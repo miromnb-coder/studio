@@ -1,6 +1,7 @@
+
 "use client";
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { Navbar } from '@/components/layout/Navbar';
 import { 
@@ -8,8 +9,7 @@ import {
   ChevronRight, 
   Search,
   FileText,
-  Mail,
-  Zap
+  Mail
 } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { useUser, useFirestore, useCollection, useMemoFirebase } from '@/firebase';
@@ -18,9 +18,14 @@ import { motion } from 'framer-motion';
 import { Skeleton } from '@/components/ui/skeleton';
 
 export default function HistoryPage() {
+  const [mounted, setMounted] = useState(false);
   const { user, isUserLoading } = useUser();
   const db = useFirestore();
   const [searchTerm, setSearchTerm] = useState('');
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
 
   const analysesQuery = useMemoFirebase(() => {
     if (!db || !user) return null;
@@ -31,6 +36,8 @@ export default function HistoryPage() {
   }, [db, user]);
 
   const { data: analyses, isLoading: isAnalysesLoading } = useCollection(analysesQuery);
+
+  if (!mounted) return null;
 
   const filteredAnalyses = analyses?.filter(a => 
     a.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -92,7 +99,7 @@ export default function HistoryPage() {
                       <div className="flex items-center gap-3 text-[9px] text-muted-foreground font-bold uppercase tracking-widest">
                         <span className="flex items-center gap-1">
                           <Calendar className="w-2.5 h-2.5" />
-                          {new Date(item.analysisDate).toLocaleDateString()}
+                          {item.analysisDate ? new Date(item.analysisDate).toLocaleDateString() : 'Recent'}
                         </span>
                         <span>• {item.source?.replace('_', ' ')}</span>
                       </div>

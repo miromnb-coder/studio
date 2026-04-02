@@ -1,6 +1,7 @@
+
 "use client";
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { Navbar } from '@/components/layout/Navbar';
 import { Button } from '@/components/ui/button';
@@ -8,24 +9,23 @@ import {
   TrendingUp, 
   ChevronRight,
   Zap,
-  ArrowRight,
   ShieldCheck,
-  Cpu,
   Clock,
-  Send,
-  Loader2,
-  Calendar,
   AlertTriangle
 } from 'lucide-react';
 import { useUser, useFirestore, useCollection, useMemoFirebase } from '@/firebase';
 import { collection, query, orderBy, limit } from 'firebase/firestore';
 import { motion } from 'framer-motion';
 import { Skeleton } from '@/components/ui/skeleton';
-import { cn } from '@/lib/utils';
 
 export default function DashboardPage() {
+  const [mounted, setMounted] = useState(false);
   const { user, isUserLoading } = useUser();
   const db = useFirestore();
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
 
   const analysesQuery = useMemoFirebase(() => {
     if (!db || !user) return null;
@@ -37,6 +37,9 @@ export default function DashboardPage() {
   }, [db, user]);
 
   const { data: analyses, isLoading: isAnalysesLoading } = useCollection(analysesQuery);
+  
+  if (!mounted) return null;
+
   const totalSavings = analyses?.reduce((acc, a) => acc + (a.estimatedMonthlySavings || 0), 0) || 0;
   const isLoading = isUserLoading || isAnalysesLoading;
 
@@ -94,7 +97,7 @@ export default function DashboardPage() {
                         <div>
                           <p className="text-xl font-bold font-headline tracking-tight">{analysis.title}</p>
                           <p className="text-[10px] text-muted-foreground font-bold uppercase tracking-widest">
-                            {new Date(analysis.analysisDate).toLocaleDateString()} • {analysis.source?.replace('_', ' ')}
+                            {analysis.analysisDate ? new Date(analysis.analysisDate).toLocaleDateString() : 'Recent'} • {analysis.source?.replace('_', ' ')}
                           </p>
                         </div>
                       </div>
