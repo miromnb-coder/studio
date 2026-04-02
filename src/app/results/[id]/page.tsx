@@ -94,7 +94,7 @@ export default function ResultsPage() {
             
             <div className="premium-card bg-success !p-12 flex flex-col justify-center items-center text-background text-center min-w-[320px] shadow-[0_32px_64px_-12px_rgba(57,217,138,0.3)]">
               <p className="text-[10px] font-bold uppercase tracking-[0.3em] opacity-60 mb-2">Monthly reclaimed</p>
-              <p className="text-8xl font-bold font-headline leading-none">€{analysis.estimatedMonthlySavings?.toFixed(0)}</p>
+              <p className="text-8xl font-bold font-headline leading-none">${analysis.estimatedMonthlySavings?.toFixed(0)}</p>
             </div>
           </div>
         </header>
@@ -148,7 +148,7 @@ export default function ResultsPage() {
 
                   <div className="text-right space-y-2 shrink-0">
                     <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground/60">Estimated Savings</p>
-                    <p className="text-6xl font-bold text-success glow-success tracking-tight">€{item.estimatedSavings}</p>
+                    <p className="text-6xl font-bold text-success glow-success tracking-tight">${item.estimatedSavings}</p>
                   </div>
                 </div>
 
@@ -197,7 +197,7 @@ export default function ResultsPage() {
         <footer className="pt-32 border-t border-white/5 flex flex-col items-center gap-12 text-center">
           <div className="space-y-4">
             <h3 className="text-5xl font-bold font-headline">Audit finalized.</h3>
-            <p className="text-2xl text-muted-foreground max-w-xl mx-auto">Your total monthly liquidity has been increased by €{analysis.estimatedMonthlySavings?.toFixed(0)}.</p>
+            <p className="text-2xl text-muted-foreground max-w-xl mx-auto">Your total monthly liquidity has been increased by ${analysis.estimatedMonthlySavings?.toFixed(0)}.</p>
           </div>
           <Button asChild className="h-20 px-16 rounded-full text-xl font-bold shadow-2xl shadow-primary/20">
             <Link href="/dashboard">Return to Operator</Link>

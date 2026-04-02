@@ -63,7 +63,7 @@ export default function DashboardPage() {
               <Skeleton className="h-16 w-32 mx-auto bg-white/5" />
             ) : (
               <h2 className="text-8xl font-bold font-headline text-success glow-success tracking-tighter">
-                €{totalSavings.toFixed(0)}
+                ${totalSavings.toFixed(0)}
               </h2>
             )}
           </div>
@@ -98,7 +98,7 @@ export default function DashboardPage() {
                   </div>
                   <div className="flex items-center gap-12">
                     <div className="text-right">
-                      <p className="text-3xl font-bold text-success tracking-tight">+€{analysis.estimatedMonthlySavings.toFixed(0)}</p>
+                      <p className="text-3xl font-bold text-success tracking-tight">+${analysis.estimatedMonthlySavings.toFixed(0)}</p>
                     </div>
                     <ChevronRight className="w-6 h-6 text-muted-foreground group-hover:text-foreground group-hover:translate-x-1 transition-all" />
                   </div>
