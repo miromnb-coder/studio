@@ -1,3 +1,4 @@
+
 "use client";
 
 import { useState, useRef, useEffect, Suspense } from 'react';
@@ -27,6 +28,8 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { RichAnalysisCard } from '@/components/chat/RichAnalysisCard';
+import { OnboardingOverlay } from '@/components/onboarding/OnboardingOverlay';
 
 interface Message {
   id: string;
@@ -48,6 +51,7 @@ function ChatContent() {
   const [input, setInput] = useState('');
   const [isProcessing, setIsProcessing] = useState(false);
   const [currentStep, setCurrentStep] = useState(0);
+  const [showOnboarding, setShowOnboarding] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const { user } = useUser();
@@ -82,6 +86,7 @@ function ChatContent() {
     if (Array.isArray(storedMessages) && storedMessages.length > 0) {
       const validMessages = storedMessages.filter(m => m && m.id && (m.content || m.data));
       setLocalMessages(validMessages);
+      setShowOnboarding(false);
     } else if (!conversationId) {
       setLocalMessages([{
         id: 'welcome',
@@ -89,6 +94,8 @@ function ChatContent() {
         content: "Operator active. High-IQ audit protocols online. How can I assist you with your life and finances today?",
         timestamp: null,
       }]);
+      // Show onboarding if no conversations exist or specifically requested
+      setShowOnboarding(true);
     }
   }, [storedMessages, conversationId, mounted]);
 
@@ -97,6 +104,16 @@ function ChatContent() {
       scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
     }
   }, [localMessages, isProcessing]);
+
+  const handleOnboardingGoal = (goal: string) => {
+    setShowOnboarding(false);
+    let initialPrompt = "";
+    if (goal === 'save_money') initialPrompt = "Run a complete subscription and recurring burn audit. I want to save money.";
+    if (goal === 'save_time') initialPrompt = "Assist me with time management and protocol automation for my life administration.";
+    if (goal === 'analyze_visual') initialPrompt = "I'm ready to upload a financial document for intelligence extraction.";
+    
+    setInput(initialPrompt);
+  };
 
   const sendMessage = async (text?: string, fileData?: string) => {
     const content = text || input;
@@ -167,7 +184,7 @@ function ChatContent() {
         id: assistantMsgId,
         role: 'assistant',
         content: result?.summary || "Analysis complete. Review findings below.",
-        type: 'analysis_result',
+        type: result?.isActionable ? 'analysis_result' : 'text',
         data: result ? { ...result } : null,
         timestamp: new Date(),
       };
@@ -224,8 +241,12 @@ function ChatContent() {
   };
 
   return (
-    <div className="flex flex-col h-screen bg-background">
+    <div className="flex flex-col h-screen bg-background relative">
       <Navbar />
+
+      <AnimatePresence>
+        {showOnboarding && <OnboardingOverlay onSelectGoal={handleOnboardingGoal} />}
+      </AnimatePresence>
       
       <div 
         ref={scrollRef}
@@ -245,7 +266,7 @@ function ChatContent() {
               )}
             >
               <div className={cn(
-                "max-w-[85%] md:max-w-[70%] space-y-4",
+                "max-w-[90%] md:max-w-[80%] space-y-4",
                 msg.role === 'user' ? "items-end text-right" : "items-start text-left"
               )}>
                 <div className={cn(
@@ -257,41 +278,8 @@ function ChatContent() {
                   {msg.content}
                 </div>
 
-                {msg.type === 'analysis_result' && msg.data && msg.data.isActionable && (
-                  <motion.div 
-                    initial={{ opacity: 0, scale: 0.98 }}
-                    animate={{ opacity: 1, scale: 1 }}
-                    className="grid gap-4 mt-6 w-full text-left"
-                  >
-                    <div className="premium-card bg-primary/10 border-primary/20 flex justify-between items-center">
-                      <div className="space-y-1">
-                        <p className="text-[10px] font-bold uppercase tracking-widest text-primary">Monthly Potential</p>
-                        <p className="text-4xl font-bold font-headline text-primary">${msg.data.savingsEstimate || 0}</p>
-                      </div>
-                    </div>
-
-                    <div className="grid gap-3">
-                      {(Array.isArray(msg.data.detectedItems) ? msg.data.detectedItems : [])
-                        .filter((item: any) => item && item.title)
-                        .slice(0, 3)
-                        .map((item: any, idx: number) => (
-                        <div key={idx} className="premium-card !p-4 bg-white/[0.02] flex items-center justify-between group">
-                          <div className="flex items-center gap-4">
-                            <div className="w-10 h-10 rounded-xl bg-white/5 flex items-center justify-center text-muted-foreground group-hover:text-primary transition-colors">
-                              <Zap className="w-4 h-4" />
-                            </div>
-                            <div>
-                              <p className="text-sm font-bold tracking-tight">{item.title}</p>
-                              <p className="text-[10px] text-muted-foreground font-bold uppercase tracking-widest">
-                                Save ${item.estimatedSavings}/mo • {item.urgencyLevel}
-                              </p>
-                            </div>
-                          </div>
-                          <ChevronRight className="w-4 h-4 text-muted-foreground opacity-50" />
-                        </div>
-                      ))}
-                    </div>
-                  </motion.div>
+                {msg.type === 'analysis_result' && msg.data && (
+                  <RichAnalysisCard data={msg.data} />
                 )}
               </div>
             </motion.div>

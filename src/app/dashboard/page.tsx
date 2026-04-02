@@ -1,3 +1,4 @@
+
 "use client";
 
 import { useState, useEffect } from 'react';
@@ -17,6 +18,7 @@ import { useUser, useFirestore, useCollection, useMemoFirebase } from '@/firebas
 import { collection, query, orderBy, limit } from 'firebase/firestore';
 import { motion } from 'framer-motion';
 import { Skeleton } from '@/components/ui/skeleton';
+import { ProactiveAlerts } from '@/components/dashboard/ProactiveAlerts';
 
 export default function DashboardPage() {
   const [mounted, setMounted] = useState(false);
@@ -33,7 +35,7 @@ export default function DashboardPage() {
       return query(
         collection(db, 'users', user.uid, 'analyses'),
         orderBy('createdAt', 'desc'),
-        limit(5)
+        limit(10)
       );
     } catch (e) {
       return null;
@@ -68,7 +70,7 @@ export default function DashboardPage() {
           </div>
         </header>
 
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-12">
           <section className="md:col-span-2 space-y-8">
             <div className="flex items-center justify-between">
               <h3 className="text-[10px] font-bold uppercase tracking-[0.3em] text-muted-foreground flex items-center gap-2">
@@ -84,7 +86,7 @@ export default function DashboardPage() {
               {isLoading ? (
                 [...Array(3)].map((_, i) => <Skeleton key={i} className="h-24 w-full bg-white/5 rounded-2xl" />)
               ) : Array.isArray(analyses) && analyses.length > 0 ? (
-                analyses.filter(a => a && a.id).map((analysis, i) => (
+                analyses.filter(a => a && a.id).slice(0, 5).map((analysis, i) => (
                   <motion.div
                     key={analysis.id}
                     initial={{ opacity: 0, y: 10 }}
@@ -126,37 +128,11 @@ export default function DashboardPage() {
 
           <aside className="space-y-8">
             <h3 className="text-[10px] font-bold uppercase tracking-[0.3em] text-muted-foreground flex items-center gap-2">
-              <TrendingUp className="w-3 h-3" />
-              Intelligence Feed
+              <AlertTriangle className="w-3 h-3" />
+              Proactive Alerts
             </h3>
             
-            <div className="space-y-4">
-              <div className="premium-card bg-danger/5 border-danger/10 space-y-4">
-                <div className="flex items-center gap-2 text-danger">
-                  <AlertTriangle className="w-4 h-4" />
-                  <p className="text-[10px] font-bold uppercase tracking-widest">High Burn Detected</p>
-                </div>
-                <p className="text-sm font-medium leading-relaxed text-muted-foreground">
-                  Detected trial expirations due within 72 hours. Audit your inbox to mitigate.
-                </p>
-                <Button asChild variant="link" className="p-0 h-auto text-[10px] font-bold uppercase tracking-widest text-danger hover:no-underline hover:text-danger/80">
-                  <Link href="/">Open Audit Chat</Link>
-                </Button>
-              </div>
-
-              <div className="premium-card bg-accent/5 border-accent/10 space-y-4">
-                <div className="flex items-center gap-2 text-accent">
-                  <Zap className="w-4 h-4" />
-                  <p className="text-[10px] font-bold uppercase tracking-widest">Optimization Ready</p>
-                </div>
-                <p className="text-sm font-medium leading-relaxed text-muted-foreground">
-                  Mobile plan market rates dropped. Operator can negotiate your tier now.
-                </p>
-                <Button asChild variant="link" className="p-0 h-auto text-[10px] font-bold uppercase tracking-widest text-accent hover:no-underline hover:text-accent/80">
-                  <Link href="/">Start Negotiation</Link>
-                </Button>
-              </div>
-            </div>
+            <ProactiveAlerts analyses={Array.isArray(analyses) ? analyses : []} isLoading={isLoading} />
           </aside>
         </div>
       </main>
