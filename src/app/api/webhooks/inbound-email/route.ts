@@ -2,14 +2,17 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { initializeFirebase } from '@/firebase';
 import { collection, query, where, getDocs, addDoc, serverTimestamp } from 'firebase/firestore';
-import { AnalysisService } from '@/services/analysis-service';
+import { analyzeFinancialDocument } from '@/ai/flows/analyze-financial-document';
+
+/**
+ * @fileOverview Inbound Email Webhook Handler.
+ * Processes emails as internal server-side tasks to avoid leaking AI logic to clients.
+ */
 
 export async function POST(req: NextRequest) {
   try {
     const payload = await req.json();
     
-    // Providers like Postmark or SendGrid send recipient in different fields
-    // Extracting the 'To' address to identify the user
     const toAddress = payload.To || payload.to || '';
     const subject = payload.Subject || payload.subject || 'No Subject';
     const body = payload.TextBody || payload.text || payload.body || '';
@@ -21,7 +24,6 @@ export async function POST(req: NextRequest) {
 
     const { firestore } = initializeFirebase();
 
-    // Find the user by their inboundEmailAddress
     const usersRef = collection(firestore, 'users');
     const q = query(usersRef, where('inboundEmailAddress', '==', toAddress));
     const querySnapshot = await getDocs(q);
@@ -34,14 +36,12 @@ export async function POST(req: NextRequest) {
     const userDoc = querySnapshot.docs[0];
     const userId = userDoc.id;
 
-    // Clean body text (simple implementation)
     const cleanedBody = body
       .split('\n')
       .filter((line: string) => !line.trim().startsWith('>') && !line.trim().startsWith('--'))
       .join('\n')
       .trim();
 
-    // Log in the user's inbox
     await addDoc(collection(firestore, 'users', userId, 'inbox'), {
       userId,
       subject,
@@ -51,13 +51,11 @@ export async function POST(req: NextRequest) {
       createdAt: serverTimestamp(),
     });
 
-    // Run analysis
-    const analysisResult = await AnalysisService.analyze({
+    // Run analysis directly using the server action internally
+    const analysisResult = await analyzeFinancialDocument({
       documentText: `Subject: ${subject}\n\n${cleanedBody}`,
-      source: 'email'
     });
 
-    // Save Analysis
     const analysesRef = collection(firestore, 'users', userId, 'analyses');
     const analysisDoc = await addDoc(analysesRef, {
       userId,
@@ -74,9 +72,8 @@ export async function POST(req: NextRequest) {
       createdAt: serverTimestamp(),
     });
 
-    // Save detected items
     const itemsRef = collection(firestore, 'users', userId, 'analyses', analysisDoc.id, 'detected_items');
-    for (const item of analysisResult.detectedItems) {
+    for (const item of (analysisResult.detectedItems || [])) {
       await addDoc(itemsRef, {
         ...item,
         userId,
