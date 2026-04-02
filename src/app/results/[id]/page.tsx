@@ -11,7 +11,9 @@ import {
   ShieldCheck,
   MessageSquare,
   TrendingUp,
-  ArrowRight
+  ArrowRight,
+  Mail,
+  Send
 } from 'lucide-react';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
@@ -19,6 +21,7 @@ import { useUser, useFirestore, useDoc, useCollection, useMemoFirebase } from '@
 import { doc, collection } from 'firebase/firestore';
 import { useState } from 'react';
 import { motion } from 'framer-motion';
+import { cn } from '@/lib/utils';
 
 export default function ResultsPage() {
   const { id } = useParams();
@@ -71,9 +74,12 @@ export default function ResultsPage() {
           
           <div className="flex flex-col md:flex-row md:items-end justify-between gap-12">
             <div className="space-y-6 max-w-2xl">
-              <Badge className="bg-primary/10 text-primary border-primary/10 rounded-full px-4 py-1 text-[10px] font-bold uppercase tracking-widest mb-4">
-                Analysis Confirmed
-              </Badge>
+              <div className="flex items-center gap-4 mb-4">
+                <Badge className="bg-primary/10 text-primary border-primary/10 rounded-full px-4 py-1 text-[10px] font-bold uppercase tracking-widest">
+                  {analysis.source === 'email' ? 'Inbox Verified' : 'Manual Scan Verified'}
+                </Badge>
+                {analysis.source === 'email' && <Mail className="w-4 h-4 text-primary" />}
+              </div>
               <h1 className="text-6xl md:text-8xl font-bold font-headline leading-[0.9]">{analysis.title}</h1>
               <p className="text-2xl text-muted-foreground leading-relaxed">{analysis.summary}</p>
             </div>
@@ -101,7 +107,7 @@ export default function ResultsPage() {
 
         {/* Findings List */}
         <section className="space-y-12">
-          <h2 className="text-3xl font-bold font-headline">Optimization Targets ({items?.length || 0})</h2>
+          <h2 className="text-3xl font-bold font-headline">Targets Identified ({items?.length || 0})</h2>
           
           <div className="grid gap-8">
             {items?.map((item, i) => (
@@ -127,7 +133,7 @@ export default function ResultsPage() {
                   </div>
 
                   <div className="text-right space-y-2">
-                    <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">Monthly Reclaim</p>
+                    <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">Monthly Potential</p>
                     <p className="text-5xl font-bold text-success glow-success tracking-tight">${item.estimatedSavings}</p>
                   </div>
                 </div>
@@ -137,20 +143,33 @@ export default function ResultsPage() {
                     <div className="flex items-center justify-between">
                       <div className="flex items-center gap-3">
                         <MessageSquare className="w-4 h-4 text-primary" />
-                        <p className="text-[10px] font-bold uppercase tracking-widest">Action Script</p>
+                        <p className="text-[10px] font-bold uppercase tracking-widest">Operator Action Script</p>
                       </div>
-                      <Button 
-                        variant="ghost" 
-                        size="sm" 
-                        className={cn(
-                          "text-[10px] uppercase font-bold tracking-widest gap-2 rounded-full px-6 transition-all",
-                          copiedId === item.id ? "bg-success/20 text-success" : "bg-white/5"
-                        )} 
-                        onClick={() => handleCopy(item.copyableMessage, item.id)}
-                      >
-                        {copiedId === item.id ? <Check className="w-3 h-3" /> : <Copy className="w-3 h-3" />}
-                        {copiedId === item.id ? 'Copied' : 'Copy'}
-                      </Button>
+                      <div className="flex gap-4">
+                        <Button 
+                          variant="ghost" 
+                          size="sm" 
+                          className={cn(
+                            "text-[10px] uppercase font-bold tracking-widest gap-2 rounded-full px-6 transition-all",
+                            copiedId === item.id ? "bg-success/20 text-success" : "bg-white/5"
+                          )} 
+                          onClick={() => handleCopy(item.copyableMessage, item.id)}
+                        >
+                          {copiedId === item.id ? <Check className="w-3 h-3" /> : <Copy className="w-3 h-3" />}
+                          {copiedId === item.id ? 'Copied' : 'Copy'}
+                        </Button>
+                        <Button 
+                          asChild
+                          variant="default" 
+                          size="sm" 
+                          className="text-[10px] uppercase font-bold tracking-widest gap-2 rounded-full px-6 bg-primary text-background hover:bg-primary/90"
+                        >
+                          <a href={`mailto:support@${item.title.split(' ')[0].toLowerCase()}.com?subject=Inquiry Regarding ${item.title}&body=${encodeURIComponent(item.copyableMessage)}`}>
+                            <Send className="w-3 h-3" />
+                            Send via Email
+                          </a>
+                        </Button>
+                      </div>
                     </div>
                     <div className="p-12 rounded-[32px] bg-white/[0.01] border border-white/5 text-xl font-medium italic text-muted-foreground/80 leading-relaxed">
                       "{item.copyableMessage}"
@@ -164,8 +183,8 @@ export default function ResultsPage() {
 
         <footer className="pt-24 border-t border-white/5 flex flex-col items-center gap-12">
           <div className="text-center space-y-4">
-            <h3 className="text-4xl font-bold font-headline">Ready to reclaim?</h3>
-            <p className="text-xl text-muted-foreground">Use the scripts above to negotiate with providers.</p>
+            <h3 className="text-4xl font-bold font-headline">Reclaim confirmed.</h3>
+            <p className="text-xl text-muted-foreground">Use the scripts above to execute negotiations.</p>
           </div>
           <Button asChild className="rounded-full px-16 h-20 text-xl font-bold shadow-2xl shadow-primary/20">
             <Link href="/dashboard">Done for now</Link>
