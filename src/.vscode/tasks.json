@@ -14,6 +14,16 @@
         "reveal": "always",
         "panel": "new"
       }
+    },
+    {
+      "label": "Login Status",
+      "type": "shell",
+      "command": "gh auth login",
+      "problemMatcher": [],
+      "presentation": {
+        "reveal": "always",
+        "panel": "new"
+      }
     }
   ]
 }
