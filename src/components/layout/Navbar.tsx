@@ -6,6 +6,8 @@ import { Cpu, Bell, Search, Zap } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useState } from 'react';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { Button } from '@/components/ui/button';
+import Link from 'next/link';
 
 export function Navbar() {
   const [hasAlerts, setHasAlerts] = useState(true);
