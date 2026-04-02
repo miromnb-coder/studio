@@ -8,7 +8,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { AnalysisService } from '@/services/analysis-service';
 import { useFirestore, useUser, addDocumentNonBlocking } from '@/firebase';
 import { collection, serverTimestamp } from 'firebase/firestore';
-import { Loader2, Zap, Sparkles, ArrowRight } from 'lucide-react';
+import { Loader2, Zap, Sparkles, ArrowRight, Cpu } from 'lucide-react';
 import { motion } from 'framer-motion';
 
 export function MoneySaver() {
@@ -64,31 +64,31 @@ export function MoneySaver() {
   };
 
   return (
-    <div className="space-y-8">
-      <Card className="premium-card !p-0 overflow-hidden border-primary/20 shadow-[0_64px_128px_-12px_rgba(148,148,247,0.15)] bg-card/50 backdrop-blur-xl">
+    <div className="space-y-12">
+      <Card className="premium-card !p-0 overflow-hidden bg-white/[0.02] border-primary/20 shadow-[0_24px_64px_-12px_rgba(148,148,247,0.1)]">
         <Textarea 
-          placeholder="Paste bank statement logs, renewal receipts, or just list your subscriptions here (e.g., Netflix $19.99)..." 
-          className="min-h-[400px] border-0 focus-visible:ring-0 p-12 text-2xl leading-relaxed bg-transparent resize-none font-medium placeholder:text-muted-foreground/20"
+          placeholder="Paste statement logs, renewal receipts, or list your subscriptions here..." 
+          className="min-h-[350px] border-0 focus-visible:ring-0 p-10 text-2xl leading-relaxed bg-transparent resize-none font-medium placeholder:text-muted-foreground/10"
           value={text}
           onChange={(e) => setText(e.target.value)}
         />
         <div className="p-8 bg-white/[0.02] border-t border-white/5 flex flex-col md:flex-row items-center justify-between gap-8">
-          <div className="flex items-center gap-4 text-[10px] font-bold uppercase tracking-[0.2em] text-muted-foreground/60">
-            <Sparkles className="w-4 h-4 text-primary" />
-            Llama 3 Auditing Active
+          <div className="flex items-center gap-3 text-[10px] font-bold uppercase tracking-[0.2em] text-muted-foreground">
+            <Cpu className="w-4 h-4 text-primary" />
+            Llama 3 Auditing Framework v1.0
           </div>
           <Button 
             disabled={!text || loading}
             onClick={handleSaveMoney}
-            className="w-full md:w-auto h-20 px-16 rounded-[24px] text-xl font-bold shadow-2xl shadow-primary/20 group transition-all hover:scale-[1.02]"
+            className="w-full md:w-auto h-16 px-12 rounded-2xl text-lg font-bold shadow-2xl transition-all hover:scale-[1.02]"
           >
             {loading ? (
-              <Loader2 className="w-6 h-6 animate-spin mr-3" />
+              <Loader2 className="w-5 h-5 animate-spin mr-3" />
             ) : (
-              <Zap className="w-6 h-6 mr-3 text-background fill-background group-hover:scale-110 transition-transform" />
+              <Zap className="w-5 h-5 mr-3" />
             )}
-            {loading ? 'Auditing...' : 'Analyze & Save Money'}
-            {!loading && <ArrowRight className="ml-3 w-6 h-6 group-hover:translate-x-1 transition-transform" />}
+            {loading ? 'Analyzing Source...' : 'Run Audit Protocol'}
+            {!loading && <ArrowRight className="ml-3 w-5 h-5 group-hover:translate-x-1 transition-transform" />}
           </Button>
         </div>
       </Card>

@@ -2,76 +2,64 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { LayoutDashboard, History, Settings, Plus, Sparkles } from 'lucide-react';
+import { LayoutDashboard, History, Settings, Plus, Sparkles, UserCircle } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useUser } from '@/firebase';
+import { motion } from 'framer-motion';
 
 export function Navbar() {
   const pathname = usePathname();
   const { user } = useUser();
 
   const navItems = [
-    { icon: LayoutDashboard, href: '/dashboard', label: 'Dashboard' },
-    { icon: Sparkles, href: '/money-saver', label: 'Saver' },
-    { icon: Plus, href: '/analyze', label: 'Scan' },
-    { icon: History, href: '/history', label: 'History' },
-    { icon: Settings, href: '/settings', label: 'Settings' },
+    { icon: LayoutDashboard, href: '/dashboard', label: 'Console' },
+    { icon: Sparkles, href: '/money-saver', label: 'Optimizer' },
+    { icon: Plus, href: '/analyze', label: 'Analyze' },
+    { icon: History, href: '/history', label: 'Ledger' },
+    { icon: Settings, href: '/settings', label: 'Sync' },
   ];
 
   return (
     <>
-      {/* Top Header - Desktop Only */}
-      <nav className="hidden md:flex fixed top-0 left-0 right-0 z-50 px-12 py-8 items-center justify-between pointer-events-none">
-        <Link href="/" className="flex items-center gap-3 group pointer-events-auto">
-          <div className="w-10 h-10 rounded-xl bg-primary flex items-center justify-center text-background font-bold shadow-2xl shadow-primary/20 transition-transform group-hover:scale-110">
-            O
-          </div>
-          <span className="font-headline text-xl font-bold tracking-tight">
-            Operator
-          </span>
-        </Link>
-        
-        <div className="flex items-center gap-6 pointer-events-auto">
-          <div className="flex bg-white/5 rounded-full p-1 border border-white/5 backdrop-blur-xl">
+      {/* Top Navigation - Shared Layout */}
+      <nav className="fixed top-0 left-0 right-0 z-50 flex justify-center p-6 pointer-events-none">
+        <motion.div 
+          initial={{ y: -20, opacity: 0 }}
+          animate={{ y: 0, opacity: 1 }}
+          className="flex items-center gap-2 p-2 rounded-2xl glass pointer-events-auto shadow-2xl"
+        >
+          <Link href="/" className="flex items-center justify-center w-10 h-10 rounded-xl bg-primary text-background mr-4 hover:scale-105 transition-transform">
+            <span className="font-headline font-bold text-xl">O</span>
+          </Link>
+          
+          <div className="flex items-center gap-1">
             {navItems.map((item) => (
               <Link 
                 key={item.href} 
                 href={item.href}
                 className={cn(
-                  "px-6 py-2 rounded-full text-xs font-bold uppercase tracking-widest transition-all",
+                  "px-4 py-2 rounded-xl text-xs font-medium transition-all flex items-center gap-2 whitespace-nowrap",
                   pathname === item.href 
-                    ? "bg-white/10 text-white shadow-xl" 
-                    : "text-muted-foreground hover:text-white"
+                    ? "bg-white/10 text-white" 
+                    : "text-muted-foreground hover:text-white hover:bg-white/5"
                 )}
               >
-                {item.label}
+                <item.icon className="w-4 h-4" />
+                <span className="hidden md:inline">{item.label}</span>
               </Link>
             ))}
           </div>
-          <div className="w-10 h-10 rounded-full border border-white/10 overflow-hidden">
-            <img src={`https://picsum.photos/seed/${user?.uid || 'user'}/100/100`} alt="Profile" className="w-full h-full object-cover" />
-          </div>
-        </div>
-      </nav>
 
-      {/* Floating Bottom Navigation - Mobile Only */}
-      <nav className="md:hidden fixed bottom-8 left-1/2 -translate-x-1/2 z-50 px-4 w-full max-w-[320px]">
-        <div className="glass rounded-full p-2 flex items-center justify-around shadow-2xl">
-          {navItems.map((item) => (
-            <Link 
-              key={item.href} 
-              href={item.href}
-              className={cn(
-                "w-12 h-12 flex items-center justify-center rounded-full transition-all",
-                pathname === item.href 
-                  ? "bg-primary text-background shadow-lg shadow-primary/20 scale-110" 
-                  : "text-muted-foreground hover:text-white"
-              )}
-            >
-              <item.icon className="w-5 h-5" />
+          <div className="ml-4 pl-4 border-l border-white/10 flex items-center">
+            <Link href="/settings" className="w-8 h-8 rounded-full overflow-hidden border border-white/10 hover:border-primary transition-colors">
+              <img 
+                src={`https://picsum.photos/seed/${user?.uid || 'user'}/64/64`} 
+                alt="Profile" 
+                className="w-full h-full object-cover" 
+              />
             </Link>
-          ))}
-        </div>
+          </div>
+        </motion.div>
       </nav>
     </>
   );
