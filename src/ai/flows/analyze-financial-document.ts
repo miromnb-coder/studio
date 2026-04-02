@@ -1,3 +1,4 @@
+
 'use server';
 /**
  * @fileOverview A "Predatory Subscription Hunter" AI agent.
@@ -33,7 +34,7 @@ const DetectedItemSchema = z.object({
 const AnalyzeFinancialDocumentInputSchema = z.object({
   imageDataUri: z.string().optional(),
   documentText: z.string().optional(),
-}).refine(data => data.imageDataUri || data.documentText);
+});
 
 const AnalyzeFinancialDocumentOutputSchema = z.object({
   title: z.string(),
@@ -60,7 +61,8 @@ export async function analyzeFinancialDocument(input: z.infer<typeof AnalyzeFina
   });
 
   const prompt = `You are a "Predatory Subscription Hunter". Your goal is to find EVERY cent of waste in the following data.
-Be aggressive. If a service is overpriced compared to market rates, call it out. 
+Be aggressive. If the input is a general request like "save me money", suggest common optimizations based on market data.
+If a specific service is mentioned or overpriced compared to market rates, call it out. 
 If there's a cheaper alternative (e.g., Free tiers, family plans, competitors), provide it.
 
 Data:
@@ -69,11 +71,11 @@ ${input.documentText || "Image detected."}
 Return a JSON object:
 {
   "title": "Monthly Waste Audit",
-  "summary": "High-level summary of the bleed.",
+  "summary": "High-level summary of the bleed or potential optimizations.",
   "detectedItems": [
     {
       "title": string,
-      "summary": "Specific predatory detail about this charge.",
+      "summary": "Specific predatory detail or optimization opportunity.",
       "type": "subscription" | "recurring_charge" | ...,
       "estimatedSavings": number,
       "alternativeSuggestion": "Switch to [Competitor]",
@@ -85,8 +87,8 @@ Return a JSON object:
   ],
   "savingsEstimate": number,
   "beforeAfterComparison": {
-    "currentSituation": "Description of the current bleed.",
-    "optimizedSituation": "Description of the future state."
+    "currentSituation": "Description of the current burn or behavior.",
+    "optimizedSituation": "Description of the future state after protocol execution."
   }
 }`;
 
