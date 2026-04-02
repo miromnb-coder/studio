@@ -1,3 +1,4 @@
+
 "use client";
 
 import { useState, useRef, useEffect, Suspense } from 'react';
@@ -33,7 +34,7 @@ interface Message {
   content: string;
   type?: 'text' | 'analysis_result' | 'error';
   data?: any;
-  timestamp: Date | any;
+  timestamp: any;
 }
 
 const STEPS = [
@@ -55,6 +56,9 @@ function ChatContent() {
   const searchParams = useSearchParams();
   const conversationId = searchParams?.get('c');
 
+  // STABILITY: Initialize local messages as empty to prevent hydration mismatch
+  const [localMessages, setLocalMessages] = useState<Message[]>([]);
+
   useEffect(() => {
     setMounted(true);
   }, []);
@@ -74,29 +78,23 @@ function ChatContent() {
 
   const { data: storedMessages } = useCollection(messagesQuery);
 
-  const [localMessages, setLocalMessages] = useState<Message[]>([
-    {
-      id: 'welcome',
-      role: 'assistant',
-      content: "Operator active. High-IQ audit protocols online. How can I assist you with your life and finances today?",
-      timestamp: new Date(),
-    }
-  ]);
-
   useEffect(() => {
+    if (!mounted) return;
+
     if (storedMessages && storedMessages.length > 0) {
       // DATA VALIDATION: Filter out corrupt or partial messages
-      const validMessages = (storedMessages || []).filter(m => m && m.id && m.content);
+      const validMessages = (storedMessages || []).filter(m => m && m.id && (m.content || m.data));
       setLocalMessages(validMessages);
     } else if (!conversationId) {
+      // Set default welcome message only after mounting to prevent mismatch
       setLocalMessages([{
         id: 'welcome',
         role: 'assistant',
         content: "Operator active. High-IQ audit protocols online. How can I assist you with your life and finances today?",
-        timestamp: new Date(),
+        timestamp: null,
       }]);
     }
-  }, [storedMessages, conversationId]);
+  }, [storedMessages, conversationId, mounted]);
 
   useEffect(() => {
     if (scrollRef.current) {
@@ -104,7 +102,7 @@ function ChatContent() {
     }
   }, [localMessages, isProcessing]);
 
-  // HARD HYDRATION GUARD
+  // HARD HYDRATION GUARD: Prevents the "client-side exception" by not rendering dynamic content during SSR
   if (!mounted) {
     return (
       <div className="flex flex-col h-screen bg-background items-center justify-center">
@@ -149,7 +147,7 @@ function ChatContent() {
       timestamp: new Date(),
     };
 
-    addDocumentNonBlocking(collection(db, 'users', user.uid, 'conversations', activeConvId, 'messages'), {
+    addDocumentNonBlocking(collection(db, 'users', user.uid, 'conversations', activeConvId!, 'messages'), {
       ...userMessage,
       timestamp: serverTimestamp(),
     });
@@ -160,7 +158,7 @@ function ChatContent() {
 
     try {
       const history = (localMessages || [])
-        .filter(m => m && m.content) // Defensive check
+        .filter(m => m && m.content)
         .slice(-10)
         .map(m => ({ role: m.role, content: m.content }));
 
@@ -176,7 +174,7 @@ function ChatContent() {
       });
 
       if (localMessages.length <= 2 && result?.title) {
-        updateDoc(doc(db, 'users', user.uid, 'conversations', activeConvId), {
+        updateDoc(doc(db, 'users', user.uid, 'conversations', activeConvId!), {
           title: result.title,
           updatedAt: serverTimestamp(),
         });
@@ -192,7 +190,7 @@ function ChatContent() {
         timestamp: new Date(),
       };
 
-      addDocumentNonBlocking(collection(db, 'users', user.uid, 'conversations', activeConvId, 'messages'), {
+      addDocumentNonBlocking(collection(db, 'users', user.uid, 'conversations', activeConvId!, 'messages'), {
         ...assistantMessage,
         timestamp: serverTimestamp(),
       });
@@ -253,7 +251,7 @@ function ChatContent() {
       >
         <AnimatePresence initial={false}>
           {(localMessages || [])
-            .filter(msg => msg && msg.id && (msg.content || msg.data)) // NULL-SAFE RENDERING
+            .filter(msg => msg && msg.id)
             .map((msg) => (
             <motion.div
               key={msg.id}

@@ -1,3 +1,4 @@
+
 "use client";
 
 import { useEffect, useState } from 'react';
@@ -63,7 +64,7 @@ export function AppSidebar() {
     { icon: Settings, href: '/settings', label: 'Sync' },
   ];
 
-  // HYDRATION GUARD
+  // HARD HYDRATION GUARD
   if (!mounted) {
     return (
       <Sidebar className="border-r border-white/5 bg-[#19191C]">
