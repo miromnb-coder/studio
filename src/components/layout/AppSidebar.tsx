@@ -34,7 +34,7 @@ export function AppSidebar() {
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const activeId = searchParams?.get('c');
-  const { user } = useUser();
+  const { user, isUserLoading } = useUser();
   const db = useFirestore();
   const router = useRouter();
 
@@ -64,11 +64,22 @@ export function AppSidebar() {
     { icon: Settings, href: '/settings', label: 'Sync' },
   ];
 
-  if (!mounted) {
+  if (!mounted || isUserLoading) {
     return (
       <Sidebar className="border-r border-white/5 bg-[#19191C]">
         <div className="flex h-full items-center justify-center">
           <Loader2 className="w-4 h-4 animate-spin text-muted-foreground/10" />
+        </div>
+      </Sidebar>
+    );
+  }
+
+  // GUARD CLAUSE: Sturdy check for Firebase services
+  if (!db || !user) {
+    return (
+      <Sidebar className="border-r border-white/5 bg-[#19191C]">
+        <div className="flex h-full items-center justify-center p-4">
+          <p className="text-[10px] text-muted-foreground uppercase tracking-widest text-center">Awaiting Auth...</p>
         </div>
       </Sidebar>
     );
@@ -113,8 +124,8 @@ export function AppSidebar() {
               <div className="flex justify-center py-4">
                 <Loader2 className="w-4 h-4 text-muted-foreground animate-spin" />
               </div>
-            ) : (conversations || []).length > 0 ? (
-              (conversations || [])
+            ) : Array.isArray(conversations) && conversations.length > 0 ? (
+              conversations
                 .filter(conv => conv && conv.id)
                 .map((conv) => (
                   <SidebarMenuItem key={conv.id}>
@@ -152,7 +163,7 @@ export function AppSidebar() {
         <SidebarGroup className="mt-auto pb-4">
           <SidebarGroupLabel className="px-4 text-[10px] font-bold uppercase tracking-widest text-muted-foreground/50">Systems</SidebarGroupLabel>
           <SidebarMenu className="px-2">
-            {coreItems.map((item) => (
+            {Array.isArray(coreItems) ? coreItems.map((item) => (
               <SidebarMenuItem key={item.href}>
                 <SidebarMenuButton 
                   asChild 
@@ -168,7 +179,7 @@ export function AppSidebar() {
                   </Link>
                 </SidebarMenuButton>
               </SidebarMenuItem>
-            ))}
+            )) : null}
           </SidebarMenu>
         </SidebarGroup>
       </SidebarContent>

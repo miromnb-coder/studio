@@ -43,7 +43,7 @@ export default function HistoryPage() {
 
   const { data: analyses, isLoading: isAnalysesLoading } = useCollection(analysesQuery);
 
-  if (!mounted) {
+  if (!mounted || isUserLoading) {
     return (
       <div className="min-h-screen bg-background flex items-center justify-center">
         <Loader2 className="w-8 h-8 text-primary animate-spin" />
@@ -51,12 +51,24 @@ export default function HistoryPage() {
     );
   }
 
-  const filteredAnalyses = (analyses || []).filter(a => 
-    (a.title || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
-    (a.summary || '').toLowerCase().includes(searchTerm.toLowerCase())
+  // GUARD CLAUSE: Sturdy check for Firebase services
+  if (!db || !user) {
+    return (
+      <div className="min-h-screen bg-background flex flex-col items-center justify-center p-6 text-center">
+        <Loader2 className="w-8 h-8 text-primary animate-spin mb-4" />
+        <p className="text-muted-foreground font-medium">Synchronizing Audit Records...</p>
+      </div>
+    );
+  }
+
+  const filteredAnalyses = (Array.isArray(analyses) ? analyses : []).filter(a => 
+    a && (
+      (a.title || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+      (a.summary || '').toLowerCase().includes(searchTerm.toLowerCase())
+    )
   );
 
-  const isLoading = isUserLoading || isAnalysesLoading;
+  const isLoading = isAnalysesLoading;
 
   return (
     <div className="min-h-screen bg-background pt-32 pb-32">
@@ -90,7 +102,7 @@ export default function HistoryPage() {
                 <Skeleton className="h-8 w-16 bg-white/5" />
               </div>
             ))
-          ) : filteredAnalyses && filteredAnalyses.length > 0 ? (
+          ) : Array.isArray(filteredAnalyses) && filteredAnalyses.length > 0 ? (
             filteredAnalyses.map((item, i) => (
               <motion.div
                 key={item.id}

@@ -1,3 +1,4 @@
+
 "use client";
 
 import { useState, useEffect } from 'react';
@@ -42,7 +43,7 @@ export default function DashboardPage() {
 
   const { data: analyses, isLoading: isAnalysesLoading } = useCollection(analysesQuery);
   
-  if (!mounted) {
+  if (!mounted || isUserLoading) {
     return (
       <div className="min-h-screen bg-background flex items-center justify-center">
         <Loader2 className="w-8 h-8 text-primary animate-spin" />
@@ -50,8 +51,18 @@ export default function DashboardPage() {
     );
   }
 
-  const totalSavings = (analyses || []).reduce((acc, a) => acc + (a.estimatedMonthlySavings || 0), 0) || 0;
-  const isLoading = isUserLoading || isAnalysesLoading;
+  // GUARD CLAUSE: Sturdy check for Firebase services
+  if (!db || !user) {
+    return (
+      <div className="min-h-screen bg-background flex flex-col items-center justify-center p-6 text-center">
+        <Loader2 className="w-8 h-8 text-primary animate-spin mb-4" />
+        <p className="text-muted-foreground font-medium">Awaiting Data Ledger...</p>
+      </div>
+    );
+  }
+
+  const totalSavings = (Array.isArray(analyses) ? analyses : []).reduce((acc, a) => acc + (a.estimatedMonthlySavings || 0), 0) || 0;
+  const isLoading = isAnalysesLoading;
 
   return (
     <div className="min-h-screen bg-background pt-24 pb-32">
@@ -91,8 +102,8 @@ export default function DashboardPage() {
             <div className="space-y-4">
               {isLoading ? (
                 [...Array(3)].map((_, i) => <Skeleton key={i} className="h-24 w-full bg-white/5 rounded-2xl" />)
-              ) : analyses && analyses.length > 0 ? (
-                analyses.map((analysis, i) => (
+              ) : Array.isArray(analyses) && analyses.length > 0 ? (
+                analyses.filter(a => a && a.id).map((analysis, i) => (
                   <motion.div
                     key={analysis.id}
                     initial={{ opacity: 0, y: 10 }}

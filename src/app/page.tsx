@@ -50,7 +50,7 @@ function ChatContent() {
   const [currentStep, setCurrentStep] = useState(0);
   const scrollRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const { user } = useUser();
+  const { user, isUserLoading } = useUser();
   const db = useFirestore();
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -79,9 +79,8 @@ function ChatContent() {
   useEffect(() => {
     if (!mounted) return;
 
-    if (storedMessages && storedMessages.length > 0) {
-      const validMessages = (storedMessages || [])
-        .filter(m => m && m.id && (m.content || m.data));
+    if (Array.isArray(storedMessages) && storedMessages.length > 0) {
+      const validMessages = storedMessages.filter(m => m && m.id && (m.content || m.data));
       setLocalMessages(validMessages);
     } else if (!conversationId) {
       setLocalMessages([{
@@ -99,7 +98,7 @@ function ChatContent() {
     }
   }, [localMessages, isProcessing]);
 
-  if (!mounted) {
+  if (!mounted || isUserLoading) {
     return (
       <div className="flex flex-col h-screen bg-background items-center justify-center">
         <Loader2 className="w-8 h-8 text-primary animate-spin" />
@@ -107,14 +106,18 @@ function ChatContent() {
     );
   }
 
+  // GUARD CLAUSE: Sturdy check for Firebase services
+  if (!db || !user) {
+    return (
+      <div className="flex flex-col h-screen bg-background items-center justify-center p-6 text-center">
+        <p className="text-muted-foreground font-medium">Initializing Operator Protocol...</p>
+      </div>
+    );
+  }
+
   const sendMessage = async (text?: string, fileData?: string) => {
     const content = text || input;
     if (!content && !fileData) return;
-
-    if (!user || !db) {
-      router.push('/login');
-      return;
-    }
 
     let activeConvId = conversationId;
     
@@ -152,7 +155,7 @@ function ChatContent() {
     setCurrentStep(0);
 
     try {
-      const history = (localMessages || [])
+      const history = (Array.isArray(localMessages) ? localMessages : [])
         .filter(m => m && m.content)
         .slice(-10)
         .map(m => ({ role: m.role, content: m.content }));
@@ -245,7 +248,7 @@ function ChatContent() {
         className="flex-1 overflow-y-auto pt-24 pb-40 px-6 md:px-12 lg:px-24 xl:px-48 space-y-12"
       >
         <AnimatePresence initial={false}>
-          {(localMessages || [])
+          {Array.isArray(localMessages) ? localMessages
             .filter(msg => msg && msg.id)
             .map((msg) => (
             <motion.div
@@ -284,7 +287,7 @@ function ChatContent() {
                     </div>
 
                     <div className="grid gap-3">
-                      {(msg.data.detectedItems || [])
+                      {Array.isArray(msg.data.detectedItems) ? msg.data.detectedItems
                         .filter((item: any) => item && item.title)
                         .slice(0, 3)
                         .map((item: any, idx: number) => (
@@ -302,13 +305,13 @@ function ChatContent() {
                           </div>
                           <ChevronRight className="w-4 h-4 text-muted-foreground opacity-50" />
                         </div>
-                      ))}
+                      )) : null}
                     </div>
                   </motion.div>
                 )}
               </div>
             </motion.div>
-          ))}
+          )) : null}
         </AnimatePresence>
 
         {isProcessing && (
