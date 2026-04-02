@@ -1,7 +1,7 @@
 
 "use client";
 
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect, Suspense } from 'react';
 import { Navbar } from '@/components/layout/Navbar';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
@@ -10,18 +10,14 @@ import {
   Send, 
   Plus, 
   Image as ImageIcon, 
-  FileText, 
   Zap, 
   CheckCircle2,
   ChevronRight,
   Loader2,
-  AlertCircle,
-  MessageSquare,
-  Sparkles
 } from 'lucide-react';
 import { AnalysisService } from '@/services/analysis-service';
 import { useFirestore, useUser, addDocumentNonBlocking, useCollection, useMemoFirebase } from '@/firebase';
-import { collection, serverTimestamp, doc, updateDoc, query, orderBy, limit, setDoc } from 'firebase/firestore';
+import { collection, serverTimestamp, doc, updateDoc, query, orderBy, setDoc } from 'firebase/firestore';
 import { motion, AnimatePresence } from 'framer-motion';
 import { cn } from '@/lib/utils';
 import { useRouter, useSearchParams } from 'next/navigation';
@@ -47,19 +43,23 @@ const STEPS = [
   { id: 'action', label: 'Finalizing actionable intelligence...', duration: 600 },
 ];
 
-export default function ChatPage() {
+function ChatContent() {
   const [input, setInput] = useState('');
   const [isProcessing, setIsProcessing] = useState(false);
   const [currentStep, setCurrentStep] = useState(0);
+  const [mounted, setMounted] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const { user } = useUser();
   const db = useFirestore();
   const router = useRouter();
   const searchParams = useSearchParams();
-  const conversationId = searchParams.get('c');
+  const conversationId = searchParams?.get('c');
 
-  // Load messages for current conversation
+  useEffect(() => {
+    setMounted(true);
+  }, []);
+
   const messagesQuery = useMemoFirebase(() => {
     if (!db || !user || !conversationId) return null;
     return query(
@@ -68,7 +68,7 @@ export default function ChatPage() {
     );
   }, [db, user, conversationId]);
 
-  const { data: storedMessages, isLoading: isMessagesLoading } = useCollection(messagesQuery);
+  const { data: storedMessages } = useCollection(messagesQuery);
 
   const [localMessages, setLocalMessages] = useState<Message[]>([
     {
@@ -98,6 +98,8 @@ export default function ChatPage() {
     }
   }, [localMessages, isProcessing]);
 
+  if (!mounted) return null;
+
   const sendMessage = async (text?: string, fileData?: string) => {
     const content = text || input;
     if (!content && !fileData) return;
@@ -109,7 +111,6 @@ export default function ChatPage() {
 
     let activeConvId = conversationId;
     
-    // Create new conversation if none exists
     if (!activeConvId) {
       const newConvRef = doc(collection(db, 'users', user.uid, 'conversations'));
       activeConvId = newConvRef.id;
@@ -130,7 +131,6 @@ export default function ChatPage() {
       timestamp: new Date(),
     };
 
-    // Save user message to Firestore
     addDocumentNonBlocking(collection(db, 'users', user.uid, 'conversations', activeConvId, 'messages'), {
       ...userMessage,
       timestamp: serverTimestamp(),
@@ -141,7 +141,6 @@ export default function ChatPage() {
     setCurrentStep(0);
 
     try {
-      // Get last 10 messages for context
       const history = localMessages.slice(-10).map(m => ({ role: m.role, content: m.content }));
 
       for (let i = 0; i < STEPS.length; i++) {
@@ -155,8 +154,7 @@ export default function ChatPage() {
         history
       });
 
-      // Update conversation title if it's the first real exchange
-      if (localMessages.length <= 2 && result.title) {
+      if (localMessages.length <= 2 && result?.title) {
         updateDoc(doc(db, 'users', user.uid, 'conversations', activeConvId), {
           title: result.title,
           updatedAt: serverTimestamp(),
@@ -167,20 +165,18 @@ export default function ChatPage() {
       const assistantMessage: Message = {
         id: assistantMsgId,
         role: 'assistant',
-        content: result.summary,
+        content: result?.summary || "Analysis complete. Review findings below.",
         type: 'analysis_result',
-        data: { ...result },
+        data: result ? { ...result } : null,
         timestamp: new Date(),
       };
 
-      // Save assistant message to Firestore
       addDocumentNonBlocking(collection(db, 'users', user.uid, 'conversations', activeConvId, 'messages'), {
         ...assistantMessage,
         timestamp: serverTimestamp(),
       });
 
-      // Save as analysis report if actionable
-      if (result.isActionable) {
+      if (result?.isActionable) {
         const analysesRef = collection(db, 'users', user.uid, 'analyses');
         const docRef = await addDocumentNonBlocking(analysesRef, {
           userId: user.uid,
@@ -267,7 +263,7 @@ export default function ChatPage() {
                     <div className="premium-card bg-primary/10 border-primary/20 flex justify-between items-center">
                       <div className="space-y-1">
                         <p className="text-[10px] font-bold uppercase tracking-widest text-primary">Monthly Potential</p>
-                        <p className="text-4xl font-bold font-headline text-primary">${msg.data.savingsEstimate}</p>
+                        <p className="text-4xl font-bold font-headline text-primary">${msg.data.savingsEstimate || 0}</p>
                       </div>
                     </div>
 
@@ -391,5 +387,17 @@ export default function ChatPage() {
         </div>
       </div>
     </div>
+  );
+}
+
+export default function ChatPage() {
+  return (
+    <Suspense fallback={
+      <div className="min-h-screen bg-background flex items-center justify-center">
+        <Loader2 className="w-8 h-8 text-primary animate-spin" />
+      </div>
+    }>
+      <ChatContent />
+    </Suspense>
   );
 }

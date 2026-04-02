@@ -1,6 +1,7 @@
 
 "use client";
 
+import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { 
@@ -10,8 +11,6 @@ import {
   MessageSquare, 
   Zap, 
   Plus,
-  Clock,
-  ChevronRight,
   Loader2
 } from 'lucide-react';
 import { 
@@ -28,15 +27,19 @@ import {
 import { useUser, useFirestore, useCollection, useMemoFirebase } from '@/firebase';
 import { collection, query, orderBy, limit } from 'firebase/firestore';
 import { cn } from '@/lib/utils';
-import { motion } from 'framer-motion';
 
 export function AppSidebar() {
+  const [mounted, setMounted] = useState(false);
   const pathname = usePathname();
   const searchParams = useSearchParams();
-  const activeId = searchParams.get('c');
+  const activeId = searchParams?.get('c');
   const { user } = useUser();
   const db = useFirestore();
   const router = useRouter();
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
 
   const conversationsQuery = useMemoFirebase(() => {
     if (!db || !user) return null;
@@ -55,6 +58,8 @@ export function AppSidebar() {
     { icon: Zap, href: '/money-saver', label: 'Optimizer' },
     { icon: Settings, href: '/settings', label: 'Sync' },
   ];
+
+  if (!mounted) return null;
 
   return (
     <Sidebar className="border-r border-white/5 bg-[#19191C]">
@@ -89,23 +94,27 @@ export function AppSidebar() {
               <div className="flex justify-center py-4">
                 <Loader2 className="w-4 h-4 text-muted-foreground animate-spin" />
               </div>
-            ) : conversations?.map((conv) => (
-              <SidebarMenuItem key={conv.id}>
-                <SidebarMenuButton 
-                  asChild 
-                  isActive={activeId === conv.id}
-                  className={cn(
-                    "rounded-xl h-11 transition-all px-4",
-                    activeId === conv.id ? "bg-white/5 text-primary" : "text-muted-foreground hover:text-white hover:bg-white/[0.02]"
-                  )}
-                >
-                  <Link href={`/?c=${conv.id}`}>
-                    <MessageSquare className="w-4 h-4 mr-2 shrink-0" />
-                    <span className="truncate font-medium text-xs">{conv.title}</span>
-                  </Link>
-                </SidebarMenuButton>
-              </SidebarMenuItem>
-            ))}
+            ) : conversations && conversations.length > 0 ? (
+              conversations.map((conv) => (
+                <SidebarMenuItem key={conv.id}>
+                  <SidebarMenuButton 
+                    asChild 
+                    isActive={activeId === conv.id}
+                    className={cn(
+                      "rounded-xl h-11 transition-all px-4",
+                      activeId === conv.id ? "bg-white/5 text-primary" : "text-muted-foreground hover:text-white hover:bg-white/[0.02]"
+                    )}
+                  >
+                    <Link href={`/?c=${conv.id}`}>
+                      <MessageSquare className="w-4 h-4 mr-2 shrink-0" />
+                      <span className="truncate font-medium text-xs">{conv.title}</span>
+                    </Link>
+                  </SidebarMenuButton>
+                </SidebarMenuItem>
+              ))
+            ) : !isLoading && (
+              <p className="px-4 py-2 text-[10px] text-muted-foreground/30 italic uppercase tracking-widest">No records found</p>
+            )}
           </SidebarMenu>
         </SidebarGroup>
 
@@ -135,12 +144,14 @@ export function AppSidebar() {
 
       <SidebarFooter className="p-4 border-t border-white/5">
         <div className="flex items-center gap-3 px-2 py-2 rounded-xl hover:bg-white/5 transition-colors cursor-pointer group">
-          <div className="w-8 h-8 rounded-full overflow-hidden border border-white/10 group-hover:border-primary/50 transition-colors">
-            <img 
-              src={`https://picsum.photos/seed/${user?.uid || 'user'}/64/64`} 
-              alt="Profile" 
-              className="w-full h-full object-cover" 
-            />
+          <div className="w-8 h-8 rounded-full overflow-hidden border border-white/10 group-hover:border-primary/50 transition-colors bg-muted/50">
+            {user?.uid && (
+              <img 
+                src={`https://picsum.photos/seed/${user.uid}/64/64`} 
+                alt="Profile" 
+                className="w-full h-full object-cover" 
+              />
+            )}
           </div>
           <div className="flex-1 min-w-0">
             <p className="text-xs font-bold text-white truncate">{user?.displayName || 'Operator User'}</p>
