@@ -1,14 +1,20 @@
+
 'use server';
 /**
- * @fileOverview An AI agent that analyzes financial documents (screenshots or text) to detect subscriptions, charges, fees, and savings opportunities.
+ * @fileOverview An AI agent that analyzes financial documents using Groq Llama 3.
  *
- * - analyzeFinancialDocument - A function that handles the financial document analysis process.
+ * - analyzeFinancialDocument - A function that handles the financial document analysis process via Groq.
  * - AnalyzeFinancialDocumentInput - The input type for the analyzeFinancialDocument function.
  * - AnalyzeFinancialDocumentOutput - The return type for the analyzeFinancialDocument function.
  */
 
 import {ai} from '@/ai/genkit';
 import {z} from 'genkit';
+import Groq from 'groq-sdk';
+
+const groq = new Groq({
+  apiKey: process.env.GROQ_API_KEY,
+});
 
 const DetectedItemSchema = z.object({
   title: z.string().describe('A concise title for the detected item.'),
@@ -42,7 +48,7 @@ export const AnalyzeFinancialDocumentInputSchema = z.object({
     .string()
     .optional()
     .describe(
-      "Optional: A screenshot or image of a bill/statement, as a data URI that must include a MIME type and use Base64 encoding. Expected format: 'data:<mimetype>;base64,<encoded_data>'."
+      "Optional: A screenshot or image of a bill/statement."
     ),
   documentText: z
     .string()
@@ -68,49 +74,62 @@ export const AnalyzeFinancialDocumentOutputSchema = z.object({
 });
 export type AnalyzeFinancialDocumentOutput = z.infer<typeof AnalyzeFinancialDocumentOutputSchema>;
 
-const analyzeFinancialDocumentPrompt = ai.definePrompt({
-  name: 'analyzeFinancialDocumentPrompt',
-  input: {schema: AnalyzeFinancialDocumentInputSchema},
-  output: {schema: AnalyzeFinancialDocumentOutputSchema},
-  prompt: `You are an expert financial assistant, specializing in identifying financial patterns and optimizing personal spending. Your task is to analyze the provided financial document (screenshot or text) and identify subscriptions, recurring charges, hidden fees, trial endings, price increases, unusual spending, duplicate charges, and potential savings opportunities.
-
-Based on your analysis, provide a structured summary of your findings, including estimated savings, urgency levels, confidence, and actionable recommendations.
-
-Here is the financial document for analysis:
-
-{{#if imageDataUri}}
-Photo of financial document: {{media url=imageDataUri}}
-{{/if}}
-
-{{#if documentText}}
-Text from financial document:
-```
-{{{documentText}}}
-```
-{{/if}}
-
-Carefully review the provided content. If both an image and text are provided, use the image as the primary source of information and use the text to clarify or supplement.
-If only text is provided, analyze the text thoroughly. If only an image is provided, extract all relevant text and visual cues from the image.
-
-Your output MUST be a JSON object conforming to the following structure:
-```json
-{{jsonSchema AnalyzeFinancialDocumentOutputSchema}}
-```
-`,
-});
-
-const analyzeFinancialDocumentFlow = ai.defineFlow(
-  {
-    name: 'analyzeFinancialDocumentFlow',
-    inputSchema: AnalyzeFinancialDocumentInputSchema,
-    outputSchema: AnalyzeFinancialDocumentOutputSchema,
-  },
-  async (input) => {
-    const {output} = await analyzeFinancialDocumentPrompt(input);
-    return output!;
-  }
-);
-
+/**
+ * analyzeFinancialDocument logic refactored to use Groq Llama 3.
+ * Note: llama3-70b-8192 is a text-only model. If imageDataUri is provided, 
+ * we assume text extraction occurred or prompt the user for text.
+ */
 export async function analyzeFinancialDocument(input: AnalyzeFinancialDocumentInput): Promise<AnalyzeFinancialDocumentOutput> {
-  return analyzeFinancialDocumentFlow(input);
+  const prompt = `You are an expert financial assistant. Analyze the following financial data and identify subscriptions, recurring charges, hidden fees, trial endings, price increases, and potential savings.
+
+Data:
+${input.documentText || "No text provided. (Image input detected, please extract text if possible)"}
+
+Return your findings in a strict JSON format matching this schema:
+{
+  "title": string,
+  "summary": string,
+  "detectedItems": [
+    {
+      "title": string,
+      "summary": string,
+      "type": "subscription" | "recurring_charge" | "hidden_fee" | "trial_ending" | "price_increase" | "unusual_spending" | "savings_opportunity" | "duplicate_charge",
+      "estimatedSavings": number,
+      "urgencyLevel": "low" | "medium" | "high" | "urgent",
+      "confidence": "low" | "medium" | "high",
+      "recommendedAction": string,
+      "copyableMessage": string,
+      "nextSteps": [string]
+    }
+  ],
+  "savingsEstimate": number,
+  "urgencyLevel": "low" | "medium" | "high" | "urgent",
+  "confidence": "low" | "medium" | "high",
+  "recommendedActions": [string],
+  "copyableMessages": [string],
+  "nextSteps": [string],
+  "beforeAfterComparison": {
+    "currentSituation": string,
+    "optimizedSituation": string,
+    "estimatedMonthlySavingsDifference": number
+  }
+}`;
+
+  const completion = await groq.chat.completions.create({
+    messages: [
+      {
+        role: 'system',
+        content: 'You are a financial optimization AI. Always output valid JSON.',
+      },
+      {
+        role: 'user',
+        content: prompt,
+      },
+    ],
+    model: 'llama3-70b-8192',
+    response_format: { type: 'json_object' },
+  });
+
+  const result = JSON.parse(completion.choices[0]?.message?.content || '{}');
+  return AnalyzeFinancialDocumentOutputSchema.parse(result);
 }
