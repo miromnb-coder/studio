@@ -1,13 +1,9 @@
-
 import type {Metadata} from 'next';
 import './globals.css';
 import { FirebaseClientProvider } from '@/firebase/client-provider';
 import { AuthGuard } from '@/components/auth/AuthGuard';
-import { SidebarProvider } from '@/components/ui/sidebar';
-import { AppSidebar } from '@/components/layout/AppSidebar';
+import { RootClientLayout } from '@/components/layout/RootClientLayout';
 import { Toaster } from '@/components/ui/toaster';
-import { Suspense } from 'react';
-import { Loader2 } from 'lucide-react';
 
 export const metadata: Metadata = {
   title: 'AI Life Operator | Conversational assistant',
@@ -29,20 +25,9 @@ export default function RootLayout({
       <body className="font-body antialiased bg-background text-foreground selection:bg-primary/30">
         <FirebaseClientProvider>
           <AuthGuard>
-            <SidebarProvider>
-              <div className="flex min-h-screen w-full">
-                <Suspense fallback={
-                  <div className="w-[var(--sidebar-width)] bg-[#19191C] border-r border-white/5 flex items-center justify-center">
-                    <Loader2 className="w-4 h-4 animate-spin text-muted-foreground" />
-                  </div>
-                }>
-                  <AppSidebar />
-                </Suspense>
-                <main className="flex-1 relative flex flex-col min-w-0">
-                  {children}
-                </main>
-              </div>
-            </SidebarProvider>
+            <RootClientLayout>
+              {children}
+            </RootClientLayout>
           </AuthGuard>
         </FirebaseClientProvider>
         <Toaster />

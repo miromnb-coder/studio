@@ -1,3 +1,4 @@
+
 "use client";
 
 import { useState, useRef, useEffect, Suspense } from 'react';
@@ -8,7 +9,7 @@ import { Card } from '@/components/ui/card';
 import { 
   Send, 
   Plus, 
-  Image as ImageIcon, 
+  ImageIcon, 
   Zap, 
   CheckCircle2,
   ChevronRight,
@@ -79,7 +80,8 @@ function ChatContent() {
     if (!mounted) return;
 
     if (storedMessages && storedMessages.length > 0) {
-      const validMessages = (storedMessages || []).filter(m => m && m.id && (m.content || m.data));
+      const validMessages = (storedMessages || [])
+        .filter(m => m && m.id && (m.content || m.data));
       setLocalMessages(validMessages);
     } else if (!conversationId) {
       setLocalMessages([{
@@ -217,7 +219,7 @@ function ChatContent() {
         }
       }
     } catch (err) {
-      // Logic for error messaging is handled within the service to prevent raw exposure
+      console.error('Chat Intelligence Error:', err);
     } finally {
       setIsProcessing(false);
     }
@@ -282,7 +284,10 @@ function ChatContent() {
                     </div>
 
                     <div className="grid gap-3">
-                      {(msg.data.detectedItems || []).slice(0, 3).map((item: any, idx: number) => (
+                      {(msg.data.detectedItems || [])
+                        .filter((item: any) => item && item.title)
+                        .slice(0, 3)
+                        .map((item: any, idx: number) => (
                         <div key={idx} className="premium-card !p-4 bg-white/[0.02] flex items-center justify-between group">
                           <div className="flex items-center gap-4">
                             <div className="w-10 h-10 rounded-xl bg-white/5 flex items-center justify-center text-muted-foreground group-hover:text-primary transition-colors">
