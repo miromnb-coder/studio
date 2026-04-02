@@ -1,3 +1,4 @@
+
 {
   "entities": {
     "UserProfile": {
@@ -12,8 +13,12 @@
         },
         "email": {
           "type": "string",
-          "description": "The user's email address. Used for display and identification, not for authentication credentials.",
+          "description": "The user's email address.",
           "format": "email"
+        },
+        "inboundEmailAddress": {
+          "type": "string",
+          "description": "Unique magic forwarding address for receipt processing."
         },
         "displayName": {
           "type": "string",
@@ -21,12 +26,10 @@
         },
         "createdAt": {
           "type": "string",
-          "description": "Timestamp when the user profile was created.",
           "format": "date-time"
         },
         "updatedAt": {
           "type": "string",
-          "description": "Timestamp when the user profile was last updated.",
           "format": "date-time"
         }
       },
@@ -36,155 +39,83 @@
         "createdAt"
       ]
     },
-    "UserSettings": {
+    "Inbox": {
       "$schema": "http://json-schema.org/draft-07/schema#",
-      "title": "UserSettings",
+      "title": "Inbox",
       "type": "object",
-      "description": "Stores user-specific preferences and application settings.",
-      "properties": {
-        "userId": {
-          "type": "string",
-          "description": "Unique identifier for the UserSettings entity, also serving as a reference to UserProfile. (Relationship: UserProfile 1:1 UserSettings)"
-        },
-        "darkModeEnabled": {
-          "type": "boolean",
-          "description": "Indicates if dark mode is enabled for the user's interface."
-        },
-        "notificationPreferences": {
-          "type": "string",
-          "description": "A JSON string storing various notification preferences (e.g., email alerts, in-app notifications)."
-        },
-        "language": {
-          "type": "string",
-          "description": "The preferred language for the user interface (e.g., 'en-US', 'es-MX')."
-        }
-      },
-      "required": [
-        "userId",
-        "darkModeEnabled",
-        "notificationPreferences",
-        "language"
-      ]
-    },
-    "UploadedFile": {
-      "$schema": "http://json-schema.org/draft-07/schema#",
-      "title": "UploadedFile",
-      "type": "object",
-      "description": "Stores metadata about files (screenshots, images) uploaded by users for analysis.",
+      "description": "Stores raw incoming email data for audit and processing.",
       "properties": {
         "id": {
-          "type": "string",
-          "description": "Unique identifier for the UploadedFile entity."
+          "type": "string"
         },
         "userId": {
-          "type": "string",
-          "description": "Reference to the UserProfile who uploaded the file. (Relationship: UserProfile 1:N UploadedFile)"
+          "type": "string"
         },
-        "analysisId": {
-          "type": "string",
-          "description": "Reference to the Analysis entity that this file is associated with. Can be null if uploaded but not yet analyzed. (Relationship: Analysis 1:N UploadedFile)"
+        "subject": {
+          "type": "string"
         },
-        "fileName": {
-          "type": "string",
-          "description": "The original name of the uploaded file."
+        "body": {
+          "type": "string"
         },
-        "fileType": {
-          "type": "string",
-          "description": "The MIME type of the uploaded file (e.g., 'image/png', 'application/pdf')."
+        "from": {
+          "type": "string"
         },
-        "storagePath": {
+        "receivedAt": {
           "type": "string",
-          "description": "The path or key to the file in Firebase Storage."
-        },
-        "downloadUrl": {
-          "type": "string",
-          "description": "The public download URL for the file from Firebase Storage.",
-          "format": "uri"
-        },
-        "uploadedAt": {
-          "type": "string",
-          "description": "Timestamp when the file was uploaded.",
           "format": "date-time"
-        },
-        "extractedText": {
-          "type": "string",
-          "description": "Text content extracted from the file, if applicable (e.g., OCR from an image)."
         }
       },
       "required": [
-        "id",
         "userId",
-        "fileName",
-        "fileType",
-        "storagePath",
-        "downloadUrl",
-        "uploadedAt"
+        "subject",
+        "body",
+        "receivedAt"
       ]
     },
     "Analysis": {
       "$schema": "http://json-schema.org/draft-07/schema#",
       "title": "Analysis",
       "type": "object",
-      "description": "Represents a single instance of a financial analysis performed based on user input.",
+      "description": "Represents a single instance of a financial analysis.",
       "properties": {
         "id": {
-          "type": "string",
-          "description": "Unique identifier for the Analysis entity."
+          "type": "string"
         },
         "userId": {
+          "type": "string"
+        },
+        "source": {
           "type": "string",
-          "description": "Reference to the UserProfile who initiated the analysis. (Relationship: UserProfile 1:N Analysis)"
+          "enum": ["screenshot", "pasted_text", "email"],
+          "description": "The origin of the data analyzed."
         },
         "title": {
-          "type": "string",
-          "description": "A concise title summarizing the analysis results."
+          "type": "string"
         },
         "summary": {
-          "type": "string",
-          "description": "A high-level summary of the findings and potential impact."
+          "type": "string"
         },
         "estimatedMonthlySavings": {
-          "type": "number",
-          "description": "The total estimated monthly savings identified in this analysis."
+          "type": "number"
         },
         "analysisDate": {
           "type": "string",
-          "description": "Timestamp when the analysis was performed.",
           "format": "date-time"
         },
         "status": {
-          "type": "string",
-          "description": "The current status of the analysis (e.g., 'completed', 'pending', 'failed')."
+          "type": "string"
         },
         "inputMethod": {
-          "type": "string",
-          "description": "The method used for input (e.g., 'screenshot', 'pasted_text', 'manual_notes')."
+          "type": "string"
         },
         "inputContent": {
-          "type": "string",
-          "description": "The raw text content provided by the user if the input method was 'pasted_text' or 'manual_notes'."
-        },
-        "uploadedFileIds": {
-          "type": "array",
-          "description": "An array of references to UploadedFile entities associated with this analysis. (Relationship: Analysis N:N UploadedFile)",
-          "items": {
-            "type": "string"
-          }
-        },
-        "detectedItemIds": {
-          "type": "array",
-          "description": "An array of references to DetectedItem entities generated by this analysis. (Relationship: Analysis 1:N DetectedItem)",
-          "items": {
-            "type": "string"
-          }
+          "type": "string"
         },
         "beforeComparison": {
-          "type": "string",
-          "description": "A JSON string representing the financial situation before applying recommendations."
+          "type": "string"
         },
         "afterComparison": {
-          "type": "string",
-          "description": "A JSON string representing the projection of the financial situation after applying recommendations."
+          "type": "string"
         }
       },
       "required": [
@@ -195,270 +126,7 @@
         "estimatedMonthlySavings",
         "analysisDate",
         "status",
-        "inputMethod",
-        "detectedItemIds",
-        "beforeComparison",
-        "afterComparison"
-      ]
-    },
-    "DetectedItem": {
-      "$schema": "http://json-schema.org/draft-07/schema#",
-      "title": "DetectedItem",
-      "type": "object",
-      "description": "Represents a specific financial finding or opportunity identified within an analysis.",
-      "properties": {
-        "id": {
-          "type": "string",
-          "description": "Unique identifier for the DetectedItem entity."
-        },
-        "analysisId": {
-          "type": "string",
-          "description": "Reference to the Analysis entity this item belongs to. (Relationship: Analysis 1:N DetectedItem)"
-        },
-        "title": {
-          "type": "string",
-          "description": "A concise title for the detected item (e.g., 'Netflix Subscription', 'Duplicate Utility Charge')."
-        },
-        "summary": {
-          "type": "string",
-          "description": "A detailed explanation of the detected item and its implications."
-        },
-        "category": {
-          "type": "string",
-          "description": "The classification of the detected item (e.g., 'Subscription', 'Duplicate Charge', 'Hidden Fee', 'Trial Ending', 'Price Increase', 'Unusual Spending')."
-        },
-        "confidenceLevel": {
-          "type": "number",
-          "description": "A confidence score (0-100) indicating the certainty of the detection."
-        },
-        "urgencyLevel": {
-          "type": "number",
-          "description": "An urgency score (0-100) indicating how quickly action should be taken."
-        },
-        "itemSavingsEstimate": {
-          "type": "number",
-          "description": "The estimated monthly savings associated with resolving this specific detected item."
-        },
-        "currentAmount": {
-          "type": "number",
-          "description": "The current cost associated with this detected item before optimization."
-        },
-        "optimizedAmount": {
-          "type": "number",
-          "description": "The projected cost associated with this detected item after optimization."
-        },
-        "recommendedActionIds": {
-          "type": "array",
-          "description": "An array of references to RecommendedAction entities for this detected item. (Relationship: DetectedItem 1:N RecommendedAction)",
-          "items": {
-            "type": "string"
-          }
-        },
-        "copyableMessage": {
-          "type": "string",
-          "description": "A pre-written, copyable message relevant to this finding (e.g., a cancellation script)."
-        },
-        "status": {
-          "type": "string",
-          "description": "The current status of this detected item (e.g., 'active', 'resolved', 'ignored')."
-        },
-        "relatedDate": {
-          "type": "string",
-          "description": "A relevant date for the item, e.g., trial ending date, renewal date.",
-          "format": "date-time"
-        }
-      },
-      "required": [
-        "id",
-        "analysisId",
-        "title",
-        "summary",
-        "category",
-        "confidenceLevel",
-        "urgencyLevel",
-        "itemSavingsEstimate",
-        "currentAmount",
-        "optimizedAmount",
-        "recommendedActionIds",
-        "status"
-      ]
-    },
-    "Subscription": {
-      "$schema": "http://json-schema.org/draft-07/schema#",
-      "title": "Subscription",
-      "type": "object",
-      "description": "Represents a recurring charge or subscription, either detected by the system or manually added/confirmed by the user.",
-      "properties": {
-        "id": {
-          "type": "string",
-          "description": "Unique identifier for the Subscription entity."
-        },
-        "userId": {
-          "type": "string",
-          "description": "Reference to the UserProfile who owns this subscription. (Relationship: UserProfile 1:N Subscription)"
-        },
-        "name": {
-          "type": "string",
-          "description": "The common name of the subscription (e.g., 'Netflix Premium', 'Spotify Family Plan')."
-        },
-        "provider": {
-          "type": "string",
-          "description": "The service provider or vendor of the subscription."
-        },
-        "monthlyCost": {
-          "type": "number",
-          "description": "The equivalent monthly cost of the subscription, regardless of billing cycle."
-        },
-        "billingCycle": {
-          "type": "string",
-          "description": "The billing frequency (e.g., 'monthly', 'annually', 'quarterly', 'weekly')."
-        },
-        "nextRenewalDate": {
-          "type": "string",
-          "description": "The next date the subscription is scheduled for renewal or billing.",
-          "format": "date-time"
-        },
-        "startDate": {
-          "type": "string",
-          "description": "The date when the subscription originally started.",
-          "format": "date-time"
-        },
-        "status": {
-          "type": "string",
-          "description": "The current status of the subscription (e.g., 'active', 'cancelled', 'on-hold', 'trial')."
-        },
-        "detectedItemId": {
-          "type": "string",
-          "description": "Reference to the DetectedItem if this subscription was initially identified by an analysis. Can be null if manually added or not directly linked to a specific detection. (Relationship: DetectedItem 1:1 Subscription)"
-        },
-        "notes": {
-          "type": "string",
-          "description": "User-added personal notes or details about the subscription."
-        }
-      },
-      "required": [
-        "id",
-        "userId",
-        "name",
-        "provider",
-        "monthlyCost",
-        "billingCycle",
-        "nextRenewalDate",
-        "startDate",
-        "status"
-      ]
-    },
-    "Alert": {
-      "$schema": "http://json-schema.org/draft-07/schema#",
-      "title": "Alert",
-      "type": "object",
-      "description": "Represents an urgent notification or critical insight generated for the user.",
-      "properties": {
-        "id": {
-          "type": "string",
-          "description": "Unique identifier for the Alert entity."
-        },
-        "userId": {
-          "type": "string",
-          "description": "Reference to the UserProfile for whom the alert is generated. (Relationship: UserProfile 1:N Alert)"
-        },
-        "detectedItemId": {
-          "type": "string",
-          "description": "Reference to the DetectedItem that triggered this alert, if applicable. (Relationship: DetectedItem 1:N Alert)"
-        },
-        "title": {
-          "type": "string",
-          "description": "A concise title for the alert (e.g., 'Trial Ending Soon!', 'Unusual Spending Detected')."
-        },
-        "message": {
-          "type": "string",
-          "description": "The detailed message content of the alert, explaining the situation and potential impact."
-        },
-        "type": {
-          "type": "string",
-          "description": "The category or type of alert (e.g., 'urgent', 'warning', 'info', 'insight')."
-        },
-        "severity": {
-          "type": "number",
-          "description": "A numerical value (0-100) indicating the severity or importance of the alert."
-        },
-        "createdAt": {
-          "type": "string",
-          "description": "Timestamp when the alert was created.",
-          "format": "date-time"
-        },
-        "isDismissed": {
-          "type": "boolean",
-          "description": "Boolean indicating if the user has dismissed this alert."
-        },
-        "dismissedAt": {
-          "type": "string",
-          "description": "Timestamp when the alert was dismissed, if applicable.",
-          "format": "date-time"
-        }
-      },
-      "required": [
-        "id",
-        "userId",
-        "title",
-        "message",
-        "type",
-        "severity",
-        "createdAt",
-        "isDismissed"
-      ]
-    },
-    "RecommendedAction": {
-      "$schema": "http://json-schema.org/draft-07/schema#",
-      "title": "RecommendedAction",
-      "type": "object",
-      "description": "Represents a specific action recommended to the user to address a detected financial item.",
-      "properties": {
-        "id": {
-          "type": "string",
-          "description": "Unique identifier for the RecommendedAction entity."
-        },
-        "detectedItemId": {
-          "type": "string",
-          "description": "Reference to the DetectedItem this action is recommended for. (Relationship: DetectedItem 1:N RecommendedAction)"
-        },
-        "title": {
-          "type": "string",
-          "description": "A concise title for the action (e.g., 'Cancel Netflix Subscription', 'Negotiate internet bill')."
-        },
-        "description": {
-          "type": "string",
-          "description": "Detailed instructions or context for carrying out the recommended action."
-        },
-        "type": {
-          "type": "string",
-          "description": "The classification of the action (e.g., 'cancellation', 'negotiation', 'reminder', 'checklist_item', 'simulated_action')."
-        },
-        "associatedMessage": {
-          "type": "string",
-          "description": "A copyable message or script directly associated with performing this action (e.g., email template)."
-        },
-        "estimatedImpact": {
-          "type": "number",
-          "description": "The estimated financial impact (e.g., savings) from successfully completing this action."
-        },
-        "status": {
-          "type": "string",
-          "description": "The current status of the action (e.g., 'pending', 'completed', 'skipped', 'in_progress')."
-        },
-        "dueDate": {
-          "type": "string",
-          "description": "An optional due date or target date for completing the action, especially for reminders.",
-          "format": "date-time"
-        }
-      },
-      "required": [
-        "id",
-        "detectedItemId",
-        "title",
-        "description",
-        "type",
-        "status"
+        "source"
       ]
     }
   },
@@ -477,49 +145,17 @@
           "schema": {
             "$ref": "#/backend/entities/UserProfile"
           },
-          "description": "Stores core profile information for a user. The document ID matches the user's Firebase Authentication UID. Access is restricted to the owning user.",
-          "params": [
-            {
-              "name": "userId",
-              "description": "The unique identifier of the user, matching request.auth.uid."
-            }
-          ]
+          "description": "Stores core profile information."
         }
       },
       {
-        "path": "/users/{userId}/settings",
+        "path": "/users/{userId}/inbox/{emailId}",
         "definition": {
-          "entityName": "UserSettings",
+          "entityName": "Inbox",
           "schema": {
-            "$ref": "#/backend/entities/UserSettings"
+            "$ref": "#/backend/entities/Inbox"
           },
-          "description": "Stores user-specific preferences and application settings. Each user has a single document, typically with a fixed ID (e.g., 'default'). Includes denormalized 'userId' (already in schema) for authorization independence.",
-          "params": [
-            {
-              "name": "userId",
-              "description": "The unique identifier of the user, matching request.auth.uid."
-            }
-          ]
-        }
-      },
-      {
-        "path": "/users/{userId}/uploaded_files/{fileId}",
-        "definition": {
-          "entityName": "UploadedFile",
-          "schema": {
-            "$ref": "#/backend/entities/UploadedFile"
-          },
-          "description": "Stores metadata for files uploaded by a user. Includes denormalized 'userId' (already in schema) for authorization independence.",
-          "params": [
-            {
-              "name": "userId",
-              "description": "The unique identifier of the user who uploaded the file."
-            },
-            {
-              "name": "fileId",
-              "description": "The unique identifier for the uploaded file metadata document."
-            }
-          ]
+          "description": "Stores raw incoming emails."
         }
       },
       {
@@ -529,112 +165,9 @@
           "schema": {
             "$ref": "#/backend/entities/Analysis"
           },
-          "description": "Stores individual financial analysis reports generated for a user. Includes denormalized 'userId' (already in schema) for authorization independence.",
-          "params": [
-            {
-              "name": "userId",
-              "description": "The unique identifier of the user who initiated the analysis."
-            },
-            {
-              "name": "analysisId",
-              "description": "The unique identifier for the analysis report."
-            }
-          ]
-        }
-      },
-      {
-        "path": "/users/{userId}/analyses/{analysisId}/detected_items/{detectedItemId}",
-        "definition": {
-          "entityName": "DetectedItem",
-          "schema": {
-            "$ref": "#/backend/entities/DetectedItem"
-          },
-          "description": "Represents a specific financial finding within an analysis. **Must include denormalized 'userId' and 'analysisId' fields** in the document for authorization independence, allowing rules to check ownership without `get()` calls to parent documents.",
-          "params": [
-            {
-              "name": "userId",
-              "description": "The unique identifier of the user who owns the parent analysis."
-            },
-            {
-              "name": "analysisId",
-              "description": "The unique identifier of the parent analysis."
-            },
-            {
-              "name": "detectedItemId",
-              "description": "The unique identifier for the detected item."
-            }
-          ]
-        }
-      },
-      {
-        "path": "/users/{userId}/subscriptions/{subscriptionId}",
-        "definition": {
-          "entityName": "Subscription",
-          "schema": {
-            "$ref": "#/backend/entities/Subscription"
-          },
-          "description": "Stores details about recurring charges or subscriptions owned by a user. Includes denormalized 'userId' (already in schema) for authorization independence.",
-          "params": [
-            {
-              "name": "userId",
-              "description": "The unique identifier of the user who owns this subscription."
-            },
-            {
-              "name": "subscriptionId",
-              "description": "The unique identifier for the subscription."
-            }
-          ]
-        }
-      },
-      {
-        "path": "/users/{userId}/alerts/{alertId}",
-        "definition": {
-          "entityName": "Alert",
-          "schema": {
-            "$ref": "#/backend/entities/Alert"
-          },
-          "description": "Stores urgent notifications or insights generated for a user. Includes denormalized 'userId' (already in schema) for authorization independence.",
-          "params": [
-            {
-              "name": "userId",
-              "description": "The unique identifier of the user for whom the alert is generated."
-            },
-            {
-              "name": "alertId",
-              "description": "The unique identifier for the alert."
-            }
-          ]
-        }
-      },
-      {
-        "path": "/users/{userId}/analyses/{analysisId}/detected_items/{detectedItemId}/recommended_actions/{actionId}",
-        "definition": {
-          "entityName": "RecommendedAction",
-          "schema": {
-            "$ref": "#/backend/entities/RecommendedAction"
-          },
-          "description": "Stores specific actions recommended for a detected item. **Must include denormalized 'userId', 'analysisId', and 'detectedItemId' fields** in the document for authorization independence, allowing rules to check ownership without `get()` calls to parent documents.",
-          "params": [
-            {
-              "name": "userId",
-              "description": "The unique identifier of the user who owns the parent analysis."
-            },
-            {
-              "name": "analysisId",
-              "description": "The unique identifier of the parent analysis."
-            },
-            {
-              "name": "detectedItemId",
-              "description": "The unique identifier of the parent detected item."
-            },
-            {
-              "name": "actionId",
-              "description": "The unique identifier for the recommended action."
-            }
-          ]
+          "description": "Stores individual financial analysis reports."
         }
       }
-    ],
-    "reasoning": "The recommended Firestore structure prioritizes secure, scalable, and debuggable access patterns by adhering strictly to the core design principles. The primary strategy employed is **Path-Based Ownership** combined with **Denormalization for Authorization Independence**.\n\n**Authorization Independence:**\nAll user-owned data is nested under a top-level `/users/{userId}` collection. For root collections like `users`, `uploaded_files`, `analyses`, `subscriptions`, and `alerts`, the `userId` field is explicitly stored within each document and also present in the document's path. This allows security rules to check `request.auth.uid == resource.data.userId` or `request.auth.uid == userId` (from the path wildcard) directly, without needing to perform `get()` operations on parent documents. This prevents issues with atomic operations (transactions/batches) and simplifies rule debugging.\n\nFor nested subcollections, specifically `detected_items` and `recommended_actions`, the original schemas only linked to their immediate parent (`analysisId` for `DetectedItem`, `detectedItemId` for `RecommendedAction`). To ensure full authorization independence as mandated, documents within these subcollections **MUST be denormalized to include the `userId` and all relevant parent IDs (`analysisId`, `detectedItemId`) directly within their document data**. For example, a `DetectedItem` document at `/users/{userId}/analyses/{analysisId}/detected_items/{detectedItemId}` will contain `userId`, `analysisId`, and `detectedItemId` fields in its payload. This allows security rules to evaluate access for any document in isolation, using only `request.auth.uid` against the denormalized `userId` field in the document itself, without costly and complex `get()` calls to `Analysis` or `User` documents.\n\n**QAPs (Rules are not Filters):**\nThe hierarchical structure directly supports efficient and secure `list` operations. By placing all user-specific data under `/users/{userId}/...`, any query initiated by an authenticated user (`request.auth.uid`) is inherently scoped to their own data. For instance, a query on `/users/myUserId/analyses` will only return analyses belonging to `myUserId`. The security rule `allow list: if request.auth.uid == userId;` for top-level user subcollections, or `allow list: if request.auth.uid == resource.data.userId;` for denormalized subcollections, is sufficient. Firestore's security engine will automatically apply this path-based filter before returning results, ensuring that users can only list data they own. This prevents accidental data exposure and ensures that rules act as gatekeepers rather than post-query filters, which is crucial for performance and security."
+    ]
   }
 }

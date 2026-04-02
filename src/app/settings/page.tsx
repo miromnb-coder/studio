@@ -1,3 +1,7 @@
+
+"use client";
+
+import { useState, useEffect } from 'react';
 import { Navbar } from '@/components/layout/Navbar';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -9,12 +13,49 @@ import {
   Bell, 
   Lock, 
   Shield, 
-  Moon,
   Database,
-  Globe
+  Mail,
+  Copy,
+  Check,
+  Zap,
+  Info
 } from 'lucide-react';
+import { useUser, useFirestore, useDoc, useMemoFirebase } from '@/firebase';
+import { doc, updateDoc } from 'firebase/firestore';
 
 export default function SettingsPage() {
+  const { user } = useUser();
+  const db = useFirestore();
+  const [copied, setCopied] = useState(false);
+
+  const userRef = useMemoFirebase(() => {
+    if (!db || !user) return null;
+    return doc(db, 'users', user.uid);
+  }, [db, user]);
+
+  const { data: profile } = useDoc(userRef);
+
+  // Generate inbound email if missing
+  useEffect(() => {
+    if (db && user && profile && !profile.inboundEmailAddress) {
+      const randomSuffix = Math.floor(1000 + Math.random() * 9000);
+      const username = (user.email || 'user').split('@')[0].replace(/[^a-zA-Z0-9]/g, '');
+      const magicEmail = `${username}${randomSuffix}@ailifeoperator.app`;
+      
+      updateDoc(doc(db, 'users', user.uid), {
+        inboundEmailAddress: magicEmail
+      });
+    }
+  }, [db, user, profile]);
+
+  const handleCopy = () => {
+    if (profile?.inboundEmailAddress) {
+      navigator.clipboard.writeText(profile.inboundEmailAddress);
+      setCopied(true);
+      setTimeout(() => setCopied(null), 2000);
+    }
+  };
+
   return (
     <div className="min-h-screen bg-background pb-12">
       <Navbar />
@@ -33,38 +74,65 @@ export default function SettingsPage() {
                 Profile
               </Button>
               <Button variant="ghost" className="justify-start gap-3 rounded-xl hover:bg-white/5">
+                <Mail className="w-4 h-4" />
+                Email Integration
+              </Button>
+              <Button variant="ghost" className="justify-start gap-3 rounded-xl hover:bg-white/5">
                 <Bell className="w-4 h-4" />
                 Notifications
-              </Button>
-              <Button variant="ghost" className="justify-start gap-3 rounded-xl hover:bg-white/5">
-                <Lock className="w-4 h-4" />
-                Security
-              </Button>
-              <Button variant="ghost" className="justify-start gap-3 rounded-xl hover:bg-white/5">
-                <Database className="w-4 h-4" />
-                Data & Privacy
               </Button>
             </nav>
           </aside>
 
           <div className="md:col-span-2 space-y-8">
             <section className="space-y-4">
+              <h2 className="text-xl font-bold font-headline flex items-center gap-2">
+                <Zap className="w-5 h-5 text-primary" />
+                Magic Forwarding Address
+              </h2>
+              <Card className="premium-card bg-primary/5 border-primary/20">
+                <CardContent className="pt-6 space-y-6">
+                  <div className="space-y-2">
+                    <Label>Your Unique Inbound Email</Label>
+                    <div className="flex gap-2">
+                      <Input 
+                        readOnly 
+                        value={profile?.inboundEmailAddress || 'Generating...'} 
+                        className="bg-white/5 border-white/10 font-mono text-primary" 
+                      />
+                      <Button variant="outline" size="icon" className="rounded-xl border-white/10" onClick={handleCopy}>
+                        {copied ? <Check className="w-4 h-4 text-success" /> : <Copy className="w-4 h-4" />}
+                      </Button>
+                    </div>
+                  </div>
+                  
+                  <div className="bg-white/5 p-4 rounded-xl space-y-3">
+                    <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-widest text-primary">
+                      <Info className="w-3 h-3" />
+                      How it works
+                    </div>
+                    <p className="text-sm text-muted-foreground leading-relaxed">
+                      Forward any digital receipt, order confirmation, or invoice to this address. 
+                      Our operator will process it instantly and notify you of any savings found.
+                    </p>
+                  </div>
+                </CardContent>
+              </Card>
+            </section>
+
+            <section className="space-y-4">
               <h2 className="text-xl font-bold font-headline">Profile Information</h2>
               <Card className="premium-card">
                 <CardContent className="pt-6 space-y-4">
                   <div className="grid grid-cols-2 gap-4">
                     <div className="space-y-2">
-                      <Label htmlFor="firstName">First Name</Label>
-                      <Input id="firstName" defaultValue="Jane" className="bg-white/5 border-white/10" />
-                    </div>
-                    <div className="space-y-2">
-                      <Label htmlFor="lastName">Last Name</Label>
-                      <Input id="lastName" defaultValue="Doe" className="bg-white/5 border-white/10" />
+                      <Label htmlFor="firstName">Display Name</Label>
+                      <Input id="displayName" defaultValue={user?.displayName || 'Jane Doe'} className="bg-white/5 border-white/10" />
                     </div>
                   </div>
                   <div className="space-y-2">
                     <Label htmlFor="email">Email Address</Label>
-                    <Input id="email" defaultValue="jane@example.com" disabled className="bg-white/5 border-white/10 opacity-50" />
+                    <Input id="email" defaultValue={user?.email || ''} disabled className="bg-white/5 border-white/10 opacity-50" />
                   </div>
                   <Button className="rounded-full">Update profile</Button>
                 </CardContent>
@@ -78,37 +146,17 @@ export default function SettingsPage() {
                   <div className="flex items-center justify-between">
                     <div className="space-y-0.5">
                       <Label className="text-base">Dark Mode</Label>
-                      <p className="text-sm text-muted-foreground">Use the dark theme by default.</p>
+                      <p className="text-sm text-muted-foreground">Use the deep dark theme by default.</p>
                     </div>
                     <Switch checked />
                   </div>
                   <div className="flex items-center justify-between">
                     <div className="space-y-0.5">
-                      <Label className="text-base">Email Alerts</Label>
-                      <p className="text-sm text-muted-foreground">Receive weekly savings reports.</p>
+                      <Label className="text-base">Proactive Email Reports</Label>
+                      <p className="text-sm text-muted-foreground">Receive weekly summaries of your automated findings.</p>
                     </div>
                     <Switch checked />
                   </div>
-                  <div className="flex items-center justify-between">
-                    <div className="space-y-0.5">
-                      <Label className="text-base">Urgent Notifications</Label>
-                      <p className="text-sm text-muted-foreground">Notify when trials are ending soon.</p>
-                    </div>
-                    <Switch checked />
-                  </div>
-                </CardContent>
-              </Card>
-            </section>
-
-            <section className="space-y-4">
-              <h2 className="text-xl font-bold font-headline text-danger">Danger Zone</h2>
-              <Card className="premium-card border-danger/20">
-                <CardContent className="pt-6 flex items-center justify-between">
-                  <div className="space-y-0.5">
-                    <Label className="text-base">Delete Account</Label>
-                    <p className="text-sm text-muted-foreground">Permanently delete your account and all data.</p>
-                  </div>
-                  <Button variant="destructive" className="rounded-full">Delete</Button>
                 </CardContent>
               </Card>
             </section>

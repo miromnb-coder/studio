@@ -10,10 +10,11 @@ import {
   ChevronRight,
   Zap,
   Plus,
-  ArrowUpRight,
   Loader2,
   Wallet,
-  Activity
+  Activity,
+  Mail,
+  ArrowUpRight
 } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { useUser, useFirestore, useCollection, useMemoFirebase } from '@/firebase';
@@ -60,12 +61,20 @@ export default function DashboardPage() {
             <h1 className="text-5xl font-bold font-headline">Dashboard</h1>
             <p className="text-muted-foreground text-xl">Your proactive financial optimization overview.</p>
           </div>
-          <Button asChild size="lg" className="h-14 px-8 rounded-full shadow-2xl shadow-primary/20">
-            <Link href="/analyze">
-              <Plus className="w-5 h-5 mr-2" />
-              New Analysis
-            </Link>
-          </Button>
+          <div className="flex gap-4">
+             <Button asChild variant="outline" className="h-14 px-8 rounded-full border-white/10 hover:bg-white/5">
+              <Link href="/settings">
+                <Mail className="w-5 h-5 mr-2" />
+                Email Setup
+              </Link>
+            </Button>
+            <Button asChild size="lg" className="h-14 px-8 rounded-full shadow-2xl shadow-primary/20">
+              <Link href="/analyze">
+                <Plus className="w-5 h-5 mr-2" />
+                New Analysis
+              </Link>
+            </Button>
+          </div>
         </motion.header>
 
         {/* Hero Savings Area */}
@@ -91,13 +100,8 @@ export default function DashboardPage() {
                 </span>
               </div>
               <p className="text-muted-foreground text-lg max-w-xl leading-relaxed">
-                We've identified optimization targets across your recent analyses. Address these findings to reclaim your monthly burn rate.
+                We've identified optimization targets. Address these to reclaim your monthly burn rate.
               </p>
-              <div className="pt-4 flex gap-4">
-                <Button asChild className="rounded-full h-12 px-8 bg-white/5 border border-white/5 hover:bg-white/10 text-white">
-                  <Link href="/history">View all findings</Link>
-                </Button>
-              </div>
             </div>
           </motion.div>
 
@@ -105,24 +109,22 @@ export default function DashboardPage() {
             initial={{ opacity: 0, scale: 0.95 }}
             animate={{ opacity: 1, scale: 1 }}
             transition={{ delay: 0.1 }}
-            className="premium-card flex flex-col justify-between"
+            className="premium-card flex flex-col justify-between bg-primary/5 border-primary/20"
           >
             <div className="space-y-6">
               <div className="w-14 h-14 rounded-2xl bg-primary/10 flex items-center justify-center text-primary">
-                <Activity className="w-7 h-7" />
+                <Zap className="w-7 h-7" />
               </div>
               <div className="space-y-2">
-                <h3 className="text-2xl font-bold font-headline">Intelligence Status</h3>
+                <h3 className="text-2xl font-bold font-headline">Magic Forwarding</h3>
                 <p className="text-muted-foreground leading-relaxed">
-                  {analyses && analyses.length > 0 
-                    ? `Monitoring active across ${analyses.length} recent statements.` 
-                    : "No data streams detected. Initiate an analysis to begin monitoring."}
+                  Automation active. Forward your digital receipts to your unique address for instant analysis.
                 </p>
               </div>
             </div>
             <Button variant="link" className="p-0 text-primary h-auto justify-start font-bold text-lg group" asChild>
-              <Link href="/history">
-                View History
+              <Link href="/settings">
+                Setup Magic Email
                 <ChevronRight className="ml-2 w-5 h-5 group-hover:translate-x-1 transition-transform" />
               </Link>
             </Button>
@@ -142,10 +144,17 @@ export default function DashboardPage() {
                   <Link key={analysis.id} href={`/results/${analysis.id}`} className="p-8 flex items-center justify-between hover:bg-white/[0.02] transition-colors group block">
                     <div className="flex items-center gap-6">
                       <div className="w-14 h-14 rounded-2xl bg-white/5 flex items-center justify-center border border-white/5 font-bold text-xl text-primary">
-                        {analysis.title.charAt(0)}
+                        {analysis.source === 'email' ? <Mail className="w-6 h-6" /> : analysis.title.charAt(0)}
                       </div>
                       <div className="space-y-1">
-                        <p className="text-xl font-bold">{analysis.title}</p>
+                        <div className="flex items-center gap-2">
+                          <p className="text-xl font-bold">{analysis.title}</p>
+                          {analysis.source === 'email' && (
+                            <Badge className="bg-primary/10 text-primary hover:bg-primary/20 text-[8px] uppercase font-bold rounded-full px-2 py-0 border-primary/20">
+                              Email Detected
+                            </Badge>
+                          )}
+                        </div>
                         <p className="text-sm text-muted-foreground">{new Date(analysis.analysisDate).toLocaleDateString()}</p>
                       </div>
                     </div>
@@ -154,9 +163,6 @@ export default function DashboardPage() {
                         <p className="text-2xl font-bold text-success tracking-tight">+${analysis.estimatedMonthlySavings.toFixed(2)}</p>
                         <p className="text-[10px] text-muted-foreground uppercase tracking-widest font-bold">Optimization</p>
                       </div>
-                      <Badge className="rounded-full px-4 py-1.5 text-[10px] font-bold uppercase bg-white/5 text-muted-foreground border-white/10">
-                        {analysis.status}
-                      </Badge>
                       <ChevronRight className="w-6 h-6 text-muted-foreground group-hover:text-foreground group-hover:translate-x-1 transition-all" />
                     </div>
                   </Link>
@@ -175,28 +181,28 @@ export default function DashboardPage() {
 
           {/* Insights */}
           <div className="space-y-8">
-            <h3 className="text-2xl font-bold font-headline">Smart Insights</h3>
+            <h3 className="text-2xl font-bold font-headline">Intelligence Status</h3>
             <div className="space-y-6">
               <motion.div 
                 whileHover={{ scale: 1.02 }}
-                className="premium-card !p-8 bg-primary/5 border-primary/20 space-y-6"
+                className="premium-card !p-8 bg-success/5 border-success/20 space-y-6"
               >
-                <div className="flex items-center gap-3 text-primary">
-                  <Zap className="w-6 h-6 fill-primary/20" />
-                  <span className="text-sm font-bold uppercase tracking-widest">Active Suggestion</span>
+                <div className="flex items-center gap-3 text-success">
+                  <Activity className="w-6 h-6" />
+                  <span className="text-sm font-bold uppercase tracking-widest">Operator Active</span>
                 </div>
                 <p className="text-lg leading-relaxed font-medium">
-                  We recommend a weekly audit of your digital receipts to prevent trial leakages.
+                  Scanning for common trial endings and hidden service fees. All streams secure.
                 </p>
               </motion.div>
 
               <div className="premium-card !p-8 border-white/10 space-y-4 opacity-80">
                 <div className="flex items-center gap-3 text-muted-foreground">
-                  <AlertTriangle className="w-5 h-5" />
-                  <span className="text-sm font-bold uppercase tracking-widest">Proactive Alert</span>
+                  <Mail className="w-5 h-5" />
+                  <span className="text-sm font-bold uppercase tracking-widest">Inbound Stats</span>
                 </div>
                 <p className="text-sm leading-relaxed text-muted-foreground">
-                  Your operator engine is currently scanning for common duplicates. No major anomalies detected in your history.
+                  Digital receipts forwarded today will be processed within seconds.
                 </p>
               </div>
             </div>
