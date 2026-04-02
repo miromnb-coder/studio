@@ -1,4 +1,3 @@
-
 "use client";
 
 import { useEffect, useState } from 'react';
@@ -64,6 +63,7 @@ export function AppSidebar() {
     { icon: Settings, href: '/settings', label: 'Sync' },
   ];
 
+  // HYDRATION GUARD
   if (!mounted) {
     return (
       <Sidebar className="border-r border-white/5 bg-[#19191C]">
@@ -108,7 +108,7 @@ export function AppSidebar() {
                 <Loader2 className="w-4 h-4 text-muted-foreground animate-spin" />
               </div>
             ) : conversations && conversations.length > 0 ? (
-              conversations.map((conv) => (
+              (conversations || []).map((conv) => (
                 <SidebarMenuItem key={conv.id}>
                   <SidebarMenuButton 
                     asChild 

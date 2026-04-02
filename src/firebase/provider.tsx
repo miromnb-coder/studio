@@ -49,8 +49,16 @@ export interface UserHookResult { // Renamed from UserAuthHookResult for consist
   userError: Error | null;
 }
 
-// React Context
-export const FirebaseContext = createContext<FirebaseContextState | undefined>(undefined);
+// React Context with safe default value
+export const FirebaseContext = createContext<FirebaseContextState>({
+  areServicesAvailable: false,
+  firebaseApp: null,
+  firestore: null,
+  auth: null,
+  user: null,
+  isUserLoading: true,
+  userError: null,
+});
 
 /**
  * FirebaseProvider manages and provides Firebase services and user authentication state.
@@ -122,8 +130,16 @@ export const useFirebase = (): FirebaseServicesAndUser => {
     throw new Error('useFirebase must be used within a FirebaseProvider.');
   }
 
+  // Gracefully handle unavailable services during the initial mount or boot sequence
   if (!context.areServicesAvailable || !context.firebaseApp || !context.firestore || !context.auth) {
-    throw new Error('Firebase core services not available. Check FirebaseProvider props.');
+    return {
+      firebaseApp: context.firebaseApp as any,
+      firestore: context.firestore as any,
+      auth: context.auth as any,
+      user: context.user,
+      isUserLoading: context.isUserLoading,
+      userError: context.userError,
+    };
   }
 
   return {

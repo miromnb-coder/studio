@@ -7,31 +7,37 @@ import { getFirestore } from 'firebase/firestore';
 
 // IMPORTANT: DO NOT MODIFY THIS FUNCTION
 export function initializeFirebase() {
-  if (!getApps().length) {
-    let firebaseApp: FirebaseApp;
-    
-    // Check if we have a valid API key before attempting initialization to prevent crashes
-    const isApiKeyMissing = !firebaseConfig.apiKey || firebaseConfig.apiKey === 'undefined';
-
-    try {
-      // Attempt to initialize via Firebase App Hosting environment variables
-      firebaseApp = initializeApp();
-    } catch (e) {
-      // Fallback to manual configuration
-      if (isApiKeyMissing) {
-        console.error('Firebase API Key is missing or invalid. Please ensure environment variables are set or config.ts is updated.');
-      }
-      firebaseApp = initializeApp(firebaseConfig);
-    }
-
-    return getSdks(firebaseApp);
+  // Check for existing app instance first
+  if (getApps().length > 0) {
+    return getSdks(getApp());
   }
 
-  // If already initialized, return the SDKs with the already initialized App
-  return getSdks(getApp());
+  // Check if we have a valid API key before attempting initialization to prevent crashes
+  const isApiKeyMissing = !firebaseConfig.apiKey || firebaseConfig.apiKey === 'undefined' || firebaseConfig.apiKey === '';
+
+  try {
+    // Attempt to initialize via Firebase App Hosting environment variables or config
+    const firebaseApp = initializeApp(firebaseConfig);
+    return getSdks(firebaseApp);
+  } catch (e) {
+    if (isApiKeyMissing) {
+      console.warn('Firebase API Key is missing. Returning placeholder SDKs to prevent boot crash.');
+    } else {
+      console.error('Firebase Initialization Error:', e);
+    }
+    // Return a dummy object if initialization fails completely to prevent root crashes
+    return {
+      firebaseApp: null as any,
+      auth: null as any,
+      firestore: null as any
+    };
+  }
 }
 
 export function getSdks(firebaseApp: FirebaseApp) {
+  if (!firebaseApp) {
+    return { firebaseApp: null as any, auth: null as any, firestore: null as any };
+  }
   return {
     firebaseApp,
     auth: getAuth(firebaseApp),

@@ -1,4 +1,3 @@
-
 "use client";
 
 import { useState, useRef, useEffect, Suspense } from 'react';
@@ -103,6 +102,7 @@ function ChatContent() {
     }
   }, [localMessages, isProcessing]);
 
+  // HARD HYDRATION GUARD
   if (!mounted) {
     return (
       <div className="flex flex-col h-screen bg-background items-center justify-center">
