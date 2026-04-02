@@ -39,7 +39,7 @@ export default function SettingsPage() {
 
   useEffect(() => {
     setMounted(true);
-    // Check if we have a connection flag in local storage for the prototype
+    // Check local storage for persistent connection status in prototype
     const status = localStorage.getItem('operator_gmail_connected');
     if (status === 'true') setGmailConnected(true);
   }, []);
@@ -75,13 +75,13 @@ export default function SettingsPage() {
       localStorage.setItem('operator_gmail_connected', 'true');
       toast({
         title: "Intelligence Connected",
-        description: "Gmail protocol is now active and scanning for patterns.",
+        description: "Gmail protocol is now active and scanning for billing patterns.",
       });
     } else {
       toast({
         variant: "destructive",
-        title: "Connection Refused",
-        description: "Failed to authorize Gmail protocol.",
+        title: "Connection Protocol Refused",
+        description: "Failed to authorize Gmail read-only access.",
       });
     }
     setIsConnectingGmail(false);
@@ -140,7 +140,7 @@ export default function SettingsPage() {
                   <div className="space-y-2 text-center md:text-left">
                     <h3 className="text-2xl font-bold text-white tracking-tight">Gmail Connectivity</h3>
                     <p className="text-sm text-muted-foreground max-w-sm">
-                      The Operator will scan your recent receipts and billing alerts. We only request read-only access.
+                      The Operator will scan your recent receipts, invoices, and billing alerts. We only request read-only access.
                     </p>
                   </div>
                   
@@ -168,7 +168,7 @@ export default function SettingsPage() {
                 
                 <div className="pt-6 border-t border-white/5 flex items-center gap-3 text-[9px] font-bold uppercase tracking-[0.2em] text-muted-foreground/50">
                   <Shield className="w-3 h-3" />
-                  Privacy Protocol: No full bodies are stored permanently.
+                  Privacy Protocol: No full message bodies are stored permanently.
                 </div>
               </div>
             </section>
@@ -194,6 +194,32 @@ export default function SettingsPage() {
                     <Button variant="outline" size="icon" className="w-14 h-14 rounded-xl border-white/5 hover:bg-white/5" onClick={handleCopy}>
                       {copied ? <Check className="w-5 h-5 text-success" /> : <Copy className="w-5 h-5 text-white" />}
                     </Button>
+                  </div>
+                </div>
+                <div className="p-4 rounded-xl bg-white/[0.02] border border-white/5 flex gap-4 text-xs text-muted-foreground leading-relaxed">
+                  <Info className="w-4 h-4 text-primary shrink-0" />
+                  <p>Forward any receipt or bank statement to this address. The Operator will automatically audit the contents within 30 seconds.</p>
+                </div>
+              </div>
+            </section>
+
+            <section className="space-y-6 pt-12 border-t border-white/5">
+              <div className="space-y-1">
+                <h2 className="text-xl font-bold font-headline tracking-tight uppercase tracking-widest text-[12px] flex items-center gap-2 text-white">
+                  <User className="w-4 h-4 text-muted-foreground" />
+                  Operator Profile
+                </h2>
+              </div>
+
+              <div className="premium-card p-8 space-y-6">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                  <div className="space-y-2">
+                    <Label className="text-[10px] uppercase font-bold tracking-widest text-muted-foreground">Display Identity</Label>
+                    <Input value={profile?.displayName || ''} readOnly className="h-12 bg-white/5 border-white/5 rounded-xl" />
+                  </div>
+                  <div className="space-y-2">
+                    <Label className="text-[10px] uppercase font-bold tracking-widest text-muted-foreground">Communication Channel</Label>
+                    <Input value={profile?.email || ''} readOnly className="h-12 bg-white/5 border-white/5 rounded-xl" />
                   </div>
                 </div>
               </div>

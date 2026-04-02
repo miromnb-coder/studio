@@ -144,13 +144,14 @@ function ChatContent() {
         return;
       }
 
-      // Format emails for analysis
-      const emailContext = emails.map(e => `FROM: ${e.from}\nSUBJECT: ${e.subject}\nSNIPPET: ${e.snippet}`).join('\n\n---\n\n');
+      // Format emails for intelligence analysis
+      const emailContext = `GMAIL INTELLIGENCE FEED:\n` + emails.map(e => `[FROM: ${e.from} | SUBJ: ${e.subject}] Snippet: ${e.snippet}`).join('\n---\n');
       
-      await sendMessage(`[SYSTEM] Analyzing ${emails.length} relevant financial emails from your Gmail inbox.`, undefined, emailContext);
+      await sendMessage(`[SYSTEM] Synchronizing intelligence from ${emails.length} financial markers in Gmail.`, undefined, emailContext);
 
     } catch (err) {
       console.error('Gmail Sync Error:', err);
+      toast({ variant: "destructive", title: "Sync Protocol Interrupted", description: "An error occurred during Gmail analysis." });
     } finally {
       setIsSyncingEmail(false);
     }
