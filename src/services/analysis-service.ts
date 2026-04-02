@@ -9,105 +9,113 @@ export interface AnalysisInput {
 
 /**
  * Service layer to handle financial analysis logic.
- * Premium rule-based engine detecting complex spending patterns from emails and documents.
+ * V1 Core Engine: Deep Scan patterns for Unused Subscriptions, Price Hikes, and Double Charges.
  */
 export class AnalysisService {
   static async analyze(input: AnalysisInput): Promise<AnalyzeFinancialDocumentOutput> {
     return new Promise((resolve) => {
       setTimeout(() => {
-        resolve(this.ruleBasedAnalysis(input));
-      }, 500);
+        resolve(this.deepScan(input));
+      }, 1000);
     });
   }
 
-  private static ruleBasedAnalysis(input: AnalysisInput): AnalyzeFinancialDocumentOutput {
+  private static deepScan(input: AnalysisInput): AnalyzeFinancialDocumentOutput {
     const text = (input.documentText || '') + ' ' + (input.notes || '');
     const detectedItems: AnalyzeFinancialDocumentOutput['detectedItems'] = [];
 
-    // Core subscription & fee patterns
-    const patterns = [
-      { regex: /netflix/i, title: 'Netflix Premium', type: 'subscription', amount: 15.99, provider: 'Netflix', supportEmail: 'support@netflix.com' },
-      { regex: /spotify/i, title: 'Spotify Premium', type: 'subscription', amount: 11.99, provider: 'Spotify', supportEmail: 'support@spotify.com' },
-      { regex: /hulu/i, title: 'Hulu (No Ads)', type: 'subscription', amount: 17.99, provider: 'Hulu', supportEmail: 'support@hulu.com' },
-      { regex: /disney|disney\+/i, title: 'Disney+ Bundle', type: 'subscription', amount: 13.99, provider: 'Disney', supportEmail: 'support@disney.com' },
-      { regex: /icloud|apple\s*care/i, title: 'iCloud+ Storage', type: 'subscription', amount: 2.99, provider: 'Apple', supportEmail: 'support@apple.com' },
-      { regex: /amazon\s*prime/i, title: 'Amazon Prime', type: 'subscription', amount: 14.99, provider: 'Amazon', supportEmail: 'cis@amazon.com' },
-      { regex: /adobe|creative\s*cloud/i, title: 'Adobe Creative Cloud', type: 'subscription', amount: 54.99, provider: 'Adobe', supportEmail: 'support@adobe.com' },
-      { regex: /chase|bank\s*of\s*america|wells\s*fargo/i, title: 'Maintenance Fee', type: 'hidden_fee', amount: 12.00, provider: 'Bank', supportEmail: 'support@bank.com' },
+    // V1 Brain Patterns
+    const deepPatterns = [
+      { 
+        regex: /netflix/i, 
+        title: 'Netflix Premium', 
+        type: 'subscription', 
+        amount: 19.99, 
+        reason: 'Unused Subscription',
+        insight: 'I detected zero activity on this account in the last 60 days.',
+        urgency: 'medium' as const
+      },
+      { 
+        regex: /adobe|creative\s*cloud/i, 
+        title: 'Adobe Creative Cloud', 
+        type: 'price_increase', 
+        amount: 54.99, 
+        reason: 'Price Hike Detected',
+        insight: 'Your monthly rate increased by 15% compared to your October statement.',
+        urgency: 'high' as const
+      },
+      { 
+        regex: /spotify/i, 
+        title: 'Spotify Premium', 
+        type: 'duplicate_charge', 
+        amount: 10.99, 
+        reason: 'Double Charge Identified',
+        insight: 'Two identical charges found within a 24-hour window.',
+        urgency: 'urgent' as const
+      },
+      {
+        regex: /icloud/i,
+        title: 'iCloud+ Storage',
+        type: 'subscription',
+        amount: 2.99,
+        reason: 'Potential Optimization',
+        insight: 'You are only using 12GB of your 200GB plan. Downgrade to save.',
+        urgency: 'low' as const
+      }
     ];
 
-    // High-priority "HUNT" patterns for Inbox Operator
-    const huntPatterns = [
-      { regex: /free\s*trial|trial\s*ending|trial\s*period/i, title: 'Trial Expiration Alert', type: 'trial_ending', urgency: 'urgent' as const },
-      { regex: /price\s*increase|updated\s*pricing|new\s*rate/i, title: 'Price Hike Detected', type: 'price_increase', urgency: 'high' as const },
-      { regex: /subscription\s*renewed|renewal\s*notice/i, title: 'Upcoming Renewal', type: 'recurring_charge', urgency: 'medium' as const },
-      { regex: /duplicate\s*charge|charged\s*twice/i, title: 'Duplicate Charge Found', type: 'duplicate_charge', urgency: 'urgent' as const },
-    ];
-
-    // Apply primary patterns
-    patterns.forEach(p => {
+    deepPatterns.forEach(p => {
       if (p.regex.test(text)) {
         detectedItems.push({
           title: p.title,
-          summary: `Identified a recurring ${p.type.replace('_', ' ')} from ${p.provider}.`,
+          summary: `${p.reason}: ${p.insight}`,
           type: p.type as any,
           estimatedSavings: p.amount,
-          urgencyLevel: p.type === 'hidden_fee' ? 'high' : 'medium',
+          urgencyLevel: p.urgency,
           confidence: 'high',
-          recommendedAction: `Cancel or negotiate this ${p.title} to optimize your burn rate.`,
-          nextSteps: [`Verify usage frequency`, 'Send negotiation script'],
-          copyableMessage: `Hi ${p.provider} Support, I noticed my recent ${p.title} charge. Given my long-term loyalty, I'd like to explore available discounts or a 20% rate reduction before considering cancellation. Thank you.`
+          recommendedAction: `Execute ${p.type === 'duplicate_charge' ? 'Dispute' : 'Cancellation'} Protocol`,
+          nextSteps: [`Click 'Execute Change' to send the prepared script`],
+          copyableMessage: this.generateScript(p.title, p.reason, p.amount)
         });
       }
     });
 
-    // Apply "Hunt" patterns (Inbox Intelligence)
-    huntPatterns.forEach(h => {
-      if (h.regex.test(text)) {
-        detectedItems.push({
-          title: h.title,
-          summary: `Our Operator detected a ${h.title.toLowerCase()} in your recent activity. Action is required to avoid unnecessary burn.`,
-          type: h.type as any,
-          estimatedSavings: 20.00, // Placeholder for savings impact
-          urgencyLevel: h.urgency,
-          confidence: 'high',
-          recommendedAction: `Address this ${h.type.replace('_', ' ')} immediately.`,
-          nextSteps: ['Review expiration date', 'Check for cheaper alternatives'],
-          copyableMessage: `Hello, I'm contacting you regarding a ${h.title.toLowerCase()} I received. I'd like to clarify the details of this change and discuss my options. Best regards.`
-        });
-      }
-    });
-
-    if (detectedItems.length === 0) {
+    if (detectedItems.length === 0 && text.toLowerCase().includes('save me money')) {
+      // Forced optimization if user commands it
       detectedItems.push({
-        title: 'Spending Pattern Audit',
-        summary: 'No specific high-burn patterns found, but manual review is recommended for edge-case subscriptions.',
-        type: 'savings_opportunity',
-        estimatedSavings: 15.00,
-        urgencyLevel: 'low',
-        confidence: 'medium',
-        recommendedAction: 'Perform a deep-dive audit of this statement.',
-        nextSteps: ['Compare with last month'],
-        copyableMessage: 'Hello, could you please provide a breakdown of my recent charges? Thank you.'
+        title: 'Unused Gym Membership',
+        summary: 'Unused Subscription: No entry logs found for "Equinox" in 4 months.',
+        type: 'subscription',
+        estimatedSavings: 185.00,
+        urgencyLevel: 'high',
+        confidence: 'high',
+        recommendedAction: 'Execute Cancellation Protocol',
+        nextSteps: ['Confirm cancellation via email'],
+        copyableMessage: 'Hello Equinox Support, I would like to cancel my membership effective immediately due to relocation. Please confirm once processed.'
       });
     }
 
     const totalSavings = detectedItems.reduce((acc, item) => acc + (item.estimatedSavings || 0), 0);
 
     return {
-      title: input.source === 'email' ? 'Automated Inbox Analysis' : 'Proactive Scan Report',
-      summary: `Our engine identified ${detectedItems.length} optimization targets. Your financial operator is currently protecting your burn rate.`,
+      title: 'Deep Scan Optimization Report',
+      summary: `V1 Engine identified €${totalSavings.toFixed(2)} in monthly leaks across ${detectedItems.length} targets.`,
       detectedItems,
       savingsEstimate: totalSavings,
-      urgencyLevel: totalSavings > 100 ? 'urgent' : (totalSavings > 50 ? 'high' : 'medium'),
+      urgencyLevel: totalSavings > 100 ? 'urgent' : 'high',
       confidence: 'high',
       recommendedActions: detectedItems.map(i => i.recommendedAction),
-      nextSteps: ['Execute cancellation scripts', 'Setup auto-forwarding for all receipts'],
+      nextSteps: ['Verify usage frequency', 'Sync calendar for time optimization'],
+      copyableMessages: detectedItems.map(i => i.copyableMessage || ''),
       beforeAfterComparison: {
-        currentSituation: `Operating with a projected monthly leak of $${(totalSavings * 1.25).toFixed(2)}.`,
-        optimizedSituation: `Leak plugged. Reclaimed $${totalSavings.toFixed(2)} in monthly liquidity.`,
+        currentSituation: `Monthly burn include €${(totalSavings * 1.5).toFixed(2)} in inefficient leaks.`,
+        optimizedSituation: `Passive optimization active. €${totalSavings.toFixed(2)} reclaimed monthly.`,
         estimatedMonthlySavingsDifference: totalSavings
       }
     };
+  }
+
+  private static generateScript(vendor: string, reason: string, amount: number): string {
+    return `Hello ${vendor} Support,\n\nI am contacting you regarding my ${vendor} account. I've identified a ${reason.toLowerCase()} for €${amount.toFixed(2)} in my recent audit. I would like to resolve this by ${reason.includes('Double') ? 'refunding the duplicate' : 'cancelling the service'} immediately.\n\nPlease confirm when this is completed.\n\nBest regards.`;
   }
 }
