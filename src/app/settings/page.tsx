@@ -1,3 +1,4 @@
+
 "use client";
 
 import { useState, useEffect } from 'react';
@@ -16,19 +17,30 @@ import {
   Zap,
   Info,
   RefreshCw,
-  Cpu
+  Cpu,
+  Loader2
 } from 'lucide-react';
 import { useUser, useFirestore, useDoc, useMemoFirebase } from '@/firebase';
 import { doc, updateDoc } from 'firebase/firestore';
 
 export default function SettingsPage() {
+  const [mounted, setMounted] = useState(false);
   const { user } = useUser();
   const db = useFirestore();
   const [copied, setCopied] = useState(false);
 
+  useEffect(() => {
+    setMounted(true);
+  }, []);
+
   const userRef = useMemoFirebase(() => {
-    if (!db || !user) return null;
-    return doc(db, 'users', user.uid);
+    try {
+      if (!db || !user) return null;
+      return doc(db, 'users', user.uid);
+    } catch (e) {
+      console.error('Settings User Ref Error:', e);
+      return null;
+    }
   }, [db, user]);
 
   const { data: profile } = useDoc(userRef);
@@ -46,12 +58,20 @@ export default function SettingsPage() {
   }, [db, user, profile]);
 
   const handleCopy = () => {
-    if (profile?.inboundEmailAddress) {
+    if (profile?.inboundEmailAddress && typeof window !== 'undefined') {
       navigator.clipboard.writeText(profile.inboundEmailAddress);
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
     }
   };
+
+  if (!mounted) {
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center">
+        <Loader2 className="w-8 h-8 text-primary animate-spin" />
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-background pt-24 pb-32">
@@ -59,7 +79,7 @@ export default function SettingsPage() {
       
       <main className="max-w-4xl mx-auto px-6 space-y-16">
         <header className="space-y-4 pt-8">
-          <h1 className="text-5xl md:text-7xl font-bold font-headline tracking-tighter leading-[0.9]">Sync.</h1>
+          <h1 className="text-5xl md:text-7xl font-bold font-headline tracking-tighter leading-[0.9] text-white">Sync.</h1>
           <p className="text-xl text-muted-foreground font-medium">Protocol configuration and passive intelligence settings.</p>
         </header>
 
@@ -67,7 +87,7 @@ export default function SettingsPage() {
           <div className="space-y-12">
             <section className="space-y-6">
               <div className="space-y-1">
-                <h2 className="text-xl font-bold font-headline tracking-tight uppercase tracking-widest text-[12px] flex items-center gap-2">
+                <h2 className="text-xl font-bold font-headline tracking-tight uppercase tracking-widest text-[12px] flex items-center gap-2 text-white">
                   <Mail className="w-4 h-4 text-primary" />
                   Inbound Protocol
                 </h2>
@@ -84,7 +104,7 @@ export default function SettingsPage() {
                       className="h-14 bg-white/5 border-white/5 font-mono text-primary text-sm px-5 rounded-xl flex-1" 
                     />
                     <Button variant="outline" size="icon" className="w-14 h-14 rounded-xl border-white/5 hover:bg-white/5" onClick={handleCopy}>
-                      {copied ? <Check className="w-5 h-5 text-success" /> : <Copy className="w-5 h-5" />}
+                      {copied ? <Check className="w-5 h-5 text-success" /> : <Copy className="w-5 h-5 text-white" />}
                     </Button>
                   </div>
                 </div>
@@ -109,18 +129,18 @@ export default function SettingsPage() {
             </section>
 
             <section className="space-y-6 pt-12 border-t border-white/5">
-              <h2 className="text-xl font-bold font-headline tracking-tight uppercase tracking-widest text-[12px]">Operator Intelligence</h2>
+              <h2 className="text-xl font-bold font-headline tracking-tight uppercase tracking-widest text-[12px] text-white">Operator Intelligence</h2>
               <div className="premium-card p-8 space-y-8 bg-white/[0.01]">
                 <div className="flex items-center justify-between">
                   <div className="space-y-1">
-                    <Label className="text-lg font-bold">Conversational Ingestion</Label>
+                    <Label className="text-lg font-bold text-white">Conversational Ingestion</Label>
                     <p className="text-xs text-muted-foreground font-medium italic">Allow operator to process chat uploads immediately.</p>
                   </div>
                   <Switch checked />
                 </div>
                 <div className="flex items-center justify-between pt-8 border-t border-white/5">
                   <div className="space-y-1">
-                    <Label className="text-lg font-bold">Predictive Scripts</Label>
+                    <Label className="text-lg font-bold text-white">Predictive Scripts</Label>
                     <p className="text-xs text-muted-foreground font-medium italic">Pre-generate negotiation drafts for all detected waste.</p>
                   </div>
                   <Switch checked />

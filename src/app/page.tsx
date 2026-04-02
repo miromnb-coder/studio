@@ -44,10 +44,10 @@ const STEPS = [
 ];
 
 function ChatContent() {
+  const [mounted, setMounted] = useState(false);
   const [input, setInput] = useState('');
   const [isProcessing, setIsProcessing] = useState(false);
   const [currentStep, setCurrentStep] = useState(0);
-  const [mounted, setMounted] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const { user } = useUser();
@@ -61,11 +61,16 @@ function ChatContent() {
   }, []);
 
   const messagesQuery = useMemoFirebase(() => {
-    if (!db || !user || !conversationId) return null;
-    return query(
-      collection(db, 'users', user.uid, 'conversations', conversationId, 'messages'),
-      orderBy('timestamp', 'asc')
-    );
+    try {
+      if (!db || !user || !conversationId) return null;
+      return query(
+        collection(db, 'users', user.uid, 'conversations', conversationId, 'messages'),
+        orderBy('timestamp', 'asc')
+      );
+    } catch (e) {
+      console.error('Messages Query Error:', e);
+      return null;
+    }
   }, [db, user, conversationId]);
 
   const { data: storedMessages } = useCollection(messagesQuery);
@@ -98,7 +103,13 @@ function ChatContent() {
     }
   }, [localMessages, isProcessing]);
 
-  if (!mounted) return null;
+  if (!mounted) {
+    return (
+      <div className="flex flex-col h-screen bg-background items-center justify-center">
+        <Loader2 className="w-8 h-8 text-primary animate-spin" />
+      </div>
+    );
+  }
 
   const sendMessage = async (text?: string, fileData?: string) => {
     const content = text || input;
@@ -112,15 +123,20 @@ function ChatContent() {
     let activeConvId = conversationId;
     
     if (!activeConvId) {
-      const newConvRef = doc(collection(db, 'users', user.uid, 'conversations'));
-      activeConvId = newConvRef.id;
-      await setDoc(newConvRef, {
-        userId: user.uid,
-        title: 'New Analysis',
-        createdAt: serverTimestamp(),
-        updatedAt: serverTimestamp(),
-      });
-      router.push(`/?c=${activeConvId}`);
+      try {
+        const newConvRef = doc(collection(db, 'users', user.uid, 'conversations'));
+        activeConvId = newConvRef.id;
+        await setDoc(newConvRef, {
+          userId: user.uid,
+          title: 'New Analysis',
+          createdAt: serverTimestamp(),
+          updatedAt: serverTimestamp(),
+        });
+        router.push(`/?c=${activeConvId}`);
+      } catch (e) {
+        console.error('Conversation Initialization Error:', e);
+        return;
+      }
     }
 
     const userMsgId = Math.random().toString(36).substr(2, 9);
@@ -141,7 +157,7 @@ function ChatContent() {
     setCurrentStep(0);
 
     try {
-      const history = localMessages.slice(-10).map(m => ({ role: m.role, content: m.content }));
+      const history = (localMessages || []).slice(-10).map(m => ({ role: m.role, content: m.content }));
 
       for (let i = 0; i < STEPS.length; i++) {
         await new Promise(r => setTimeout(r, STEPS[i].duration));
@@ -231,7 +247,7 @@ function ChatContent() {
         className="flex-1 overflow-y-auto pt-24 pb-40 px-6 md:px-12 lg:px-24 xl:px-48 space-y-12"
       >
         <AnimatePresence initial={false}>
-          {localMessages.map((msg) => (
+          {(localMessages || []).map((msg) => (
             <motion.div
               key={msg.id}
               initial={{ opacity: 0, y: 10 }}
@@ -268,7 +284,7 @@ function ChatContent() {
                     </div>
 
                     <div className="grid gap-3">
-                      {msg.data.detectedItems?.slice(0, 3).map((item: any, idx: number) => (
+                      {(msg.data.detectedItems || []).slice(0, 3).map((item: any, idx: number) => (
                         <div key={idx} className="premium-card !p-4 bg-white/[0.02] flex items-center justify-between group">
                           <div className="flex items-center gap-4">
                             <div className="w-10 h-10 rounded-xl bg-white/5 flex items-center justify-center text-muted-foreground group-hover:text-primary transition-colors">
@@ -338,11 +354,11 @@ function ChatContent() {
               <DropdownMenuContent align="start" className="w-56 bg-card border-white/10 rounded-2xl p-2 mb-4">
                 <DropdownMenuItem onClick={() => fileInputRef.current?.click()} className="rounded-xl h-11 cursor-pointer gap-3">
                   <ImageIcon className="w-4 h-4 text-primary" />
-                  <span className="font-medium text-sm">Upload Visual Source</span>
+                  <span className="font-medium text-sm text-white">Upload Visual Source</span>
                 </DropdownMenuItem>
                 <DropdownMenuItem onClick={() => router.push('/')} className="rounded-xl h-11 cursor-pointer gap-3">
                   <Plus className="w-4 h-4 text-success" />
-                  <span className="font-medium text-sm">New Conversation</span>
+                  <span className="font-medium text-sm text-white">New Conversation</span>
                 </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
@@ -365,7 +381,7 @@ function ChatContent() {
                 }
               }}
               placeholder="Ask anything or request a deep audit..."
-              className="flex-1 border-0 focus-visible:ring-0 bg-transparent min-h-[48px] py-3 text-base font-medium resize-none overflow-hidden"
+              className="flex-1 border-0 focus-visible:ring-0 bg-transparent min-h-[48px] py-3 text-base font-medium resize-none overflow-hidden text-white"
               rows={1}
             />
 

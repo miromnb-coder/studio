@@ -11,7 +11,8 @@ import {
   Zap,
   ShieldCheck,
   Clock,
-  AlertTriangle
+  AlertTriangle,
+  Loader2
 } from 'lucide-react';
 import { useUser, useFirestore, useCollection, useMemoFirebase } from '@/firebase';
 import { collection, query, orderBy, limit } from 'firebase/firestore';
@@ -28,19 +29,30 @@ export default function DashboardPage() {
   }, []);
 
   const analysesQuery = useMemoFirebase(() => {
-    if (!db || !user) return null;
-    return query(
-      collection(db, 'users', user.uid, 'analyses'),
-      orderBy('createdAt', 'desc'),
-      limit(5)
-    );
+    try {
+      if (!db || !user) return null;
+      return query(
+        collection(db, 'users', user.uid, 'analyses'),
+        orderBy('createdAt', 'desc'),
+        limit(5)
+      );
+    } catch (e) {
+      console.error('Dashboard Query Error:', e);
+      return null;
+    }
   }, [db, user]);
 
   const { data: analyses, isLoading: isAnalysesLoading } = useCollection(analysesQuery);
   
-  if (!mounted) return null;
+  if (!mounted) {
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center">
+        <Loader2 className="w-8 h-8 text-primary animate-spin" />
+      </div>
+    );
+  }
 
-  const totalSavings = analyses?.reduce((acc, a) => acc + (a.estimatedMonthlySavings || 0), 0) || 0;
+  const totalSavings = (analyses || []).reduce((acc, a) => acc + (a.estimatedMonthlySavings || 0), 0) || 0;
   const isLoading = isUserLoading || isAnalysesLoading;
 
   return (
@@ -50,7 +62,7 @@ export default function DashboardPage() {
       <main className="max-w-6xl mx-auto px-6 space-y-16">
         <header className="flex flex-col md:flex-row md:items-end justify-between gap-12 pt-8">
           <div className="space-y-6">
-            <h1 className="text-6xl md:text-8xl font-bold font-headline tracking-tighter leading-[0.9]">Console.</h1>
+            <h1 className="text-6xl md:text-8xl font-bold font-headline tracking-tighter leading-[0.9] text-white">Console.</h1>
             <p className="text-xl text-muted-foreground font-medium max-w-md">Passive protocol oversight for your financial health.</p>
           </div>
           
@@ -95,15 +107,15 @@ export default function DashboardPage() {
                           <Zap className="w-5 h-5" />
                         </div>
                         <div>
-                          <p className="text-xl font-bold font-headline tracking-tight">{analysis.title}</p>
+                          <p className="text-xl font-bold font-headline tracking-tight text-white">{analysis.title || 'Audit Report'}</p>
                           <p className="text-[10px] text-muted-foreground font-bold uppercase tracking-widest">
-                            {analysis.analysisDate ? new Date(analysis.analysisDate).toLocaleDateString() : 'Recent'} • {analysis.source?.replace('_', ' ')}
+                            {analysis.analysisDate ? new Date(analysis.analysisDate).toLocaleDateString() : 'Recent'} • {analysis.source?.replace('_', ' ') || 'Manual'}
                           </p>
                         </div>
                       </div>
                       <div className="flex items-center gap-6">
                         <div className="text-right">
-                          <p className="text-2xl font-bold text-success tracking-tight">+${analysis.estimatedMonthlySavings?.toFixed(0)}</p>
+                          <p className="text-2xl font-bold text-success tracking-tight">+${analysis.estimatedMonthlySavings?.toFixed(0) || 0}</p>
                         </div>
                         <ChevronRight className="w-4 h-4 text-muted-foreground group-hover:text-white transition-all" />
                       </div>
@@ -115,7 +127,7 @@ export default function DashboardPage() {
                   <ShieldCheck className="w-10 h-10 text-white/10 mx-auto" />
                   <p className="text-muted-foreground font-medium">No audit data identified yet.</p>
                   <Button asChild variant="outline" className="h-10 rounded-xl font-bold uppercase tracking-widest text-[10px] border-white/10">
-                    <Link href="/">Enter Chat</Link>
+                    <Link href="/" className="text-white">Enter Chat</Link>
                   </Button>
                 </div>
               )}
@@ -134,7 +146,7 @@ export default function DashboardPage() {
                   <AlertTriangle className="w-4 h-4" />
                   <p className="text-[10px] font-bold uppercase tracking-widest">High Burn Detected</p>
                 </div>
-                <p className="text-sm font-medium leading-relaxed">
+                <p className="text-sm font-medium leading-relaxed text-muted-foreground">
                   Detected trial expirations due within 72 hours. Audit your inbox to mitigate.
                 </p>
                 <Button asChild variant="link" className="p-0 h-auto text-[10px] font-bold uppercase tracking-widest text-danger hover:no-underline hover:text-danger/80">
@@ -147,7 +159,7 @@ export default function DashboardPage() {
                   <Zap className="w-4 h-4" />
                   <p className="text-[10px] font-bold uppercase tracking-widest">Optimization Ready</p>
                 </div>
-                <p className="text-sm font-medium leading-relaxed">
+                <p className="text-sm font-medium leading-relaxed text-muted-foreground">
                   Mobile plan market rates dropped. Operator can negotiate your tier now.
                 </p>
                 <Button asChild variant="link" className="p-0 h-auto text-[10px] font-bold uppercase tracking-widest text-accent hover:no-underline hover:text-accent/80">

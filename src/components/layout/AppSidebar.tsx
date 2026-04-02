@@ -42,12 +42,17 @@ export function AppSidebar() {
   }, []);
 
   const conversationsQuery = useMemoFirebase(() => {
-    if (!db || !user) return null;
-    return query(
-      collection(db, 'users', user.uid, 'conversations'),
-      orderBy('updatedAt', 'desc'),
-      limit(20)
-    );
+    try {
+      if (!db || !user) return null;
+      return query(
+        collection(db, 'users', user.uid, 'conversations'),
+        orderBy('updatedAt', 'desc'),
+        limit(20)
+      );
+    } catch (e) {
+      console.error('Sidebar Firebase Query Error:', e);
+      return null;
+    }
   }, [db, user]);
 
   const { data: conversations, isLoading } = useCollection(conversationsQuery);
@@ -59,7 +64,15 @@ export function AppSidebar() {
     { icon: Settings, href: '/settings', label: 'Sync' },
   ];
 
-  if (!mounted) return null;
+  if (!mounted) {
+    return (
+      <Sidebar className="border-r border-white/5 bg-[#19191C]">
+        <div className="flex h-full items-center justify-center">
+          <Loader2 className="w-4 h-4 animate-spin text-muted-foreground/20" />
+        </div>
+      </Sidebar>
+    );
+  }
 
   return (
     <Sidebar className="border-r border-white/5 bg-[#19191C]">
@@ -68,7 +81,7 @@ export function AppSidebar() {
           <div className="flex items-center justify-center w-8 h-8 rounded-lg bg-primary text-background group-hover:scale-105 transition-transform">
             <span className="font-headline font-bold text-lg">O</span>
           </div>
-          <span className="font-headline font-bold text-lg tracking-tight">Operator</span>
+          <span className="font-headline font-bold text-lg tracking-tight text-white">Operator</span>
         </Link>
       </SidebarHeader>
 
@@ -107,7 +120,7 @@ export function AppSidebar() {
                   >
                     <Link href={`/?c=${conv.id}`}>
                       <MessageSquare className="w-4 h-4 mr-2 shrink-0" />
-                      <span className="truncate font-medium text-xs">{conv.title}</span>
+                      <span className="truncate font-medium text-xs">{conv.title || 'Audit Session'}</span>
                     </Link>
                   </SidebarMenuButton>
                 </SidebarMenuItem>
@@ -145,12 +158,14 @@ export function AppSidebar() {
       <SidebarFooter className="p-4 border-t border-white/5">
         <div className="flex items-center gap-3 px-2 py-2 rounded-xl hover:bg-white/5 transition-colors cursor-pointer group">
           <div className="w-8 h-8 rounded-full overflow-hidden border border-white/10 group-hover:border-primary/50 transition-colors bg-muted/50">
-            {user?.uid && (
+            {user?.uid ? (
               <img 
                 src={`https://picsum.photos/seed/${user.uid}/64/64`} 
                 alt="Profile" 
                 className="w-full h-full object-cover" 
               />
+            ) : (
+              <div className="w-full h-full bg-white/5" />
             )}
           </div>
           <div className="flex-1 min-w-0">

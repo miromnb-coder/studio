@@ -9,7 +9,8 @@ import {
   ChevronRight, 
   Search,
   FileText,
-  Mail
+  Mail,
+  Loader2
 } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { useUser, useFirestore, useCollection, useMemoFirebase } from '@/firebase';
@@ -28,20 +29,31 @@ export default function HistoryPage() {
   }, []);
 
   const analysesQuery = useMemoFirebase(() => {
-    if (!db || !user) return null;
-    return query(
-      collection(db, 'users', user.uid, 'analyses'),
-      orderBy('createdAt', 'desc')
-    );
+    try {
+      if (!db || !user) return null;
+      return query(
+        collection(db, 'users', user.uid, 'analyses'),
+        orderBy('createdAt', 'desc')
+      );
+    } catch (e) {
+      console.error('History Query Error:', e);
+      return null;
+    }
   }, [db, user]);
 
   const { data: analyses, isLoading: isAnalysesLoading } = useCollection(analysesQuery);
 
-  if (!mounted) return null;
+  if (!mounted) {
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center">
+        <Loader2 className="w-8 h-8 text-primary animate-spin" />
+      </div>
+    );
+  }
 
-  const filteredAnalyses = analyses?.filter(a => 
-    a.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    a.summary.toLowerCase().includes(searchTerm.toLowerCase())
+  const filteredAnalyses = (analyses || []).filter(a => 
+    (a.title || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+    (a.summary || '').toLowerCase().includes(searchTerm.toLowerCase())
   );
 
   const isLoading = isUserLoading || isAnalysesLoading;
@@ -52,7 +64,7 @@ export default function HistoryPage() {
       
       <main className="max-w-3xl mx-auto px-6 space-y-16">
         <header className="space-y-4">
-          <h1 className="text-5xl md:text-7xl font-bold font-headline tracking-tighter leading-[0.9]">Ledger.</h1>
+          <h1 className="text-5xl md:text-7xl font-bold font-headline tracking-tighter leading-[0.9] text-white">Ledger.</h1>
           <p className="text-xl text-muted-foreground font-medium">Historical audit records and reclaimed liquidty.</p>
         </header>
 
@@ -60,7 +72,7 @@ export default function HistoryPage() {
           <Search className="absolute left-5 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground/30" />
           <Input 
             placeholder="Search audit records..." 
-            className="pl-14 bg-white/5 border-white/5 rounded-2xl h-14 text-base font-medium focus:ring-primary/20"
+            className="pl-14 bg-white/5 border-white/5 rounded-2xl h-14 text-base font-medium focus:ring-primary/20 text-white"
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
           />
@@ -95,19 +107,19 @@ export default function HistoryPage() {
                       {item.source === 'email' ? <Mail className="w-4 h-4" /> : <FileText className="w-4 h-4" />}
                     </div>
                     <div>
-                      <h3 className="font-bold text-lg font-headline tracking-tight">{item.title}</h3>
+                      <h3 className="font-bold text-lg font-headline tracking-tight text-white">{item.title || 'Audit Report'}</h3>
                       <div className="flex items-center gap-3 text-[9px] text-muted-foreground font-bold uppercase tracking-widest">
                         <span className="flex items-center gap-1">
                           <Calendar className="w-2.5 h-2.5" />
                           {item.analysisDate ? new Date(item.analysisDate).toLocaleDateString() : 'Recent'}
                         </span>
-                        <span>• {item.source?.replace('_', ' ')}</span>
+                        <span>• {item.source?.replace('_', ' ') || 'Manual'}</span>
                       </div>
                     </div>
                   </div>
                   
                   <div className="flex items-center gap-8">
-                    <p className="text-xl font-bold text-success font-headline tracking-tight">+${item.estimatedMonthlySavings?.toFixed(0)}</p>
+                    <p className="text-xl font-bold text-success font-headline tracking-tight">+${item.estimatedMonthlySavings?.toFixed(0) || 0}</p>
                     <ChevronRight className="w-4 h-4 text-muted-foreground group-hover:text-white transition-all group-hover:translate-x-1" />
                   </div>
                 </Link>
