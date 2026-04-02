@@ -67,7 +67,7 @@ function ChatContent() {
         orderBy('timestamp', 'asc')
       );
     } catch (e) {
-      console.error('Messages Query Error:', e);
+      console.error('Chat Intelligence Ledger Error:', e);
       return null;
     }
   }, [db, user, conversationId]);
@@ -85,7 +85,9 @@ function ChatContent() {
 
   useEffect(() => {
     if (storedMessages && storedMessages.length > 0) {
-      setLocalMessages(storedMessages);
+      // DATA VALIDATION: Filter out corrupt or partial messages
+      const validMessages = (storedMessages || []).filter(m => m && m.id && m.content);
+      setLocalMessages(validMessages);
     } else if (!conversationId) {
       setLocalMessages([{
         id: 'welcome',
@@ -134,7 +136,7 @@ function ChatContent() {
         });
         router.push(`/?c=${activeConvId}`);
       } catch (e) {
-        console.error('Conversation Initialization Error:', e);
+        console.error('Audit Context Initialization Error:', e);
         return;
       }
     }
@@ -157,7 +159,10 @@ function ChatContent() {
     setCurrentStep(0);
 
     try {
-      const history = (localMessages || []).slice(-10).map(m => ({ role: m.role, content: m.content }));
+      const history = (localMessages || [])
+        .filter(m => m && m.content) // Defensive check
+        .slice(-10)
+        .map(m => ({ role: m.role, content: m.content }));
 
       for (let i = 0; i < STEPS.length; i++) {
         await new Promise(r => setTimeout(r, STEPS[i].duration));
@@ -221,7 +226,7 @@ function ChatContent() {
         }
       }
     } catch (err) {
-      console.error('Operator Logic Failure:', err);
+      console.error('Operator Logic Exception:', err);
     } finally {
       setIsProcessing(false);
     }
@@ -247,7 +252,9 @@ function ChatContent() {
         className="flex-1 overflow-y-auto pt-24 pb-40 px-6 md:px-12 lg:px-24 xl:px-48 space-y-12"
       >
         <AnimatePresence initial={false}>
-          {(localMessages || []).map((msg) => (
+          {(localMessages || [])
+            .filter(msg => msg && msg.id && (msg.content || msg.data)) // NULL-SAFE RENDERING
+            .map((msg) => (
             <motion.div
               key={msg.id}
               initial={{ opacity: 0, y: 10 }}

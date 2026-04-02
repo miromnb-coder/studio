@@ -49,7 +49,7 @@ export function AppSidebar() {
         limit(20)
       );
     } catch (e) {
-      console.error('Sidebar Firebase Query Error:', e);
+      console.error('Sidebar Intelligence Query Error:', e);
       return null;
     }
   }, [db, user]);
@@ -68,7 +68,7 @@ export function AppSidebar() {
     return (
       <Sidebar className="border-r border-white/5 bg-[#19191C]">
         <div className="flex h-full items-center justify-center">
-          <Loader2 className="w-4 h-4 animate-spin text-muted-foreground/20" />
+          <Loader2 className="w-4 h-4 animate-spin text-muted-foreground/10" />
         </div>
       </Sidebar>
     );
@@ -107,24 +107,26 @@ export function AppSidebar() {
               <div className="flex justify-center py-4">
                 <Loader2 className="w-4 h-4 text-muted-foreground animate-spin" />
               </div>
-            ) : conversations && conversations.length > 0 ? (
-              (conversations || []).map((conv) => (
-                <SidebarMenuItem key={conv.id}>
-                  <SidebarMenuButton 
-                    asChild 
-                    isActive={activeId === conv.id}
-                    className={cn(
-                      "rounded-xl h-11 transition-all px-4",
-                      activeId === conv.id ? "bg-white/5 text-primary" : "text-muted-foreground hover:text-white hover:bg-white/[0.02]"
-                    )}
-                  >
-                    <Link href={`/?c=${conv.id}`}>
-                      <MessageSquare className="w-4 h-4 mr-2 shrink-0" />
-                      <span className="truncate font-medium text-xs">{conv.title || 'Audit Session'}</span>
-                    </Link>
-                  </SidebarMenuButton>
-                </SidebarMenuItem>
-              ))
+            ) : (conversations || []).length > 0 ? (
+              (conversations || [])
+                .filter(conv => conv && conv.id) // DATA VALIDATION: Skip corrupted docs
+                .map((conv) => (
+                  <SidebarMenuItem key={conv.id}>
+                    <SidebarMenuButton 
+                      asChild 
+                      isActive={activeId === conv.id}
+                      className={cn(
+                        "rounded-xl h-11 transition-all px-4",
+                        activeId === conv.id ? "bg-white/5 text-primary" : "text-muted-foreground hover:text-white hover:bg-white/[0.02]"
+                      )}
+                    >
+                      <Link href={`/?c=${conv.id}`}>
+                        <MessageSquare className="w-4 h-4 mr-2 shrink-0" />
+                        <span className="truncate font-medium text-xs">{conv.title || 'Audit Session'}</span>
+                      </Link>
+                    </SidebarMenuButton>
+                  </SidebarMenuItem>
+                ))
             ) : !isLoading && (
               <p className="px-4 py-2 text-[10px] text-muted-foreground/30 italic uppercase tracking-widest">No records found</p>
             )}
