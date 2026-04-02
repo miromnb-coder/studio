@@ -1,9 +1,7 @@
 
 'use server';
 /**
- * @fileOverview Universal "AI Life Operator" flow.
- *
- * - analyzeFinancialDocument - Distinguishes between general assistance and deep financial audits.
+ * @fileOverview Universal "AI Life Operator" flow with memory and high-IQ reasoning.
  */
 
 import {ai} from '@/ai/genkit';
@@ -27,17 +25,21 @@ const DetectedItemSchema = z.object({
   alternativeSuggestion: z.string().optional(),
   alternativeLink: z.string().optional(),
   urgencyLevel: z.enum(['low', 'medium', 'high', 'urgent']),
-  copyableMessage: z.string().describe('Professional script.'),
-  actionLabel: z.string().describe('Button label.'),
+  copyableMessage: z.string().describe('Professional script for negotiation or cancellation.'),
+  actionLabel: z.string().describe('Button label for the action.'),
 });
 
 const AnalyzeFinancialDocumentInputSchema = z.object({
   imageDataUri: z.string().optional(),
   documentText: z.string().optional(),
+  history: z.array(z.object({
+    role: z.enum(['user', 'assistant']),
+    content: z.string(),
+  })).optional(),
 });
 
 const AnalyzeFinancialDocumentOutputSchema = z.object({
-  title: z.string(),
+  title: z.string().describe('A title for the conversation if this is the start.'),
   summary: z.string().describe('The primary conversational response.'),
   detectedItems: z.array(DetectedItemSchema).optional(),
   savingsEstimate: z.number().optional(),
@@ -54,10 +56,10 @@ export async function analyzeFinancialDocument(input: z.infer<typeof AnalyzeFina
   const apiKey = process.env.GROQ_API_KEY;
   
   if (!apiKey) {
-    console.error('GROQ_API_KEY is missing from environment variables.');
+    console.error('GROQ_API_KEY is missing.');
     return {
       title: "Operator Connection",
-      summary: "I'm having a brief connection issue with my deep audit framework (API Key Missing). Please ensure the GROQ_API_KEY is configured.",
+      summary: "I'm having a brief connection issue with my deep audit framework (API Key Missing).",
       isActionable: false,
       detectedItems: [],
       savingsEstimate: 0,
@@ -66,29 +68,37 @@ export async function analyzeFinancialDocument(input: z.infer<typeof AnalyzeFina
 
   const groq = new Groq({ apiKey });
 
-  const prompt = `You are the "AI Life Operator". You are a refined, intelligent, and proactive assistant.
-Your goal is to help the user optimize their life, primarily their finances.
+  // Prepare chat history context
+  const historyContext = input.history?.map(msg => `${msg.role.toUpperCase()}: ${msg.content}`).join('\n') || "No previous history.";
+
+  const prompt = `You are a "High-IQ Life Operator Assistant". You are refined, intelligent, proactive, and analytical.
+Use step-by-step reasoning (Chain of Thought) before answering. Always provide actionable, professional, and deeply analyzed advice.
+
+CONTEXT MEMORY:
+${historyContext}
 
 INTENT ROUTING:
-1. If the input contains financial data, statements, or a request to "save money":
+1. If the input contains financial data, bank logs, statements, or a request to "save money":
    - Act as a "Predatory Subscription Hunter".
    - Find waste, hidden fees, and cheaper alternatives.
    - Set "isActionable" to true.
-   - Populated "detectedItems", "savingsEstimate", and "beforeAfterComparison".
+   - Populate "detectedItems", "savingsEstimate", and "beforeAfterComparison".
+   - Generate a short, relevant "title" for the conversation (e.g., "Netflix & Spotify Audit").
 
-2. If the input is a general question (e.g., "Hello", "How do I save for a car?", "What is inflation?"):
-   - Act as a helpful financial advisor and general assistant.
-   - Provide a high-quality conversational answer in the "summary" field.
+2. If the input is a general question (e.g., "How do I save for a car?"):
+   - Act as a high-IQ financial advisor.
+   - Provide a deep, step-by-step reasoning based response in "summary".
    - Set "isActionable" to false.
    - Leave "detectedItems" as an empty array [].
+   - Generate a short, relevant "title" for the conversation.
 
-Data/Query:
+CURRENT INPUT:
 ${input.documentText || "Visual source detected."}
 
 Return a JSON object matching this schema:
 {
-  "title": string (A concise header for the response),
-  "summary": string (Your main conversational answer or audit summary),
+  "title": string,
+  "summary": string,
   "isActionable": boolean,
   "detectedItems": [],
   "savingsEstimate": number,
@@ -100,7 +110,7 @@ Return a JSON object matching this schema:
       messages: [
         {
           role: 'system',
-          content: 'You are an elite AI assistant. Always output valid JSON. Be helpful, concise, and proactive.',
+          content: 'You are a High-IQ Life Operator Assistant. Always output valid JSON. Use step-by-step reasoning.',
         },
         {
           role: 'user',
@@ -124,7 +134,7 @@ Return a JSON object matching this schema:
     console.error('Groq Analysis Error:', error);
     return {
       title: "Protocol Interruption",
-      summary: "I encountered an interruption while processing your request. Please try again or rephrase your goal.",
+      summary: "I encountered an interruption while processing your request. Please try again.",
       isActionable: false,
       detectedItems: [],
       savingsEstimate: 0,

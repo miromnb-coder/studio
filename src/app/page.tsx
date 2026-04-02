@@ -16,14 +16,15 @@ import {
   ChevronRight,
   Loader2,
   AlertCircle,
-  MessageSquare
+  MessageSquare,
+  Sparkles
 } from 'lucide-react';
 import { AnalysisService } from '@/services/analysis-service';
-import { useFirestore, useUser, addDocumentNonBlocking } from '@/firebase';
-import { collection, serverTimestamp } from 'firebase/firestore';
+import { useFirestore, useUser, addDocumentNonBlocking, useCollection, useMemoFirebase } from '@/firebase';
+import { collection, serverTimestamp, doc, updateDoc, query, orderBy, limit, setDoc } from 'firebase/firestore';
 import { motion, AnimatePresence } from 'framer-motion';
 import { cn } from '@/lib/utils';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -37,24 +38,16 @@ interface Message {
   content: string;
   type?: 'text' | 'analysis_result' | 'error';
   data?: any;
-  timestamp: Date;
+  timestamp: Date | any;
 }
 
 const STEPS = [
   { id: 'ingest', label: 'Ingesting intent...', duration: 500 },
-  { id: 'scan', label: 'Processing intelligence...', duration: 800 },
-  { id: 'action', label: 'Finalizing protocol...', duration: 600 },
+  { id: 'scan', label: 'Analyzing with High-IQ protocols...', duration: 800 },
+  { id: 'action', label: 'Finalizing actionable intelligence...', duration: 600 },
 ];
 
 export default function ChatPage() {
-  const [messages, setMessages] = useState<Message[]>([
-    {
-      id: 'welcome',
-      role: 'assistant',
-      content: "Operator active. I am monitoring for predatory patterns and assisting with your life optimization. How can I help you today?",
-      timestamp: new Date(),
-    }
-  ]);
   const [input, setInput] = useState('');
   const [isProcessing, setIsProcessing] = useState(false);
   const [currentStep, setCurrentStep] = useState(0);
@@ -63,41 +56,94 @@ export default function ChatPage() {
   const { user } = useUser();
   const db = useFirestore();
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const conversationId = searchParams.get('c');
+
+  // Load messages for current conversation
+  const messagesQuery = useMemoFirebase(() => {
+    if (!db || !user || !conversationId) return null;
+    return query(
+      collection(db, 'users', user.uid, 'conversations', conversationId, 'messages'),
+      orderBy('timestamp', 'asc')
+    );
+  }, [db, user, conversationId]);
+
+  const { data: storedMessages, isLoading: isMessagesLoading } = useCollection(messagesQuery);
+
+  const [localMessages, setLocalMessages] = useState<Message[]>([
+    {
+      id: 'welcome',
+      role: 'assistant',
+      content: "Operator active. High-IQ audit protocols online. How can I assist you with your life and finances today?",
+      timestamp: new Date(),
+    }
+  ]);
+
+  useEffect(() => {
+    if (storedMessages && storedMessages.length > 0) {
+      setLocalMessages(storedMessages);
+    } else if (!conversationId) {
+      setLocalMessages([{
+        id: 'welcome',
+        role: 'assistant',
+        content: "Operator active. High-IQ audit protocols online. How can I assist you with your life and finances today?",
+        timestamp: new Date(),
+      }]);
+    }
+  }, [storedMessages, conversationId]);
 
   useEffect(() => {
     if (scrollRef.current) {
       scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
     }
-  }, [messages, isProcessing]);
+  }, [localMessages, isProcessing]);
 
   const sendMessage = async (text?: string, fileData?: string) => {
     const content = text || input;
     if (!content && !fileData) return;
 
     if (!user || !db) {
-      setMessages(prev => [...prev, {
-        id: Math.random().toString(36).substr(2, 9),
-        role: 'assistant',
-        content: "Identity verification required. Please sign in to access the secure audit sandbox.",
-        timestamp: new Date(),
-      }]);
+      router.push('/login');
       return;
     }
 
+    let activeConvId = conversationId;
+    
+    // Create new conversation if none exists
+    if (!activeConvId) {
+      const newConvRef = doc(collection(db, 'users', user.uid, 'conversations'));
+      activeConvId = newConvRef.id;
+      await setDoc(newConvRef, {
+        userId: user.uid,
+        title: 'New Analysis',
+        createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp(),
+      });
+      router.push(`/?c=${activeConvId}`);
+    }
+
+    const userMsgId = Math.random().toString(36).substr(2, 9);
     const userMessage: Message = {
-      id: Math.random().toString(36).substr(2, 9),
+      id: userMsgId,
       role: 'user',
-      content: content || 'Source uploaded for analysis.',
+      content: content || 'Visual Source Uploaded',
       timestamp: new Date(),
     };
 
-    setMessages(prev => [...prev, userMessage]);
+    // Save user message to Firestore
+    addDocumentNonBlocking(collection(db, 'users', user.uid, 'conversations', activeConvId, 'messages'), {
+      ...userMessage,
+      timestamp: serverTimestamp(),
+    });
+
     setInput('');
     setIsProcessing(true);
     setCurrentStep(0);
 
     try {
-      // Simulation for "Agentic" feel
+      // Get last 10 messages for context
+      const history = localMessages.slice(-10).map(m => ({ role: m.role, content: m.content }));
+
       for (let i = 0; i < STEPS.length; i++) {
         await new Promise(r => setTimeout(r, STEPS[i].duration));
         setCurrentStep(i + 1);
@@ -105,12 +151,35 @@ export default function ChatPage() {
 
       const result = await AnalysisService.analyze({ 
         documentText: content,
-        imageDataUri: fileData 
+        imageDataUri: fileData,
+        history
       });
 
-      let analysisId = null;
+      // Update conversation title if it's the first real exchange
+      if (localMessages.length <= 2 && result.title) {
+        updateDoc(doc(db, 'users', user.uid, 'conversations', activeConvId), {
+          title: result.title,
+          updatedAt: serverTimestamp(),
+        });
+      }
 
-      // Only persist to Firestore if it's an actionable financial audit
+      const assistantMsgId = Math.random().toString(36).substr(2, 9);
+      const assistantMessage: Message = {
+        id: assistantMsgId,
+        role: 'assistant',
+        content: result.summary,
+        type: 'analysis_result',
+        data: { ...result },
+        timestamp: new Date(),
+      };
+
+      // Save assistant message to Firestore
+      addDocumentNonBlocking(collection(db, 'users', user.uid, 'conversations', activeConvId, 'messages'), {
+        ...assistantMessage,
+        timestamp: serverTimestamp(),
+      });
+
+      // Save as analysis report if actionable
       if (result.isActionable) {
         const analysesRef = collection(db, 'users', user.uid, 'analyses');
         const docRef = await addDocumentNonBlocking(analysesRef, {
@@ -120,14 +189,13 @@ export default function ChatPage() {
           estimatedMonthlySavings: result.savingsEstimate || 0,
           analysisDate: new Date().toISOString(),
           status: 'completed',
-          inputMethod: fileData ? 'screenshot' : 'chat',
+          inputMethod: 'chat',
           inputContent: content,
           createdAt: serverTimestamp(),
-          source: fileData ? 'screenshot' : 'chat'
+          source: 'chat'
         });
 
         if (docRef) {
-          analysisId = docRef.id;
           const itemsRef = collection(db, 'users', user.uid, 'analyses', docRef.id, 'detected_items');
           for (const item of (result.detectedItems || [])) {
             addDocumentNonBlocking(itemsRef, {
@@ -140,25 +208,8 @@ export default function ChatPage() {
           }
         }
       }
-
-      const assistantMessage: Message = {
-        id: Math.random().toString(36).substr(2, 9),
-        role: 'assistant',
-        content: result.summary,
-        type: 'analysis_result',
-        data: { ...result, analysisId },
-        timestamp: new Date(),
-      };
-      setMessages(prev => [...prev, assistantMessage]);
     } catch (err) {
-      console.error('Operator logic failure:', err);
-      setMessages(prev => [...prev, {
-        id: 'err-' + Date.now(),
-        role: 'assistant',
-        type: 'error',
-        content: "I encountered an interruption in my logic protocol. Please try again or rephrase your request.",
-        timestamp: new Date(),
-      }]);
+      console.error('Operator Logic Failure:', err);
     } finally {
       setIsProcessing(false);
     }
@@ -184,7 +235,7 @@ export default function ChatPage() {
         className="flex-1 overflow-y-auto pt-24 pb-40 px-6 md:px-12 lg:px-24 xl:px-48 space-y-12"
       >
         <AnimatePresence initial={false}>
-          {messages.map((msg) => (
+          {localMessages.map((msg) => (
             <motion.div
               key={msg.id}
               initial={{ opacity: 0, y: 10 }}
@@ -202,8 +253,7 @@ export default function ChatPage() {
                   "p-5 rounded-[24px] text-sm md:text-base leading-relaxed font-medium shadow-sm",
                   msg.role === 'user' 
                     ? "bg-primary text-background rounded-tr-none" 
-                    : "bg-white/[0.03] border border-white/5 text-foreground rounded-tl-none",
-                  msg.type === 'error' && "border-danger/20 bg-danger/5 text-danger"
+                    : "bg-white/[0.03] border border-white/5 text-foreground rounded-tl-none"
                 )}>
                   {msg.content}
                 </div>
@@ -212,24 +262,18 @@ export default function ChatPage() {
                   <motion.div 
                     initial={{ opacity: 0, scale: 0.98 }}
                     animate={{ opacity: 1, scale: 1 }}
-                    className="grid gap-4 mt-6 w-full"
+                    className="grid gap-4 mt-6 w-full text-left"
                   >
-                    <div className="premium-card bg-primary/10 border-primary/20 flex justify-between items-center group">
+                    <div className="premium-card bg-primary/10 border-primary/20 flex justify-between items-center">
                       <div className="space-y-1">
                         <p className="text-[10px] font-bold uppercase tracking-widest text-primary">Monthly Potential</p>
                         <p className="text-4xl font-bold font-headline text-primary">${msg.data.savingsEstimate}</p>
                       </div>
-                      <Button asChild size="sm" variant="outline" className="rounded-xl border-primary/20 hover:bg-primary/20 text-primary transition-all">
-                        <a href={`/results/${msg.data.analysisId}`}>
-                          Open Detailed Ledger
-                          <ChevronRight className="ml-2 w-3 h-3" />
-                        </a>
-                      </Button>
                     </div>
 
                     <div className="grid gap-3">
                       {msg.data.detectedItems?.slice(0, 3).map((item: any, idx: number) => (
-                        <div key={idx} className="premium-card !p-4 bg-white/[0.02] flex items-center justify-between group hover:bg-white/[0.04]">
+                        <div key={idx} className="premium-card !p-4 bg-white/[0.02] flex items-center justify-between group">
                           <div className="flex items-center gap-4">
                             <div className="w-10 h-10 rounded-xl bg-white/5 flex items-center justify-center text-muted-foreground group-hover:text-primary transition-colors">
                               <Zap className="w-4 h-4" />
@@ -241,7 +285,7 @@ export default function ChatPage() {
                               </p>
                             </div>
                           </div>
-                          <ChevronRight className="w-4 h-4 text-muted-foreground opacity-0 group-hover:opacity-100 transition-all translate-x-2 group-hover:translate-x-0" />
+                          <ChevronRight className="w-4 h-4 text-muted-foreground opacity-50" />
                         </div>
                       ))}
                     </div>
@@ -260,7 +304,7 @@ export default function ChatPage() {
           >
             <div className="flex items-center gap-3 p-5 rounded-[24px] bg-white/[0.03] border border-white/5 rounded-tl-none">
               <Loader2 className="w-4 h-4 text-primary animate-spin" />
-              <span className="text-sm font-medium text-muted-foreground italic">Operator is ingesting intent...</span>
+              <span className="text-sm font-medium text-muted-foreground italic">Operator is applying High-IQ logic...</span>
             </div>
             
             <div className="w-full max-w-xs space-y-4 pl-4 border-l-2 border-white/5">
@@ -300,13 +344,9 @@ export default function ChatPage() {
                   <ImageIcon className="w-4 h-4 text-primary" />
                   <span className="font-medium text-sm">Upload Visual Source</span>
                 </DropdownMenuItem>
-                <DropdownMenuItem onClick={() => setInput('Analyze my active subscriptions:')} className="rounded-xl h-11 cursor-pointer gap-3">
-                  <FileText className="w-4 h-4 text-accent" />
-                  <span className="font-medium text-sm">Paste Bank Log</span>
-                </DropdownMenuItem>
-                <DropdownMenuItem onClick={() => setInput('How can I save money this month?')} className="rounded-xl h-11 cursor-pointer gap-3">
-                  <MessageSquare className="w-4 h-4 text-success" />
-                  <span className="font-medium text-sm">Ask Savings Advice</span>
+                <DropdownMenuItem onClick={() => router.push('/')} className="rounded-xl h-11 cursor-pointer gap-3">
+                  <Plus className="w-4 h-4 text-success" />
+                  <span className="font-medium text-sm">New Conversation</span>
                 </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
@@ -328,7 +368,7 @@ export default function ChatPage() {
                   sendMessage();
                 }
               }}
-              placeholder="Ask anything or request an audit..."
+              placeholder="Ask anything or request a deep audit..."
               className="flex-1 border-0 focus-visible:ring-0 bg-transparent min-h-[48px] py-3 text-base font-medium resize-none overflow-hidden"
               rows={1}
             />
@@ -345,7 +385,7 @@ export default function ChatPage() {
           <div className="flex justify-center mt-4 gap-2 items-center">
             <div className="w-1 h-1 bg-success rounded-full animate-pulse" />
             <p className="text-[9px] font-bold uppercase tracking-[0.3em] text-muted-foreground/30">
-              Universal Assistant Active
+              High-IQ Operator Protocol Active
             </p>
           </div>
         </div>

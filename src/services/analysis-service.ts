@@ -6,11 +6,11 @@ export interface AnalysisInput {
   documentText?: string;
   notes?: string;
   source?: 'screenshot' | 'pasted_text' | 'email' | 'chat';
+  history?: Array<{role: 'user' | 'assistant', content: string}>;
 }
 
 /**
- * Service layer to handle universal assistant logic.
- * Routes between conversational AI and deep financial audits.
+ * Service layer to handle universal assistant logic with memory.
  */
 export class AnalysisService {
   static async analyze(input: AnalysisInput): Promise<AnalyzeFinancialDocumentOutput> {
@@ -20,19 +20,19 @@ export class AnalysisService {
     ].filter(Boolean).join('\n\n');
 
     try {
-      // Pass directly to the universal AI flow
+      // Pass directly to the universal AI flow with history context
       const result = await analyzeFinancialDocument({
         imageDataUri: input.imageDataUri,
-        documentText: combinedText || "Visual source uploaded."
+        documentText: combinedText || "Visual source uploaded.",
+        history: input.history
       });
 
       return result;
     } catch (error) {
       console.error('Operator Logic Interruption:', error);
-      // Fallback to a helpful conversational response if the AI fails
       return {
         title: "Operator Connection",
-        summary: "I'm having a brief connection issue with my deep audit framework, but I'm still here to help. Could you try rephrasing your request or re-uploading the source?",
+        summary: "I'm having a brief connection issue. Please try again.",
         isActionable: false,
         detectedItems: [],
         savingsEstimate: 0,
