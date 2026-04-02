@@ -16,11 +16,13 @@ import {
   Loader2,
   AlertCircle,
   MailCheck,
-  RefreshCw
+  RefreshCw,
+  CalendarDays
 } from 'lucide-react';
 import { AnalysisService } from '@/services/analysis-service';
 import { MemoryService } from '@/services/memory-service';
 import { GmailService } from '@/services/gmail-service';
+import { DigestService } from '@/services/digest-service';
 import { useFirestore, useUser, addDocumentNonBlocking, useCollection, useMemoFirebase, useDoc } from '@/firebase';
 import { collection, serverTimestamp, doc, updateDoc, query, orderBy, setDoc } from 'firebase/firestore';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -33,6 +35,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { RichAnalysisCard } from '@/components/chat/RichAnalysisCard';
+import { DailyDigestCard } from '@/components/chat/DailyDigestCard';
 import { OnboardingOverlay } from '@/components/onboarding/OnboardingOverlay';
 import { useToast } from '@/hooks/use-toast';
 
@@ -40,7 +43,7 @@ interface Message {
   id: string;
   role: 'user' | 'assistant';
   content: string;
-  type?: 'text' | 'analysis_result' | 'error' | 'system';
+  type?: 'text' | 'analysis_result' | 'daily_digest' | 'error' | 'system';
   data?: any;
   timestamp: any;
 }
@@ -123,6 +126,56 @@ function ChatContent() {
     return null;
   }
 
+  const generateDailyBriefing = async () => {
+    if (!user || !db) return;
+    setIsProcessing(true);
+    
+    try {
+      const digest = await DigestService.generateDigest(db, user.uid);
+      
+      if (!digest) {
+        toast({ title: "No New Data", description: "I haven't identified enough new patterns today for a full briefing." });
+        setIsProcessing(false);
+        return;
+      }
+
+      // Add digest to chat
+      const activeConvId = conversationId || await createNewConversation();
+      
+      const assistantMessage: Message = {
+        id: Math.random().toString(36).substr(2, 9),
+        role: 'assistant',
+        content: "I have synthesized your Daily Intelligence Briefing. Here are today's most actionable optimizations.",
+        type: 'daily_digest',
+        data: digest,
+        timestamp: new Date(),
+      };
+
+      addDocumentNonBlocking(collection(db, 'users', user.uid, 'conversations', activeConvId, 'messages'), {
+        ...assistantMessage,
+        timestamp: serverTimestamp(),
+      });
+
+    } catch (err) {
+      console.error('Digest Generation Error:', err);
+    } finally {
+      setIsProcessing(false);
+    }
+  };
+
+  const createNewConversation = async () => {
+    if (!user || !db) return '';
+    const newConvRef = doc(collection(db, 'users', user.uid, 'conversations'));
+    await setDoc(newConvRef, {
+      userId: user.uid,
+      title: 'Audit Session',
+      createdAt: serverTimestamp(),
+      updatedAt: serverTimestamp(),
+    });
+    router.push(`/?c=${newConvRef.id}`);
+    return newConvRef.id;
+  };
+
   const syncGmailIntelligence = async () => {
     if (!user || !db) return;
     
@@ -144,14 +197,11 @@ function ChatContent() {
         return;
       }
 
-      // Format emails for intelligence analysis
       const emailContext = `GMAIL INTELLIGENCE FEED:\n` + emails.map(e => `[FROM: ${e.from} | SUBJ: ${e.subject}] Snippet: ${e.snippet}`).join('\n---\n');
-      
       await sendMessage(`[SYSTEM] Synchronizing intelligence from ${emails.length} financial markers in Gmail.`, undefined, emailContext);
 
     } catch (err) {
       console.error('Gmail Sync Error:', err);
-      toast({ variant: "destructive", title: "Sync Protocol Interrupted", description: "An error occurred during Gmail analysis." });
     } finally {
       setIsSyncingEmail(false);
     }
@@ -172,24 +222,11 @@ function ChatContent() {
     let activeConvId = conversationId;
     
     if (!activeConvId) {
-      try {
-        const newConvRef = doc(collection(db, 'users', user.uid, 'conversations'));
-        activeConvId = newConvRef.id;
-        await setDoc(newConvRef, {
-          userId: user.uid,
-          title: 'New Session',
-          createdAt: serverTimestamp(),
-          updatedAt: serverTimestamp(),
-        });
-        router.push(`/?c=${activeConvId}`);
-      } catch (e) {
-        return;
-      }
+      activeConvId = await createNewConversation();
     }
 
-    const userMsgId = Math.random().toString(36).substr(2, 9);
     const userMessage: Message = {
-      id: userMsgId,
+      id: Math.random().toString(36).substr(2, 9),
       role: 'user',
       content: content.startsWith('[SYSTEM]') ? 'Gmail Intelligence Sync' : (content || 'Source uploaded'),
       timestamp: new Date(),
@@ -233,9 +270,8 @@ function ChatContent() {
         MemoryService.updateMemory(db, user.uid, result.memoryUpdates);
       }
 
-      const assistantMsgId = Math.random().toString(36).substr(2, 9);
       const assistantMessage: Message = {
-        id: assistantMsgId,
+        id: Math.random().toString(36).substr(2, 9),
         role: 'assistant',
         content: result?.summary || "Analysis complete.",
         type: result?.isActionable ? 'analysis_result' : 'text',
@@ -249,8 +285,7 @@ function ChatContent() {
       });
 
       if (result?.isActionable) {
-        const analysesRef = collection(db, 'users', user.uid, 'analyses');
-        const docRef = await addDocumentNonBlocking(analysesRef, {
+        const docRef = await addDocumentNonBlocking(collection(db, 'users', user.uid, 'analyses'), {
           userId: user.uid,
           title: result.title || "Audit Report",
           summary: result.summary || "",
@@ -266,15 +301,13 @@ function ChatContent() {
         if (docRef && Array.isArray(result.detectedItems)) {
           const itemsRef = collection(db, 'users', user.uid, 'analyses', docRef.id, 'detected_items');
           for (const item of result.detectedItems) {
-            if (item && item.title) {
-              addDocumentNonBlocking(itemsRef, {
-                ...item,
-                userId: user.uid,
-                analysisId: docRef.id,
-                status: 'active',
-                createdAt: serverTimestamp(),
-              });
-            }
+            addDocumentNonBlocking(itemsRef, {
+              ...item,
+              userId: user.uid,
+              analysisId: docRef.id,
+              status: 'active',
+              createdAt: serverTimestamp(),
+            });
           }
         }
       }
@@ -314,20 +347,12 @@ function ChatContent() {
               key={msg.id}
               initial={{ opacity: 0, y: 10 }}
               animate={{ opacity: 1, y: 0 }}
-              className={cn(
-                "flex w-full",
-                msg.role === 'user' ? "justify-end" : "justify-start"
-              )}
+              className={cn("flex w-full", msg.role === 'user' ? "justify-end" : "justify-start")}
             >
-              <div className={cn(
-                "max-w-[90%] md:max-w-[80%] space-y-4",
-                msg.role === 'user' ? "items-end text-right" : "items-start text-left"
-              )}>
+              <div className={cn("max-w-[90%] md:max-w-[80%] space-y-4", msg.role === 'user' ? "items-end text-right" : "items-start text-left")}>
                 <div className={cn(
                   "p-5 rounded-[24px] text-sm md:text-base leading-relaxed font-medium shadow-sm",
-                  msg.role === 'user' 
-                    ? "bg-primary text-background rounded-tr-none" 
-                    : "bg-white/[0.03] border border-white/5 text-foreground rounded-tl-none"
+                  msg.role === 'user' ? "bg-primary text-background rounded-tr-none" : "bg-white/[0.03] border border-white/5 text-foreground rounded-tl-none"
                 )}>
                   {msg.content}
                 </div>
@@ -335,43 +360,35 @@ function ChatContent() {
                 {msg.type === 'analysis_result' && msg.data && (
                   <RichAnalysisCard data={msg.data} />
                 )}
+
+                {msg.type === 'daily_digest' && msg.data && (
+                  <DailyDigestCard digest={msg.data} />
+                )}
               </div>
             </motion.div>
           ))}
         </AnimatePresence>
 
         {(isProcessing || isSyncingEmail) && (
-          <motion.div 
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            className="flex flex-col items-start space-y-6"
-          >
+          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="flex flex-col items-start space-y-6">
             <div className="flex items-center gap-3 p-5 rounded-[24px] bg-white/[0.03] border border-white/5 rounded-tl-none">
               <Loader2 className="w-4 h-4 text-primary animate-spin" />
               <span className="text-sm font-medium text-muted-foreground italic">
                 {isSyncingEmail ? "Synchronizing Gmail Intelligence..." : "Processing intelligence..."}
               </span>
             </div>
-            
-            <div className="w-full max-w-xs space-y-4 pl-4 border-l-2 border-white/5">
-              {STEPS.map((step, idx) => (
-                <div 
-                  key={step.id}
-                  className={cn(
-                    "flex items-center gap-3 transition-all duration-500",
-                    currentStep >= idx ? "opacity-100" : "opacity-20"
-                  )}
-                >
-                  <div className={cn(
-                    "w-4 h-4 rounded-full flex items-center justify-center transition-all",
-                    currentStep > idx ? "bg-success scale-110" : currentStep === idx ? "bg-primary animate-pulse" : "bg-white/10"
-                  )}>
-                    {currentStep > idx && <CheckCircle2 className="w-3 h-3 text-background" />}
+            {!isSyncingEmail && (
+              <div className="w-full max-w-xs space-y-4 pl-4 border-l-2 border-white/5">
+                {STEPS.map((step, idx) => (
+                  <div key={step.id} className={cn("flex items-center gap-3 transition-all duration-500", currentStep >= idx ? "opacity-100" : "opacity-20")}>
+                    <div className={cn("w-4 h-4 rounded-full flex items-center justify-center transition-all", currentStep > idx ? "bg-success scale-110" : currentStep === idx ? "bg-primary animate-pulse" : "bg-white/10")}>
+                      {currentStep > idx && <CheckCircle2 className="w-3 h-3 text-background" />}
+                    </div>
+                    <span className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">{step.label}</span>
                   </div>
-                  <span className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">{step.label}</span>
-                </div>
-              ))}
-            </div>
+                ))}
+              </div>
+            )}
           </motion.div>
         )}
       </div>
@@ -386,16 +403,20 @@ function ChatContent() {
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="start" className="w-64 bg-card border-white/10 rounded-2xl p-2 mb-4">
+                <DropdownMenuItem onClick={generateDailyBriefing} className="rounded-xl h-11 cursor-pointer gap-3">
+                  <CalendarDays className="w-4 h-4 text-primary" />
+                  <span className="font-medium text-sm text-white">Generate Daily Briefing</span>
+                </DropdownMenuItem>
                 <DropdownMenuItem onClick={syncGmailIntelligence} className="rounded-xl h-11 cursor-pointer gap-3">
                   <MailCheck className="w-4 h-4 text-accent" />
                   <span className="font-medium text-sm text-white">Sync Gmail Intelligence</span>
                 </DropdownMenuItem>
                 <DropdownMenuItem onClick={() => fileInputRef.current?.click()} className="rounded-xl h-11 cursor-pointer gap-3">
-                  <ImageIcon className="w-4 h-4 text-primary" />
+                  <ImageIcon className="w-4 h-4 text-success" />
                   <span className="font-medium text-sm text-white">Upload visual source</span>
                 </DropdownMenuItem>
                 <DropdownMenuItem onClick={() => router.push('/')} className="rounded-xl h-11 cursor-pointer gap-3">
-                  <RefreshCw className="w-4 h-4 text-success" />
+                  <RefreshCw className="w-4 h-4 text-muted-foreground" />
                   <span className="font-medium text-sm text-white">New session</span>
                 </DropdownMenuItem>
               </DropdownMenuContent>

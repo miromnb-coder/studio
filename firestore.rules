@@ -95,14 +95,13 @@ service cloud.firestore {
           allow create: if isOwner(userId) && matchesPath('userId', userId) && matchesPath('analysisId', analysisId);
           allow update: if isExistingOwner(userId) && isUnchanged('userId') && isUnchanged('analysisId');
           allow delete: if isExistingOwner(userId);
-
-          match /recommended_actions/{actionId} {
-            allow get, list: if isOwner(userId);
-            allow create: if isOwner(userId) && matchesPath('userId', userId) && matchesPath('analysisId', analysisId) && matchesPath('detectedItemId', detectedItemId);
-            allow update: if isExistingOwner(userId) && isUnchanged('userId') && isUnchanged('analysisId') && isUnchanged('detectedItemId');
-            allow delete: if isExistingOwner(userId);
-          }
         }
+      }
+
+      match /digests/{digestId} {
+        allow get, list: if isOwner(userId);
+        allow create: if isOwner(userId) && matchesPath('userId', userId);
+        allow update, delete: if isExistingOwner(userId);
       }
 
       match /subscriptions/{subscriptionId} {

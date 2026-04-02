@@ -12,22 +12,32 @@ import {
   ShieldCheck,
   Clock,
   AlertTriangle,
-  Loader2
+  Loader2,
+  CalendarDays,
+  Sparkles
 } from 'lucide-react';
 import { useUser, useFirestore, useCollection, useMemoFirebase } from '@/firebase';
 import { collection, query, orderBy, limit } from 'firebase/firestore';
 import { motion } from 'framer-motion';
 import { Skeleton } from '@/components/ui/skeleton';
 import { ProactiveAlerts } from '@/components/dashboard/ProactiveAlerts';
+import { DigestService, DailyDigest } from '@/services/digest-service';
 
 export default function DashboardPage() {
   const [mounted, setMounted] = useState(false);
+  const [latestDigest, setLatestDigest] = useState<DailyDigest | null>(null);
   const { user } = useUser();
   const db = useFirestore();
 
   useEffect(() => {
     setMounted(true);
   }, []);
+
+  useEffect(() => {
+    if (mounted && user && db) {
+      DigestService.getLatestDigest(db, user.uid).then(setLatestDigest);
+    }
+  }, [mounted, user, db]);
 
   const analysesQuery = useMemoFirebase(() => {
     try {
@@ -58,7 +68,7 @@ export default function DashboardPage() {
             <p className="text-xl text-muted-foreground font-medium max-w-md">Passive protocol oversight for your financial health.</p>
           </div>
           
-          <div className="premium-card !p-10 text-center min-w-[280px] bg-white/[0.02]">
+          <div className="premium-card !p-10 text-center min-w-[280px] bg-white/[0.02] border-primary/20">
             <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground mb-2">Total Reclaimed</p>
             {isLoading ? (
               <Skeleton className="h-12 w-24 mx-auto bg-white/5" />
@@ -69,6 +79,44 @@ export default function DashboardPage() {
             )}
           </div>
         </header>
+
+        {/* Daily Briefing Highlight */}
+        <section className="grid grid-cols-1 md:grid-cols-4 gap-8">
+          <div className="md:col-span-3">
+            {latestDigest ? (
+              <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}>
+                <Link href={`/?c=digest-${latestDigest.id}`} className="premium-card bg-primary/5 border-primary/20 flex flex-col md:flex-row items-center gap-8 group">
+                  <div className="w-16 h-16 rounded-2xl bg-primary/20 flex items-center justify-center text-primary shrink-0">
+                    <CalendarDays className="w-8 h-8" />
+                  </div>
+                  <div className="flex-1 space-y-2 text-center md:text-left">
+                    <div className="flex items-center justify-center md:justify-start gap-2">
+                      <Sparkles className="w-3.5 h-3.5 text-primary" />
+                      <p className="text-[10px] font-bold uppercase tracking-widest text-primary">Intelligence Briefing Active</p>
+                    </div>
+                    <h3 className="text-2xl font-bold text-white tracking-tight">{latestDigest.summary}</h3>
+                    <p className="text-sm text-muted-foreground font-medium">Synthesized from your latest financial audits and email patterns.</p>
+                  </div>
+                  <Button variant="outline" className="rounded-xl border-primary/20 hover:bg-primary/10 text-primary font-bold uppercase tracking-widest text-[10px]">
+                    Open Digest
+                  </Button>
+                </Link>
+              </motion.div>
+            ) : (
+              <div className="premium-card border-dashed border-white/5 flex items-center justify-center py-12 gap-4 text-muted-foreground/50">
+                <CalendarDays className="w-6 h-6" />
+                <p className="text-sm font-bold uppercase tracking-widest">No Active Daily Digest</p>
+              </div>
+            )}
+          </div>
+          <div className="premium-card bg-white/[0.02] flex flex-col items-center justify-center text-center space-y-2">
+             <div className="w-10 h-10 rounded-xl bg-success/10 text-success flex items-center justify-center mb-2">
+                <TrendingUp className="w-5 h-5" />
+             </div>
+             <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">Monthly Momentum</p>
+             <h4 className="text-3xl font-bold text-white">Stable</h4>
+          </div>
+        </section>
 
         <div className="grid grid-cols-1 md:grid-cols-3 gap-12">
           <section className="md:col-span-2 space-y-8">
@@ -87,12 +135,7 @@ export default function DashboardPage() {
                 [...Array(3)].map((_, i) => <Skeleton key={i} className="h-24 w-full bg-white/5 rounded-2xl" />)
               ) : Array.isArray(analyses) && analyses.length > 0 ? (
                 analyses.filter(a => a && a.id).slice(0, 5).map((analysis, i) => (
-                  <motion.div
-                    key={analysis.id}
-                    initial={{ opacity: 0, y: 10 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    transition={{ delay: i * 0.05 }}
-                  >
+                  <motion.div key={analysis.id} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.05 }}>
                     <Link href={`/results/${analysis.id}`} className="premium-card flex items-center justify-between group hover:bg-white/[0.04]">
                       <div className="flex items-center gap-6">
                         <div className="w-12 h-12 rounded-xl bg-white/5 flex items-center justify-center text-muted-foreground group-hover:text-primary transition-colors">

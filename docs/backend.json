@@ -132,6 +132,33 @@
         "status",
         "source"
       ]
+    },
+    "DailyDigest": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "title": "DailyDigest",
+      "type": "object",
+      "description": "A synthesized daily summary of financial findings and actions.",
+      "properties": {
+        "id": { "type": "string" },
+        "userId": { "type": "string" },
+        "date": { "type": "string", "format": "date" },
+        "summary": { "type": "string" },
+        "estimatedMonthlySavings": { "type": "number" },
+        "findingsCount": { "type": "number" },
+        "topActions": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "title": { "type": "string" },
+              "description": { "type": "string" },
+              "urgency": { "type": "string" }
+            }
+          }
+        },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["userId", "date", "summary"]
     }
   },
   "auth": {
@@ -188,6 +215,14 @@
           "entityName": "Analysis",
           "schema": { "$ref": "#/backend/entities/Analysis" },
           "description": "Stores individual financial analysis reports."
+        }
+      },
+      {
+        "path": "/users/{userId}/digests/{digestId}",
+        "definition": {
+          "entityName": "DailyDigest",
+          "schema": { "$ref": "#/backend/entities/DailyDigest" },
+          "description": "Stores daily financial briefings."
         }
       }
     ]
