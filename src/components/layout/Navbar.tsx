@@ -2,10 +2,9 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { LayoutDashboard, History, Settings, Plus, User } from 'lucide-react';
+import { LayoutDashboard, History, Settings, Plus, Sparkles } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useUser } from '@/firebase';
-import { motion } from 'framer-motion';
 
 export function Navbar() {
   const pathname = usePathname();
@@ -13,7 +12,8 @@ export function Navbar() {
 
   const navItems = [
     { icon: LayoutDashboard, href: '/dashboard', label: 'Dashboard' },
-    { icon: Plus, href: '/analyze', label: 'Analyze' },
+    { icon: Sparkles, href: '/money-saver', label: 'Saver' },
+    { icon: Plus, href: '/analyze', label: 'Scan' },
     { icon: History, href: '/history', label: 'History' },
     { icon: Settings, href: '/settings', label: 'Settings' },
   ];

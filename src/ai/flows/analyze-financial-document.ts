@@ -1,4 +1,3 @@
-
 'use server';
 /**
  * @fileOverview An AI agent that analyzes financial documents using Groq Llama 3.
@@ -30,10 +29,11 @@ const DetectedItemSchema = z.object({
     'duplicate_charge'
   ]).describe('The type of financial finding.'),
   estimatedSavings: z.number().optional().describe('Estimated monthly savings in USD for this item, if applicable.'),
+  alternativeSuggestion: z.string().optional().describe('A cheaper alternative or a note if the service is known to be overpriced.'),
   urgencyLevel: z.enum(['low', 'medium', 'high', 'urgent']).describe('How urgent this finding is.'),
   confidence: z.enum(['low', 'medium', 'high']).describe('Confidence level of the detection.'),
   recommendedAction: z.string().describe('A recommended action for the user.'),
-  copyableMessage: z.string().optional().describe('A copyable message related to the action, e.g., cancellation email text.'),
+  copyableMessage: z.string().optional().describe('A copyable message related to the action, e.g., cancellation or price-match email text.'),
   nextSteps: z.array(z.string()).describe('A list of concrete next steps.'),
 });
 
@@ -75,12 +75,14 @@ export const AnalyzeFinancialDocumentOutputSchema = z.object({
 export type AnalyzeFinancialDocumentOutput = z.infer<typeof AnalyzeFinancialDocumentOutputSchema>;
 
 /**
- * analyzeFinancialDocument logic refactored to use Groq Llama 3.
- * Note: llama3-70b-8192 is a text-only model. If imageDataUri is provided, 
- * we assume text extraction occurred or prompt the user for text.
+ * analyzeFinancialDocument logic powered by Groq Llama 3.
  */
 export async function analyzeFinancialDocument(input: AnalyzeFinancialDocumentInput): Promise<AnalyzeFinancialDocumentOutput> {
-  const prompt = `You are an expert financial assistant. Analyze the following financial data and identify subscriptions, recurring charges, hidden fees, trial endings, price increases, and potential savings.
+  const prompt = `You are an expert financial "Agentic Money Saver". Analyze the following financial data.
+Your goal is to:
+1. Identify recurring subscriptions and charges.
+2. Suggest cheaper alternatives or identify if a service is overpriced compared to market rates.
+3. Draft professional 'Cancellation' or 'Price Match' emails for the user to copy.
 
 Data:
 ${input.documentText || "No text provided. (Image input detected, please extract text if possible)"}
@@ -95,10 +97,11 @@ Return your findings in a strict JSON format matching this schema:
       "summary": string,
       "type": "subscription" | "recurring_charge" | "hidden_fee" | "trial_ending" | "price_increase" | "unusual_spending" | "savings_opportunity" | "duplicate_charge",
       "estimatedSavings": number,
+      "alternativeSuggestion": string (e.g. "Switch to Hulu for $7.99" or "Use free Tier"),
       "urgencyLevel": "low" | "medium" | "high" | "urgent",
       "confidence": "low" | "medium" | "high",
       "recommendedAction": string,
-      "copyableMessage": string,
+      "copyableMessage": string (Draft a professional email for cancellation or negotiation),
       "nextSteps": [string]
     }
   ],
@@ -119,7 +122,7 @@ Return your findings in a strict JSON format matching this schema:
     messages: [
       {
         role: 'system',
-        content: 'You are a financial optimization AI. Always output valid JSON.',
+        content: 'You are a financial optimization AI specializing in detecting waste and finding cheaper alternatives. Always output valid JSON.',
       },
       {
         role: 'user',

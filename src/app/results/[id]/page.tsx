@@ -8,12 +8,11 @@ import {
   Copy, 
   Check, 
   Zap, 
-  ShieldCheck,
   MessageSquare,
   TrendingUp,
-  ArrowRight,
   Mail,
-  Send
+  Send,
+  ArrowRightLeft
 } from 'lucide-react';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
@@ -76,7 +75,7 @@ export default function ResultsPage() {
             <div className="space-y-6 max-w-2xl">
               <div className="flex items-center gap-4 mb-4">
                 <Badge className="bg-primary/10 text-primary border-primary/10 rounded-full px-4 py-1 text-[10px] font-bold uppercase tracking-widest">
-                  {analysis.source === 'email' ? 'Inbox Verified' : 'Manual Scan Verified'}
+                  Agentic Optimization Verified
                 </Badge>
                 {analysis.source === 'email' && <Mail className="w-4 h-4 text-primary" />}
               </div>
@@ -86,7 +85,7 @@ export default function ResultsPage() {
             
             <div className="premium-card bg-success !p-12 flex flex-col justify-center items-center text-background text-center min-w-[280px]">
               <p className="text-[10px] font-bold uppercase tracking-[0.3em] opacity-60 mb-2">Monthly Saving</p>
-              <p className="text-7xl font-bold font-headline leading-none">${analysis.estimatedMonthlySavings?.toFixed(0)}</p>
+              <p className="text-7xl font-bold font-headline leading-none">€{analysis.estimatedMonthlySavings?.toFixed(0)}</p>
             </div>
           </div>
         </header>
@@ -129,12 +128,19 @@ export default function ResultsPage() {
                     <div className="space-y-4">
                       <h3 className="text-4xl font-bold font-headline">{item.title}</h3>
                       <p className="text-xl text-muted-foreground leading-relaxed">{item.summary}</p>
+                      
+                      {item.alternativeSuggestion && (
+                        <div className="flex items-center gap-3 p-4 rounded-2xl bg-primary/5 border border-primary/10 w-fit">
+                          <ArrowRightLeft className="w-4 h-4 text-primary" />
+                          <p className="text-sm font-bold text-primary">CHEAPER ALTERNATIVE: {item.alternativeSuggestion}</p>
+                        </div>
+                      )}
                     </div>
                   </div>
 
                   <div className="text-right space-y-2">
                     <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">Monthly Potential</p>
-                    <p className="text-5xl font-bold text-success glow-success tracking-tight">${item.estimatedSavings}</p>
+                    <p className="text-5xl font-bold text-success glow-success tracking-tight">€{item.estimatedSavings}</p>
                   </div>
                 </div>
 
@@ -166,7 +172,7 @@ export default function ResultsPage() {
                         >
                           <a href={`mailto:support@${item.title.split(' ')[0].toLowerCase()}.com?subject=Inquiry Regarding ${item.title}&body=${encodeURIComponent(item.copyableMessage)}`}>
                             <Send className="w-3 h-3" />
-                            Send via Email
+                            Execute Change
                           </a>
                         </Button>
                       </div>
