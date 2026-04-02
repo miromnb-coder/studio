@@ -1,4 +1,3 @@
-
 "use client";
 
 import { useState, useEffect } from 'react';
@@ -21,7 +20,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 
 export default function DashboardPage() {
   const [mounted, setMounted] = useState(false);
-  const { user, isUserLoading } = useUser();
+  const { user } = useUser();
   const db = useFirestore();
 
   useEffect(() => {
@@ -43,26 +42,8 @@ export default function DashboardPage() {
 
   const { data: analyses, isLoading: isAnalysesLoading } = useCollection(analysesQuery);
   
-  if (!mounted || isUserLoading) {
-    return (
-      <div className="min-h-screen bg-background flex items-center justify-center">
-        <Loader2 className="w-8 h-8 text-primary animate-spin" />
-      </div>
-    );
-  }
-
-  // GUARD CLAUSE: Sturdy check for Firebase services
-  if (!db || !user) {
-    return (
-      <div className="min-h-screen bg-background flex flex-col items-center justify-center p-6 text-center">
-        <Loader2 className="w-8 h-8 text-primary animate-spin mb-4" />
-        <p className="text-muted-foreground font-medium">Awaiting Data Ledger...</p>
-      </div>
-    );
-  }
-
   const totalSavings = (Array.isArray(analyses) ? analyses : []).reduce((acc, a) => acc + (a.estimatedMonthlySavings || 0), 0) || 0;
-  const isLoading = isAnalysesLoading;
+  const isLoading = isAnalysesLoading || !mounted;
 
   return (
     <div className="min-h-screen bg-background pt-24 pb-32">

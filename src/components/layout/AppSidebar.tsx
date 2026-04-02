@@ -1,4 +1,3 @@
-
 "use client";
 
 import { useEffect, useState } from 'react';
@@ -34,7 +33,7 @@ export function AppSidebar() {
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const activeId = searchParams?.get('c');
-  const { user, isUserLoading } = useUser();
+  const { user } = useUser();
   const db = useFirestore();
   const router = useRouter();
 
@@ -64,26 +63,9 @@ export function AppSidebar() {
     { icon: Settings, href: '/settings', label: 'Sync' },
   ];
 
-  if (!mounted || isUserLoading) {
-    return (
-      <Sidebar className="border-r border-white/5 bg-[#19191C]">
-        <div className="flex h-full items-center justify-center">
-          <Loader2 className="w-4 h-4 animate-spin text-muted-foreground/10" />
-        </div>
-      </Sidebar>
-    );
-  }
-
-  // GUARD CLAUSE: Sturdy check for Firebase services
-  if (!db || !user) {
-    return (
-      <Sidebar className="border-r border-white/5 bg-[#19191C]">
-        <div className="flex h-full items-center justify-center p-4">
-          <p className="text-[10px] text-muted-foreground uppercase tracking-widest text-center">Awaiting Auth...</p>
-        </div>
-      </Sidebar>
-    );
-  }
+  // We no longer return a full-screen loader here. 
+  // We allow the sidebar structure to render and populate as data arrives.
+  const isSyncing = !mounted || isLoading;
 
   return (
     <Sidebar className="border-r border-white/5 bg-[#19191C]">
@@ -115,14 +97,14 @@ export function AppSidebar() {
           <div className="flex items-center justify-between px-4 mb-2">
             <SidebarGroupLabel className="p-0 text-[10px] font-bold uppercase tracking-widest text-muted-foreground/50">Recent Intelligence</SidebarGroupLabel>
             <div className="flex items-center gap-1.5">
-              <div className="w-1 h-1 rounded-full bg-success animate-pulse" />
+              <div className={cn("w-1 h-1 rounded-full", isSyncing ? "bg-white/20" : "bg-success animate-pulse")} />
               <span className="text-[8px] font-bold uppercase tracking-[0.2em] text-success/50">Live</span>
             </div>
           </div>
           <SidebarMenu className="px-2 space-y-1">
-            {isLoading ? (
+            {isSyncing && !conversations ? (
               <div className="flex justify-center py-4">
-                <Loader2 className="w-4 h-4 text-muted-foreground animate-spin" />
+                <Loader2 className="w-4 h-4 text-muted-foreground/10 animate-spin" />
               </div>
             ) : Array.isArray(conversations) && conversations.length > 0 ? (
               conversations
@@ -187,7 +169,7 @@ export function AppSidebar() {
       <SidebarFooter className="p-4 border-t border-white/5">
         <div className="flex items-center gap-3 px-2 py-2 rounded-xl hover:bg-white/5 transition-colors cursor-pointer group">
           <div className="w-8 h-8 rounded-full overflow-hidden border border-white/10 group-hover:border-primary/50 transition-colors bg-muted/50">
-            {user?.uid ? (
+            {user?.uid && mounted ? (
               <img 
                 src={`https://picsum.photos/seed/${user.uid}/64/64`} 
                 alt="Profile" 

@@ -6,7 +6,7 @@ import { RootClientLayout } from '@/components/layout/RootClientLayout';
 import { Toaster } from '@/components/ui/toaster';
 
 export const metadata: Metadata = {
-  title: 'AI Life Operator | Conversational assistant',
+  title: 'AI Life Operator | Intelligent Financial Audit',
   description: 'AI Life Operator scans receipts, screenshots, and notes to uncover subscriptions and hidden fees through a conversational interface.',
 };
 

@@ -1,4 +1,3 @@
-
 "use client";
 
 import { useState, useEffect } from 'react';
@@ -20,7 +19,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 
 export default function HistoryPage() {
   const [mounted, setMounted] = useState(false);
-  const { user, isUserLoading } = useUser();
+  const { user } = useUser();
   const db = useFirestore();
   const [searchTerm, setSearchTerm] = useState('');
 
@@ -43,24 +42,6 @@ export default function HistoryPage() {
 
   const { data: analyses, isLoading: isAnalysesLoading } = useCollection(analysesQuery);
 
-  if (!mounted || isUserLoading) {
-    return (
-      <div className="min-h-screen bg-background flex items-center justify-center">
-        <Loader2 className="w-8 h-8 text-primary animate-spin" />
-      </div>
-    );
-  }
-
-  // GUARD CLAUSE: Sturdy check for Firebase services
-  if (!db || !user) {
-    return (
-      <div className="min-h-screen bg-background flex flex-col items-center justify-center p-6 text-center">
-        <Loader2 className="w-8 h-8 text-primary animate-spin mb-4" />
-        <p className="text-muted-foreground font-medium">Synchronizing Audit Records...</p>
-      </div>
-    );
-  }
-
   const filteredAnalyses = (Array.isArray(analyses) ? analyses : []).filter(a => 
     a && (
       (a.title || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -68,7 +49,7 @@ export default function HistoryPage() {
     )
   );
 
-  const isLoading = isAnalysesLoading;
+  const isLoading = isAnalysesLoading || !mounted;
 
   return (
     <div className="min-h-screen bg-background pt-32 pb-32">
