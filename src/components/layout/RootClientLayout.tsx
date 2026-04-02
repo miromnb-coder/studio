@@ -38,7 +38,7 @@ export function RootClientLayout({ children }: { children: React.ReactNode }) {
         }>
           <AppSidebar />
         </Suspense>
-        <main className="flex-1 relative flex flex-col min-w-0">
+        <main className="flex-1 relative flex flex-col min-w-0" id="main-content">
           {children}
         </main>
       </div>
