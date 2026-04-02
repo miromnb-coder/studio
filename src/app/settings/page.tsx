@@ -18,19 +18,30 @@ import {
   Info,
   RefreshCw,
   Cpu,
-  Loader2
+  Loader2,
+  Lock,
+  LogOut,
+  MailCheck
 } from 'lucide-react';
 import { useUser, useFirestore, useDoc, useMemoFirebase } from '@/firebase';
 import { doc, updateDoc } from 'firebase/firestore';
+import { GmailService } from '@/services/gmail-service';
+import { useToast } from '@/hooks/use-toast';
 
 export default function SettingsPage() {
   const [mounted, setMounted] = useState(false);
   const { user } = useUser();
   const db = useFirestore();
   const [copied, setCopied] = useState(false);
+  const [isConnectingGmail, setIsConnectingGmail] = useState(false);
+  const [gmailConnected, setGmailConnected] = useState(false);
+  const { toast } = useToast();
 
   useEffect(() => {
     setMounted(true);
+    // Check if we have a connection flag in local storage for the prototype
+    const status = localStorage.getItem('operator_gmail_connected');
+    if (status === 'true') setGmailConnected(true);
   }, []);
 
   const userRef = useMemoFirebase(() => {
@@ -38,7 +49,6 @@ export default function SettingsPage() {
       if (!db || !user) return null;
       return doc(db, 'users', user.uid);
     } catch (e) {
-      console.error('Settings User Ref Error:', e);
       return null;
     }
   }, [db, user]);
@@ -56,6 +66,35 @@ export default function SettingsPage() {
       });
     }
   }, [db, user, profile]);
+
+  const handleConnectGmail = async () => {
+    setIsConnectingGmail(true);
+    const token = await GmailService.connect();
+    if (token) {
+      setGmailConnected(true);
+      localStorage.setItem('operator_gmail_connected', 'true');
+      toast({
+        title: "Intelligence Connected",
+        description: "Gmail protocol is now active and scanning for patterns.",
+      });
+    } else {
+      toast({
+        variant: "destructive",
+        title: "Connection Refused",
+        description: "Failed to authorize Gmail protocol.",
+      });
+    }
+    setIsConnectingGmail(false);
+  };
+
+  const handleDisconnectGmail = () => {
+    setGmailConnected(false);
+    localStorage.removeItem('operator_gmail_connected');
+    toast({
+      title: "Protocol Severed",
+      description: "Gmail intelligence has been disconnected.",
+    });
+  };
 
   const handleCopy = () => {
     if (profile?.inboundEmailAddress && typeof window !== 'undefined') {
@@ -85,13 +124,62 @@ export default function SettingsPage() {
 
         <div className="grid grid-cols-1 gap-12">
           <div className="space-y-12">
+            
+            {/* Gmail Intelligence Section */}
             <section className="space-y-6">
+              <div className="space-y-1">
+                <h2 className="text-xl font-bold font-headline tracking-tight uppercase tracking-widest text-[12px] flex items-center gap-2 text-white">
+                  <MailCheck className="w-4 h-4 text-accent" />
+                  Direct Intelligence
+                </h2>
+                <p className="text-sm text-muted-foreground font-medium">Connect your primary inbox for autonomous audit scanning.</p>
+              </div>
+
+              <div className="premium-card bg-accent/5 border-accent/10 p-8 space-y-6">
+                <div className="flex flex-col md:flex-row items-center justify-between gap-6">
+                  <div className="space-y-2 text-center md:text-left">
+                    <h3 className="text-2xl font-bold text-white tracking-tight">Gmail Connectivity</h3>
+                    <p className="text-sm text-muted-foreground max-w-sm">
+                      The Operator will scan your recent receipts and billing alerts. We only request read-only access.
+                    </p>
+                  </div>
+                  
+                  {gmailConnected ? (
+                    <div className="flex flex-col items-center gap-3">
+                      <div className="px-4 py-2 rounded-xl bg-success/10 border border-success/20 text-success text-[10px] font-bold uppercase tracking-widest flex items-center gap-2">
+                        <Check className="w-3 h-3" />
+                        Protocol Active
+                      </div>
+                      <Button variant="ghost" onClick={handleDisconnectGmail} className="text-danger hover:text-danger hover:bg-danger/10 text-[10px] font-bold uppercase tracking-widest">
+                        Disconnect
+                      </Button>
+                    </div>
+                  ) : (
+                    <Button 
+                      onClick={handleConnectGmail} 
+                      disabled={isConnectingGmail}
+                      className="h-14 px-8 rounded-2xl bg-white text-background hover:bg-white/90 font-bold uppercase tracking-widest text-[10px] gap-3"
+                    >
+                      {isConnectingGmail ? <Loader2 className="w-4 h-4 animate-spin" /> : <Lock className="w-4 h-4" />}
+                      Connect Gmail
+                    </Button>
+                  )}
+                </div>
+                
+                <div className="pt-6 border-t border-white/5 flex items-center gap-3 text-[9px] font-bold uppercase tracking-[0.2em] text-muted-foreground/50">
+                  <Shield className="w-3 h-3" />
+                  Privacy Protocol: No full bodies are stored permanently.
+                </div>
+              </div>
+            </section>
+
+            <section className="space-y-6 pt-12 border-t border-white/5">
               <div className="space-y-1">
                 <h2 className="text-xl font-bold font-headline tracking-tight uppercase tracking-widest text-[12px] flex items-center gap-2 text-white">
                   <Mail className="w-4 h-4 text-primary" />
                   Inbound Protocol
                 </h2>
-                <p className="text-sm text-muted-foreground font-medium">Magic address for autonomous document ingestion.</p>
+                <p className="text-sm text-muted-foreground font-medium">Magic address for manual document ingestion.</p>
               </div>
 
               <div className="premium-card bg-primary/5 border-primary/10 p-8 space-y-8">
@@ -107,43 +195,6 @@ export default function SettingsPage() {
                       {copied ? <Check className="w-5 h-5 text-success" /> : <Copy className="w-5 h-5 text-white" />}
                     </Button>
                   </div>
-                </div>
-                
-                <div className="space-y-4">
-                  <p className="text-[9px] font-bold uppercase tracking-widest text-muted-foreground">Automation Protocol</p>
-                  <div className="grid md:grid-cols-2 gap-4">
-                    {[
-                      "Register this address as email target.",
-                      "Configure filters for receipts & renewals.",
-                      "Enable auto-forwarding.",
-                      "Operator will scan in background."
-                    ].map((step, i) => (
-                      <div key={i} className="flex items-start gap-3 text-sm text-muted-foreground font-medium p-4 bg-white/5 rounded-xl">
-                        <span className="w-5 h-5 rounded-full bg-primary/10 flex items-center justify-center text-primary text-[10px] shrink-0 font-bold">{i + 1}</span>
-                        <p>{step}</p>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              </div>
-            </section>
-
-            <section className="space-y-6 pt-12 border-t border-white/5">
-              <h2 className="text-xl font-bold font-headline tracking-tight uppercase tracking-widest text-[12px] text-white">Operator Intelligence</h2>
-              <div className="premium-card p-8 space-y-8 bg-white/[0.01]">
-                <div className="flex items-center justify-between">
-                  <div className="space-y-1">
-                    <Label className="text-lg font-bold text-white">Conversational Ingestion</Label>
-                    <p className="text-xs text-muted-foreground font-medium italic">Allow operator to process chat uploads immediately.</p>
-                  </div>
-                  <Switch checked />
-                </div>
-                <div className="flex items-center justify-between pt-8 border-t border-white/5">
-                  <div className="space-y-1">
-                    <Label className="text-lg font-bold text-white">Predictive Scripts</Label>
-                    <p className="text-xs text-muted-foreground font-medium italic">Pre-generate negotiation drafts for all detected waste.</p>
-                  </div>
-                  <Switch checked />
                 </div>
               </div>
             </section>

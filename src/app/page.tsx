@@ -1,3 +1,4 @@
+
 "use client";
 
 import { useState, useRef, useEffect, Suspense } from 'react';
@@ -13,10 +14,13 @@ import {
   CheckCircle2,
   ChevronRight,
   Loader2,
-  AlertCircle
+  AlertCircle,
+  MailCheck,
+  RefreshCw
 } from 'lucide-react';
 import { AnalysisService } from '@/services/analysis-service';
 import { MemoryService } from '@/services/memory-service';
+import { GmailService } from '@/services/gmail-service';
 import { useFirestore, useUser, addDocumentNonBlocking, useCollection, useMemoFirebase, useDoc } from '@/firebase';
 import { collection, serverTimestamp, doc, updateDoc, query, orderBy, setDoc } from 'firebase/firestore';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -30,12 +34,13 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { RichAnalysisCard } from '@/components/chat/RichAnalysisCard';
 import { OnboardingOverlay } from '@/components/onboarding/OnboardingOverlay';
+import { useToast } from '@/hooks/use-toast';
 
 interface Message {
   id: string;
   role: 'user' | 'assistant';
   content: string;
-  type?: 'text' | 'analysis_result' | 'error';
+  type?: 'text' | 'analysis_result' | 'error' | 'system';
   data?: any;
   timestamp: any;
 }
@@ -52,6 +57,7 @@ function ChatContent() {
   const [isProcessing, setIsProcessing] = useState(false);
   const [currentStep, setCurrentStep] = useState(0);
   const [showOnboarding, setShowOnboarding] = useState(false);
+  const [isSyncingEmail, setIsSyncingEmail] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const { user, isUserLoading } = useUser();
@@ -59,6 +65,7 @@ function ChatContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const conversationId = searchParams?.get('c');
+  const { toast } = useToast();
 
   const [localMessages, setLocalMessages] = useState<Message[]>([]);
 
@@ -74,7 +81,6 @@ function ChatContent() {
         orderBy('timestamp', 'asc')
       );
     } catch (e) {
-      console.error("Message query error:", e);
       return null;
     }
   }, [db, user, conversationId]);
@@ -110,27 +116,56 @@ function ChatContent() {
     if (scrollRef.current) {
       scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
     }
-  }, [localMessages, isProcessing]);
+  }, [localMessages, isProcessing, isSyncingEmail]);
 
-  // Safety Guard for initialization
   if (mounted && !isUserLoading && !user) {
     router.push('/login');
     return null;
   }
 
-  const handleOnboardingGoal = (goal: string) => {
-    setShowOnboarding(false);
-    let initialPrompt = "";
-    if (goal === 'save_money') initialPrompt = "I want to save money on my recurring expenses.";
-    if (goal === 'save_time') initialPrompt = "Help me optimize my daily administrative tasks.";
-    if (goal === 'analyze_visual') initialPrompt = "I have a screenshot of a receipt or statement to analyze.";
+  const syncGmailIntelligence = async () => {
+    if (!user || !db) return;
     
-    setInput(initialPrompt);
+    setIsSyncingEmail(true);
+    const token = await GmailService.connect();
+    
+    if (!token) {
+      setIsSyncingEmail(false);
+      toast({ variant: "destructive", title: "Sync Failed", description: "Could not connect to Gmail protocol." });
+      return;
+    }
+
+    try {
+      const emails = await GmailService.fetchFinancialEmails(token);
+      
+      if (emails.length === 0) {
+        setIsSyncingEmail(false);
+        toast({ title: "Scan Complete", description: "No new financial patterns detected in your inbox." });
+        return;
+      }
+
+      // Format emails for analysis
+      const emailContext = emails.map(e => `FROM: ${e.from}\nSUBJECT: ${e.subject}\nSNIPPET: ${e.snippet}`).join('\n\n---\n\n');
+      
+      await sendMessage(`[SYSTEM] Analyzing ${emails.length} relevant financial emails from your Gmail inbox.`, undefined, emailContext);
+
+    } catch (err) {
+      console.error('Gmail Sync Error:', err);
+    } finally {
+      setIsSyncingEmail(false);
+    }
   };
 
-  const sendMessage = async (text?: string, fileData?: string) => {
+  const handleOnboardingGoal = (goal: string) => {
+    setShowOnboarding(false);
+    if (goal === 'save_money') setInput("I want to save money on my recurring expenses.");
+    if (goal === 'save_time') setInput("Help me optimize my daily administrative tasks.");
+    if (goal === 'analyze_visual') setInput("I have a screenshot of a receipt or statement to analyze.");
+  };
+
+  const sendMessage = async (text?: string, fileData?: string, rawContext?: string) => {
     const content = text || input;
-    if (!content && !fileData) return;
+    if (!content && !fileData && !rawContext) return;
     if (!user || !db) return;
 
     let activeConvId = conversationId;
@@ -147,7 +182,6 @@ function ChatContent() {
         });
         router.push(`/?c=${activeConvId}`);
       } catch (e) {
-        console.error("Failed to create conversation:", e);
         return;
       }
     }
@@ -156,7 +190,7 @@ function ChatContent() {
     const userMessage: Message = {
       id: userMsgId,
       role: 'user',
-      content: content || 'Source uploaded',
+      content: content.startsWith('[SYSTEM]') ? 'Gmail Intelligence Sync' : (content || 'Source uploaded'),
       timestamp: new Date(),
     };
 
@@ -181,7 +215,7 @@ function ChatContent() {
       }
 
       const result = await AnalysisService.analyze({ 
-        documentText: content,
+        documentText: rawContext || content,
         imageDataUri: fileData,
         history,
         userMemory: userMemory || null
@@ -223,7 +257,7 @@ function ChatContent() {
           analysisDate: new Date().toISOString(),
           status: 'completed',
           inputMethod: 'chat',
-          inputContent: content,
+          inputContent: rawContext || content,
           createdAt: serverTimestamp(),
           source: 'chat'
         });
@@ -254,9 +288,7 @@ function ChatContent() {
     const file = e.target.files?.[0];
     if (file) {
       const reader = new FileReader();
-      reader.onloadend = () => {
-        sendMessage(undefined, reader.result as string);
-      };
+      reader.onloadend = () => sendMessage(undefined, reader.result as string);
       reader.readAsDataURL(file);
     }
   };
@@ -307,7 +339,7 @@ function ChatContent() {
           ))}
         </AnimatePresence>
 
-        {isProcessing && (
+        {(isProcessing || isSyncingEmail) && (
           <motion.div 
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
@@ -315,7 +347,9 @@ function ChatContent() {
           >
             <div className="flex items-center gap-3 p-5 rounded-[24px] bg-white/[0.03] border border-white/5 rounded-tl-none">
               <Loader2 className="w-4 h-4 text-primary animate-spin" />
-              <span className="text-sm font-medium text-muted-foreground italic">Processing intelligence...</span>
+              <span className="text-sm font-medium text-muted-foreground italic">
+                {isSyncingEmail ? "Synchronizing Gmail Intelligence..." : "Processing intelligence..."}
+              </span>
             </div>
             
             <div className="w-full max-w-xs space-y-4 pl-4 border-l-2 border-white/5">
@@ -350,25 +384,23 @@ function ChatContent() {
                   <Plus className="w-5 h-5" />
                 </Button>
               </DropdownMenuTrigger>
-              <DropdownMenuContent align="start" className="w-56 bg-card border-white/10 rounded-2xl p-2 mb-4">
+              <DropdownMenuContent align="start" className="w-64 bg-card border-white/10 rounded-2xl p-2 mb-4">
+                <DropdownMenuItem onClick={syncGmailIntelligence} className="rounded-xl h-11 cursor-pointer gap-3">
+                  <MailCheck className="w-4 h-4 text-accent" />
+                  <span className="font-medium text-sm text-white">Sync Gmail Intelligence</span>
+                </DropdownMenuItem>
                 <DropdownMenuItem onClick={() => fileInputRef.current?.click()} className="rounded-xl h-11 cursor-pointer gap-3">
                   <ImageIcon className="w-4 h-4 text-primary" />
                   <span className="font-medium text-sm text-white">Upload visual source</span>
                 </DropdownMenuItem>
                 <DropdownMenuItem onClick={() => router.push('/')} className="rounded-xl h-11 cursor-pointer gap-3">
-                  <Plus className="w-4 h-4 text-success" />
+                  <RefreshCw className="w-4 h-4 text-success" />
                   <span className="font-medium text-sm text-white">New session</span>
                 </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
 
-            <input 
-              type="file" 
-              className="hidden" 
-              ref={fileInputRef} 
-              accept="image/*"
-              onChange={onFileChange}
-            />
+            <input type="file" className="hidden" ref={fileInputRef} accept="image/*" onChange={onFileChange} />
 
             <Textarea 
               value={input}
@@ -401,11 +433,7 @@ function ChatContent() {
 
 export default function ChatPage() {
   return (
-    <Suspense fallback={
-      <div className="min-h-screen bg-background flex items-center justify-center">
-        <Loader2 className="w-8 h-8 text-primary animate-spin" />
-      </div>
-    }>
+    <Suspense fallback={<div className="min-h-screen bg-background flex items-center justify-center"><Loader2 className="w-8 h-8 text-primary animate-spin" /></div>}>
       <ChatContent />
     </Suspense>
   );
