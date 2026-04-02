@@ -1,3 +1,4 @@
+
 "use client";
 
 import { useState, useRef, useEffect } from 'react';
@@ -8,17 +9,13 @@ import { Card } from '@/components/ui/card';
 import { 
   Send, 
   Plus, 
-  Paperclip, 
   Image as ImageIcon, 
   FileText, 
   Zap, 
-  Sparkles,
-  ArrowRight,
-  Cpu,
-  Loader2,
   CheckCircle2,
   ChevronRight,
-  MessageSquare
+  Loader2,
+  AlertCircle
 } from 'lucide-react';
 import { AnalysisService } from '@/services/analysis-service';
 import { useFirestore, useUser, addDocumentNonBlocking } from '@/firebase';
@@ -37,15 +34,15 @@ interface Message {
   id: string;
   role: 'user' | 'assistant';
   content: string;
-  type?: 'text' | 'analysis_result';
+  type?: 'text' | 'analysis_result' | 'error';
   data?: any;
   timestamp: Date;
 }
 
 const STEPS = [
-  { id: 'ingest', label: 'Ingesting data protocol...', duration: 1000 },
-  { id: 'scan', label: 'Scanning for predatory patterns...', duration: 1500 },
-  { id: 'action', label: 'Compiling actionable ledger...', duration: 1200 },
+  { id: 'ingest', label: 'Ingesting data protocol...', duration: 800 },
+  { id: 'scan', label: 'Scanning for predatory patterns...', duration: 1200 },
+  { id: 'action', label: 'Compiling actionable ledger...', duration: 1000 },
 ];
 
 export default function ChatPage() {
@@ -53,7 +50,7 @@ export default function ChatPage() {
     {
       id: 'welcome',
       role: 'assistant',
-      content: "Operator active. How can I assist your liquidity today? Type 'save me money' or upload a statement to begin audit.",
+      content: "Operator active. I am monitoring for predatory subscriptions, hidden fees, and trial endings. Provide a statement or type a command to begin audit.",
       timestamp: new Date(),
     }
   ]);
@@ -73,20 +70,14 @@ export default function ChatPage() {
   }, [messages, isProcessing]);
 
   const sendMessage = async (text?: string, fileData?: string) => {
-    console.log('sendMessage execution started', { text, hasFileData: !!fileData, input });
-    
     const content = text || input;
-    if (!content && !fileData) {
-      console.log('Execution aborted: No content or file data provided');
-      return;
-    }
+    if (!content && !fileData) return;
 
     if (!user || !db) {
-      console.log('Execution aborted: Authentication or database not ready', { user: !!user, db: !!db });
       setMessages(prev => [...prev, {
         id: Math.random().toString(36).substr(2, 9),
         role: 'assistant',
-        content: "Please sign in to your account to use the audit protocol and secure sandbox features.",
+        content: "Identity verification required. Please sign in to access the secure audit sandbox.",
         timestamp: new Date(),
       }]);
       return;
@@ -95,89 +86,75 @@ export default function ChatPage() {
     const userMessage: Message = {
       id: Math.random().toString(36).substr(2, 9),
       role: 'user',
-      content: content || 'Analyzing file...',
+      content: content || 'Source uploaded for analysis.',
       timestamp: new Date(),
     };
 
     setMessages(prev => [...prev, userMessage]);
     setInput('');
-    
-    // Check if intent is "save money" or audit
-    const isAuditIntent = content.toLowerCase().includes('save') || content.toLowerCase().includes('money') || content.toLowerCase().includes('audit') || fileData;
+    setIsProcessing(true);
+    setCurrentStep(0);
 
-    if (isAuditIntent) {
-      console.log('Audit intent identified. Starting sequence...');
-      setIsProcessing(true);
-      setCurrentStep(0);
-
-      // Simulate steps
+    try {
+      // Simulate analysis steps for UI/UX "Agentic" feel
       for (let i = 0; i < STEPS.length; i++) {
         await new Promise(r => setTimeout(r, STEPS[i].duration));
         setCurrentStep(i + 1);
       }
 
-      try {
-        const result = await AnalysisService.analyze({ 
-          documentText: content,
-          imageDataUri: fileData 
-        });
+      const result = await AnalysisService.analyze({ 
+        documentText: content,
+        imageDataUri: fileData 
+      });
 
-        // Save to Firestore
-        const analysesRef = collection(db, 'users', user.uid, 'analyses');
-        const docRef = await addDocumentNonBlocking(analysesRef, {
-          userId: user.uid,
-          title: result.title,
-          summary: result.summary,
-          estimatedMonthlySavings: result.savingsEstimate,
-          analysisDate: new Date().toISOString(),
-          status: 'completed',
-          inputMethod: fileData ? 'screenshot' : 'chat',
-          inputContent: content,
-          createdAt: serverTimestamp(),
-          source: fileData ? 'screenshot' : 'chat'
-        });
+      // Persist analysis to Firestore
+      const analysesRef = collection(db, 'users', user.uid, 'analyses');
+      const docRef = await addDocumentNonBlocking(analysesRef, {
+        userId: user.uid,
+        title: result.title,
+        summary: result.summary,
+        estimatedMonthlySavings: result.savingsEstimate,
+        analysisDate: new Date().toISOString(),
+        status: 'completed',
+        inputMethod: fileData ? 'screenshot' : 'chat',
+        inputContent: content,
+        createdAt: serverTimestamp(),
+        source: fileData ? 'screenshot' : 'chat'
+      });
 
-        if (docRef) {
-          const itemsRef = collection(db, 'users', user.uid, 'analyses', docRef.id, 'detected_items');
-          for (const item of result.detectedItems) {
-            addDocumentNonBlocking(itemsRef, {
-              ...item,
-              userId: user.uid,
-              analysisId: docRef.id,
-            });
-          }
+      if (docRef) {
+        const itemsRef = collection(db, 'users', user.uid, 'analyses', docRef.id, 'detected_items');
+        for (const item of result.detectedItems) {
+          addDocumentNonBlocking(itemsRef, {
+            ...item,
+            userId: user.uid,
+            analysisId: docRef.id,
+            status: 'active',
+            createdAt: serverTimestamp(),
+          });
         }
-
-        const assistantMessage: Message = {
-          id: Math.random().toString(36).substr(2, 9),
-          role: 'assistant',
-          content: `Audit complete. Identified $${result.savingsEstimate}/mo in potential reclaimed liquidity.`,
-          type: 'analysis_result',
-          data: { ...result, analysisId: docRef?.id },
-          timestamp: new Date(),
-        };
-        setMessages(prev => [...prev, assistantMessage]);
-      } catch (err) {
-        console.error('Audit protocol failure:', err);
-        setMessages(prev => [...prev, {
-          id: 'err',
-          role: 'assistant',
-          content: "Audit protocol failed. Please re-provide data source or check your connection.",
-          timestamp: new Date(),
-        }]);
-      } finally {
-        setIsProcessing(false);
       }
-    } else {
-      console.log('Conversational intent identified.');
-      setTimeout(() => {
-        setMessages(prev => [...prev, {
-          id: Math.random().toString(36).substr(2, 9),
-          role: 'assistant',
-          content: "Understood. I'm monitoring your financial flow. You can use 'audit ledger' to see past records or 'console' for the dashboard.",
-          timestamp: new Date(),
-        }]);
-      }, 1000);
+
+      const assistantMessage: Message = {
+        id: Math.random().toString(36).substr(2, 9),
+        role: 'assistant',
+        content: result.summary,
+        type: 'analysis_result',
+        data: { ...result, analysisId: docRef?.id },
+        timestamp: new Date(),
+      };
+      setMessages(prev => [...prev, assistantMessage]);
+    } catch (err) {
+      console.error('Audit sequence failed:', err);
+      setMessages(prev => [...prev, {
+        id: 'err-' + Date.now(),
+        role: 'assistant',
+        type: 'error',
+        content: "The audit protocol encountered an error. This is usually due to invalid input data or network instability. Please try again with a clearer source.",
+        timestamp: new Date(),
+      }]);
+    } finally {
+      setIsProcessing(false);
     }
   };
 
@@ -196,10 +173,9 @@ export default function ChatPage() {
     <div className="flex flex-col h-screen bg-background">
       <Navbar />
       
-      {/* Chat Thread */}
       <div 
         ref={scrollRef}
-        className="flex-1 overflow-y-auto pt-24 pb-32 px-6 md:px-12 lg:px-24 xl:px-48 space-y-12"
+        className="flex-1 overflow-y-auto pt-24 pb-40 px-6 md:px-12 lg:px-24 xl:px-48 space-y-12"
       >
         <AnimatePresence initial={false}>
           {messages.map((msg) => (
@@ -214,46 +190,52 @@ export default function ChatPage() {
             >
               <div className={cn(
                 "max-w-[85%] md:max-w-[70%] space-y-4",
-                msg.role === 'user' ? "items-end" : "items-start"
+                msg.role === 'user' ? "items-end text-right" : "items-start text-left"
               )}>
                 <div className={cn(
-                  "p-5 rounded-[24px] text-sm md:text-base leading-relaxed font-medium",
+                  "p-5 rounded-[24px] text-sm md:text-base leading-relaxed font-medium shadow-sm",
                   msg.role === 'user' 
-                    ? "bg-primary text-background rounded-tr-none shadow-xl shadow-primary/10" 
-                    : "bg-white/[0.03] border border-white/5 text-foreground rounded-tl-none"
+                    ? "bg-primary text-background rounded-tr-none" 
+                    : "bg-white/[0.03] border border-white/5 text-foreground rounded-tl-none",
+                  msg.type === 'error' && "border-danger/20 bg-danger/5 text-danger"
                 )}>
                   {msg.content}
                 </div>
 
                 {msg.type === 'analysis_result' && msg.data && (
                   <motion.div 
-                    initial={{ opacity: 0, scale: 0.95 }}
+                    initial={{ opacity: 0, scale: 0.98 }}
                     animate={{ opacity: 1, scale: 1 }}
-                    className="grid gap-4 mt-6"
+                    className="grid gap-4 mt-6 w-full"
                   >
-                    <div className="premium-card bg-primary/10 border-primary/20 flex justify-between items-center">
+                    <div className="premium-card bg-primary/10 border-primary/20 flex justify-between items-center group">
                       <div className="space-y-1">
-                        <p className="text-[10px] font-bold uppercase tracking-widest text-primary">Monthly Reclaimed</p>
+                        <p className="text-[10px] font-bold uppercase tracking-widest text-primary">Monthly Potential</p>
                         <p className="text-4xl font-bold font-headline text-primary">${msg.data.savingsEstimate}</p>
                       </div>
-                      <Button asChild size="sm" variant="outline" className="rounded-xl border-primary/20 hover:bg-primary/10 text-primary">
-                        <a href={`/results/${msg.data.analysisId}`}>View Full Ledger</a>
+                      <Button asChild size="sm" variant="outline" className="rounded-xl border-primary/20 hover:bg-primary/20 text-primary transition-all">
+                        <a href={`/results/${msg.data.analysisId}`}>
+                          Open Detailed Ledger
+                          <ChevronRight className="ml-2 w-3 h-3" />
+                        </a>
                       </Button>
                     </div>
 
                     <div className="grid gap-3">
-                      {msg.data.detectedItems.slice(0, 2).map((item: any, idx: number) => (
+                      {msg.data.detectedItems.map((item: any, idx: number) => (
                         <div key={idx} className="premium-card !p-4 bg-white/[0.02] flex items-center justify-between group hover:bg-white/[0.04]">
                           <div className="flex items-center gap-4">
-                            <div className="w-10 h-10 rounded-xl bg-white/5 flex items-center justify-center text-muted-foreground group-hover:text-primary">
+                            <div className="w-10 h-10 rounded-xl bg-white/5 flex items-center justify-center text-muted-foreground group-hover:text-primary transition-colors">
                               <Zap className="w-4 h-4" />
                             </div>
                             <div>
-                              <p className="text-sm font-bold">{item.title}</p>
-                              <p className="text-[10px] text-muted-foreground font-bold uppercase tracking-widest">-${item.estimatedSavings}/mo</p>
+                              <p className="text-sm font-bold tracking-tight">{item.title}</p>
+                              <p className="text-[10px] text-muted-foreground font-bold uppercase tracking-widest">
+                                Save ${item.estimatedSavings}/mo • {item.urgencyLevel}
+                              </p>
                             </div>
                           </div>
-                          <ChevronRight className="w-4 h-4 text-muted-foreground opacity-0 group-hover:opacity-100 transition-all" />
+                          <ChevronRight className="w-4 h-4 text-muted-foreground opacity-0 group-hover:opacity-100 transition-all translate-x-2 group-hover:translate-x-0" />
                         </div>
                       ))}
                     </div>
@@ -285,8 +267,8 @@ export default function ChatPage() {
                   )}
                 >
                   <div className={cn(
-                    "w-4 h-4 rounded-full flex items-center justify-center",
-                    currentStep > idx ? "bg-success" : currentStep === idx ? "bg-primary animate-pulse" : "bg-white/10"
+                    "w-4 h-4 rounded-full flex items-center justify-center transition-all",
+                    currentStep > idx ? "bg-success scale-110" : currentStep === idx ? "bg-primary animate-pulse" : "bg-white/10"
                   )}>
                     {currentStep > idx && <CheckCircle2 className="w-3 h-3 text-background" />}
                   </div>
@@ -298,7 +280,6 @@ export default function ChatPage() {
         )}
       </div>
 
-      {/* Input Bar */}
       <div className="fixed bottom-0 right-0 left-0 lg:left-[var(--sidebar-width)] p-6 md:p-10 pointer-events-none">
         <div className="max-w-4xl mx-auto w-full pointer-events-auto">
           <Card className="glass !p-2 flex items-end gap-2 rounded-[32px] border-white/10 shadow-[0_24px_64px_-12px_rgba(0,0,0,0.5)]">
@@ -308,18 +289,18 @@ export default function ChatPage() {
                   <Plus className="w-5 h-5" />
                 </Button>
               </DropdownMenuTrigger>
-              <DropdownMenuContent align="start" className="w-56 bg-surface border-white/10 rounded-2xl p-2 mb-4">
+              <DropdownMenuContent align="start" className="w-56 bg-card border-white/10 rounded-2xl p-2 mb-4">
                 <DropdownMenuItem onClick={() => fileInputRef.current?.click()} className="rounded-xl h-11 cursor-pointer gap-3">
                   <ImageIcon className="w-4 h-4 text-primary" />
                   <span className="font-medium text-sm">Upload Screenshot</span>
                 </DropdownMenuItem>
-                <DropdownMenuItem onClick={() => setInput('Audit my subscriptions from this text:')} className="rounded-xl h-11 cursor-pointer gap-3">
+                <DropdownMenuItem onClick={() => setInput('Audit my active subscriptions:')} className="rounded-xl h-11 cursor-pointer gap-3">
                   <FileText className="w-4 h-4 text-accent" />
                   <span className="font-medium text-sm">Paste Bank Log</span>
                 </DropdownMenuItem>
                 <DropdownMenuItem onClick={() => router.push('/dashboard')} className="rounded-xl h-11 cursor-pointer gap-3">
                   <Zap className="w-4 h-4 text-success" />
-                  <span className="font-medium text-sm">Open Console</span>
+                  <span className="font-medium text-sm">View Savings Dashboard</span>
                 </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
@@ -341,23 +322,24 @@ export default function ChatPage() {
                   sendMessage();
                 }
               }}
-              placeholder="Command your operator..."
+              placeholder="Type your savings intent..."
               className="flex-1 border-0 focus-visible:ring-0 bg-transparent min-h-[48px] py-3 text-base font-medium resize-none overflow-hidden"
               rows={1}
             />
 
             <Button 
               size="icon" 
-              disabled={!input.trim()}
+              disabled={(!input.trim() && !isProcessing) || isProcessing}
               onClick={() => sendMessage()}
               className="w-12 h-12 rounded-full shadow-2xl transition-transform hover:scale-105 active:scale-95 shrink-0"
             >
-              <Send className="w-5 h-5" />
+              {isProcessing ? <Loader2 className="w-5 h-5 animate-spin" /> : <Send className="w-5 h-5" />}
             </Button>
           </Card>
-          <div className="flex justify-center mt-4">
+          <div className="flex justify-center mt-4 gap-2 items-center">
+            <div className="w-1 h-1 bg-success rounded-full animate-pulse" />
             <p className="text-[9px] font-bold uppercase tracking-[0.3em] text-muted-foreground/30">
-              Encrypted Audit Sandbox Active
+              Audit Sandbox Encrypted
             </p>
           </div>
         </div>
