@@ -1,6 +1,7 @@
 import type {Metadata} from 'next';
 import './globals.css';
 import { FirebaseClientProvider } from '@/firebase/client-provider';
+import { AuthGuard } from '@/components/auth/AuthGuard';
 
 export const metadata: Metadata = {
   title: 'AI Life Operator | Proactive Savings Agent',
@@ -21,7 +22,9 @@ export default function RootLayout({
       </head>
       <body className="font-body antialiased bg-background text-foreground selection:bg-primary/30">
         <FirebaseClientProvider>
-          {children}
+          <AuthGuard>
+            {children}
+          </AuthGuard>
         </FirebaseClientProvider>
       </body>
     </html>

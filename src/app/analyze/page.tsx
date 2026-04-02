@@ -12,7 +12,8 @@ import { Camera, FileText, Upload, AlertCircle, Loader2, CheckCircle2, Cpu } fro
 import { AnalysisService } from '@/services/analysis-service';
 import { useFirestore, useUser, addDocumentNonBlocking } from '@/firebase';
 import { collection, serverTimestamp } from 'firebase/firestore';
-import { motion, AnimatePresence } from 'framer-motion';
+import { motion } from 'framer-motion';
+import { cn } from '@/lib/utils';
 
 const STEPS = [
   { id: 'ocr', label: 'Extracting text...', duration: 800 },
@@ -68,6 +69,7 @@ export default function AnalyzePage() {
         inputContent: textInput || '',
         beforeComparison: JSON.stringify(result.beforeAfterComparison),
         createdAt: serverTimestamp(),
+        source: preview ? 'screenshot' : 'pasted_text'
       });
 
       if (docRef) {
