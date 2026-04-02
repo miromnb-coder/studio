@@ -10,7 +10,8 @@
     "build": "NODE_ENV=production next build",
     "start": "next start",
     "lint": "next lint",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "git:sync": "git init && git add . && git commit -m 'V1 Core Engine: AI Life Operator' && gh repo create ai-life-operator --private --source=. --remote=origin --push"
   },
   "dependencies": {
     "@genkit-ai/google-genai": "^1.28.0",
