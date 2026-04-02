@@ -10,6 +10,7 @@ export interface AnalysisInput {
   notes?: string;
   source?: 'screenshot' | 'pasted_text' | 'email' | 'chat';
   history?: Array<{role: 'user' | 'assistant', content: string}>;
+  userMemory?: any;
 }
 
 export interface AnalysisOutput {
@@ -22,6 +23,12 @@ export interface AnalysisOutput {
     optimizedSituation: string;
   };
   isActionable: boolean;
+  memoryUpdates?: {
+    newGoals?: string[];
+    newPreferences?: string[];
+    newSubscriptions?: string[];
+    behaviorSummaryUpdate?: string;
+  };
 }
 
 export class AnalysisService {
@@ -43,7 +50,8 @@ export class AnalysisService {
         body: JSON.stringify({
           imageDataUri: input.imageDataUri,
           documentText: combinedText || "Visual source uploaded.",
-          history: input.history
+          history: input.history,
+          userMemory: input.userMemory
         }),
       });
 

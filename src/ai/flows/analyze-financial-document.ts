@@ -29,6 +29,13 @@ const DetectedItemSchema = z.object({
   actionLabel: z.string().describe('Button label for the action.'),
 });
 
+const UserMemorySchema = z.object({
+  behaviorSummary: z.string().optional(),
+  goals: z.array(z.string()).optional(),
+  preferences: z.array(z.string()).optional(),
+  subscriptions: z.array(z.string()).optional(),
+}).optional();
+
 const AnalyzeFinancialDocumentInputSchema = z.object({
   imageDataUri: z.string().optional(),
   documentText: z.string().optional(),
@@ -36,6 +43,7 @@ const AnalyzeFinancialDocumentInputSchema = z.object({
     role: z.enum(['user', 'assistant']),
     content: z.string(),
   })).optional(),
+  userMemory: UserMemorySchema,
 });
 
 const AnalyzeFinancialDocumentOutputSchema = z.object({
@@ -48,6 +56,12 @@ const AnalyzeFinancialDocumentOutputSchema = z.object({
     optimizedSituation: z.string(),
   }).optional(),
   isActionable: z.boolean().describe('True if this triggered a financial audit with items.'),
+  memoryUpdates: z.object({
+    newGoals: z.array(z.string()).optional(),
+    newPreferences: z.array(z.string()).optional(),
+    newSubscriptions: z.array(z.string()).optional(),
+    behaviorSummaryUpdate: z.string().optional(),
+  }).optional().describe('Inferred updates for the user long-term memory.'),
 });
 
 export type AnalyzeFinancialDocumentOutput = z.infer<typeof AnalyzeFinancialDocumentOutputSchema>;
@@ -70,27 +84,39 @@ export async function analyzeFinancialDocument(input: z.infer<typeof AnalyzeFina
 
   // Prepare chat history context
   const historyContext = input.history?.map(msg => `${msg.role.toUpperCase()}: ${msg.content}`).join('\n') || "No previous history.";
+  
+  // Prepare memory context
+  const memoryContext = input.userMemory ? `
+USER MEMORY PROTOCOL:
+- Behavior Summary: ${input.userMemory.behaviorSummary || 'No behavior recorded yet.'}
+- Active Goals: ${input.userMemory.goals?.join(', ') || 'None set.'}
+- Known Subscriptions: ${input.userMemory.subscriptions?.join(', ') || 'None detected yet.'}
+- Preferences: ${input.userMemory.preferences?.join(', ') || 'No explicit preferences.'}
+  ` : "USER MEMORY: No memory protocol active for this session.";
 
   const prompt = `You are a "High-IQ Life Operator Assistant". You are refined, intelligent, proactive, and analytical.
 Use step-by-step reasoning (Chain of Thought) before answering. Always provide actionable, professional, and deeply analyzed advice.
 
-CONTEXT MEMORY:
+${memoryContext}
+
+CONTEXT MEMORY (Current Thread):
 ${historyContext}
 
 INTENT ROUTING:
 1. If the input contains financial data, bank logs, statements, or a request to "save money":
    - Act as a "Predatory Subscription Hunter".
+   - Cross-reference with USER MEMORY to identify changes, usage patterns, or repeated waste.
    - Find waste, hidden fees, and cheaper alternatives.
    - Set "isActionable" to true.
    - Populate "detectedItems", "savingsEstimate", and "beforeAfterComparison".
-   - Generate a short, relevant "title" for the conversation (e.g., "Netflix & Spotify Audit").
+   - Generate a short, relevant "title" for the conversation.
 
-2. If the input is a general question (e.g., "How do I save for a car?"):
+2. If the input is a general question or behavioral input:
    - Act as a high-IQ financial advisor.
+   - Use USER MEMORY to personalize the advice.
    - Provide a deep, step-by-step reasoning based response in "summary".
    - Set "isActionable" to false.
-   - Leave "detectedItems" as an empty array [].
-   - Generate a short, relevant "title" for the conversation.
+   - Infer potential "memoryUpdates" if the user mentions a new goal, preference, or service.
 
 CURRENT INPUT:
 ${input.documentText || "Visual source detected."}
@@ -102,7 +128,8 @@ Return a JSON object matching this schema:
   "isActionable": boolean,
   "detectedItems": [],
   "savingsEstimate": number,
-  "beforeAfterComparison": { "currentSituation": string, "optimizedSituation": string }
+  "beforeAfterComparison": { "currentSituation": string, "optimizedSituation": string },
+  "memoryUpdates": { "newGoals": [], "newPreferences": [], "newSubscriptions": [], "behaviorSummaryUpdate": string }
 }`;
 
   try {

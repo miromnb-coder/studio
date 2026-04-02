@@ -39,6 +39,21 @@
         "createdAt"
       ]
     },
+    "UserMemory": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "title": "UserMemory",
+      "type": "object",
+      "description": "Synthesized intelligence about a user's financial habits, goals, and preferences.",
+      "properties": {
+        "userId": { "type": "string" },
+        "goals": { "type": "array", "items": { "type": "string" } },
+        "subscriptions": { "type": "array", "items": { "type": "string" } },
+        "preferences": { "type": "array", "items": { "type": "string" } },
+        "behaviorSummary": { "type": "string" },
+        "lastUpdated": { "type": "string", "format": "date-time" }
+      },
+      "required": ["userId"]
+    },
     "Conversation": {
       "$schema": "http://json-schema.org/draft-07/schema#",
       "title": "Conversation",
@@ -133,6 +148,14 @@
           "entityName": "UserProfile",
           "schema": { "$ref": "#/backend/entities/UserProfile" },
           "description": "Stores core profile information."
+        }
+      },
+      {
+        "path": "/users/{userId}/memory/main",
+        "definition": {
+          "entityName": "UserMemory",
+          "schema": { "$ref": "#/backend/entities/UserMemory" },
+          "description": "User long-term memory."
         }
       },
       {

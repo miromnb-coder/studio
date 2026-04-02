@@ -15,7 +15,8 @@ export async function POST(req: Request) {
     const result = await analyzeFinancialDocument({
       imageDataUri: body.imageDataUri,
       documentText: body.documentText,
-      history: body.history
+      history: body.history,
+      userMemory: body.userMemory
     });
 
     return NextResponse.json(result);

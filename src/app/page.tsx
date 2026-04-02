@@ -17,7 +17,8 @@ import {
   AlertCircle
 } from 'lucide-react';
 import { AnalysisService } from '@/services/analysis-service';
-import { useFirestore, useUser, addDocumentNonBlocking, useCollection, useMemoFirebase } from '@/firebase';
+import { MemoryService } from '@/services/memory-service';
+import { useFirestore, useUser, addDocumentNonBlocking, useCollection, useMemoFirebase, useDoc } from '@/firebase';
 import { collection, serverTimestamp, doc, updateDoc, query, orderBy, setDoc } from 'firebase/firestore';
 import { motion, AnimatePresence } from 'framer-motion';
 import { cn } from '@/lib/utils';
@@ -43,7 +44,7 @@ interface Message {
 const STEPS = [
   { id: 'ingest', label: 'Ingesting intent...', duration: 500 },
   { id: 'scan', label: 'Analyzing with High-IQ protocols...', duration: 800 },
-  { id: 'action', label: 'Finalizing actionable intelligence...', duration: 600 },
+  { id: 'action', label: 'Consulting Long-Term Memory...', duration: 600 },
 ];
 
 function ChatContent() {
@@ -80,6 +81,13 @@ function ChatContent() {
 
   const { data: storedMessages } = useCollection(messagesQuery);
 
+  // User Memory Ref
+  const memoryRef = useMemoFirebase(() => {
+    if (!db || !user) return null;
+    return doc(db, 'users', user.uid, 'memory', 'main');
+  }, [db, user]);
+  const { data: userMemory } = useDoc(memoryRef);
+
   useEffect(() => {
     if (!mounted) return;
 
@@ -91,10 +99,9 @@ function ChatContent() {
       setLocalMessages([{
         id: 'welcome',
         role: 'assistant',
-        content: "Operator active. High-IQ audit protocols online. How can I assist you with your life and finances today?",
+        content: "Operator active. High-IQ audit protocols online. I've accessed your behavioral ledger. How can I assist you today?",
         timestamp: null,
       }]);
-      // Show onboarding if no conversations exist or specifically requested
       setShowOnboarding(true);
     }
   }, [storedMessages, conversationId, mounted]);
@@ -108,9 +115,9 @@ function ChatContent() {
   const handleOnboardingGoal = (goal: string) => {
     setShowOnboarding(false);
     let initialPrompt = "";
-    if (goal === 'save_money') initialPrompt = "Run a complete subscription and recurring burn audit. I want to save money.";
-    if (goal === 'save_time') initialPrompt = "Assist me with time management and protocol automation for my life administration.";
-    if (goal === 'analyze_visual') initialPrompt = "I'm ready to upload a financial document for intelligence extraction.";
+    if (goal === 'save_money') initialPrompt = "I want to save money. Run an audit on my recent spend.";
+    if (goal === 'save_time') initialPrompt = "Help me save time with life administration.";
+    if (goal === 'analyze_visual') initialPrompt = "I have a document for visual analysis.";
     
     setInput(initialPrompt);
   };
@@ -128,7 +135,7 @@ function ChatContent() {
         activeConvId = newConvRef.id;
         await setDoc(newConvRef, {
           userId: user.uid,
-          title: 'New Analysis',
+          title: 'New Session',
           createdAt: serverTimestamp(),
           updatedAt: serverTimestamp(),
         });
@@ -169,7 +176,8 @@ function ChatContent() {
       const result = await AnalysisService.analyze({ 
         documentText: content,
         imageDataUri: fileData,
-        history
+        history,
+        userMemory: userMemory // Passing the long-term memory to the AI
       });
 
       if (localMessages.length <= 2 && result?.title) {
@@ -177,6 +185,11 @@ function ChatContent() {
           title: result.title,
           updatedAt: serverTimestamp(),
         });
+      }
+
+      // Memory Intelligence Sync
+      if (result?.memoryUpdates) {
+        MemoryService.updateMemory(db, user.uid, result.memoryUpdates);
       }
 
       const assistantMsgId = Math.random().toString(36).substr(2, 9);
@@ -294,7 +307,7 @@ function ChatContent() {
           >
             <div className="flex items-center gap-3 p-5 rounded-[24px] bg-white/[0.03] border border-white/5 rounded-tl-none">
               <Loader2 className="w-4 h-4 text-primary animate-spin" />
-              <span className="text-sm font-medium text-muted-foreground italic">Operator applying High-IQ logic...</span>
+              <span className="text-sm font-medium text-muted-foreground italic">Operator applying intelligence...</span>
             </div>
             
             <div className="w-full max-w-xs space-y-4 pl-4 border-l-2 border-white/5">
@@ -336,7 +349,7 @@ function ChatContent() {
                 </DropdownMenuItem>
                 <DropdownMenuItem onClick={() => router.push('/')} className="rounded-xl h-11 cursor-pointer gap-3">
                   <Plus className="w-4 h-4 text-success" />
-                  <span className="font-medium text-sm text-white">New Conversation</span>
+                  <span className="font-medium text-sm text-white">New Session</span>
                 </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
@@ -375,7 +388,7 @@ function ChatContent() {
           <div className="flex justify-center mt-4 gap-2 items-center">
             <div className="w-1 h-1 bg-success rounded-full animate-pulse" />
             <p className="text-[9px] font-bold uppercase tracking-[0.3em] text-muted-foreground/30">
-              High-IQ Operator Protocol Active
+              Long-Term Memory Protocol Synchronized
             </p>
           </div>
         </div>
