@@ -1,4 +1,3 @@
-
 "use client";
 
 import Link from 'next/link';
@@ -6,13 +5,10 @@ import { Navbar } from '@/components/layout/Navbar';
 import { Button } from '@/components/ui/button';
 import { 
   TrendingUp, 
-  AlertTriangle, 
   ChevronRight,
-  Zap,
   Plus,
   Loader2,
   Wallet,
-  Activity,
   Mail,
   ArrowUpRight
 } from 'lucide-react';
@@ -41,173 +37,123 @@ export default function DashboardPage() {
   if (isUserLoading || isAnalysesLoading) {
     return (
       <div className="min-h-screen bg-background flex flex-col items-center justify-center">
-        <Loader2 className="w-10 h-10 animate-spin text-primary" />
-        <p className="mt-6 text-muted-foreground font-medium">Loading your secure dashboard...</p>
+        <div className="w-12 h-12 rounded-full border-2 border-primary/20 border-t-primary animate-spin" />
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-background pb-20">
+    <div className="min-h-screen bg-background pb-32 md:pt-32">
       <Navbar />
       
-      <main className="max-w-7xl mx-auto px-6 py-12 md:py-20 space-y-12">
-        <motion.header 
-          initial={{ opacity: 0, y: -10 }}
-          animate={{ opacity: 1, y: 0 }}
-          className="flex flex-col md:flex-row md:items-end justify-between gap-8"
-        >
-          <div className="space-y-2">
-            <h1 className="text-5xl font-bold font-headline">Dashboard</h1>
-            <p className="text-muted-foreground text-xl">Your proactive financial optimization overview.</p>
+      <main className="max-w-7xl mx-auto px-8 space-y-24">
+        <header className="flex flex-col md:flex-row md:items-end justify-between gap-12">
+          <div className="space-y-4">
+            <h1 className="text-6xl md:text-8xl font-bold font-headline leading-[0.9]">Insights</h1>
+            <p className="text-muted-foreground text-xl max-w-md">Your proactive financial optimization engine is active.</p>
           </div>
-          <div className="flex gap-4">
-             <Button asChild variant="outline" className="h-14 px-8 rounded-full border-white/10 hover:bg-white/5">
-              <Link href="/settings">
-                <Mail className="w-5 h-5 mr-2" />
-                Email Setup
-              </Link>
-            </Button>
-            <Button asChild size="lg" className="h-14 px-8 rounded-full shadow-2xl shadow-primary/20">
-              <Link href="/analyze">
-                <Plus className="w-5 h-5 mr-2" />
-                New Analysis
-              </Link>
-            </Button>
-          </div>
-        </motion.header>
+        </header>
 
         {/* Hero Savings Area */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+        <section className="grid grid-cols-1 lg:grid-cols-3 gap-12">
           <motion.div 
-            initial={{ opacity: 0, scale: 0.95 }}
-            animate={{ opacity: 1, scale: 1 }}
-            className="md:col-span-2 premium-card relative overflow-hidden bg-gradient-to-br from-[#232327] to-[#1a1a1e]"
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="lg:col-span-2 premium-card flex flex-col justify-between min-h-[400px]"
           >
-            <div className="absolute top-0 right-0 p-12 opacity-[0.03]">
-              <TrendingUp className="w-64 h-64" />
-            </div>
-            <div className="relative space-y-6">
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-xl bg-success/10 flex items-center justify-center text-success">
-                  <Wallet className="w-5 h-5" />
-                </div>
-                <p className="text-sm font-bold uppercase tracking-widest text-success">Monthly Potential Savings</p>
+            <div className="space-y-8">
+              <Badge className="bg-success/10 text-success border-success/20 rounded-full px-4 py-1 text-[10px] font-bold uppercase tracking-widest">
+                Optimization Targets
+              </Badge>
+              <div className="space-y-2">
+                <p className="text-sm font-bold uppercase tracking-widest text-muted-foreground">Monthly Reclaim Potential</p>
+                <h2 className="text-[120px] font-bold font-headline leading-none text-success glow-success tracking-tighter">
+                  ${totalSavings.toFixed(0)}
+                </h2>
               </div>
-              <div className="flex items-baseline gap-4">
-                <span className="text-8xl font-bold font-headline glow-success text-success tracking-tighter">
-                  ${totalSavings.toFixed(2)}
-                </span>
-              </div>
-              <p className="text-muted-foreground text-lg max-w-xl leading-relaxed">
-                We've identified optimization targets. Address these to reclaim your monthly burn rate.
-              </p>
             </div>
+            <p className="text-muted-foreground text-lg leading-relaxed max-w-xl">
+              We identified recurring patterns in your spending. Act on these findings to reclaim your monthly burn rate.
+            </p>
           </motion.div>
 
           <motion.div 
-            initial={{ opacity: 0, scale: 0.95 }}
-            animate={{ opacity: 1, scale: 1 }}
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.1 }}
-            className="premium-card flex flex-col justify-between bg-primary/5 border-primary/20"
+            className="premium-card flex flex-col justify-between bg-primary/5 border-primary/10"
           >
-            <div className="space-y-6">
-              <div className="w-14 h-14 rounded-2xl bg-primary/10 flex items-center justify-center text-primary">
-                <Zap className="w-7 h-7" />
+            <div className="space-y-8">
+              <div className="w-16 h-16 rounded-3xl bg-primary/10 flex items-center justify-center text-primary">
+                <Mail className="w-8 h-8" />
               </div>
-              <div className="space-y-2">
-                <h3 className="text-2xl font-bold font-headline">Magic Forwarding</h3>
-                <p className="text-muted-foreground leading-relaxed">
-                  Automation active. Forward your digital receipts to your unique address for instant analysis.
+              <div className="space-y-4">
+                <h3 className="text-3xl font-bold font-headline">Magic Email</h3>
+                <p className="text-muted-foreground leading-relaxed text-lg">
+                  Forward receipts to your unique address for instant, hands-free analysis.
                 </p>
               </div>
             </div>
             <Button variant="link" className="p-0 text-primary h-auto justify-start font-bold text-lg group" asChild>
               <Link href="/settings">
-                Setup Magic Email
+                Setup automation
                 <ChevronRight className="ml-2 w-5 h-5 group-hover:translate-x-1 transition-transform" />
               </Link>
             </Button>
           </motion.div>
-        </div>
+        </section>
 
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-12 pt-4">
-          {/* Recent Analyses */}
-          <div className="lg:col-span-2 space-y-8">
-            <div className="flex items-center justify-between px-2">
-              <h3 className="text-2xl font-bold font-headline">Recent Analyses</h3>
-              <Link href="/history" className="text-muted-foreground hover:text-primary transition-colors font-medium">View all</Link>
-            </div>
-            <div className="premium-card !p-0 overflow-hidden border-white/5">
-              <div className="divide-y divide-white/5">
-                {analyses && analyses.map((analysis, i) => (
-                  <Link key={analysis.id} href={`/results/${analysis.id}`} className="p-8 flex items-center justify-between hover:bg-white/[0.02] transition-colors group block">
-                    <div className="flex items-center gap-6">
-                      <div className="w-14 h-14 rounded-2xl bg-white/5 flex items-center justify-center border border-white/5 font-bold text-xl text-primary">
-                        {analysis.source === 'email' ? <Mail className="w-6 h-6" /> : analysis.title.charAt(0)}
-                      </div>
-                      <div className="space-y-1">
-                        <div className="flex items-center gap-2">
-                          <p className="text-xl font-bold">{analysis.title}</p>
-                          {analysis.source === 'email' && (
-                            <Badge className="bg-primary/10 text-primary hover:bg-primary/20 text-[8px] uppercase font-bold rounded-full px-2 py-0 border-primary/20">
-                              Email Detected
-                            </Badge>
-                          )}
-                        </div>
-                        <p className="text-sm text-muted-foreground">{new Date(analysis.analysisDate).toLocaleDateString()}</p>
-                      </div>
-                    </div>
-                    <div className="flex items-center gap-8">
-                      <div className="text-right hidden sm:block">
-                        <p className="text-2xl font-bold text-success tracking-tight">+${analysis.estimatedMonthlySavings.toFixed(2)}</p>
-                        <p className="text-[10px] text-muted-foreground uppercase tracking-widest font-bold">Optimization</p>
-                      </div>
-                      <ChevronRight className="w-6 h-6 text-muted-foreground group-hover:text-foreground group-hover:translate-x-1 transition-all" />
-                    </div>
-                  </Link>
-                ))}
-                {(!analyses || analyses.length === 0) && (
-                  <div className="p-20 text-center space-y-6">
-                    <p className="text-xl text-muted-foreground">No analyses found yet.</p>
-                    <Button asChild size="lg" className="rounded-full px-8">
-                      <Link href="/analyze">Run First Analysis</Link>
-                    </Button>
-                  </div>
-                )}
-              </div>
-            </div>
+        {/* Recent Activity */}
+        <section className="space-y-12">
+          <div className="flex items-center justify-between">
+            <h3 className="text-3xl font-bold font-headline">Recent Analyses</h3>
+            <Link href="/history" className="text-muted-foreground hover:text-primary transition-colors font-bold uppercase tracking-widest text-xs">View History</Link>
           </div>
-
-          {/* Insights */}
-          <div className="space-y-8">
-            <h3 className="text-2xl font-bold font-headline">Intelligence Status</h3>
-            <div className="space-y-6">
-              <motion.div 
-                whileHover={{ scale: 1.02 }}
-                className="premium-card !p-8 bg-success/5 border-success/20 space-y-6"
+          
+          <div className="grid gap-6">
+            {analyses?.map((analysis, i) => (
+              <motion.div
+                key={analysis.id}
+                initial={{ opacity: 0, x: -10 }}
+                animate={{ opacity: 1, x: 0 }}
+                transition={{ delay: i * 0.05 }}
               >
-                <div className="flex items-center gap-3 text-success">
-                  <Activity className="w-6 h-6" />
-                  <span className="text-sm font-bold uppercase tracking-widest">Operator Active</span>
-                </div>
-                <p className="text-lg leading-relaxed font-medium">
-                  Scanning for common trial endings and hidden service fees. All streams secure.
-                </p>
+                <Link href={`/results/${analysis.id}`} className="premium-card !p-6 flex items-center justify-between group hover:bg-white/[0.02]">
+                  <div className="flex items-center gap-8">
+                    <div className="w-14 h-14 rounded-2xl bg-white/5 flex items-center justify-center border border-white/5 font-bold text-muted-foreground group-hover:text-primary transition-colors">
+                      {analysis.source === 'email' ? <Mail className="w-6 h-6" /> : <TrendingUp className="w-6 h-6" />}
+                    </div>
+                    <div className="space-y-1">
+                      <div className="flex items-center gap-3">
+                        <p className="text-xl font-bold">{analysis.title}</p>
+                        {analysis.source === 'email' && (
+                          <span className="text-[8px] font-bold uppercase tracking-widest text-primary bg-primary/10 px-2 py-0.5 rounded-full">Automated</span>
+                        )}
+                      </div>
+                      <p className="text-xs text-muted-foreground font-medium uppercase tracking-widest">
+                        {new Date(analysis.analysisDate).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}
+                      </p>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-8">
+                    <div className="text-right">
+                      <p className="text-2xl font-bold text-success tracking-tight">+${analysis.estimatedMonthlySavings.toFixed(2)}</p>
+                    </div>
+                    <ChevronRight className="w-5 h-5 text-muted-foreground group-hover:text-foreground group-hover:translate-x-1 transition-all" />
+                  </div>
+                </Link>
               </motion.div>
-
-              <div className="premium-card !p-8 border-white/10 space-y-4 opacity-80">
-                <div className="flex items-center gap-3 text-muted-foreground">
-                  <Mail className="w-5 h-5" />
-                  <span className="text-sm font-bold uppercase tracking-widest">Inbound Stats</span>
-                </div>
-                <p className="text-sm leading-relaxed text-muted-foreground">
-                  Digital receipts forwarded today will be processed within seconds.
-                </p>
+            ))}
+            {(!analyses || analyses.length === 0) && (
+              <div className="premium-card py-24 text-center space-y-8 border-dashed opacity-50">
+                <p className="text-xl text-muted-foreground">No analyses found yet.</p>
+                <Button asChild className="rounded-full px-12 h-14 text-lg font-bold">
+                  <Link href="/analyze">Run First Analysis</Link>
+                </Button>
               </div>
-            </div>
+            )}
           </div>
-        </div>
+        </section>
       </main>
     </div>
   );
