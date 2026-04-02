@@ -54,7 +54,14 @@ export async function analyzeFinancialDocument(input: z.infer<typeof AnalyzeFina
   const apiKey = process.env.GROQ_API_KEY;
   
   if (!apiKey) {
-    throw new Error('GROQ_API_KEY is missing.');
+    console.error('GROQ_API_KEY is missing from environment variables.');
+    return {
+      title: "Operator Connection",
+      summary: "I'm having a brief connection issue with my deep audit framework (API Key Missing). Please ensure the GROQ_API_KEY is configured.",
+      isActionable: false,
+      detectedItems: [],
+      savingsEstimate: 0,
+    };
   }
 
   const groq = new Groq({ apiKey });
@@ -88,25 +95,39 @@ Return a JSON object matching this schema:
   "beforeAfterComparison": { "currentSituation": string, "optimizedSituation": string }
 }`;
 
-  const completion = await groq.chat.completions.create({
-    messages: [
-      {
-        role: 'system',
-        content: 'You are an elite AI assistant. Always output valid JSON. Be helpful, concise, and proactive.',
-      },
-      {
-        role: 'user',
-        content: prompt,
-      },
-    ],
-    model: 'llama3-70b-8192',
-    response_format: { type: 'json_object' },
-  });
+  try {
+    const completion = await groq.chat.completions.create({
+      messages: [
+        {
+          role: 'system',
+          content: 'You are an elite AI assistant. Always output valid JSON. Be helpful, concise, and proactive.',
+        },
+        {
+          role: 'user',
+          content: prompt,
+        },
+      ],
+      model: 'llama-3.3-70b-versatile',
+      response_format: { type: 'json_object' },
+    });
 
-  const result = JSON.parse(completion.choices[0]?.message?.content || '{}');
-  return AnalyzeFinancialDocumentOutputSchema.parse({
-    ...result,
-    detectedItems: result.detectedItems || [],
-    savingsEstimate: result.savingsEstimate || 0,
-  });
+    const content = completion.choices[0]?.message?.content;
+    if (!content) throw new Error('Empty response from Groq');
+
+    const result = JSON.parse(content);
+    return AnalyzeFinancialDocumentOutputSchema.parse({
+      ...result,
+      detectedItems: result.detectedItems || [],
+      savingsEstimate: result.savingsEstimate || 0,
+    });
+  } catch (error) {
+    console.error('Groq Analysis Error:', error);
+    return {
+      title: "Protocol Interruption",
+      summary: "I encountered an interruption while processing your request. Please try again or rephrase your goal.",
+      isActionable: false,
+      detectedItems: [],
+      savingsEstimate: 0,
+    };
+  }
 }
