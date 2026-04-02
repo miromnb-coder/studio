@@ -1,3 +1,4 @@
+
 "use client";
 
 import { useState } from 'react';
@@ -8,8 +9,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { AnalysisService } from '@/services/analysis-service';
 import { useFirestore, useUser, addDocumentNonBlocking } from '@/firebase';
 import { collection, serverTimestamp } from 'firebase/firestore';
-import { Loader2, Zap, Sparkles, ArrowRight, Cpu } from 'lucide-react';
-import { motion } from 'framer-motion';
+import { Loader2, Zap, ArrowRight, Cpu } from 'lucide-react';
 
 export function MoneySaver() {
   const [loading, setLoading] = useState(false);
@@ -31,34 +31,40 @@ export function MoneySaver() {
         source: 'pasted_text'
       });
 
+      if (!result || !result.title) {
+        throw new Error("Invalid analysis output");
+      }
+
       const analysesRef = collection(db, 'users', user.uid, 'analyses');
       const docRef = await addDocumentNonBlocking(analysesRef, {
         userId: user.uid,
         title: result.title,
         summary: result.summary,
-        estimatedMonthlySavings: result.savingsEstimate,
+        estimatedMonthlySavings: result.savingsEstimate || 0,
         analysisDate: new Date().toISOString(),
         status: 'completed',
         inputMethod: 'savings_dashboard',
         inputContent: text,
-        beforeComparison: JSON.stringify(result.beforeAfterComparison),
+        beforeComparison: result.beforeAfterComparison ? JSON.stringify(result.beforeAfterComparison) : null,
         createdAt: serverTimestamp(),
         source: 'pasted_text'
       });
 
       if (docRef) {
         const itemsRef = collection(db, 'users', user.uid, 'analyses', docRef.id, 'detected_items');
-        for (const item of result.detectedItems) {
-          addDocumentNonBlocking(itemsRef, {
-            ...item,
-            userId: user.uid,
-            analysisId: docRef.id,
-          });
+        for (const item of (result.detectedItems || [])) {
+          if (item && item.title) {
+            addDocumentNonBlocking(itemsRef, {
+              ...item,
+              userId: user.uid,
+              analysisId: docRef.id,
+            });
+          }
         }
         router.push(`/results/${docRef.id}`);
       }
     } catch (err) {
-      console.error(err);
+      console.error('Manual optimization failed:', err);
       setLoading(false);
     }
   };

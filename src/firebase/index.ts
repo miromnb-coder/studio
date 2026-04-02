@@ -1,3 +1,4 @@
+
 'use client';
 
 import { firebaseConfig } from '@/firebase/config';
@@ -5,27 +6,32 @@ import { initializeApp, getApps, getApp, FirebaseApp } from 'firebase/app';
 import { getAuth } from 'firebase/auth';
 import { getFirestore } from 'firebase/firestore';
 
-// IMPORTANT: DO NOT MODIFY THIS FUNCTION
+// Core SDK initialization logic that is safe for both client and server (Route Handlers)
 export function initializeFirebase() {
-  // Check for existing app instance first to prevent double initialization
   if (getApps().length > 0) {
-    return getSdks(getApp());
+    const app = getApp();
+    return {
+      firebaseApp: app,
+      auth: getAuth(app),
+      firestore: getFirestore(app)
+    };
   }
 
-  // Check if we have a valid API key before attempting initialization to prevent crashes
   const isApiKeyMissing = !firebaseConfig.apiKey || firebaseConfig.apiKey === 'undefined' || firebaseConfig.apiKey === '';
 
   try {
-    // Attempt to initialize via Firebase App Hosting environment variables or config
     const firebaseApp = initializeApp(firebaseConfig);
-    return getSdks(firebaseApp);
+    return {
+      firebaseApp,
+      auth: getAuth(firebaseApp),
+      firestore: getFirestore(firebaseApp)
+    };
   } catch (e) {
     if (isApiKeyMissing) {
-      console.warn('CRITICAL: Firebase API Key is missing (NEXT_PUBLIC_FIREBASE_API_KEY). Returning placeholder SDKs.');
+      console.warn('CRITICAL: Firebase API Key is missing. Returning placeholder SDKs.');
     } else {
       console.error('Firebase Initialization Error:', e);
     }
-    // Return a dummy object if initialization fails completely to prevent root crashes
     return {
       firebaseApp: null as any,
       auth: null as any,
@@ -34,17 +40,7 @@ export function initializeFirebase() {
   }
 }
 
-export function getSdks(firebaseApp: FirebaseApp) {
-  if (!firebaseApp) {
-    return { firebaseApp: null as any, auth: null as any, firestore: null as any };
-  }
-  return {
-    firebaseApp,
-    auth: getAuth(firebaseApp),
-    firestore: getFirestore(firebaseApp)
-  };
-}
-
+// Re-export everything from the modular files
 export * from './provider';
 export * from './client-provider';
 export * from './firestore/use-collection';

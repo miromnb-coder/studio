@@ -1,3 +1,4 @@
+
 "use client";
 
 import { useState } from 'react';
@@ -8,11 +9,11 @@ import { Card } from '@/components/ui/card';
 import { Textarea } from '@/components/ui/textarea';
 import { Input } from '@/components/ui/input';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Camera, FileText, Upload, AlertCircle, Loader2, Search, Cpu, CheckCircle2 } from 'lucide-react';
+import { Camera, FileText, Upload, AlertCircle, Loader2, Cpu, CheckCircle2 } from 'lucide-react';
 import { AnalysisService } from '@/services/analysis-service';
 import { useFirestore, useUser, addDocumentNonBlocking } from '@/firebase';
 import { collection, serverTimestamp } from 'firebase/firestore';
-import { motion, AnimatePresence } from 'framer-motion';
+import { motion } from 'framer-motion';
 import { cn } from '@/lib/utils';
 
 const STEPS = [
@@ -56,34 +57,40 @@ export default function AnalyzePage() {
         imageDataUri: preview || undefined 
       });
 
+      if (!result || !result.title) {
+        throw new Error("Invalid analysis output");
+      }
+
       const analysesRef = collection(db, 'users', user.uid, 'analyses');
       const docRef = await addDocumentNonBlocking(analysesRef, {
         userId: user.uid,
         title: result.title,
         summary: result.summary,
-        estimatedMonthlySavings: result.savingsEstimate,
+        estimatedMonthlySavings: result.savingsEstimate || 0,
         analysisDate: new Date().toISOString(),
         status: 'completed',
         inputMethod: textInput ? 'pasted_text' : 'screenshot',
         inputContent: textInput || '',
-        beforeComparison: JSON.stringify(result.beforeAfterComparison),
+        beforeComparison: result.beforeAfterComparison ? JSON.stringify(result.beforeAfterComparison) : null,
         createdAt: serverTimestamp(),
         source: preview ? 'screenshot' : 'pasted_text'
       });
 
       if (docRef) {
         const itemsRef = collection(db, 'users', user.uid, 'analyses', docRef.id, 'detected_items');
-        for (const item of result.detectedItems) {
-          addDocumentNonBlocking(itemsRef, {
-            ...item,
-            userId: user.uid,
-            analysisId: docRef.id,
-          });
+        for (const item of (result.detectedItems || [])) {
+          if (item && item.title) {
+            addDocumentNonBlocking(itemsRef, {
+              ...item,
+              userId: user.uid,
+              analysisId: docRef.id,
+            });
+          }
         }
         router.push(`/results/${docRef.id}`);
       }
     } catch (err) {
-      console.error(err);
+      console.error('Analysis failed:', err);
       setLoading(false);
     }
   };
