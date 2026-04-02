@@ -1,9 +1,9 @@
 
 'use server';
 /**
- * @fileOverview A "Predatory Subscription Hunter" AI agent.
+ * @fileOverview Universal "AI Life Operator" flow.
  *
- * - analyzeFinancialDocument - Handles deep financial analysis via Groq Llama 3.
+ * - analyzeFinancialDocument - Distinguishes between general assistance and deep financial audits.
  */
 
 import {ai} from '@/ai/genkit';
@@ -11,8 +11,8 @@ import {z} from 'genkit';
 import Groq from 'groq-sdk';
 
 const DetectedItemSchema = z.object({
-  title: z.string().describe('The name of the service (e.g., Netflix).'),
-  summary: z.string().describe('Why this is a bad deal or where to get it cheaper.'),
+  title: z.string().describe('The name of the service or category.'),
+  summary: z.string().describe('Why this is an optimization opportunity.'),
   type: z.enum([
     'subscription',
     'recurring_charge',
@@ -24,11 +24,11 @@ const DetectedItemSchema = z.object({
     'duplicate_charge'
   ]),
   estimatedSavings: z.number().describe('Monthly USD savings.'),
-  alternativeSuggestion: z.string().optional().describe('Direct name of a cheaper competitor.'),
-  alternativeLink: z.string().optional().describe('A URL to the alternative or a search query link.'),
+  alternativeSuggestion: z.string().optional(),
+  alternativeLink: z.string().optional(),
   urgencyLevel: z.enum(['low', 'medium', 'high', 'urgent']),
-  copyableMessage: z.string().describe('A professional cancellation or negotiation script.'),
-  actionLabel: z.string().describe('Label for the magic button (e.g., "Draft Cancellation").'),
+  copyableMessage: z.string().describe('Professional script.'),
+  actionLabel: z.string().describe('Button label.'),
 });
 
 const AnalyzeFinancialDocumentInputSchema = z.object({
@@ -38,13 +38,14 @@ const AnalyzeFinancialDocumentInputSchema = z.object({
 
 const AnalyzeFinancialDocumentOutputSchema = z.object({
   title: z.string(),
-  summary: z.string(),
-  detectedItems: z.array(DetectedItemSchema),
-  savingsEstimate: z.number(),
+  summary: z.string().describe('The primary conversational response.'),
+  detectedItems: z.array(DetectedItemSchema).optional(),
+  savingsEstimate: z.number().optional(),
   beforeAfterComparison: z.object({
     currentSituation: z.string(),
     optimizedSituation: z.string(),
-  }),
+  }).optional(),
+  isActionable: z.boolean().describe('True if this triggered a financial audit with items.'),
 });
 
 export type AnalyzeFinancialDocumentOutput = z.infer<typeof AnalyzeFinancialDocumentOutputSchema>;
@@ -53,50 +54,45 @@ export async function analyzeFinancialDocument(input: z.infer<typeof AnalyzeFina
   const apiKey = process.env.GROQ_API_KEY;
   
   if (!apiKey) {
-    throw new Error('GROQ_API_KEY is missing. Please add it to your environment variables or .env file.');
+    throw new Error('GROQ_API_KEY is missing.');
   }
 
-  const groq = new Groq({
-    apiKey: apiKey,
-  });
+  const groq = new Groq({ apiKey });
 
-  const prompt = `You are a "Predatory Subscription Hunter". Your goal is to find EVERY cent of waste in the following data.
-Be aggressive. If the input is a general request like "save me money", suggest common optimizations based on market data.
-If a specific service is mentioned or overpriced compared to market rates, call it out. 
-If there's a cheaper alternative (e.g., Free tiers, family plans, competitors), provide it.
+  const prompt = `You are the "AI Life Operator". You are a refined, intelligent, and proactive assistant.
+Your goal is to help the user optimize their life, primarily their finances.
 
-Data:
-${input.documentText || "Image detected."}
+INTENT ROUTING:
+1. If the input contains financial data, statements, or a request to "save money":
+   - Act as a "Predatory Subscription Hunter".
+   - Find waste, hidden fees, and cheaper alternatives.
+   - Set "isActionable" to true.
+   - Populated "detectedItems", "savingsEstimate", and "beforeAfterComparison".
 
-Return a JSON object:
+2. If the input is a general question (e.g., "Hello", "How do I save for a car?", "What is inflation?"):
+   - Act as a helpful financial advisor and general assistant.
+   - Provide a high-quality conversational answer in the "summary" field.
+   - Set "isActionable" to false.
+   - Leave "detectedItems" as an empty array [].
+
+Data/Query:
+${input.documentText || "Visual source detected."}
+
+Return a JSON object matching this schema:
 {
-  "title": "Monthly Waste Audit",
-  "summary": "High-level summary of the bleed or potential optimizations.",
-  "detectedItems": [
-    {
-      "title": string,
-      "summary": "Specific predatory detail or optimization opportunity.",
-      "type": "subscription" | "recurring_charge" | ...,
-      "estimatedSavings": number,
-      "alternativeSuggestion": "Switch to [Competitor]",
-      "alternativeLink": "https://google.com/search?q=[Competitor]",
-      "urgencyLevel": "urgent",
-      "copyableMessage": "Draft a professional but firm cancellation or price-match email.",
-      "actionLabel": "Generate Cancellation Email"
-    }
-  ],
+  "title": string (A concise header for the response),
+  "summary": string (Your main conversational answer or audit summary),
+  "isActionable": boolean,
+  "detectedItems": [],
   "savingsEstimate": number,
-  "beforeAfterComparison": {
-    "currentSituation": "Description of the current burn or behavior.",
-    "optimizedSituation": "Description of the future state after protocol execution."
-  }
+  "beforeAfterComparison": { "currentSituation": string, "optimizedSituation": string }
 }`;
 
   const completion = await groq.chat.completions.create({
     messages: [
       {
         role: 'system',
-        content: 'You are a elite financial optimization AI. You excel at detecting waste and finding cheaper alternatives. Always output valid JSON.',
+        content: 'You are an elite AI assistant. Always output valid JSON. Be helpful, concise, and proactive.',
       },
       {
         role: 'user',
@@ -108,5 +104,9 @@ Return a JSON object:
   });
 
   const result = JSON.parse(completion.choices[0]?.message?.content || '{}');
-  return AnalyzeFinancialDocumentOutputSchema.parse(result);
+  return AnalyzeFinancialDocumentOutputSchema.parse({
+    ...result,
+    detectedItems: result.detectedItems || [],
+    savingsEstimate: result.savingsEstimate || 0,
+  });
 }

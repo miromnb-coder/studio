@@ -15,7 +15,8 @@ import {
   CheckCircle2,
   ChevronRight,
   Loader2,
-  AlertCircle
+  AlertCircle,
+  MessageSquare
 } from 'lucide-react';
 import { AnalysisService } from '@/services/analysis-service';
 import { useFirestore, useUser, addDocumentNonBlocking } from '@/firebase';
@@ -40,9 +41,9 @@ interface Message {
 }
 
 const STEPS = [
-  { id: 'ingest', label: 'Ingesting data protocol...', duration: 800 },
-  { id: 'scan', label: 'Scanning for predatory patterns...', duration: 1200 },
-  { id: 'action', label: 'Compiling actionable ledger...', duration: 1000 },
+  { id: 'ingest', label: 'Ingesting intent...', duration: 500 },
+  { id: 'scan', label: 'Processing intelligence...', duration: 800 },
+  { id: 'action', label: 'Finalizing protocol...', duration: 600 },
 ];
 
 export default function ChatPage() {
@@ -50,7 +51,7 @@ export default function ChatPage() {
     {
       id: 'welcome',
       role: 'assistant',
-      content: "Operator active. I am monitoring for predatory subscriptions, hidden fees, and trial endings. Provide a statement or type a command to begin audit.",
+      content: "Operator active. I am monitoring for predatory patterns and assisting with your life optimization. How can I help you today?",
       timestamp: new Date(),
     }
   ]);
@@ -96,7 +97,7 @@ export default function ChatPage() {
     setCurrentStep(0);
 
     try {
-      // Simulate analysis steps for UI/UX "Agentic" feel
+      // Simulation for "Agentic" feel
       for (let i = 0; i < STEPS.length; i++) {
         await new Promise(r => setTimeout(r, STEPS[i].duration));
         setCurrentStep(i + 1);
@@ -107,31 +108,36 @@ export default function ChatPage() {
         imageDataUri: fileData 
       });
 
-      // Persist analysis to Firestore
-      const analysesRef = collection(db, 'users', user.uid, 'analyses');
-      const docRef = await addDocumentNonBlocking(analysesRef, {
-        userId: user.uid,
-        title: result.title,
-        summary: result.summary,
-        estimatedMonthlySavings: result.savingsEstimate,
-        analysisDate: new Date().toISOString(),
-        status: 'completed',
-        inputMethod: fileData ? 'screenshot' : 'chat',
-        inputContent: content,
-        createdAt: serverTimestamp(),
-        source: fileData ? 'screenshot' : 'chat'
-      });
+      let analysisId = null;
 
-      if (docRef) {
-        const itemsRef = collection(db, 'users', user.uid, 'analyses', docRef.id, 'detected_items');
-        for (const item of result.detectedItems) {
-          addDocumentNonBlocking(itemsRef, {
-            ...item,
-            userId: user.uid,
-            analysisId: docRef.id,
-            status: 'active',
-            createdAt: serverTimestamp(),
-          });
+      // Only persist to Firestore if it's an actionable financial audit
+      if (result.isActionable) {
+        const analysesRef = collection(db, 'users', user.uid, 'analyses');
+        const docRef = await addDocumentNonBlocking(analysesRef, {
+          userId: user.uid,
+          title: result.title,
+          summary: result.summary,
+          estimatedMonthlySavings: result.savingsEstimate || 0,
+          analysisDate: new Date().toISOString(),
+          status: 'completed',
+          inputMethod: fileData ? 'screenshot' : 'chat',
+          inputContent: content,
+          createdAt: serverTimestamp(),
+          source: fileData ? 'screenshot' : 'chat'
+        });
+
+        if (docRef) {
+          analysisId = docRef.id;
+          const itemsRef = collection(db, 'users', user.uid, 'analyses', docRef.id, 'detected_items');
+          for (const item of (result.detectedItems || [])) {
+            addDocumentNonBlocking(itemsRef, {
+              ...item,
+              userId: user.uid,
+              analysisId: docRef.id,
+              status: 'active',
+              createdAt: serverTimestamp(),
+            });
+          }
         }
       }
 
@@ -140,17 +146,17 @@ export default function ChatPage() {
         role: 'assistant',
         content: result.summary,
         type: 'analysis_result',
-        data: { ...result, analysisId: docRef?.id },
+        data: { ...result, analysisId },
         timestamp: new Date(),
       };
       setMessages(prev => [...prev, assistantMessage]);
     } catch (err) {
-      console.error('Audit sequence failed:', err);
+      console.error('Operator logic failure:', err);
       setMessages(prev => [...prev, {
         id: 'err-' + Date.now(),
         role: 'assistant',
         type: 'error',
-        content: "The audit protocol encountered an error. This is usually due to invalid input data or network instability. Please try again with a clearer source.",
+        content: "I encountered an interruption in my logic protocol. Please try again or rephrase your request.",
         timestamp: new Date(),
       }]);
     } finally {
@@ -202,7 +208,7 @@ export default function ChatPage() {
                   {msg.content}
                 </div>
 
-                {msg.type === 'analysis_result' && msg.data && (
+                {msg.type === 'analysis_result' && msg.data && msg.data.isActionable && (
                   <motion.div 
                     initial={{ opacity: 0, scale: 0.98 }}
                     animate={{ opacity: 1, scale: 1 }}
@@ -222,7 +228,7 @@ export default function ChatPage() {
                     </div>
 
                     <div className="grid gap-3">
-                      {msg.data.detectedItems.map((item: any, idx: number) => (
+                      {msg.data.detectedItems?.slice(0, 3).map((item: any, idx: number) => (
                         <div key={idx} className="premium-card !p-4 bg-white/[0.02] flex items-center justify-between group hover:bg-white/[0.04]">
                           <div className="flex items-center gap-4">
                             <div className="w-10 h-10 rounded-xl bg-white/5 flex items-center justify-center text-muted-foreground group-hover:text-primary transition-colors">
@@ -254,7 +260,7 @@ export default function ChatPage() {
           >
             <div className="flex items-center gap-3 p-5 rounded-[24px] bg-white/[0.03] border border-white/5 rounded-tl-none">
               <Loader2 className="w-4 h-4 text-primary animate-spin" />
-              <span className="text-sm font-medium text-muted-foreground italic">Operator is auditing source...</span>
+              <span className="text-sm font-medium text-muted-foreground italic">Operator is ingesting intent...</span>
             </div>
             
             <div className="w-full max-w-xs space-y-4 pl-4 border-l-2 border-white/5">
@@ -292,15 +298,15 @@ export default function ChatPage() {
               <DropdownMenuContent align="start" className="w-56 bg-card border-white/10 rounded-2xl p-2 mb-4">
                 <DropdownMenuItem onClick={() => fileInputRef.current?.click()} className="rounded-xl h-11 cursor-pointer gap-3">
                   <ImageIcon className="w-4 h-4 text-primary" />
-                  <span className="font-medium text-sm">Upload Screenshot</span>
+                  <span className="font-medium text-sm">Upload Visual Source</span>
                 </DropdownMenuItem>
-                <DropdownMenuItem onClick={() => setInput('Audit my active subscriptions:')} className="rounded-xl h-11 cursor-pointer gap-3">
+                <DropdownMenuItem onClick={() => setInput('Analyze my active subscriptions:')} className="rounded-xl h-11 cursor-pointer gap-3">
                   <FileText className="w-4 h-4 text-accent" />
                   <span className="font-medium text-sm">Paste Bank Log</span>
                 </DropdownMenuItem>
-                <DropdownMenuItem onClick={() => router.push('/dashboard')} className="rounded-xl h-11 cursor-pointer gap-3">
-                  <Zap className="w-4 h-4 text-success" />
-                  <span className="font-medium text-sm">View Savings Dashboard</span>
+                <DropdownMenuItem onClick={() => setInput('How can I save money this month?')} className="rounded-xl h-11 cursor-pointer gap-3">
+                  <MessageSquare className="w-4 h-4 text-success" />
+                  <span className="font-medium text-sm">Ask Savings Advice</span>
                 </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
@@ -322,7 +328,7 @@ export default function ChatPage() {
                   sendMessage();
                 }
               }}
-              placeholder="Type your savings intent..."
+              placeholder="Ask anything or request an audit..."
               className="flex-1 border-0 focus-visible:ring-0 bg-transparent min-h-[48px] py-3 text-base font-medium resize-none overflow-hidden"
               rows={1}
             />
@@ -339,7 +345,7 @@ export default function ChatPage() {
           <div className="flex justify-center mt-4 gap-2 items-center">
             <div className="w-1 h-1 bg-success rounded-full animate-pulse" />
             <p className="text-[9px] font-bold uppercase tracking-[0.3em] text-muted-foreground/30">
-              Audit Sandbox Encrypted
+              Universal Assistant Active
             </p>
           </div>
         </div>
