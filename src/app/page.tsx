@@ -3,7 +3,7 @@
 import { useState, useRef, useEffect } from 'react';
 import { Navbar } from '@/components/layout/Navbar';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
+import { Textarea } from '@/components/ui/textarea';
 import { Card } from '@/components/ui/card';
 import { 
   Send, 
@@ -72,10 +72,25 @@ export default function ChatPage() {
     }
   }, [messages, isProcessing]);
 
-  const handleSend = async (text?: string, fileData?: string) => {
+  const sendMessage = async (text?: string, fileData?: string) => {
+    console.log('sendMessage execution started', { text, hasFileData: !!fileData, input });
+    
     const content = text || input;
-    if (!content && !fileData) return;
-    if (!user || !db) return;
+    if (!content && !fileData) {
+      console.log('Execution aborted: No content or file data provided');
+      return;
+    }
+
+    if (!user || !db) {
+      console.log('Execution aborted: Authentication or database not ready', { user: !!user, db: !!db });
+      setMessages(prev => [...prev, {
+        id: Math.random().toString(36).substr(2, 9),
+        role: 'assistant',
+        content: "Please sign in to your account to use the audit protocol and secure sandbox features.",
+        timestamp: new Date(),
+      }]);
+      return;
+    }
 
     const userMessage: Message = {
       id: Math.random().toString(36).substr(2, 9),
@@ -91,6 +106,7 @@ export default function ChatPage() {
     const isAuditIntent = content.toLowerCase().includes('save') || content.toLowerCase().includes('money') || content.toLowerCase().includes('audit') || fileData;
 
     if (isAuditIntent) {
+      console.log('Audit intent identified. Starting sequence...');
       setIsProcessing(true);
       setCurrentStep(0);
 
@@ -142,18 +158,18 @@ export default function ChatPage() {
         };
         setMessages(prev => [...prev, assistantMessage]);
       } catch (err) {
-        console.error(err);
+        console.error('Audit protocol failure:', err);
         setMessages(prev => [...prev, {
           id: 'err',
           role: 'assistant',
-          content: "Audit protocol failed. Please re-provide data source.",
+          content: "Audit protocol failed. Please re-provide data source or check your connection.",
           timestamp: new Date(),
         }]);
       } finally {
         setIsProcessing(false);
       }
     } else {
-      // Normal conversational response
+      console.log('Conversational intent identified.');
       setTimeout(() => {
         setMessages(prev => [...prev, {
           id: Math.random().toString(36).substr(2, 9),
@@ -170,7 +186,7 @@ export default function ChatPage() {
     if (file) {
       const reader = new FileReader();
       reader.onloadend = () => {
-        handleSend(undefined, reader.result as string);
+        sendMessage(undefined, reader.result as string);
       };
       reader.readAsDataURL(file);
     }
@@ -316,18 +332,24 @@ export default function ChatPage() {
               onChange={onFileChange}
             />
 
-            <Input 
+            <Textarea 
               value={input}
               onChange={(e) => setInput(e.target.value)}
-              onKeyDown={(e) => e.key === 'Enter' && handleSend()}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' && !e.shiftKey) {
+                  e.preventDefault();
+                  sendMessage();
+                }
+              }}
               placeholder="Command your operator..."
-              className="flex-1 border-0 focus-visible:ring-0 bg-transparent h-12 text-base font-medium"
+              className="flex-1 border-0 focus-visible:ring-0 bg-transparent min-h-[48px] py-3 text-base font-medium resize-none overflow-hidden"
+              rows={1}
             />
 
             <Button 
               size="icon" 
-              disabled={!input || isProcessing}
-              onClick={() => handleSend()}
+              disabled={!input.trim()}
+              onClick={() => sendMessage()}
               className="w-12 h-12 rounded-full shadow-2xl transition-transform hover:scale-105 active:scale-95 shrink-0"
             >
               <Send className="w-5 h-5" />
