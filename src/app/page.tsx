@@ -1,4 +1,3 @@
-
 "use client";
 
 import { useState, useRef, useEffect, Suspense } from 'react';
@@ -42,9 +41,9 @@ interface Message {
 }
 
 const STEPS = [
-  { id: 'ingest', label: 'Ingesting intent...', duration: 500 },
-  { id: 'scan', label: 'Analyzing with High-IQ protocols...', duration: 800 },
-  { id: 'action', label: 'Consulting Long-Term Memory...', duration: 600 },
+  { id: 'ingest', label: 'Processing intent...', duration: 400 },
+  { id: 'scan', label: 'Analyzing with intelligence...', duration: 600 },
+  { id: 'action', label: 'Consulting memory ledger...', duration: 500 },
 ];
 
 function ChatContent() {
@@ -55,7 +54,7 @@ function ChatContent() {
   const [showOnboarding, setShowOnboarding] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const { user } = useUser();
+  const { user, isUserLoading } = useUser();
   const db = useFirestore();
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -75,17 +74,18 @@ function ChatContent() {
         orderBy('timestamp', 'asc')
       );
     } catch (e) {
+      console.error("Message query error:", e);
       return null;
     }
   }, [db, user, conversationId]);
 
   const { data: storedMessages } = useCollection(messagesQuery);
 
-  // User Memory Ref
   const memoryRef = useMemoFirebase(() => {
     if (!db || !user) return null;
     return doc(db, 'users', user.uid, 'memory', 'main');
   }, [db, user]);
+  
   const { data: userMemory } = useDoc(memoryRef);
 
   useEffect(() => {
@@ -99,7 +99,7 @@ function ChatContent() {
       setLocalMessages([{
         id: 'welcome',
         role: 'assistant',
-        content: "Operator active. High-IQ audit protocols online. I've accessed your behavioral ledger. How can I assist you today?",
+        content: "Operator active. How can I assist you today?",
         timestamp: null,
       }]);
       setShowOnboarding(true);
@@ -112,12 +112,18 @@ function ChatContent() {
     }
   }, [localMessages, isProcessing]);
 
+  // Safety Guard for initialization
+  if (mounted && !isUserLoading && !user) {
+    router.push('/login');
+    return null;
+  }
+
   const handleOnboardingGoal = (goal: string) => {
     setShowOnboarding(false);
     let initialPrompt = "";
-    if (goal === 'save_money') initialPrompt = "I want to save money. Run an audit on my recent spend.";
-    if (goal === 'save_time') initialPrompt = "Help me save time with life administration.";
-    if (goal === 'analyze_visual') initialPrompt = "I have a document for visual analysis.";
+    if (goal === 'save_money') initialPrompt = "I want to save money on my recurring expenses.";
+    if (goal === 'save_time') initialPrompt = "Help me optimize my daily administrative tasks.";
+    if (goal === 'analyze_visual') initialPrompt = "I have a screenshot of a receipt or statement to analyze.";
     
     setInput(initialPrompt);
   };
@@ -141,6 +147,7 @@ function ChatContent() {
         });
         router.push(`/?c=${activeConvId}`);
       } catch (e) {
+        console.error("Failed to create conversation:", e);
         return;
       }
     }
@@ -149,7 +156,7 @@ function ChatContent() {
     const userMessage: Message = {
       id: userMsgId,
       role: 'user',
-      content: content || 'Visual Source Uploaded',
+      content: content || 'Source uploaded',
       timestamp: new Date(),
     };
 
@@ -177,7 +184,7 @@ function ChatContent() {
         documentText: content,
         imageDataUri: fileData,
         history,
-        userMemory: userMemory // Passing the long-term memory to the AI
+        userMemory: userMemory || null
       });
 
       if (localMessages.length <= 2 && result?.title) {
@@ -187,7 +194,6 @@ function ChatContent() {
         });
       }
 
-      // Memory Intelligence Sync
       if (result?.memoryUpdates) {
         MemoryService.updateMemory(db, user.uid, result.memoryUpdates);
       }
@@ -196,9 +202,9 @@ function ChatContent() {
       const assistantMessage: Message = {
         id: assistantMsgId,
         role: 'assistant',
-        content: result?.summary || "Analysis complete. Review findings below.",
+        content: result?.summary || "Analysis complete.",
         type: result?.isActionable ? 'analysis_result' : 'text',
-        data: result ? { ...result } : null,
+        data: result || null,
         timestamp: new Date(),
       };
 
@@ -211,8 +217,8 @@ function ChatContent() {
         const analysesRef = collection(db, 'users', user.uid, 'analyses');
         const docRef = await addDocumentNonBlocking(analysesRef, {
           userId: user.uid,
-          title: result.title,
-          summary: result.summary,
+          title: result.title || "Audit Report",
+          summary: result.summary || "",
           estimatedMonthlySavings: result.savingsEstimate || 0,
           analysisDate: new Date().toISOString(),
           status: 'completed',
@@ -222,21 +228,23 @@ function ChatContent() {
           source: 'chat'
         });
 
-        if (docRef) {
+        if (docRef && Array.isArray(result.detectedItems)) {
           const itemsRef = collection(db, 'users', user.uid, 'analyses', docRef.id, 'detected_items');
-          for (const item of (result.detectedItems || [])) {
-            addDocumentNonBlocking(itemsRef, {
-              ...item,
-              userId: user.uid,
-              analysisId: docRef.id,
-              status: 'active',
-              createdAt: serverTimestamp(),
-            });
+          for (const item of result.detectedItems) {
+            if (item && item.title) {
+              addDocumentNonBlocking(itemsRef, {
+                ...item,
+                userId: user.uid,
+                analysisId: docRef.id,
+                status: 'active',
+                createdAt: serverTimestamp(),
+              });
+            }
           }
         }
       }
     } catch (err) {
-      console.error('Chat Intelligence Error:', err);
+      console.error('Processing error:', err);
     } finally {
       setIsProcessing(false);
     }
@@ -254,7 +262,7 @@ function ChatContent() {
   };
 
   return (
-    <div className="flex flex-col h-screen bg-background relative">
+    <div className="flex flex-col h-screen bg-background relative overflow-hidden">
       <Navbar />
 
       <AnimatePresence>
@@ -307,7 +315,7 @@ function ChatContent() {
           >
             <div className="flex items-center gap-3 p-5 rounded-[24px] bg-white/[0.03] border border-white/5 rounded-tl-none">
               <Loader2 className="w-4 h-4 text-primary animate-spin" />
-              <span className="text-sm font-medium text-muted-foreground italic">Operator applying intelligence...</span>
+              <span className="text-sm font-medium text-muted-foreground italic">Processing intelligence...</span>
             </div>
             
             <div className="w-full max-w-xs space-y-4 pl-4 border-l-2 border-white/5">
@@ -345,11 +353,11 @@ function ChatContent() {
               <DropdownMenuContent align="start" className="w-56 bg-card border-white/10 rounded-2xl p-2 mb-4">
                 <DropdownMenuItem onClick={() => fileInputRef.current?.click()} className="rounded-xl h-11 cursor-pointer gap-3">
                   <ImageIcon className="w-4 h-4 text-primary" />
-                  <span className="font-medium text-sm text-white">Upload Visual Source</span>
+                  <span className="font-medium text-sm text-white">Upload visual source</span>
                 </DropdownMenuItem>
                 <DropdownMenuItem onClick={() => router.push('/')} className="rounded-xl h-11 cursor-pointer gap-3">
                   <Plus className="w-4 h-4 text-success" />
-                  <span className="font-medium text-sm text-white">New Session</span>
+                  <span className="font-medium text-sm text-white">New session</span>
                 </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
@@ -371,7 +379,7 @@ function ChatContent() {
                   sendMessage();
                 }
               }}
-              placeholder="Ask anything or request a deep audit..."
+              placeholder="Message operator..."
               className="flex-1 border-0 focus-visible:ring-0 bg-transparent min-h-[48px] py-3 text-base font-medium resize-none overflow-hidden text-white"
               rows={1}
             />
@@ -385,12 +393,6 @@ function ChatContent() {
               {isProcessing ? <Loader2 className="w-5 h-5 animate-spin" /> : <Send className="w-5 h-5" />}
             </Button>
           </Card>
-          <div className="flex justify-center mt-4 gap-2 items-center">
-            <div className="w-1 h-1 bg-success rounded-full animate-pulse" />
-            <p className="text-[9px] font-bold uppercase tracking-[0.3em] text-muted-foreground/30">
-              Long-Term Memory Protocol Synchronized
-            </p>
-          </div>
         </div>
       </div>
     </div>

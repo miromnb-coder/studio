@@ -1,9 +1,9 @@
-
 'use client';
 
 import { useEffect } from 'react';
 import { Button } from '@/components/ui/button';
-import { AlertCircle, RefreshCw } from 'lucide-react';
+import { AlertCircle, RefreshCw, Home } from 'lucide-react';
+import Link from 'next/link';
 
 export default function Error({
   error,
@@ -13,19 +13,20 @@ export default function Error({
   reset: () => void;
 }) {
   useEffect(() => {
-    console.error('Root Error Boundary caught:', error);
+    // Log the error to a central location if needed
+    console.error('Application Error:', error);
   }, [error]);
 
   return (
     <div className="min-h-screen bg-background flex flex-col items-center justify-center p-6 text-center space-y-8">
-      <div className="w-20 h-20 rounded-3xl bg-danger/10 flex items-center justify-center text-danger border border-danger/20">
+      <div className="w-20 h-20 rounded-3xl bg-primary/10 flex items-center justify-center text-primary border border-primary/20">
         <AlertCircle className="w-10 h-10" />
       </div>
       
       <div className="space-y-2">
-        <h1 className="text-4xl font-bold font-headline tracking-tighter">Protocol Interruption</h1>
+        <h1 className="text-4xl font-bold font-headline tracking-tighter">Something went wrong</h1>
         <p className="text-muted-foreground max-w-sm mx-auto font-medium leading-relaxed">
-          The operator encountered a critical logic exception. Please reset the environment or refresh the protocol.
+          The application encountered an unexpected error. We've been notified and are looking into it.
         </p>
       </div>
 
@@ -35,20 +36,25 @@ export default function Error({
           className="h-14 rounded-2xl font-bold uppercase tracking-widest text-[10px] gap-2"
         >
           <RefreshCw className="w-3.5 h-3.5" />
-          Reset Environment
+          Try Again
         </Button>
         <Button 
           variant="outline" 
-          onClick={() => window.location.reload()} 
+          asChild
           className="h-14 rounded-2xl font-bold uppercase tracking-widest text-[10px] border-white/5"
         >
-          Hard Reload
+          <Link href="/">
+            <Home className="w-3.5 h-3.5 mr-2" />
+            Go to Home
+          </Link>
         </Button>
       </div>
 
-      <p className="text-[10px] text-muted-foreground/30 font-mono">
-        DIGEST: {error.digest || 'unknown'}
-      </p>
+      {process.env.NODE_ENV === 'development' && (
+        <p className="text-[10px] text-muted-foreground/30 font-mono max-w-lg truncate">
+          ID: {error.digest || 'no-digest'} | {error.message}
+        </p>
+      )}
     </div>
   );
 }
