@@ -41,29 +41,14 @@ export default function DashboardPage() {
   const isLoading = isUserLoading || isAnalysesLoading;
 
   return (
-    <div className="min-h-screen bg-background pt-32 pb-32">
+    <div className="min-h-screen bg-background pt-24 pb-32">
       <Navbar />
       
       <main className="max-w-6xl mx-auto px-6 space-y-16">
-        {/* Command Center Header */}
-        <header className="flex flex-col md:flex-row md:items-end justify-between gap-12">
+        <header className="flex flex-col md:flex-row md:items-end justify-between gap-12 pt-8">
           <div className="space-y-6">
-            <motion.div 
-              initial={{ opacity: 0, x: -20 }}
-              animate={{ opacity: 1, x: 0 }}
-              className="flex items-center gap-2 text-[10px] font-bold uppercase tracking-widest text-primary"
-            >
-              <Cpu className="w-3 h-3" />
-              Operator Console v1.0
-            </motion.div>
             <h1 className="text-6xl md:text-8xl font-bold font-headline tracking-tighter leading-[0.9]">Console.</h1>
-            <p className="text-xl text-muted-foreground font-medium max-w-md">Monitoring protocol for financial waste.</p>
-            <Button asChild className="h-14 px-8 rounded-2xl font-bold uppercase tracking-widest text-[10px] shadow-2xl group">
-              <Link href="/analyze">
-                Initiate New Audit
-                <ArrowRight className="ml-2 w-4 h-4 group-hover:translate-x-1 transition-transform" />
-              </Link>
-            </Button>
+            <p className="text-xl text-muted-foreground font-medium max-w-md">Passive protocol oversight for your financial health.</p>
           </div>
           
           <div className="premium-card !p-10 text-center min-w-[280px] bg-white/[0.02]">
@@ -79,15 +64,14 @@ export default function DashboardPage() {
         </header>
 
         <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
-          {/* Intelligence Timeline */}
           <section className="md:col-span-2 space-y-8">
             <div className="flex items-center justify-between">
               <h3 className="text-[10px] font-bold uppercase tracking-[0.3em] text-muted-foreground flex items-center gap-2">
                 <Clock className="w-3 h-3" />
-                Audit Ledger
+                Audit History
               </h3>
               <Link href="/history" className="text-[10px] font-bold uppercase tracking-widest text-primary hover:underline">
-                View Full Records
+                Full Records
               </Link>
             </div>
             
@@ -128,44 +112,43 @@ export default function DashboardPage() {
                   <ShieldCheck className="w-10 h-10 text-white/10 mx-auto" />
                   <p className="text-muted-foreground font-medium">No audit data identified yet.</p>
                   <Button asChild variant="outline" className="h-10 rounded-xl font-bold uppercase tracking-widest text-[10px] border-white/10">
-                    <Link href="/analyze">Start First Scan</Link>
+                    <Link href="/">Enter Chat</Link>
                   </Button>
                 </div>
               )}
             </div>
           </section>
 
-          {/* Sidebar Insights */}
           <aside className="space-y-8">
             <h3 className="text-[10px] font-bold uppercase tracking-[0.3em] text-muted-foreground flex items-center gap-2">
               <TrendingUp className="w-3 h-3" />
-              Proactive Insights
+              Intelligence Feed
             </h3>
             
             <div className="space-y-4">
               <div className="premium-card bg-danger/5 border-danger/10 space-y-4">
                 <div className="flex items-center gap-2 text-danger">
                   <AlertTriangle className="w-4 h-4" />
-                  <p className="text-[10px] font-bold uppercase tracking-widest">High Impact</p>
+                  <p className="text-[10px] font-bold uppercase tracking-widest">High Burn Detected</p>
                 </div>
                 <p className="text-sm font-medium leading-relaxed">
-                  Detected $120/mo in trial expirations due within 72 hours. Protocol ready.
+                  Detected trial expirations due within 72 hours. Audit your inbox to mitigate.
                 </p>
-                <Button variant="link" className="p-0 h-auto text-[10px] font-bold uppercase tracking-widest text-danger hover:no-underline hover:text-danger/80">
-                  Execute Mitigation
+                <Button asChild variant="link" className="p-0 h-auto text-[10px] font-bold uppercase tracking-widest text-danger hover:no-underline hover:text-danger/80">
+                  <Link href="/">Open Audit Chat</Link>
                 </Button>
               </div>
 
               <div className="premium-card bg-accent/5 border-accent/10 space-y-4">
                 <div className="flex items-center gap-2 text-accent">
                   <Zap className="w-4 h-4" />
-                  <p className="text-[10px] font-bold uppercase tracking-widest">Optimization</p>
+                  <p className="text-[10px] font-bold uppercase tracking-widest">Optimization Ready</p>
                 </div>
                 <p className="text-sm font-medium leading-relaxed">
-                  Market rates for Mobile Plans dropped by 15%. I can re-negotiate your current tier.
+                  Mobile plan market rates dropped. Operator can negotiate your tier now.
                 </p>
-                <Button variant="link" className="p-0 h-auto text-[10px] font-bold uppercase tracking-widest text-accent hover:no-underline hover:text-accent/80">
-                  Generate Script
+                <Button asChild variant="link" className="p-0 h-auto text-[10px] font-bold uppercase tracking-widest text-accent hover:no-underline hover:text-accent/80">
+                  <Link href="/">Start Negotiation</Link>
                 </Button>
               </div>
             </div>

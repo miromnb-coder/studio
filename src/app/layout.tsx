@@ -2,10 +2,13 @@ import type {Metadata} from 'next';
 import './globals.css';
 import { FirebaseClientProvider } from '@/firebase/client-provider';
 import { AuthGuard } from '@/components/auth/AuthGuard';
+import { SidebarProvider } from '@/components/ui/sidebar';
+import { AppSidebar } from '@/components/layout/AppSidebar';
+import { Toaster } from '@/components/ui/toaster';
 
 export const metadata: Metadata = {
-  title: 'AI Life Operator | Proactive Savings Agent',
-  description: 'AI Life Operator scans receipts, screenshots, and notes to uncover subscriptions, duplicate charges, hidden fees, and easy savings.',
+  title: 'AI Life Operator | Conversational assistant',
+  description: 'AI Life Operator scans receipts, screenshots, and notes to uncover subscriptions and hidden fees through a conversational interface.',
 };
 
 export default function RootLayout({
@@ -23,9 +26,17 @@ export default function RootLayout({
       <body className="font-body antialiased bg-background text-foreground selection:bg-primary/30">
         <FirebaseClientProvider>
           <AuthGuard>
-            {children}
+            <SidebarProvider>
+              <div className="flex min-h-screen w-full">
+                <AppSidebar />
+                <main className="flex-1 relative flex flex-col min-w-0">
+                  {children}
+                </main>
+              </div>
+            </SidebarProvider>
           </AuthGuard>
         </FirebaseClientProvider>
+        <Toaster />
       </body>
     </html>
   );

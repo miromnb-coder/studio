@@ -1,66 +1,34 @@
 "use client";
 
-import Link from 'next/link';
-import { usePathname } from 'next/navigation';
-import { LayoutDashboard, History, Settings, Plus, Sparkles, UserCircle } from 'lucide-react';
-import { cn } from '@/lib/utils';
-import { useUser } from '@/firebase';
+import { SidebarTrigger } from '@/components/ui/sidebar';
+import { Cpu, Bell, Search } from 'lucide-react';
 import { motion } from 'framer-motion';
 
 export function Navbar() {
-  const pathname = usePathname();
-  const { user } = useUser();
-
-  const navItems = [
-    { icon: LayoutDashboard, href: '/dashboard', label: 'Console' },
-    { icon: Sparkles, href: '/money-saver', label: 'Optimizer' },
-    { icon: Plus, href: '/analyze', label: 'Analyze' },
-    { icon: History, href: '/history', label: 'Ledger' },
-    { icon: Settings, href: '/settings', label: 'Sync' },
-  ];
-
   return (
-    <>
-      {/* Top Navigation - Shared Layout */}
-      <nav className="fixed top-0 left-0 right-0 z-50 flex justify-center p-6 pointer-events-none">
+    <header className="fixed top-0 right-0 left-0 lg:left-[var(--sidebar-width)] z-40 bg-background/80 backdrop-blur-xl border-b border-white/5 h-16 flex items-center px-6 justify-between">
+      <div className="flex items-center gap-4">
+        <SidebarTrigger className="text-muted-foreground hover:text-white" />
+        <div className="h-4 w-px bg-white/10 mx-2 hidden md:block" />
         <motion.div 
-          initial={{ y: -20, opacity: 0 }}
-          animate={{ y: 0, opacity: 1 }}
-          className="flex items-center gap-2 p-2 rounded-2xl glass pointer-events-auto shadow-2xl"
+          initial={{ opacity: 0, x: -10 }}
+          animate={{ opacity: 1, x: 0 }}
+          className="flex items-center gap-2"
         >
-          <Link href="/" className="flex items-center justify-center w-10 h-10 rounded-xl bg-primary text-background mr-4 hover:scale-105 transition-transform">
-            <span className="font-headline font-bold text-xl">O</span>
-          </Link>
-          
-          <div className="flex items-center gap-1">
-            {navItems.map((item) => (
-              <Link 
-                key={item.href} 
-                href={item.href}
-                className={cn(
-                  "px-4 py-2 rounded-xl text-xs font-medium transition-all flex items-center gap-2 whitespace-nowrap",
-                  pathname === item.href 
-                    ? "bg-white/10 text-white" 
-                    : "text-muted-foreground hover:text-white hover:bg-white/5"
-                )}
-              >
-                <item.icon className="w-4 h-4" />
-                <span className="hidden md:inline">{item.label}</span>
-              </Link>
-            ))}
-          </div>
-
-          <div className="ml-4 pl-4 border-l border-white/10 flex items-center">
-            <Link href="/settings" className="w-8 h-8 rounded-full overflow-hidden border border-white/10 hover:border-primary transition-colors">
-              <img 
-                src={`https://picsum.photos/seed/${user?.uid || 'user'}/64/64`} 
-                alt="Profile" 
-                className="w-full h-full object-cover" 
-              />
-            </Link>
-          </div>
+          <Cpu className="w-3.5 h-3.5 text-primary" />
+          <span className="text-[10px] font-bold uppercase tracking-[0.2em] text-muted-foreground">Operator v1.0</span>
         </motion.div>
-      </nav>
-    </>
+      </div>
+
+      <div className="flex items-center gap-4">
+        <button className="p-2 rounded-lg hover:bg-white/5 text-muted-foreground transition-colors">
+          <Search className="w-4 h-4" />
+        </button>
+        <button className="p-2 rounded-lg hover:bg-white/5 text-muted-foreground transition-colors relative">
+          <Bell className="w-4 h-4" />
+          <span className="absolute top-2 right-2 w-1.5 h-1.5 bg-primary rounded-full" />
+        </button>
+      </div>
+    </header>
   );
 }

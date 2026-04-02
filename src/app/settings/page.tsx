@@ -6,7 +6,6 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Switch } from '@/components/ui/switch';
 import { Label } from '@/components/ui/label';
-import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/components/ui/card';
 import { 
   User, 
   Bell, 
@@ -34,7 +33,6 @@ export default function SettingsPage() {
 
   const { data: profile } = useDoc(userRef);
 
-  // Generate inbound email if missing
   useEffect(() => {
     if (db && user && profile && !profile.inboundEmailAddress) {
       const randomSuffix = Math.floor(1000 + Math.random() * 9000);
@@ -56,39 +54,24 @@ export default function SettingsPage() {
   };
 
   return (
-    <div className="min-h-screen bg-background pt-32 pb-32">
+    <div className="min-h-screen bg-background pt-24 pb-32">
       <Navbar />
       
       <main className="max-w-4xl mx-auto px-6 space-y-16">
-        <header className="space-y-4">
+        <header className="space-y-4 pt-8">
           <h1 className="text-5xl md:text-7xl font-bold font-headline tracking-tighter leading-[0.9]">Sync.</h1>
-          <p className="text-xl text-muted-foreground font-medium">Configure protocol integration and intelligence preferences.</p>
+          <p className="text-xl text-muted-foreground font-medium">Protocol configuration and passive intelligence settings.</p>
         </header>
 
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-12">
-          <nav className="flex flex-col gap-2">
-            <Button variant="ghost" className="justify-start gap-3 h-12 rounded-xl bg-white/5 text-primary">
-              <Cpu className="w-4 h-4" />
-              Protocol Sync
-            </Button>
-            <Button variant="ghost" className="justify-start gap-3 h-12 rounded-xl text-muted-foreground hover:bg-white/5">
-              <User className="w-4 h-4" />
-              Identity
-            </Button>
-            <Button variant="ghost" className="justify-start gap-3 h-12 rounded-xl text-muted-foreground hover:bg-white/5">
-              <Bell className="w-4 h-4" />
-              Alerts
-            </Button>
-          </nav>
-
-          <div className="md:col-span-3 space-y-12">
+        <div className="grid grid-cols-1 gap-12">
+          <div className="space-y-12">
             <section className="space-y-6">
               <div className="space-y-1">
                 <h2 className="text-xl font-bold font-headline tracking-tight uppercase tracking-widest text-[12px] flex items-center gap-2">
                   <Mail className="w-4 h-4 text-primary" />
                   Inbound Protocol
                 </h2>
-                <p className="text-sm text-muted-foreground font-medium">Unique magic address for autonomous ingestion.</p>
+                <p className="text-sm text-muted-foreground font-medium">Magic address for autonomous document ingestion.</p>
               </div>
 
               <div className="premium-card bg-primary/5 border-primary/10 p-8 space-y-8">
@@ -107,15 +90,15 @@ export default function SettingsPage() {
                 </div>
                 
                 <div className="space-y-4">
-                  <p className="text-[9px] font-bold uppercase tracking-widest text-muted-foreground">Automation Guide</p>
-                  <div className="grid gap-3">
+                  <p className="text-[9px] font-bold uppercase tracking-widest text-muted-foreground">Automation Protocol</p>
+                  <div className="grid md:grid-cols-2 gap-4">
                     {[
-                      "Navigate to Email Settings > Forwarding.",
-                      "Register Magic Address as protocol target.",
-                      "Configure filters for: 'Receipt', 'Renewal', 'Price'.",
-                      "Activate auto-forwarding protocol."
+                      "Register this address as email target.",
+                      "Configure filters for receipts & renewals.",
+                      "Enable auto-forwarding.",
+                      "Operator will scan in background."
                     ].map((step, i) => (
-                      <div key={i} className="flex items-start gap-3 text-sm text-muted-foreground font-medium">
+                      <div key={i} className="flex items-start gap-3 text-sm text-muted-foreground font-medium p-4 bg-white/5 rounded-xl">
                         <span className="w-5 h-5 rounded-full bg-primary/10 flex items-center justify-center text-primary text-[10px] shrink-0 font-bold">{i + 1}</span>
                         <p>{step}</p>
                       </div>
@@ -126,19 +109,19 @@ export default function SettingsPage() {
             </section>
 
             <section className="space-y-6 pt-12 border-t border-white/5">
-              <h2 className="text-xl font-bold font-headline tracking-tight uppercase tracking-widest text-[12px]">Intelligence Settings</h2>
-              <div className="premium-card p-8 space-y-8">
+              <h2 className="text-xl font-bold font-headline tracking-tight uppercase tracking-widest text-[12px]">Operator Intelligence</h2>
+              <div className="premium-card p-8 space-y-8 bg-white/[0.01]">
                 <div className="flex items-center justify-between">
                   <div className="space-y-1">
-                    <Label className="text-lg font-bold">Autonomous Alerts</Label>
-                    <p className="text-xs text-muted-foreground font-medium italic">Notify 72 hours prior to trial expiration.</p>
+                    <Label className="text-lg font-bold">Conversational Ingestion</Label>
+                    <p className="text-xs text-muted-foreground font-medium italic">Allow operator to process chat uploads immediately.</p>
                   </div>
                   <Switch checked />
                 </div>
                 <div className="flex items-center justify-between pt-8 border-t border-white/5">
                   <div className="space-y-1">
-                    <Label className="text-lg font-bold">Script Generation</Label>
-                    <p className="text-xs text-muted-foreground font-medium italic">Auto-prepare negotiation drafts for detected hikes.</p>
+                    <Label className="text-lg font-bold">Predictive Scripts</Label>
+                    <p className="text-xs text-muted-foreground font-medium italic">Pre-generate negotiation drafts for all detected waste.</p>
                   </div>
                   <Switch checked />
                 </div>
