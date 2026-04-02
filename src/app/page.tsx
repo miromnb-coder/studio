@@ -1,4 +1,3 @@
-
 "use client";
 
 import { useState, useRef, useEffect, Suspense } from 'react';
@@ -14,6 +13,7 @@ import {
   CheckCircle2,
   ChevronRight,
   Loader2,
+  AlertCircle
 } from 'lucide-react';
 import { AnalysisService } from '@/services/analysis-service';
 import { useFirestore, useUser, addDocumentNonBlocking, useCollection, useMemoFirebase } from '@/firebase';
@@ -48,6 +48,7 @@ function ChatContent() {
   const [input, setInput] = useState('');
   const [isProcessing, setIsProcessing] = useState(false);
   const [currentStep, setCurrentStep] = useState(0);
+  const [loadTimeout, setLoadTimeout] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const { user, isUserLoading } = useUser();
@@ -60,6 +61,11 @@ function ChatContent() {
 
   useEffect(() => {
     setMounted(true);
+    // 5s Bypass for stuck loading state
+    const timer = setTimeout(() => {
+      setLoadTimeout(true);
+    }, 5000);
+    return () => clearTimeout(timer);
   }, []);
 
   const messagesQuery = useMemoFirebase(() => {
@@ -98,19 +104,31 @@ function ChatContent() {
     }
   }, [localMessages, isProcessing]);
 
-  if (!mounted || isUserLoading) {
+  if (!mounted || (isUserLoading && !loadTimeout)) {
     return (
       <div className="flex flex-col h-screen bg-background items-center justify-center">
         <Loader2 className="w-8 h-8 text-primary animate-spin" />
+        <p className="mt-4 text-[10px] font-bold uppercase tracking-[0.3em] text-muted-foreground/50">Initialising Protocol...</p>
       </div>
     );
   }
 
-  // GUARD CLAUSE: Sturdy check for Firebase services
-  if (!db || !user) {
+  // FAILSAFE: Report stuck loading or configuration errors
+  if (!db || !user || (isUserLoading && loadTimeout)) {
     return (
-      <div className="flex flex-col h-screen bg-background items-center justify-center p-6 text-center">
-        <p className="text-muted-foreground font-medium">Initializing Operator Protocol...</p>
+      <div className="flex flex-col h-screen bg-background items-center justify-center p-6 text-center space-y-6">
+        <div className="w-20 h-20 rounded-3xl bg-danger/10 flex items-center justify-center text-danger border border-danger/20">
+          <AlertCircle className="w-10 h-10" />
+        </div>
+        <div className="space-y-2">
+          <h2 className="text-2xl font-bold font-headline">Ledger Synchronization Error</h2>
+          <p className="text-muted-foreground text-sm max-w-xs mx-auto">
+            The operator is unable to connect to the data ledger. Please check your network or configuration protocol.
+          </p>
+        </div>
+        <Button onClick={() => window.location.reload()} className="rounded-xl font-bold uppercase tracking-widest text-[10px]">
+          Retry Connection
+        </Button>
       </div>
     );
   }
@@ -248,7 +266,7 @@ function ChatContent() {
         className="flex-1 overflow-y-auto pt-24 pb-40 px-6 md:px-12 lg:px-24 xl:px-48 space-y-12"
       >
         <AnimatePresence initial={false}>
-          {Array.isArray(localMessages) ? localMessages
+          {(Array.isArray(localMessages) ? localMessages : [])
             .filter(msg => msg && msg.id)
             .map((msg) => (
             <motion.div
@@ -287,7 +305,7 @@ function ChatContent() {
                     </div>
 
                     <div className="grid gap-3">
-                      {Array.isArray(msg.data.detectedItems) ? msg.data.detectedItems
+                      {(Array.isArray(msg.data.detectedItems) ? msg.data.detectedItems : [])
                         .filter((item: any) => item && item.title)
                         .slice(0, 3)
                         .map((item: any, idx: number) => (
@@ -305,13 +323,13 @@ function ChatContent() {
                           </div>
                           <ChevronRight className="w-4 h-4 text-muted-foreground opacity-50" />
                         </div>
-                      )) : null}
+                      ))}
                     </div>
                   </motion.div>
                 )}
               </div>
             </motion.div>
-          )) : null}
+          ))}
         </AnimatePresence>
 
         {isProcessing && (

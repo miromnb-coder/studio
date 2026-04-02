@@ -7,7 +7,7 @@ import { getFirestore } from 'firebase/firestore';
 
 // IMPORTANT: DO NOT MODIFY THIS FUNCTION
 export function initializeFirebase() {
-  // Check for existing app instance first
+  // Check for existing app instance first to prevent double initialization
   if (getApps().length > 0) {
     return getSdks(getApp());
   }
@@ -21,7 +21,7 @@ export function initializeFirebase() {
     return getSdks(firebaseApp);
   } catch (e) {
     if (isApiKeyMissing) {
-      console.warn('Firebase API Key is missing. Returning placeholder SDKs to prevent boot crash.');
+      console.warn('CRITICAL: Firebase API Key is missing (NEXT_PUBLIC_FIREBASE_API_KEY). Returning placeholder SDKs.');
     } else {
       console.error('Firebase Initialization Error:', e);
     }
