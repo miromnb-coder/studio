@@ -1,3 +1,5 @@
+"use client";
+
 import Link from 'next/link';
 import { Navbar } from '@/components/layout/Navbar';
 import { Button } from '@/components/ui/button';
@@ -10,17 +12,38 @@ import {
   ChevronRight,
   Zap,
   DollarSign,
-  ArrowUpRight
+  ArrowUpRight,
+  Loader2
 } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
+import { useUser, useFirestore, useCollection, useMemoFirebase } from '@/firebase';
+import { collection, query, orderBy, limit } from 'firebase/firestore';
 
 export default function DashboardPage() {
-  // Mock data for dashboard
-  const activeSubs = [
-    { name: 'Adobe CC', amount: 54.99, date: 'Mar 24', status: 'Active' },
-    { name: 'Spotify Family', amount: 15.99, date: 'Mar 28', status: 'Renewal' },
-    { name: 'Amazon Prime', amount: 12.99, date: 'Apr 02', status: 'Trial Ending' },
-  ];
+  const { user, isUserLoading } = useUser();
+  const db = useFirestore();
+
+  const analysesQuery = useMemoFirebase(() => {
+    if (!db || !user) return null;
+    return query(
+      collection(db, 'users', user.uid, 'analyses'),
+      orderBy('createdAt', 'desc'),
+      limit(5)
+    );
+  }, [db, user]);
+
+  const { data: analyses, isLoading: isAnalysesLoading } = useCollection(analysesQuery);
+
+  const totalSavings = analyses?.reduce((acc, a) => acc + (a.estimatedMonthlySavings || 0), 0) || 0;
+
+  if (isUserLoading || isAnalysesLoading) {
+    return (
+      <div className="min-h-screen bg-background flex flex-col items-center justify-center">
+        <Loader2 className="w-8 h-8 animate-spin text-primary" />
+        <p className="mt-4 text-muted-foreground">Loading your dashboard...</p>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-background pb-12">
@@ -49,15 +72,15 @@ export default function DashboardPage() {
             <div className="relative space-y-4">
               <p className="text-sm font-medium uppercase tracking-widest text-primary">Monthly Potential Savings</p>
               <div className="flex items-baseline gap-2">
-                <span className="text-6xl font-bold font-headline">$142.50</span>
+                <span className="text-6xl font-bold font-headline">${totalSavings.toFixed(2)}</span>
                 <span className="text-success flex items-center text-sm font-bold">
                   <ArrowUpRight className="w-4 h-4" />
-                  +12% vs last month
+                  Live results
                 </span>
               </div>
-              <p className="text-muted-foreground max-w-md">We've identified 4 new items that could be optimized to lower your monthly burn rate.</p>
+              <p className="text-muted-foreground max-w-md">We've identified several items across your recent analyses that could be optimized to lower your monthly burn rate.</p>
               <Button asChild variant="secondary" className="rounded-full bg-white/5 border border-white/5 hover:bg-white/10 transition-all">
-                <Link href="/history">View findings</Link>
+                <Link href="/history">View all findings</Link>
               </Button>
             </div>
           </div>
@@ -67,50 +90,62 @@ export default function DashboardPage() {
               <div className="w-12 h-12 rounded-xl bg-accent/10 flex items-center justify-center text-accent">
                 <AlertTriangle className="w-6 h-6" />
               </div>
-              <h3 className="text-xl font-bold font-headline">Urgent Alerts</h3>
-              <p className="text-sm text-muted-foreground">2 trials ending within 48 hours. Cancel now to avoid being charged.</p>
+              <h3 className="text-xl font-bold font-headline">Recent Activity</h3>
+              <p className="text-sm text-muted-foreground">
+                {analyses && analyses.length > 0 
+                  ? `You have ${analyses.length} recent financial analyses.` 
+                  : "Start your first analysis to see savings opportunities."}
+              </p>
             </div>
-            <Button variant="link" className="p-0 text-accent h-auto justify-start font-bold group">
-              Resolve now
-              <ChevronRight className="ml-1 w-4 h-4 group-hover:translate-x-1 transition-transform" />
+            <Button variant="link" className="p-0 text-accent h-auto justify-start font-bold group" asChild>
+              <Link href="/history">
+                View history
+                <ChevronRight className="ml-1 w-4 h-4 group-hover:translate-x-1 transition-transform" />
+              </Link>
             </Button>
           </div>
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-          {/* Active Subscriptions */}
+          {/* Recent Analyses */}
           <div className="lg:col-span-2 space-y-4">
             <div className="flex items-center justify-between px-2">
-              <h3 className="text-xl font-bold font-headline">Active Items Detected</h3>
-              <Link href="#" className="text-sm text-muted-foreground hover:text-primary transition-colors">View all</Link>
+              <h3 className="text-xl font-bold font-headline">Recent Analyses</h3>
+              <Link href="/history" className="text-sm text-muted-foreground hover:text-primary transition-colors">View all</Link>
             </div>
             <div className="premium-card overflow-hidden">
               <div className="divide-y divide-white/5">
-                {activeSubs.map((sub, i) => (
-                  <div key={i} className="p-4 md:p-6 flex items-center justify-between hover:bg-white/[0.02] transition-colors group">
+                {analyses && analyses.map((analysis, i) => (
+                  <Link key={analysis.id} href={`/results/${analysis.id}`} className="p-4 md:p-6 flex items-center justify-between hover:bg-white/[0.02] transition-colors group block">
                     <div className="flex items-center gap-4">
                       <div className="w-10 h-10 rounded-lg bg-white/5 flex items-center justify-center border border-white/5 font-bold text-xs">
-                        {sub.name.charAt(0)}
+                        {analysis.title.charAt(0)}
                       </div>
                       <div>
-                        <p className="font-bold">{sub.name}</p>
-                        <p className="text-xs text-muted-foreground">Renewing {sub.date}</p>
+                        <p className="font-bold">{analysis.title}</p>
+                        <p className="text-xs text-muted-foreground">{new Date(analysis.analysisDate).toLocaleDateString()}</p>
                       </div>
                     </div>
                     <div className="flex items-center gap-6">
                       <div className="text-right hidden sm:block">
-                        <p className="font-bold">${sub.amount}</p>
-                        <p className="text-[10px] text-muted-foreground uppercase tracking-tighter">Monthly</p>
+                        <p className="font-bold text-success">+${analysis.estimatedMonthlySavings.toFixed(2)}</p>
+                        <p className="text-[10px] text-muted-foreground uppercase tracking-tighter">Savings</p>
                       </div>
-                      <Badge variant={sub.status === 'Trial Ending' ? 'destructive' : 'secondary'} className="rounded-full px-3 py-1 text-[10px] font-bold uppercase">
-                        {sub.status}
+                      <Badge variant="secondary" className="rounded-full px-3 py-1 text-[10px] font-bold uppercase">
+                        {analysis.status}
                       </Badge>
-                      <Button variant="ghost" size="icon" className="rounded-full text-muted-foreground group-hover:text-foreground">
-                        <ChevronRight className="w-5 h-5" />
-                      </Button>
+                      <ChevronRight className="w-5 h-5 text-muted-foreground group-hover:text-foreground" />
                     </div>
-                  </div>
+                  </Link>
                 ))}
+                {(!analyses || analyses.length === 0) && (
+                  <div className="p-12 text-center space-y-4">
+                    <p className="text-muted-foreground">No analyses found yet.</p>
+                    <Button asChild variant="outline" className="rounded-full">
+                      <Link href="/analyze">Run First Analysis</Link>
+                    </Button>
+                  </div>
+                )}
               </div>
             </div>
           </div>
@@ -125,18 +160,17 @@ export default function DashboardPage() {
                   <span className="text-sm font-bold uppercase tracking-wider">Quick Win</span>
                 </div>
                 <p className="text-sm leading-relaxed">
-                  You have <span className="text-foreground font-bold">2 duplicate streaming charges</span> for Spotify. Cancelling one will save you <span className="text-foreground font-bold">$15.99/mo</span> immediately.
+                  Your rule-based engine is scanning for patterns. Upload a new statement to see immediate results.
                 </p>
-                <Button size="sm" className="w-full rounded-full bg-primary text-background font-bold">Generate Message</Button>
               </div>
 
               <div className="premium-card p-6 border-white/10 space-y-4">
                 <div className="flex items-center gap-2 text-success">
                   <CheckCircle2 className="w-5 h-5" />
-                  <span className="text-sm font-bold uppercase tracking-wider">On Track</span>
+                  <span className="text-sm font-bold uppercase tracking-wider">Status</span>
                 </div>
                 <p className="text-sm leading-relaxed text-muted-foreground">
-                  Your monthly subscription burn rate is <span className="text-foreground font-bold">15% lower</span> than typical users in your demographic.
+                  Proactive monitoring is enabled. Your financial data is stored securely in Firestore.
                 </p>
               </div>
             </div>

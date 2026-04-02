@@ -10,6 +10,8 @@ import { Input } from '@/components/ui/input';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Camera, FileText, Upload, Plus, AlertCircle, Loader2 } from 'lucide-react';
 import { AnalysisService } from '@/services/analysis-service';
+import { useFirestore, useUser, addDocumentNonBlocking } from '@/firebase';
+import { collection, serverTimestamp } from 'firebase/firestore';
 
 export default function AnalyzePage() {
   const [loading, setLoading] = useState(false);
@@ -17,6 +19,8 @@ export default function AnalyzePage() {
   const [file, setFile] = useState<File | null>(null);
   const [preview, setPreview] = useState<string | null>(null);
   const router = useRouter();
+  const db = useFirestore();
+  const { user } = useUser();
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const selectedFile = e.target.files?.[0];
@@ -31,17 +35,50 @@ export default function AnalyzePage() {
   };
 
   const handleSubmit = async () => {
+    if (!user || !db) return;
     setLoading(true);
+    
     try {
-      // In a real app, we'd upload to Firebase Storage here
-      // const analysis = await AnalysisService.analyze({ documentText: textInput, imageDataUri: preview || undefined });
+      // Execute rule-based analysis
+      const analysisResult = await AnalysisService.analyze({ 
+        documentText: textInput, 
+        imageDataUri: preview || undefined 
+      });
+
+      const analysesRef = collection(db, 'users', user.uid, 'analyses');
       
-      // Simulate API delay
-      await new Promise(r => setTimeout(r, 2000));
-      
-      // Navigate to a mock results page or create a record in Firestore
-      // For this demo, we'll just redirect to dashboard with a mock query
-      router.push('/dashboard?new_analysis=true');
+      const analysisData = {
+        userId: user.uid,
+        title: analysisResult.title,
+        summary: analysisResult.summary,
+        estimatedMonthlySavings: analysisResult.savingsEstimate,
+        analysisDate: new Date().toISOString(),
+        status: 'completed',
+        inputMethod: textInput ? 'pasted_text' : 'screenshot',
+        inputContent: textInput || '',
+        detectedItemIds: [], // We'll store items as subcollection but track IDs here if needed
+        beforeComparison: JSON.stringify(analysisResult.beforeAfterComparison),
+        afterComparison: JSON.stringify(analysisResult.beforeAfterComparison), // Simplified for MVP
+        createdAt: serverTimestamp(),
+      };
+
+      const docRefPromise = addDocumentNonBlocking(analysesRef, analysisData);
+      const docRef = await docRefPromise;
+
+      if (docRef) {
+        // Save detected items as subcollection
+        const itemsRef = collection(db, 'users', user.uid, 'analyses', docRef.id, 'detected_items');
+        for (const item of analysisResult.detectedItems) {
+          addDocumentNonBlocking(itemsRef, {
+            ...item,
+            userId: user.uid,
+            analysisId: docRef.id,
+            status: 'active',
+            recommendedActionIds: [],
+          });
+        }
+        router.push(`/results/${docRef.id}`);
+      }
     } catch (err) {
       console.error(err);
     } finally {

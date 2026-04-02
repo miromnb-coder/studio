@@ -1,27 +1,53 @@
+"use client";
+
 import Link from 'next/link';
 import { Navbar } from '@/components/layout/Navbar';
 import { 
-  History, 
+  History as HistoryIcon, 
   Calendar, 
   ChevronRight, 
   Search,
   Filter,
   FileText,
   TrendingUp,
-  ExternalLink
+  ExternalLink,
+  Loader2
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
+import { useUser, useFirestore, useCollection, useMemoFirebase } from '@/firebase';
+import { collection, query, orderBy } from 'firebase/firestore';
+import { useState } from 'react';
 
 export default function HistoryPage() {
-  const historyItems = [
-    { id: '1', date: 'Oct 24, 2024', title: 'Monthly Statement Audit', savings: 142.50, items: 4, type: 'Manual' },
-    { id: '2', date: 'Oct 15, 2024', title: 'Streaming Review', savings: 15.99, items: 1, type: 'Screenshot' },
-    { id: '3', date: 'Oct 02, 2024', title: 'Bank Fees Check', savings: 12.00, items: 2, type: 'Screenshot' },
-    { id: '4', date: 'Sep 28, 2024', title: 'Q3 Subscription Cleanup', savings: 85.00, items: 6, type: 'Manual' },
-    { id: '5', date: 'Sep 12, 2024', title: 'Hulu Price Increase Alert', savings: 5.00, items: 1, type: 'Text' },
-  ];
+  const { user, isUserLoading } = useUser();
+  const db = useFirestore();
+  const [searchTerm, setSearchTerm] = useState('');
+
+  const analysesQuery = useMemoFirebase(() => {
+    if (!db || !user) return null;
+    return query(
+      collection(db, 'users', user.uid, 'analyses'),
+      orderBy('createdAt', 'desc')
+    );
+  }, [db, user]);
+
+  const { data: analyses, isLoading: isAnalysesLoading } = useCollection(analysesQuery);
+
+  const filteredAnalyses = analyses?.filter(a => 
+    a.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    a.summary.toLowerCase().includes(searchTerm.toLowerCase())
+  );
+
+  if (isUserLoading || isAnalysesLoading) {
+    return (
+      <div className="min-h-screen bg-background flex flex-col items-center justify-center">
+        <Loader2 className="w-8 h-8 animate-spin text-primary" />
+        <p className="mt-4 text-muted-foreground">Loading history...</p>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-background">
@@ -41,6 +67,8 @@ export default function HistoryPage() {
             <Input 
               placeholder="Search past analyses..." 
               className="pl-10 bg-white/5 border-white/5 rounded-full h-11"
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
             />
           </div>
           <Button variant="outline" className="rounded-full h-11 border-white/5 bg-white/5 gap-2 px-6">
@@ -50,7 +78,7 @@ export default function HistoryPage() {
         </div>
 
         <div className="space-y-4">
-          {historyItems.map((item, i) => (
+          {filteredAnalyses && filteredAnalyses.map((item, i) => (
             <Link 
               key={item.id} 
               href={`/results/${item.id}`}
@@ -66,22 +94,22 @@ export default function HistoryPage() {
                     <div className="flex items-center gap-3 text-xs text-muted-foreground">
                       <span className="flex items-center gap-1">
                         <Calendar className="w-3 h-3" />
-                        {item.date}
+                        {new Date(item.analysisDate).toLocaleDateString()}
                       </span>
                       <span className="w-1 h-1 rounded-full bg-white/20" />
-                      <span>{item.items} findings detected</span>
+                      <span>{item.status}</span>
                     </div>
                   </div>
                 </div>
                 
                 <div className="flex items-center justify-between sm:justify-end gap-6 border-t sm:border-t-0 pt-4 sm:pt-0 border-white/5">
                   <div className="text-right">
-                    <p className="text-sm font-medium text-muted-foreground uppercase tracking-wider">Saved</p>
-                    <p className="text-xl font-bold text-success">+${item.savings.toFixed(2)}</p>
+                    <p className="text-sm font-medium text-muted-foreground uppercase tracking-wider">Potential Savings</p>
+                    <p className="text-xl font-bold text-success">+${item.estimatedMonthlySavings.toFixed(2)}</p>
                   </div>
                   <div className="flex items-center gap-3">
                     <Badge variant="secondary" className="bg-white/5 text-[10px] uppercase font-bold tracking-tight">
-                      {item.type}
+                      {item.inputMethod}
                     </Badge>
                     <ChevronRight className="w-5 h-5 text-muted-foreground group-hover:text-foreground transition-all group-hover:translate-x-1" />
                   </div>
@@ -89,11 +117,16 @@ export default function HistoryPage() {
               </div>
             </Link>
           ))}
+          {(!filteredAnalyses || filteredAnalyses.length === 0) && (
+            <div className="p-12 text-center border rounded-xl border-dashed">
+              <p className="text-muted-foreground">No analyses found match your search.</p>
+            </div>
+          )}
         </div>
 
         <div className="pt-8 text-center">
           <Button variant="ghost" className="text-muted-foreground hover:text-foreground">
-            Load more activity
+            No more activity
           </Button>
         </div>
       </main>
