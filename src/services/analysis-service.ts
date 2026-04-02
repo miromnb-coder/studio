@@ -1,4 +1,3 @@
-
 import { analyzeFinancialDocument, AnalyzeFinancialDocumentOutput } from '@/ai/flows/analyze-financial-document';
 
 export interface AnalysisInput {
@@ -11,6 +10,7 @@ export interface AnalysisInput {
 
 /**
  * Service layer to handle universal assistant logic with memory.
+ * Cleaned for production deployment.
  */
 export class AnalysisService {
   static async analyze(input: AnalysisInput): Promise<AnalyzeFinancialDocumentOutput> {
@@ -20,7 +20,6 @@ export class AnalysisService {
     ].filter(Boolean).join('\n\n');
 
     try {
-      // Pass directly to the universal AI flow with history context
       const result = await analyzeFinancialDocument({
         imageDataUri: input.imageDataUri,
         documentText: combinedText || "Visual source uploaded.",
@@ -29,7 +28,6 @@ export class AnalysisService {
 
       return result;
     } catch (error) {
-      console.error('Operator Logic Interruption:', error);
       return {
         title: "Operator Connection",
         summary: "I'm having a brief connection issue. Please try again.",

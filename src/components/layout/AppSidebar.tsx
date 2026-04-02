@@ -1,4 +1,3 @@
-
 "use client";
 
 import { useEffect, useState } from 'react';
@@ -50,7 +49,6 @@ export function AppSidebar() {
         limit(20)
       );
     } catch (e) {
-      console.error('Sidebar Intelligence Query Error:', e);
       return null;
     }
   }, [db, user]);
@@ -64,7 +62,6 @@ export function AppSidebar() {
     { icon: Settings, href: '/settings', label: 'Sync' },
   ];
 
-  // HARD HYDRATION GUARD
   if (!mounted) {
     return (
       <Sidebar className="border-r border-white/5 bg-[#19191C]">
@@ -102,7 +99,13 @@ export function AppSidebar() {
         </SidebarGroup>
 
         <SidebarGroup className="mt-4">
-          <SidebarGroupLabel className="px-4 text-[10px] font-bold uppercase tracking-widest text-muted-foreground/50">Recent Intelligence</SidebarGroupLabel>
+          <div className="flex items-center justify-between px-4 mb-2">
+            <SidebarGroupLabel className="p-0 text-[10px] font-bold uppercase tracking-widest text-muted-foreground/50">Recent Intelligence</SidebarGroupLabel>
+            <div className="flex items-center gap-1.5">
+              <div className="w-1 h-1 rounded-full bg-success animate-pulse" />
+              <span className="text-[8px] font-bold uppercase tracking-[0.2em] text-success/50">Live</span>
+            </div>
+          </div>
           <SidebarMenu className="px-2 space-y-1">
             {isLoading ? (
               <div className="flex justify-center py-4">
@@ -110,7 +113,7 @@ export function AppSidebar() {
               </div>
             ) : (conversations || []).length > 0 ? (
               (conversations || [])
-                .filter(conv => conv && conv.id) // DATA VALIDATION: Skip corrupted docs
+                .filter(conv => conv && conv.id)
                 .map((conv) => (
                   <SidebarMenuItem key={conv.id}>
                     <SidebarMenuButton 
@@ -128,8 +131,18 @@ export function AppSidebar() {
                     </SidebarMenuButton>
                   </SidebarMenuItem>
                 ))
-            ) : !isLoading && (
-              <p className="px-4 py-2 text-[10px] text-muted-foreground/30 italic uppercase tracking-widest">No records found</p>
+            ) : (
+              <div className="px-4 py-6 text-center">
+                <p className="text-[10px] text-muted-foreground/30 italic uppercase tracking-widest mb-4">No records found</p>
+                <Button 
+                  variant="ghost" 
+                  size="sm" 
+                  onClick={() => router.push('/')}
+                  className="h-7 text-[9px] font-bold uppercase tracking-widest text-primary/50 hover:text-primary hover:bg-primary/5 rounded-lg"
+                >
+                  Initialize Session
+                </Button>
+              </div>
             )}
           </SidebarMenu>
         </SidebarGroup>
@@ -173,7 +186,7 @@ export function AppSidebar() {
           </div>
           <div className="flex-1 min-w-0">
             <p className="text-xs font-bold text-white truncate">{user?.displayName || 'Operator User'}</p>
-            <p className="text-[10px] font-medium text-muted-foreground truncate">Operator V1.5 IQ-Active</p>
+            <p className="text-[10px] font-medium text-muted-foreground truncate">V1.5 High-IQ Ready</p>
           </div>
         </div>
       </SidebarFooter>

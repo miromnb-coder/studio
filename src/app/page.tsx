@@ -1,4 +1,3 @@
-
 "use client";
 
 import { useState, useRef, useEffect, Suspense } from 'react';
@@ -56,7 +55,6 @@ function ChatContent() {
   const searchParams = useSearchParams();
   const conversationId = searchParams?.get('c');
 
-  // STABILITY: Initialize local messages as empty to prevent hydration mismatch
   const [localMessages, setLocalMessages] = useState<Message[]>([]);
 
   useEffect(() => {
@@ -71,7 +69,6 @@ function ChatContent() {
         orderBy('timestamp', 'asc')
       );
     } catch (e) {
-      console.error('Chat Intelligence Ledger Error:', e);
       return null;
     }
   }, [db, user, conversationId]);
@@ -82,11 +79,9 @@ function ChatContent() {
     if (!mounted) return;
 
     if (storedMessages && storedMessages.length > 0) {
-      // DATA VALIDATION: Filter out corrupt or partial messages
       const validMessages = (storedMessages || []).filter(m => m && m.id && (m.content || m.data));
       setLocalMessages(validMessages);
     } else if (!conversationId) {
-      // Set default welcome message only after mounting to prevent mismatch
       setLocalMessages([{
         id: 'welcome',
         role: 'assistant',
@@ -102,7 +97,6 @@ function ChatContent() {
     }
   }, [localMessages, isProcessing]);
 
-  // HARD HYDRATION GUARD: Prevents the "client-side exception" by not rendering dynamic content during SSR
   if (!mounted) {
     return (
       <div className="flex flex-col h-screen bg-background items-center justify-center">
@@ -134,7 +128,6 @@ function ChatContent() {
         });
         router.push(`/?c=${activeConvId}`);
       } catch (e) {
-        console.error('Audit Context Initialization Error:', e);
         return;
       }
     }
@@ -224,7 +217,7 @@ function ChatContent() {
         }
       }
     } catch (err) {
-      console.error('Operator Logic Exception:', err);
+      // Logic for error messaging is handled within the service to prevent raw exposure
     } finally {
       setIsProcessing(false);
     }
@@ -321,7 +314,7 @@ function ChatContent() {
           >
             <div className="flex items-center gap-3 p-5 rounded-[24px] bg-white/[0.03] border border-white/5 rounded-tl-none">
               <Loader2 className="w-4 h-4 text-primary animate-spin" />
-              <span className="text-sm font-medium text-muted-foreground italic">Operator is applying High-IQ logic...</span>
+              <span className="text-sm font-medium text-muted-foreground italic">Operator applying High-IQ logic...</span>
             </div>
             
             <div className="w-full max-w-xs space-y-4 pl-4 border-l-2 border-white/5">

@@ -1,4 +1,3 @@
-
 "use client";
 
 import { useState, useEffect } from 'react';
@@ -37,7 +36,6 @@ export default function DashboardPage() {
         limit(5)
       );
     } catch (e) {
-      console.error('Dashboard Query Error:', e);
       return null;
     }
   }, [db, user]);
