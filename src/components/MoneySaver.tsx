@@ -8,8 +8,8 @@ import { Textarea } from '@/components/ui/textarea';
 import { AnalysisService } from '@/services/analysis-service';
 import { useFirestore, useUser, addDocumentNonBlocking } from '@/firebase';
 import { collection, serverTimestamp } from 'firebase/firestore';
+import { Loader2, Zap, Sparkles, ArrowRight } from 'lucide-react';
 import { motion } from 'framer-motion';
-import { Loader2, Zap, Sparkles } from 'lucide-react';
 
 export function MoneySaver() {
   const [loading, setLoading] = useState(false);
@@ -19,7 +19,10 @@ export function MoneySaver() {
   const { user } = useUser();
 
   const handleSaveMoney = async () => {
-    if (!user || !db || !text) return;
+    if (!user || !db || !text) {
+      if (!user) router.push('/login');
+      return;
+    }
     setLoading(true);
 
     try {
@@ -36,7 +39,7 @@ export function MoneySaver() {
         estimatedMonthlySavings: result.savingsEstimate,
         analysisDate: new Date().toISOString(),
         status: 'completed',
-        inputMethod: 'money_saver_tool',
+        inputMethod: 'savings_dashboard',
         inputContent: text,
         beforeComparison: JSON.stringify(result.beforeAfterComparison),
         createdAt: serverTimestamp(),
@@ -62,33 +65,30 @@ export function MoneySaver() {
 
   return (
     <div className="space-y-8">
-      <div className="space-y-2">
-        <h2 className="text-3xl font-bold font-headline flex items-center gap-3">
-          <Sparkles className="w-8 h-8 text-primary" />
-          Money Saver
-        </h2>
-        <p className="text-muted-foreground font-medium">Paste your bank statement or subscription list below.</p>
-      </div>
-
-      <Card className="premium-card !p-0 overflow-hidden border-primary/10 shadow-2xl shadow-primary/5">
+      <Card className="premium-card !p-0 overflow-hidden border-primary/20 shadow-[0_64px_128px_-12px_rgba(148,148,247,0.15)] bg-card/50 backdrop-blur-xl">
         <Textarea 
-          placeholder="e.g., Netflix €19.99, Spotify Premium €10.99, Amazon Prime..." 
-          className="min-h-[300px] border-0 focus-visible:ring-0 p-8 text-xl leading-relaxed bg-transparent resize-none font-medium placeholder:text-muted-foreground/20"
+          placeholder="Paste bank statement logs, renewal receipts, or just list your subscriptions here (e.g., Netflix $19.99)..." 
+          className="min-h-[400px] border-0 focus-visible:ring-0 p-12 text-2xl leading-relaxed bg-transparent resize-none font-medium placeholder:text-muted-foreground/20"
           value={text}
           onChange={(e) => setText(e.target.value)}
         />
-        <div className="p-6 bg-white/[0.02] border-t border-white/5 flex justify-end">
+        <div className="p-8 bg-white/[0.02] border-t border-white/5 flex flex-col md:flex-row items-center justify-between gap-8">
+          <div className="flex items-center gap-4 text-[10px] font-bold uppercase tracking-[0.2em] text-muted-foreground/60">
+            <Sparkles className="w-4 h-4 text-primary" />
+            Llama 3 Auditing Active
+          </div>
           <Button 
             disabled={!text || loading}
             onClick={handleSaveMoney}
-            className="h-14 px-10 rounded-2xl text-lg font-bold shadow-xl shadow-primary/20 group"
+            className="w-full md:w-auto h-20 px-16 rounded-[24px] text-xl font-bold shadow-2xl shadow-primary/20 group transition-all hover:scale-[1.02]"
           >
             {loading ? (
-              <Loader2 className="w-5 h-5 animate-spin mr-2" />
+              <Loader2 className="w-6 h-6 animate-spin mr-3" />
             ) : (
-              <Zap className="w-5 h-5 mr-2 text-background fill-background group-hover:scale-110 transition-transform" />
+              <Zap className="w-6 h-6 mr-3 text-background fill-background group-hover:scale-110 transition-transform" />
             )}
-            {loading ? 'Analyzing...' : 'Save Me Money'}
+            {loading ? 'Auditing...' : 'Analyze & Save Money'}
+            {!loading && <ArrowRight className="ml-3 w-6 h-6 group-hover:translate-x-1 transition-transform" />}
           </Button>
         </div>
       </Card>

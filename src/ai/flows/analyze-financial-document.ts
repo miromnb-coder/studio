@@ -1,23 +1,17 @@
 'use server';
 /**
- * @fileOverview An AI agent that analyzes financial documents using Groq Llama 3.
+ * @fileOverview A "Predatory Subscription Hunter" AI agent.
  *
- * - analyzeFinancialDocument - A function that handles the financial document analysis process via Groq.
- * - AnalyzeFinancialDocumentInput - The input type for the analyzeFinancialDocument function.
- * - AnalyzeFinancialDocumentOutput - The return type for the analyzeFinancialDocument function.
+ * - analyzeFinancialDocument - Handles deep financial analysis via Groq Llama 3.
  */
 
 import {ai} from '@/ai/genkit';
 import {z} from 'genkit';
 import Groq from 'groq-sdk';
 
-const groq = new Groq({
-  apiKey: process.env.GROQ_API_KEY,
-});
-
 const DetectedItemSchema = z.object({
-  title: z.string().describe('A concise title for the detected item.'),
-  summary: z.string().describe('A brief summary of the detected item.'),
+  title: z.string().describe('The name of the service (e.g., Netflix).'),
+  summary: z.string().describe('Why this is a bad deal or where to get it cheaper.'),
   type: z.enum([
     'subscription',
     'recurring_charge',
@@ -27,94 +21,72 @@ const DetectedItemSchema = z.object({
     'unusual_spending',
     'savings_opportunity',
     'duplicate_charge'
-  ]).describe('The type of financial finding.'),
-  estimatedSavings: z.number().optional().describe('Estimated monthly savings in USD for this item, if applicable.'),
-  alternativeSuggestion: z.string().optional().describe('A cheaper alternative or a note if the service is known to be overpriced.'),
-  urgencyLevel: z.enum(['low', 'medium', 'high', 'urgent']).describe('How urgent this finding is.'),
-  confidence: z.enum(['low', 'medium', 'high']).describe('Confidence level of the detection.'),
-  recommendedAction: z.string().describe('A recommended action for the user.'),
-  copyableMessage: z.string().optional().describe('A copyable message related to the action, e.g., cancellation or price-match email text.'),
-  nextSteps: z.array(z.string()).describe('A list of concrete next steps.'),
+  ]),
+  estimatedSavings: z.number().describe('Monthly USD savings.'),
+  alternativeSuggestion: z.string().optional().describe('Direct name of a cheaper competitor.'),
+  alternativeLink: z.string().optional().describe('A URL to the alternative or a search query link.'),
+  urgencyLevel: z.enum(['low', 'medium', 'high', 'urgent']),
+  copyableMessage: z.string().describe('A professional cancellation or negotiation script.'),
+  actionLabel: z.string().describe('Label for the magic button (e.g., "Draft Cancellation").'),
 });
 
-const BeforeAfterComparisonSchema = z.object({
-  currentSituation: z.string().describe('Description of the current financial situation related to the analysis.'),
-  optimizedSituation: z.string().describe('Description of the optimized financial situation after taking recommended actions.'),
-  estimatedMonthlySavingsDifference: z.number().describe('The overall estimated monthly savings difference in USD.'),
+const AnalyzeFinancialDocumentInputSchema = z.object({
+  imageDataUri: z.string().optional(),
+  documentText: z.string().optional(),
+}).refine(data => data.imageDataUri || data.documentText);
+
+const AnalyzeFinancialDocumentOutputSchema = z.object({
+  title: z.string(),
+  summary: z.string(),
+  detectedItems: z.array(DetectedItemSchema),
+  savingsEstimate: z.number(),
+  beforeAfterComparison: z.object({
+    currentSituation: z.string(),
+    optimizedSituation: z.string(),
+  }),
 });
 
-export const AnalyzeFinancialDocumentInputSchema = z.object({
-  imageDataUri: z
-    .string()
-    .optional()
-    .describe(
-      "Optional: A screenshot or image of a bill/statement."
-    ),
-  documentText: z
-    .string()
-    .optional()
-    .describe('Optional: Pasted text from a bill, statement, or manual notes.'),
-}).refine(
-  (data) => data.imageDataUri || data.documentText,
-  "Either imageDataUri or documentText must be provided."
-);
-export type AnalyzeFinancialDocumentInput = z.infer<typeof AnalyzeFinancialDocumentInputSchema>;
-
-export const AnalyzeFinancialDocumentOutputSchema = z.object({
-  title: z.string().describe('A title for the overall analysis report.'),
-  summary: z.string().describe('A high-level summary of all findings.'),
-  detectedItems: z.array(DetectedItemSchema).describe('A list of individual financial findings.'),
-  savingsEstimate: z.number().describe('Total estimated monthly savings in USD across all findings.'),
-  urgencyLevel: z.enum(['low', 'medium', 'high', 'urgent']).describe('Overall urgency level of the analysis.'),
-  confidence: z.enum(['low', 'medium', 'high']).describe('Overall confidence level of the analysis.'),
-  recommendedActions: z.array(z.string()).describe('Overall recommended actions for the user.'),
-  copyableMessages: z.array(z.string()).optional().describe('Overall copyable messages, if any, for the user.'),
-  nextSteps: z.array(z.string()).describe('Overall concrete next steps for the user.'),
-  beforeAfterComparison: BeforeAfterComparisonSchema.describe('Comparison of the financial situation before and after recommended actions.'),
-});
 export type AnalyzeFinancialDocumentOutput = z.infer<typeof AnalyzeFinancialDocumentOutputSchema>;
 
-/**
- * analyzeFinancialDocument logic powered by Groq Llama 3.
- */
-export async function analyzeFinancialDocument(input: AnalyzeFinancialDocumentInput): Promise<AnalyzeFinancialDocumentOutput> {
-  const prompt = `You are an expert financial "Agentic Money Saver". Analyze the following financial data.
-Your goal is to:
-1. Identify recurring subscriptions and charges.
-2. Suggest cheaper alternatives or identify if a service is overpriced compared to market rates.
-3. Draft professional 'Cancellation' or 'Price Match' emails for the user to copy.
+export async function analyzeFinancialDocument(input: z.infer<typeof AnalyzeFinancialDocumentInputSchema>): Promise<AnalyzeFinancialDocumentOutput> {
+  const apiKey = process.env.GROQ_API_KEY;
+  
+  if (!apiKey) {
+    throw new Error('GROQ_API_KEY is missing. Please add it to your environment variables or .env file.');
+  }
+
+  const groq = new Groq({
+    apiKey: apiKey,
+  });
+
+  const prompt = `You are a "Predatory Subscription Hunter". Your goal is to find EVERY cent of waste in the following data.
+Be aggressive. If a service is overpriced compared to market rates, call it out. 
+If there's a cheaper alternative (e.g., Free tiers, family plans, competitors), provide it.
 
 Data:
-${input.documentText || "No text provided. (Image input detected, please extract text if possible)"}
+${input.documentText || "Image detected."}
 
-Return your findings in a strict JSON format matching this schema:
+Return a JSON object:
 {
-  "title": string,
-  "summary": string,
+  "title": "Monthly Waste Audit",
+  "summary": "High-level summary of the bleed.",
   "detectedItems": [
     {
       "title": string,
-      "summary": string,
-      "type": "subscription" | "recurring_charge" | "hidden_fee" | "trial_ending" | "price_increase" | "unusual_spending" | "savings_opportunity" | "duplicate_charge",
+      "summary": "Specific predatory detail about this charge.",
+      "type": "subscription" | "recurring_charge" | ...,
       "estimatedSavings": number,
-      "alternativeSuggestion": string (e.g. "Switch to Hulu for $7.99" or "Use free Tier"),
-      "urgencyLevel": "low" | "medium" | "high" | "urgent",
-      "confidence": "low" | "medium" | "high",
-      "recommendedAction": string,
-      "copyableMessage": string (Draft a professional email for cancellation or negotiation),
-      "nextSteps": [string]
+      "alternativeSuggestion": "Switch to [Competitor]",
+      "alternativeLink": "https://google.com/search?q=[Competitor]",
+      "urgencyLevel": "urgent",
+      "copyableMessage": "Draft a professional but firm cancellation or price-match email.",
+      "actionLabel": "Generate Cancellation Email"
     }
   ],
   "savingsEstimate": number,
-  "urgencyLevel": "low" | "medium" | "high" | "urgent",
-  "confidence": "low" | "medium" | "high",
-  "recommendedActions": [string],
-  "copyableMessages": [string],
-  "nextSteps": [string],
   "beforeAfterComparison": {
-    "currentSituation": string,
-    "optimizedSituation": string,
-    "estimatedMonthlySavingsDifference": number
+    "currentSituation": "Description of the current bleed.",
+    "optimizedSituation": "Description of the future state."
   }
 }`;
 
@@ -122,7 +94,7 @@ Return your findings in a strict JSON format matching this schema:
     messages: [
       {
         role: 'system',
-        content: 'You are a financial optimization AI specializing in detecting waste and finding cheaper alternatives. Always output valid JSON.',
+        content: 'You are a elite financial optimization AI. You excel at detecting waste and finding cheaper alternatives. Always output valid JSON.',
       },
       {
         role: 'user',
