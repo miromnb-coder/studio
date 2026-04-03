@@ -1,4 +1,3 @@
-
 "use client";
 
 import { useState, useRef, useEffect, Suspense } from 'react';
@@ -237,7 +236,7 @@ function ChatContent() {
       const assistantMessage: Message = {
         id: Math.random().toString(36).substr(2, 9),
         role: 'assistant',
-        content: result?.summary || "I've analyzed the source. Here's my perspective on the current state.",
+        content: result?.summary || "I've reviewed the information provided. I'm standing by to help with any adjustments you'd like to make.",
         type: result?.isActionable ? 'analysis_result' : 'text',
         strategy: result?.strategy,
         mode: result?.mode,
@@ -257,7 +256,7 @@ function ChatContent() {
       const assistantMessage: Message = {
         id: Math.random().toString(36).substr(2, 9),
         role: 'assistant',
-        content: "I've encountered a brief interruption in my reasoning flow. My core monitoring remains active, but I'll need you to re-send that specific data if you want a detailed audit.",
+        content: "I've encountered a slight delay in processing. I'm still here to help—could you please re-share that last detail so I can finish the audit?",
         type: 'text',
         mode: 'advisor',
         timestamp: new Date(),
@@ -269,7 +268,7 @@ function ChatContent() {
         timestamp: serverTimestamp(),
       });
 
-      toast({ variant: 'destructive', title: "Intelligence Sync Failed", description: "Defaulting to advisor mode." });
+      toast({ variant: 'destructive', title: "Sync Interrupted", description: "Defaulting to safe advisor mode." });
     } finally {
       setIsProcessing(false);
     }
@@ -314,7 +313,7 @@ function ChatContent() {
                     <div className="flex items-center gap-3 mb-2 ml-1">
                       <div className="p-1.5 rounded-lg bg-white/5 border border-white/5">{getModeIcon(msg.mode)}</div>
                       <span className="text-[10px] font-bold uppercase tracking-[0.2em] text-muted-foreground/40">
-                        {msg.mode || 'Operator'} • {msg.strategy?.replace('_', ' ') || 'Protocol'}
+                        {msg.mode || 'Operator'} • {msg.strategy?.replace('_', ' ') || 'Advisor'}
                       </span>
                     </div>
                   )}
@@ -355,8 +354,8 @@ function ChatContent() {
             <div className="flex flex-col items-center justify-center h-full text-center space-y-6 opacity-20 pt-32">
               <Cpu className="w-16 h-16 text-primary" />
               <div className="space-y-2">
-                <p className="text-2xl font-bold font-headline tracking-tighter">Protocol Awaiting Intent</p>
-                <p className="text-sm font-medium uppercase tracking-[0.3em]">Operator Active • Logic Standby</p>
+                <p className="text-2xl font-bold font-headline tracking-tighter">Ready to Audit</p>
+                <p className="text-sm font-medium uppercase tracking-[0.3em]">Operator Online • Logic Engaged</p>
               </div>
             </div>
           )}
@@ -425,7 +424,7 @@ function ChatContent() {
               value={input} 
               onChange={(e) => setInput(e.target.value)} 
               onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMessage(); } }} 
-              placeholder="Command operator..." 
+              placeholder="How can I optimize your finances today?" 
               className="flex-1 border-0 focus-visible:ring-0 bg-transparent min-h-[56px] py-4 text-lg font-medium resize-none overflow-hidden text-white placeholder:text-muted-foreground/20" 
               rows={1} 
             />

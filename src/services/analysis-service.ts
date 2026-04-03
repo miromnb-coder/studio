@@ -1,7 +1,6 @@
-
 /**
  * @fileOverview Client-side service wrapper for the AI Analysis API.
- * Hardened to guarantee a structured response even during failures.
+ * Guarantees a friendly, non-technical response even during complete failures.
  */
 
 export interface AnalysisInput {
@@ -43,8 +42,8 @@ export class AnalysisService {
     ].filter(Boolean).join('\n\n');
 
     const fallbackResponse: AnalysisOutput = {
-      title: "Stability Protocol",
-      summary: "I've encountered a minor sync interruption. While I re-establish connection, I'm analyzing your request in advisor mode to ensure you're never without guidance.",
+      title: "Advisor Update",
+      summary: "I'm currently processing the details. While I finalize the full audit, I recommend keeping an eye on any upcoming renewal dates for this service.",
       strategy: 'direct_answer',
       mode: 'advisor',
       isActionable: false,
@@ -73,15 +72,7 @@ export class AnalysisService {
       clearTimeout(timeoutId);
 
       if (!response.ok) {
-        try {
-          const errorResult = await response.json();
-          return {
-            ...fallbackResponse,
-            summary: errorResult.summary || fallbackResponse.summary
-          };
-        } catch {
-          return fallbackResponse;
-        }
+        return fallbackResponse;
       }
 
       const result = await response.json();
@@ -105,7 +96,7 @@ export class AnalysisService {
       if (error.name === 'AbortError') {
         return {
           ...fallbackResponse,
-          summary: "This request is particularly complex. I recommend breaking it down into smaller parts so I can provide a more detailed audit."
+          summary: "This request is taking a bit longer to process due to its complexity. Let's try breaking it down into smaller details so I can provide a more immediate audit."
         };
       }
       

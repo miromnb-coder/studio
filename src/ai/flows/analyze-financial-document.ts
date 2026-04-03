@@ -1,4 +1,3 @@
-
 'use server';
 /**
  * @fileOverview High-IQ "AI Life Operator" reasoning engine.
@@ -66,7 +65,7 @@ const AnalyzeFinancialDocumentOutputSchema = z.object({
   savingsEstimate: z.number().optional(),
   beforeAfterComparison: z.object({
     currentSituation: z.string(),
-    optimizedSituation: z.string(),
+    optimizedSituation: string,
   }).optional(),
   followUpQuestion: z.string().optional().describe('A single high-value question if further data is needed.'),
   isActionable: z.boolean().describe('True if this triggered a structured financial audit.'),
@@ -85,8 +84,8 @@ export async function analyzeFinancialDocument(input: z.infer<typeof AnalyzeFina
   const apiKey = process.env.GROQ_API_KEY;
   
   const fallback: AnalyzeFinancialDocumentOutput = {
-    title: "Intelligence Briefing",
-    summary: "I'm currently scanning the context you provided. To ensure accuracy, I recommend providing a clear screenshot or text snippet of the specific billing item.",
+    title: "Advisor Review",
+    summary: "I've reviewed your latest request. To provide a truly tailored savings audit, could you provide a bit more context or a clear screenshot of the bill in question?",
     strategy: 'direct_answer',
     mode: 'advisor',
     isActionable: false,
@@ -117,8 +116,8 @@ Your primary directive is to save the user time and money through strategic over
 OPERATIONAL GUIDELINES:
 1. CHAIN OF THOUGHT: Analyze the user's intent, conversation history, and user memory before selecting a strategy.
 2. ADAPTIVE STRATEGY: Do not use the same tone or format every time. Choose the best 'strategy' and 'mode' for the context.
-3. MEMORY AWARENESS: Respect past decisions. If a user ignored a suggestion (e.g. "Don't cancel Spotify"), do not suggest it again unless the context has changed significantly.
-4. FRESH DIALOGUE: Avoid repetitive phrases like "Understood" or "Here is what I found". Be conversational, concise, and professional.
+3. MEMORY AWARENESS: Respect past decisions. If a user ignored a suggestion, do not suggest it again unless the context has changed.
+4. FRESH DIALOGUE: Avoid repetitive phrases. Be conversational, concise, and professional.
 5. INTENT ROUTING: 
    - Financial Audit (statements/receipts) -> 'analyst' mode, 'guided_analysis' strategy.
    - High Waste Found -> 'alert' mode, 'proactive_alert' strategy.

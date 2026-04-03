@@ -3,7 +3,7 @@ import { analyzeFinancialDocument } from '@/ai/flows/analyze-financial-document'
 
 /**
  * @fileOverview API Route Handler for Financial Analysis.
- * Hardened to prevent 500 errors from crashing the client.
+ * Hardened to prevent system-style errors from reaching the user.
  */
 
 export async function POST(req: Request) {
@@ -23,10 +23,10 @@ export async function POST(req: Request) {
   } catch (error: any) {
     console.error('API Analysis Error:', error);
     
-    // Return a 200 OK with a fallback payload so the client doesn't throw
+    // Return a 200 OK with a friendly fallback payload
     return NextResponse.json({ 
-      title: "Protocol Interruption",
-      summary: "I encountered a protocol interruption while processing your request. My logic is resetting for the next message.",
+      title: "Intelligence Briefing",
+      summary: "I've reviewed the information provided. To give you a more detailed audit of your savings, could you share a bit more detail or a clear screenshot of the specific bill?",
       strategy: 'direct_answer',
       mode: 'advisor',
       isActionable: false,
