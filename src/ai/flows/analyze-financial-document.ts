@@ -1,7 +1,7 @@
-
 'use server';
 /**
- * @fileOverview Universal "AI Life Operator" flow with memory and high-IQ reasoning.
+ * @fileOverview High-IQ "AI Life Operator" reasoning engine.
+ * Implements dynamic strategy selection, intent routing, and memory-aware behavior.
  */
 
 import {ai} from '@/ai/genkit';
@@ -34,6 +34,7 @@ const UserMemorySchema = z.object({
   goals: z.array(z.string()).optional(),
   preferences: z.array(z.string()).optional(),
   subscriptions: z.array(z.string()).optional(),
+  ignoredSuggestions: z.array(z.string()).optional(),
 }).optional();
 
 const AnalyzeFinancialDocumentInputSchema = z.object({
@@ -47,21 +48,34 @@ const AnalyzeFinancialDocumentInputSchema = z.object({
 });
 
 const AnalyzeFinancialDocumentOutputSchema = z.object({
-  title: z.string().describe('A title for the conversation if this is the start.'),
-  summary: z.string().describe('The primary conversational response.'),
+  title: z.string().describe('A refined title for the session.'),
+  summary: z.string().describe('The core conversational response, adapted to the selected strategy.'),
+  strategy: z.enum([
+    'direct_answer',
+    'guided_analysis',
+    'proactive_alert',
+    'concise_summary',
+    'follow_up',
+    'action_recommendation',
+    'clarification',
+    'checklist'
+  ]).describe('The chosen response strategy for this specific interaction.'),
+  mode: z.enum(['alert', 'advisor', 'analyst', 'planner', 'executor', 'reminder']).describe('The active operational mode.'),
   detectedItems: z.array(DetectedItemSchema).optional(),
   savingsEstimate: z.number().optional(),
   beforeAfterComparison: z.object({
     currentSituation: z.string(),
     optimizedSituation: z.string(),
   }).optional(),
-  isActionable: z.boolean().describe('True if this triggered a financial audit with items.'),
+  followUpQuestion: z.string().optional().describe('A single high-value question if further data is needed.'),
+  isActionable: z.boolean().describe('True if this triggered a structured financial audit.'),
   memoryUpdates: z.object({
     newGoals: z.array(z.string()).optional(),
     newPreferences: z.array(z.string()).optional(),
     newSubscriptions: z.array(z.string()).optional(),
+    newIgnoredSuggestions: z.array(z.string()).optional(),
     behaviorSummaryUpdate: z.string().optional(),
-  }).optional().describe('Inferred updates for the user long-term memory.'),
+  }).optional(),
 });
 
 export type AnalyzeFinancialDocumentOutput = z.infer<typeof AnalyzeFinancialDocumentOutputSchema>;
@@ -70,101 +84,82 @@ export async function analyzeFinancialDocument(input: z.infer<typeof AnalyzeFina
   const apiKey = process.env.GROQ_API_KEY;
   
   if (!apiKey) {
-    console.error('GROQ_API_KEY is missing.');
     return {
-      title: "Operator Connection",
-      summary: "I'm having a brief connection issue with my deep audit framework (API Key Missing).",
+      title: "Protocol Interruption",
+      summary: "I'm having a brief connection issue with my reasoning framework (API Key Missing).",
+      strategy: 'direct_answer',
+      mode: 'advisor',
       isActionable: false,
-      detectedItems: [],
-      savingsEstimate: 0,
     };
   }
 
   const groq = new Groq({ apiKey });
 
-  // Prepare chat history context
   const historyContext = input.history?.map(msg => `${msg.role.toUpperCase()}: ${msg.content}`).join('\n') || "No previous history.";
   
-  // Prepare memory context
   const memoryContext = input.userMemory ? `
 USER MEMORY PROTOCOL:
-- Behavior Summary: ${input.userMemory.behaviorSummary || 'No behavior recorded yet.'}
-- Active Goals: ${input.userMemory.goals?.join(', ') || 'None set.'}
-- Known Subscriptions: ${input.userMemory.subscriptions?.join(', ') || 'None detected yet.'}
+- Behavior Summary: ${input.userMemory.behaviorSummary || 'Passive gathering active.'}
+- Goals: ${input.userMemory.goals?.join(', ') || 'None set.'}
+- Subscriptions: ${input.userMemory.subscriptions?.join(', ') || 'None detected.'}
 - Preferences: ${input.userMemory.preferences?.join(', ') || 'No explicit preferences.'}
-  ` : "USER MEMORY: No memory protocol active for this session.";
+- Ignored/Rejected: ${input.userMemory.ignoredSuggestions?.join(', ') || 'None.'}
+  ` : "USER MEMORY: Not initialized.";
 
-  const prompt = `You are a "High-IQ Life Operator Assistant". You are refined, intelligent, proactive, and analytical.
-Use step-by-step reasoning (Chain of Thought) before answering. Always provide actionable, professional, and deeply analyzed advice.
+  const systemPrompt = `You are a "High-IQ Life Operator Assistant". You are refined, intelligent, proactive, and analytical.
+Your primary directive is to save the user time and money through strategic oversight.
 
+OPERATIONAL GUIDELINES:
+1. CHAIN OF THOUGHT: Analyze the user's intent, conversation history, and user memory before selecting a strategy.
+2. ADAPTIVE STRATEGY: Do not use the same tone or format every time. Choose the best 'strategy' and 'mode' for the context.
+3. MEMORY AWARENESS: Respect past decisions. If a user ignored a suggestion (e.g. "Don't cancel Spotify"), do not suggest it again unless the context has changed significantly.
+4. FRESH DIALOGUE: Avoid repetitive phrases like "Understood" or "Here is what I found". Be conversational, concise, and professional.
+5. INTENT ROUTING: 
+   - Financial Audit (statements/receipts) -> 'analyst' mode, 'guided_analysis' strategy.
+   - High Waste Found -> 'alert' mode, 'proactive_alert' strategy.
+   - General Planning -> 'planner' mode, 'checklist' strategy.
+   - Quick Question -> 'advisor' mode, 'direct_answer' strategy.
+
+MEMORY CONTEXT:
 ${memoryContext}
 
-CONTEXT MEMORY (Current Thread):
+THREAD HISTORY:
 ${historyContext}
 
-INTENT ROUTING:
-1. If the input contains financial data, bank logs, statements, or a request to "save money":
-   - Act as a "Predatory Subscription Hunter".
-   - Cross-reference with USER MEMORY to identify changes, usage patterns, or repeated waste.
-   - Find waste, hidden fees, and cheaper alternatives.
-   - Set "isActionable" to true.
-   - Populate "detectedItems", "savingsEstimate", and "beforeAfterComparison".
-   - Generate a short, relevant "title" for the conversation.
-
-2. If the input is a general question or behavioral input:
-   - Act as a high-IQ financial advisor.
-   - Use USER MEMORY to personalize the advice.
-   - Provide a deep, step-by-step reasoning based response in "summary".
-   - Set "isActionable" to false.
-   - Infer potential "memoryUpdates" if the user mentions a new goal, preference, or service.
-
 CURRENT INPUT:
-${input.documentText || "Visual source detected."}
+${input.documentText || "Visual source provided."}
 
-Return a JSON object matching this schema:
-{
-  "title": string,
-  "summary": string,
-  "isActionable": boolean,
-  "detectedItems": [],
-  "savingsEstimate": number,
-  "beforeAfterComparison": { "currentSituation": string, "optimizedSituation": string },
-  "memoryUpdates": { "newGoals": [], "newPreferences": [], "newSubscriptions": [], "behaviorSummaryUpdate": string }
-}`;
+OUTPUT SCHEMA REQUIREMENT:
+You MUST return a JSON object exactly matching the schema. Select the most strategic 'mode' and 'strategy'.`;
 
   try {
     const completion = await groq.chat.completions.create({
       messages: [
-        {
-          role: 'system',
-          content: 'You are a High-IQ Life Operator Assistant. Always output valid JSON. Use step-by-step reasoning.',
-        },
-        {
-          role: 'user',
-          content: prompt,
-        },
+        { role: 'system', content: 'You are a High-IQ Life Operator Assistant. Always output valid JSON.' },
+        { role: 'user', content: systemPrompt },
       ],
       model: 'llama-3.3-70b-versatile',
       response_format: { type: 'json_object' },
     });
 
     const content = completion.choices[0]?.message?.content;
-    if (!content) throw new Error('Empty response from Groq');
+    if (!content) throw new Error('Empty response');
 
     const result = JSON.parse(content);
     return AnalyzeFinancialDocumentOutputSchema.parse({
       ...result,
       detectedItems: result.detectedItems || [],
       savingsEstimate: result.savingsEstimate || 0,
+      isActionable: !!result.isActionable,
     });
   } catch (error) {
     console.error('Groq Analysis Error:', error);
     return {
       title: "Protocol Interruption",
-      summary: "I encountered an interruption while processing your request. Please try again.",
+      summary: "I encountered a reasoning interruption. Please re-state your intent.",
+      strategy: 'direct_answer',
+      mode: 'advisor',
       isActionable: false,
-      detectedItems: [],
-      savingsEstimate: 0,
     };
   }
 }

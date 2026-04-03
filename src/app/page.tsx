@@ -1,4 +1,3 @@
-
 "use client";
 
 import { useState, useRef, useEffect, Suspense } from 'react';
@@ -17,7 +16,12 @@ import {
   AlertCircle,
   MailCheck,
   RefreshCw,
-  CalendarDays
+  CalendarDays,
+  Cpu,
+  BrainCircuit,
+  ShieldCheck,
+  ListChecks,
+  MessageSquareQuote
 } from 'lucide-react';
 import { AnalysisService } from '@/services/analysis-service';
 import { MemoryService } from '@/services/memory-service';
@@ -43,7 +47,9 @@ interface Message {
   id: string;
   role: 'user' | 'assistant';
   content: string;
-  type?: 'text' | 'analysis_result' | 'daily_digest' | 'error' | 'system';
+  type?: 'text' | 'analysis_result' | 'daily_digest' | 'error' | 'system' | 'strategy_alert';
+  strategy?: string;
+  mode?: string;
   data?: any;
   timestamp: any;
 }
@@ -108,7 +114,8 @@ function ChatContent() {
       setLocalMessages([{
         id: 'welcome',
         role: 'assistant',
-        content: "Operator active. How can I assist you today?",
+        content: "Operator active. My intelligence ledger is synchronized and ready for intent.",
+        mode: 'advisor',
         timestamp: null,
       }]);
       setShowOnboarding(true);
@@ -126,43 +133,6 @@ function ChatContent() {
     return null;
   }
 
-  const generateDailyBriefing = async () => {
-    if (!user || !db) return;
-    setIsProcessing(true);
-    
-    try {
-      const digest = await DigestService.generateDigest(db, user.uid);
-      
-      if (!digest) {
-        toast({ title: "No New Data", description: "I haven't identified enough new patterns today for a full briefing." });
-        setIsProcessing(false);
-        return;
-      }
-
-      // Add digest to chat
-      const activeConvId = conversationId || await createNewConversation();
-      
-      const assistantMessage: Message = {
-        id: Math.random().toString(36).substr(2, 9),
-        role: 'assistant',
-        content: "I have synthesized your Daily Intelligence Briefing. Here are today's most actionable optimizations.",
-        type: 'daily_digest',
-        data: digest,
-        timestamp: new Date(),
-      };
-
-      addDocumentNonBlocking(collection(db, 'users', user.uid, 'conversations', activeConvId, 'messages'), {
-        ...assistantMessage,
-        timestamp: serverTimestamp(),
-      });
-
-    } catch (err) {
-      console.error('Digest Generation Error:', err);
-    } finally {
-      setIsProcessing(false);
-    }
-  };
-
   const createNewConversation = async () => {
     if (!user || !db) return '';
     const newConvRef = doc(collection(db, 'users', user.uid, 'conversations'));
@@ -176,59 +146,18 @@ function ChatContent() {
     return newConvRef.id;
   };
 
-  const syncGmailIntelligence = async () => {
-    if (!user || !db) return;
-    
-    setIsSyncingEmail(true);
-    const token = await GmailService.connect();
-    
-    if (!token) {
-      setIsSyncingEmail(false);
-      toast({ variant: "destructive", title: "Sync Failed", description: "Could not connect to Gmail protocol." });
-      return;
-    }
-
-    try {
-      const emails = await GmailService.fetchFinancialEmails(token);
-      
-      if (emails.length === 0) {
-        setIsSyncingEmail(false);
-        toast({ title: "Scan Complete", description: "No new financial patterns detected in your inbox." });
-        return;
-      }
-
-      const emailContext = `GMAIL INTELLIGENCE FEED:\n` + emails.map(e => `[FROM: ${e.from} | SUBJ: ${e.subject}] Snippet: ${e.snippet}`).join('\n---\n');
-      await sendMessage(`[SYSTEM] Synchronizing intelligence from ${emails.length} financial markers in Gmail.`, undefined, emailContext);
-
-    } catch (err) {
-      console.error('Gmail Sync Error:', err);
-    } finally {
-      setIsSyncingEmail(false);
-    }
-  };
-
-  const handleOnboardingGoal = (goal: string) => {
-    setShowOnboarding(false);
-    if (goal === 'save_money') setInput("I want to save money on my recurring expenses.");
-    if (goal === 'save_time') setInput("Help me optimize my daily administrative tasks.");
-    if (goal === 'analyze_visual') setInput("I have a screenshot of a receipt or statement to analyze.");
-  };
-
   const sendMessage = async (text?: string, fileData?: string, rawContext?: string) => {
     const content = text || input;
     if (!content && !fileData && !rawContext) return;
     if (!user || !db) return;
 
     let activeConvId = conversationId;
-    
-    if (!activeConvId) {
-      activeConvId = await createNewConversation();
-    }
+    if (!activeConvId) activeConvId = await createNewConversation();
 
     const userMessage: Message = {
       id: Math.random().toString(36).substr(2, 9),
       role: 'user',
-      content: content.startsWith('[SYSTEM]') ? 'Gmail Intelligence Sync' : (content || 'Source uploaded'),
+      content: content.startsWith('[SYSTEM]') ? 'Intelligence Sync' : (content || 'Visual source uploaded'),
       timestamp: new Date(),
     };
 
@@ -273,8 +202,10 @@ function ChatContent() {
       const assistantMessage: Message = {
         id: Math.random().toString(36).substr(2, 9),
         role: 'assistant',
-        content: result?.summary || "Analysis complete.",
+        content: result?.summary || "Audit complete.",
         type: result?.isActionable ? 'analysis_result' : 'text',
+        strategy: result?.strategy,
+        mode: result?.mode,
         data: result || null,
         timestamp: new Date(),
       };
@@ -284,33 +215,11 @@ function ChatContent() {
         timestamp: serverTimestamp(),
       });
 
-      if (result?.isActionable) {
-        const docRef = await addDocumentNonBlocking(collection(db, 'users', user.uid, 'analyses'), {
-          userId: user.uid,
-          title: result.title || "Audit Report",
-          summary: result.summary || "",
-          estimatedMonthlySavings: result.savingsEstimate || 0,
-          analysisDate: new Date().toISOString(),
-          status: 'completed',
-          inputMethod: 'chat',
-          inputContent: rawContext || content,
-          createdAt: serverTimestamp(),
-          source: 'chat'
-        });
-
-        if (docRef && Array.isArray(result.detectedItems)) {
-          const itemsRef = collection(db, 'users', user.uid, 'analyses', docRef.id, 'detected_items');
-          for (const item of result.detectedItems) {
-            addDocumentNonBlocking(itemsRef, {
-              ...item,
-              userId: user.uid,
-              analysisId: docRef.id,
-              status: 'active',
-              createdAt: serverTimestamp(),
-            });
-          }
-        }
+      if (result?.followUpQuestion) {
+        // AI specifically wants a clarification
+        toast({ title: "Clarification Needed", description: result.followUpQuestion });
       }
+
     } catch (err) {
       console.error('Processing error:', err);
     } finally {
@@ -318,77 +227,57 @@ function ChatContent() {
     }
   };
 
-  const onFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (file) {
-      const reader = new FileReader();
-      reader.onloadend = () => sendMessage(undefined, reader.result as string);
-      reader.readAsDataURL(file);
+  const getModeIcon = (mode?: string) => {
+    switch (mode) {
+      case 'alert': return <Zap className="w-3.5 h-3.5 text-danger" />;
+      case 'analyst': return <BrainCircuit className="w-3.5 h-3.5 text-primary" />;
+      case 'planner': return <ListChecks className="w-3.5 h-3.5 text-accent" />;
+      case 'executor': return <ShieldCheck className="w-3.5 h-3.5 text-success" />;
+      default: return <Cpu className="w-3.5 h-3.5 text-muted-foreground" />;
     }
   };
 
   return (
     <div className="flex flex-col h-screen bg-background relative overflow-hidden">
       <Navbar />
-
-      <AnimatePresence>
-        {showOnboarding && <OnboardingOverlay onSelectGoal={handleOnboardingGoal} />}
-      </AnimatePresence>
+      <AnimatePresence>{showOnboarding && <OnboardingOverlay onSelectGoal={(g) => { setShowOnboarding(false); sendMessage(g === 'save_money' ? "I want to audit my recurring expenses." : "Analyze a financial document."); }} />}</AnimatePresence>
       
-      <div 
-        ref={scrollRef}
-        className="flex-1 overflow-y-auto pt-24 pb-40 px-6 md:px-12 lg:px-24 xl:px-48 space-y-12"
-      >
+      <div ref={scrollRef} className="flex-1 overflow-y-auto pt-24 pb-40 px-6 md:px-24 lg:px-48 space-y-12">
         <AnimatePresence initial={false}>
-          {mounted && (Array.isArray(localMessages) ? localMessages : [])
-            .filter(msg => msg && msg.id)
-            .map((msg) => (
-            <motion.div
-              key={msg.id}
-              initial={{ opacity: 0, y: 10 }}
-              animate={{ opacity: 1, y: 0 }}
-              className={cn("flex w-full", msg.role === 'user' ? "justify-end" : "justify-start")}
-            >
+          {mounted && (Array.isArray(localMessages) ? localMessages : []).map((msg) => (
+            <motion.div key={msg.id} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className={cn("flex w-full", msg.role === 'user' ? "justify-end" : "justify-start")}>
               <div className={cn("max-w-[90%] md:max-w-[80%] space-y-4", msg.role === 'user' ? "items-end text-right" : "items-start text-left")}>
+                
+                {msg.role === 'assistant' && (
+                  <div className="flex items-center gap-2 mb-1">
+                    <div className="p-1 rounded bg-white/5">{getModeIcon(msg.mode)}</div>
+                    <span className="text-[9px] font-bold uppercase tracking-widest text-muted-foreground opacity-50">
+                      {msg.mode || 'Operator'} Protocol • {msg.strategy?.replace('_', ' ') || 'Response'}
+                    </span>
+                  </div>
+                )}
+
                 <div className={cn(
                   "p-5 rounded-[24px] text-sm md:text-base leading-relaxed font-medium shadow-sm",
-                  msg.role === 'user' ? "bg-primary text-background rounded-tr-none" : "bg-white/[0.03] border border-white/5 text-foreground rounded-tl-none"
+                  msg.role === 'user' ? "bg-primary text-background rounded-tr-none" : "bg-white/[0.03] border border-white/5 text-foreground rounded-tl-none",
+                  msg.strategy === 'proactive_alert' ? "border-danger/30 bg-danger/5" : ""
                 )}>
                   {msg.content}
                 </div>
 
-                {msg.type === 'analysis_result' && msg.data && (
-                  <RichAnalysisCard data={msg.data} />
-                )}
-
-                {msg.type === 'daily_digest' && msg.data && (
-                  <DailyDigestCard digest={msg.data} />
-                )}
+                {msg.type === 'analysis_result' && msg.data && <RichAnalysisCard data={msg.data} />}
+                {msg.type === 'daily_digest' && msg.data && <DailyDigestCard digest={msg.data} />}
               </div>
             </motion.div>
           ))}
         </AnimatePresence>
 
-        {(isProcessing || isSyncingEmail) && (
+        {isProcessing && (
           <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="flex flex-col items-start space-y-6">
             <div className="flex items-center gap-3 p-5 rounded-[24px] bg-white/[0.03] border border-white/5 rounded-tl-none">
               <Loader2 className="w-4 h-4 text-primary animate-spin" />
-              <span className="text-sm font-medium text-muted-foreground italic">
-                {isSyncingEmail ? "Synchronizing Gmail Intelligence..." : "Processing intelligence..."}
-              </span>
+              <span className="text-sm font-medium text-muted-foreground italic">Running Intelligence Protocol...</span>
             </div>
-            {!isSyncingEmail && (
-              <div className="w-full max-w-xs space-y-4 pl-4 border-l-2 border-white/5">
-                {STEPS.map((step, idx) => (
-                  <div key={step.id} className={cn("flex items-center gap-3 transition-all duration-500", currentStep >= idx ? "opacity-100" : "opacity-20")}>
-                    <div className={cn("w-4 h-4 rounded-full flex items-center justify-center transition-all", currentStep > idx ? "bg-success scale-110" : currentStep === idx ? "bg-primary animate-pulse" : "bg-white/10")}>
-                      {currentStep > idx && <CheckCircle2 className="w-3 h-3 text-background" />}
-                    </div>
-                    <span className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">{step.label}</span>
-                  </div>
-                ))}
-              </div>
-            )}
           </motion.div>
         )}
       </div>
@@ -398,52 +287,18 @@ function ChatContent() {
           <Card className="glass !p-2 flex items-end gap-2 rounded-[32px] border-white/10 shadow-[0_24px_64px_-12px_rgba(0,0,0,0.5)]">
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
-                <Button size="icon" variant="ghost" className="w-12 h-12 rounded-full hover:bg-white/5 text-muted-foreground">
-                  <Plus className="w-5 h-5" />
-                </Button>
+                <Button size="icon" variant="ghost" className="w-12 h-12 rounded-full hover:bg-white/5 text-muted-foreground"><Plus className="w-5 h-5" /></Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="start" className="w-64 bg-card border-white/10 rounded-2xl p-2 mb-4">
-                <DropdownMenuItem onClick={generateDailyBriefing} className="rounded-xl h-11 cursor-pointer gap-3">
-                  <CalendarDays className="w-4 h-4 text-primary" />
-                  <span className="font-medium text-sm text-white">Generate Daily Briefing</span>
-                </DropdownMenuItem>
-                <DropdownMenuItem onClick={syncGmailIntelligence} className="rounded-xl h-11 cursor-pointer gap-3">
-                  <MailCheck className="w-4 h-4 text-accent" />
-                  <span className="font-medium text-sm text-white">Sync Gmail Intelligence</span>
-                </DropdownMenuItem>
-                <DropdownMenuItem onClick={() => fileInputRef.current?.click()} className="rounded-xl h-11 cursor-pointer gap-3">
-                  <ImageIcon className="w-4 h-4 text-success" />
-                  <span className="font-medium text-sm text-white">Upload visual source</span>
-                </DropdownMenuItem>
-                <DropdownMenuItem onClick={() => router.push('/')} className="rounded-xl h-11 cursor-pointer gap-3">
-                  <RefreshCw className="w-4 h-4 text-muted-foreground" />
-                  <span className="font-medium text-sm text-white">New session</span>
-                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => DigestService.generateDigest(db!, user!.uid).then(d => d && sendMessage("[SYSTEM] Daily Briefing Requested", undefined, "User requested a daily briefing.")) } className="rounded-xl h-11 cursor-pointer gap-3"><CalendarDays className="w-4 h-4 text-primary" /><span className="font-medium text-sm text-white">Generate Daily Briefing</span></DropdownMenuItem>
+                <DropdownMenuItem onClick={() => GmailService.connect().then(t => t && GmailService.fetchFinancialEmails(t).then(e => e.length > 0 && sendMessage(`[SYSTEM] Syncing ${e.length} markers`, undefined, e.map(i => i.snippet).join('\n')))) } className="rounded-xl h-11 cursor-pointer gap-3"><MailCheck className="w-4 h-4 text-accent" /><span className="font-medium text-sm text-white">Sync Gmail Intelligence</span></DropdownMenuItem>
+                <DropdownMenuItem onClick={() => fileInputRef.current?.click()} className="rounded-xl h-11 cursor-pointer gap-3"><ImageIcon className="w-4 h-4 text-success" /><span className="font-medium text-sm text-white">Upload visual source</span></DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
 
-            <input type="file" className="hidden" ref={fileInputRef} accept="image/*" onChange={onFileChange} />
-
-            <Textarea 
-              value={input}
-              onChange={(e) => setInput(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter' && !e.shiftKey) {
-                  e.preventDefault();
-                  sendMessage();
-                }
-              }}
-              placeholder="Message operator..."
-              className="flex-1 border-0 focus-visible:ring-0 bg-transparent min-h-[48px] py-3 text-base font-medium resize-none overflow-hidden text-white"
-              rows={1}
-            />
-
-            <Button 
-              size="icon" 
-              disabled={(!input.trim() && !isProcessing) || isProcessing}
-              onClick={() => sendMessage()}
-              className="w-12 h-12 rounded-full shadow-2xl transition-transform hover:scale-105 active:scale-95 shrink-0"
-            >
+            <input type="file" className="hidden" ref={fileInputRef} accept="image/*" onChange={(e) => { const f = e.target.files?.[0]; if (f) { const r = new FileReader(); r.onloadend = () => sendMessage(undefined, r.result as string); r.readAsDataURL(f); } }} />
+            <Textarea value={input} onChange={(e) => setInput(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMessage(); } }} placeholder="Message operator..." className="flex-1 border-0 focus-visible:ring-0 bg-transparent min-h-[48px] py-3 text-base font-medium resize-none overflow-hidden text-white" rows={1} />
+            <Button size="icon" disabled={!input.trim() || isProcessing} onClick={() => sendMessage()} className="w-12 h-12 rounded-full shadow-2xl transition-transform hover:scale-105 active:scale-95 shrink-0">
               {isProcessing ? <Loader2 className="w-5 h-5 animate-spin" /> : <Send className="w-5 h-5" />}
             </Button>
           </Card>
