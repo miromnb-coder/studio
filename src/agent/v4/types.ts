@@ -10,10 +10,16 @@ export interface AgentStep {
   description?: string;
 }
 
+export interface ToolError {
+  code: 'UNKNOWN_TOOL' | 'TOOL_EXECUTION_FAILED';
+  message: string;
+  details?: Record<string, unknown>;
+}
+
 export interface ToolResult {
   action: string;
   output: any;
-  error?: string;
+  error?: ToolError;
 }
 
 export interface CriticFeedback {

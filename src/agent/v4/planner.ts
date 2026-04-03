@@ -1,17 +1,20 @@
 import { groq } from '@/ai/groq';
 import { Intent, AgentStep } from './types';
+import { V4_TOOL_NAMES } from './tool-registry';
 
 export async function createPlan(input: string, intent: Intent, history: any[]): Promise<AgentStep[]> {
-  console.log("[PLANNER] Creating execution plan...");
+  console.log('[PLANNER] Creating execution plan...');
 
   const prompt = `
 User Intent: ${intent}
 Input: ${input}
 
+Allowed tools: ${V4_TOOL_NAMES.join(', ')}
+
 Return ONLY valid JSON in this format:
 {
   "steps": [
-    { "action": "analyze", "priority": "high" }
+    { "action": "notes", "priority": "high" }
   ]
 }
 
@@ -30,21 +33,20 @@ No explanation. No markdown.
       temperature: 0.1,
     });
 
-    let content = res.choices[0]?.message?.content || "{}";
+    const content = res.choices[0]?.message?.content || '{}';
 
     // TURVALLINEN PARSE
     const parsed = JSON.parse(content);
     const plan: AgentStep[] = parsed.steps || [];
 
     if (!plan.length) {
-      return [{ action: 'analyze', priority: 'high' }];
+      return [{ action: 'notes', priority: 'high' }];
     }
 
-    console.log("[PLANNER] Plan created:", plan.map(s => s.action).join(" -> "));
+    console.log('[PLANNER] Plan created:', plan.map((s) => s.action).join(' -> '));
     return plan;
-
   } catch (err) {
-    console.error("[PLANNER ERROR]", err);
-    return [{ action: 'analyze', priority: 'high' }];
+    console.error('[PLANNER ERROR]', err);
+    return [{ action: 'notes', priority: 'high' }];
   }
 }
