@@ -43,6 +43,8 @@ import { useUser, useFirestore, useCollection, useMemoFirebase } from '@/firebas
 import { collection, query, orderBy, limit, doc, updateDoc, serverTimestamp, deleteDoc } from 'firebase/firestore';
 import { cn } from '@/lib/utils';
 import { useToast } from '@/hooks/use-toast';
+import { errorEmitter } from '@/firebase/error-emitter';
+import { FirestorePermissionError } from '@/firebase/errors';
 
 export function AppSidebar() {
   const [mounted, setMounted] = useState(false);
@@ -100,41 +102,78 @@ export function AppSidebar() {
   const handleRename = async (id: string, currentTitle: string) => {
     const newTitle = prompt("Rename Protocol Thread:", currentTitle);
     if (newTitle && newTitle !== currentTitle) {
-      await updateDoc(doc(db!, 'users', user!.uid, 'conversations', id), {
-        title: newTitle,
-        updatedAt: serverTimestamp()
-      });
-      toast({ title: "Thread Renamed", description: "Ledger updated successfully." });
+      try {
+        await updateDoc(doc(db!, 'users', user!.uid, 'conversations', id), {
+          title: newTitle,
+          updatedAt: serverTimestamp()
+        });
+        toast({ title: "Thread Renamed", description: "Ledger updated successfully." });
+      } catch (err: any) {
+        errorEmitter.emit('permission-error', new FirestorePermissionError({
+          path: `users/${user!.uid}/conversations/${id}`,
+          operation: 'update',
+          requestResourceData: { title: newTitle }
+        }));
+      }
     }
   };
 
   const handleArchive = async (id: string, isArchived: boolean) => {
-    await updateDoc(doc(db!, 'users', user!.uid, 'conversations', id), {
-      isArchived: !isArchived,
-      updatedAt: serverTimestamp()
-    });
-    toast({ 
-      title: isArchived ? "Thread Restored" : "Thread Archived", 
-      description: isArchived ? "Moved back to active intelligence." : "Stored in secondary archives." 
-    });
+    try {
+      await updateDoc(doc(db!, 'users', user!.uid, 'conversations', id), {
+        isArchived: !isArchived,
+        updatedAt: serverTimestamp()
+      });
+      toast({ 
+        title: isArchived ? "Thread Restored" : "Thread Archived", 
+        description: isArchived ? "Moved back to active intelligence." : "Stored in secondary archives." 
+      });
+    } catch (err: any) {
+      errorEmitter.emit('permission-error', new FirestorePermissionError({
+        path: `users/${user!.uid}/conversations/${id}`,
+        operation: 'update',
+        requestResourceData: { isArchived: !isArchived }
+      }));
+    }
   };
 
   const handlePin = async (id: string, isPinned: boolean) => {
-    await updateDoc(doc(db!, 'users', user!.uid, 'conversations', id), {
-      isPinned: !isPinned,
-      updatedAt: serverTimestamp()
-    });
-    toast({ 
-      title: isPinned ? "Thread Unpinned" : "Thread Pinned", 
-      description: isPinned ? "Removed from priority view." : "Moved to top of protocol list." 
-    });
+    try {
+      await updateDoc(doc(db!, 'users', user!.uid, 'conversations', id), {
+        isPinned: !isPinned,
+        updatedAt: serverTimestamp()
+      });
+      toast({ 
+        title: isPinned ? "Thread Unpinned" : "Thread Pinned", 
+        description: isPinned ? "Removed from priority view." : "Moved to top of protocol list." 
+      });
+    } catch (err: any) {
+      errorEmitter.emit('permission-error', new FirestorePermissionError({
+        path: `users/${user!.uid}/conversations/${id}`,
+        operation: 'update',
+        requestResourceData: { isPinned: !isPinned }
+      }));
+    }
   };
 
   const handleDelete = async (id: string) => {
     if (confirm("CRITICAL: Permanently purge this intelligence thread? This cannot be undone.")) {
-      await deleteDoc(doc(db!, 'users', user!.uid, 'conversations', id));
-      if (activeId === id) router.push('/');
-      toast({ title: "Thread Purged", description: "Record removed from secure ledger." });
+      try {
+        const docRef = doc(db!, 'users', user!.uid, 'conversations', id);
+        await deleteDoc(docRef);
+        
+        if (activeId === id) {
+          router.push('/');
+        }
+        
+        toast({ title: "Thread Purged", description: "Record removed from secure ledger." });
+      } catch (err: any) {
+        errorEmitter.emit('permission-error', new FirestorePermissionError({
+          path: `users/${user!.uid}/conversations/${id}`,
+          operation: 'delete'
+        }));
+        toast({ variant: 'destructive', title: "Purge Failed", description: "Insufficient clearance to remove this record." });
+      }
     }
   };
 

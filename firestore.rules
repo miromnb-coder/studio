@@ -40,7 +40,8 @@ service cloud.firestore {
       allow get: if isOwner(userId);
       allow list: if false;
       allow create: if isOwner(userId) && matchesPath('id', userId);
-      allow update, delete: if isExistingOwner(userId) && isUnchanged('id');
+      allow update: if isExistingOwner(userId) && isUnchanged('id');
+      allow delete: if isExistingOwner(userId);
       
       /**
        * @description User long-term memory.
@@ -58,7 +59,8 @@ service cloud.firestore {
       match /conversations/{conversationId} {
         allow get, list: if isOwner(userId);
         allow create: if isOwner(userId) && matchesPath('userId', userId);
-        allow update, delete: if isExistingOwner(userId) && isUnchanged('userId');
+        allow update: if isExistingOwner(userId) && isUnchanged('userId');
+        allow delete: if isExistingOwner(userId);
 
         /**
          * @description Individual messages within a conversation.
@@ -66,7 +68,8 @@ service cloud.firestore {
         match /messages/{messageId} {
           allow get, list: if isOwner(userId);
           allow create: if isOwner(userId);
-          allow update, delete: if isExistingOwner(userId);
+          allow update: if isExistingOwner(userId);
+          allow delete: if isExistingOwner(userId);
         }
       }
 
