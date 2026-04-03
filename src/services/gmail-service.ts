@@ -1,6 +1,6 @@
 /**
  * @fileOverview Client-side service for interacting with the Gmail API.
- * Handles OAuth scope acquisition and filtered email retrieval for financial analysis.
+ * Optimized for financial pattern discovery.
  */
 
 import { GoogleAuthProvider, signInWithPopup, getAuth } from 'firebase/auth';
@@ -17,8 +17,7 @@ export class GmailService {
   private static SCOPE = 'https://www.googleapis.com/auth/gmail.readonly';
 
   /**
-   * Requests Gmail Read-Only access from the user and returns an access token.
-   * This uses the existing Firebase Auth instance and triggers a Google popup.
+   * Requests Gmail Read-Only access from the user.
    */
   static async connect(): Promise<string | null> {
     const auth = getAuth();
@@ -36,31 +35,23 @@ export class GmailService {
   }
 
   /**
-   * Fetches relevant financial emails using the provided access token.
-   * Uses a targeted query to minimize data exposure and optimize processing.
+   * Fetches relevant financial emails with improved query targeting.
    */
   static async fetchFinancialEmails(accessToken: string): Promise<GmailMessage[]> {
-    // Queries for common financial keywords to minimize data retrieval and stay privacy-focused
-    const query = 'subject:(receipt OR invoice OR "subscription" OR "renewal" OR "billing" OR "trial" OR "payment" OR "statement")';
-    const url = `https://gmail.googleapis.com/gmail/v1/users/me/messages?q=${encodeURIComponent(query)}&maxResults=25`;
+    // Highly targeted query to find financial signals while maintaining efficiency
+    const query = 'subject:(receipt OR invoice OR "subscription" OR "renewal" OR "billing" OR "trial" OR "payment" OR "statement" OR "uudistuu" OR "lasku")';
+    const url = `https://gmail.googleapis.com/gmail/v1/users/me/messages?q=${encodeURIComponent(query)}&maxResults=30`;
 
     try {
       const listResponse = await fetch(url, {
         headers: { Authorization: `Bearer ${accessToken}` },
       });
 
-      if (!listResponse.ok) {
-        if (listResponse.status === 401) console.error('Gmail Access Token expired or invalid.');
-        throw new Error('Failed to fetch message list');
-      }
+      if (!listResponse.ok) return [];
       
       const listData = await listResponse.json();
-
       if (!listData.messages || listData.messages.length === 0) return [];
 
-      const messages: GmailMessage[] = [];
-
-      // Fetch details for each message (limited to top 25 for prototype stability)
       const detailPromises = listData.messages.map(async (msg: { id: string }) => {
         const detailUrl = `https://gmail.googleapis.com/gmail/v1/users/me/messages/${msg.id}`;
         const detailRes = await fetch(detailUrl, {

@@ -1,7 +1,7 @@
 'use server';
 /**
  * @fileOverview AI Life Operator analysis engine using Groq models.
- * Optimized for deep financial intelligence and actionable insights.
+ * Optimized for deep financial intelligence and actionable insights from various sources.
  */
 
 import { ai } from '@/ai/genkit';
@@ -35,6 +35,7 @@ const AnalyzeFinancialDocumentInputSchema = z.object({
     content: z.string(),
   })).optional(),
   userMemory: z.any().optional(),
+  source: z.string().optional(),
 });
 
 const AnalyzeFinancialDocumentOutputSchema = z.object({
@@ -45,8 +46,8 @@ const AnalyzeFinancialDocumentOutputSchema = z.object({
   detectedItems: z.array(DetectedItemSchema).optional(),
   savingsEstimate: z.number().optional(),
   beforeAfterComparison: z.object({
-    currentSituation: "string",
-    optimizedSituation: "string",
+    currentSituation: z.string(),
+    optimizedSituation: z.string(),
   }).optional(),
   isActionable: z.boolean(),
   memoryUpdates: z.any().optional(),
@@ -63,6 +64,7 @@ export const analyzeFinancialDocumentFlow = ai.defineFlow(
   },
   async (input) => {
     const hasImage = !!input.imageDataUri;
+    const isEmailAudit = input.documentText?.includes('Subject:') || input.source === 'email';
     const modelId = hasImage ? 'llama-3.2-11b-vision-preview' : 'llama-3.3-70b-versatile';
     
     if (!process.env.GROQ_API_KEY) {
@@ -72,13 +74,15 @@ export const analyzeFinancialDocumentFlow = ai.defineFlow(
     const latestUserMessage = input.history?.slice(-1)[0]?.content || input.documentText || "Analysoi kuluja.";
 
     const systemPrompt = `Olet "AI Life Operator", armoton mutta sivistynyt säästöarkkitehti ja talousvisionääri.
-ÄLÄ KOSKAAN vastaa geneerisesti kuten "Analyysi valmistui". Sinun on annettava syvällinen, analyyttinen ja jopa provosoiva katsaus käyttäjän talouteen.
+ÄLÄ KOSKAAN vastaa geneerisesti. Sinun on annettava syvällinen, analyyttinen ja jopa provosoiva katsaus käyttäjän talouteen.
+
+LÄHDE: ${isEmailAudit ? 'SÄHKÖPOSTIAUDITOINTI (Inbox Sync)' : 'MANUAALINEN SYÖTE'}
 
 TEHTÄVÄSI:
-1. RADIKAALI AUDITOINTI: Haasta jokainen euro. Jos näet tilauspalvelun, mieti onko se tarpeellinen. Jos näet hinnan, vertaa sitä markkinoiden parhaisiin hintoihin.
-2. BRIEFING (Summary): Kirjoita vähintään 4 lausetta pitkä, älykäs ja tiivistetty katsaus havaintoihisi. Käytä ammattimaista termistöä (esim. "likviditeetin vuoto", "pääoman optimointi").
-3. STRATEGIA: Kirjoita konkreettinen, monivaiheinen suunnitelma siitä, miten käyttäjä voi säästää satoja euroja vuodessa. Älä sano "suosittelen säästämistä", vaan sano "Eliminoi X ja siirrä Y säästötilille välittömästi".
-4. MARKKINATIETO: Käytä tietoasi suoratoiston, sähkön, puhelinliittymien ja vakuutusten tyypillisistä hinnoista Suomessa. Jos hinta on yli markkinatason, se on 'savings_opportunity'.
+1. RADIKAALI AUDITOINTI: Haasta jokainen euro. Jos kyseessä on sähköpostitieto, etsi tilausvahvistuksia, uusiutumisilmoituksia ja piilomaksuja.
+2. BRIEFING (Summary): Kirjoita älykäs ja tiivistetty katsaus havaintoihisi. Käytä ammattimaista termistöä (esim. "likviditeetin vuoto", "pääoman optimointi").
+3. STRATEGIA: Kirjoita konkreettinen suunnitelma. Jos kyseessä on sähköpostiauditointi, huomioi erityisesti toistuvat laskutusjaksot.
+4. MARKKINATIETO: Vertaa hintoja Suomen markkinatasoon (liittymät, suoratoisto, sähkö).
 
 KÄYTTÄJÄN HISTORIA JA MUISTI:
 ${JSON.stringify(input.userMemory || {})}
@@ -91,7 +95,7 @@ KAIKKI VASTAUKSET ON OLTAVA SUOMEKSI.`;
       userContent.push({ type: 'text', text: 'Analysoi tämä kuva tarkasti ja haasta kaikki siinä näkyvät kulut.' });
       userContent.push({ type: 'image_url', image_url: { url: input.imageDataUri } });
     } else {
-      userContent.push({ type: 'text', text: latestUserMessage });
+      userContent.push({ type: 'text', text: isEmailAudit ? `Analysoi seuraavat sähköpostitiedot ja etsi säästökohteita:\n\n${input.documentText}` : latestUserMessage });
     }
 
     try {
@@ -114,7 +118,7 @@ KAIKKI VASTAUKSET ON OLTAVA SUOMEKSI.`;
       const parsed = JSON.parse(jsonString);
 
       return {
-        title: parsed.title || "Strateginen Operatiivinen Katsaus",
+        title: parsed.title || (isEmailAudit ? "Sähköpostien Älykäs Auditointi" : "Strateginen Operatiivinen Katsaus"),
         summary: parsed.summary || "Analyysi valmistui, mutta malli ei tuottanut yhteenvetoa.",
         strategy: parsed.strategy || "Suosittelen välitöntä kulukartoitusta ja karsintaa.",
         mode: parsed.mode || 'advisor',

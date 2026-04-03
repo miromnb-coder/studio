@@ -1,4 +1,3 @@
-
 import { NextRequest, NextResponse } from 'next/server';
 import { initializeFirebase } from '@/firebase';
 import { collection, query, where, getDocs, addDoc, serverTimestamp } from 'firebase/firestore';
@@ -6,13 +5,14 @@ import { analyzeFinancialDocument } from '@/ai/flows/analyze-financial-document'
 
 /**
  * @fileOverview Inbound Email Webhook Handler.
- * Processes emails as internal server-side tasks to avoid leaking AI logic to clients.
+ * Processes emails as internal server-side tasks and triggers high-IQ analysis.
  */
 
 export async function POST(req: NextRequest) {
   try {
     const payload = await req.json();
     
+    // Support common webhook payloads (Postmark, SendGrid, etc.)
     const toAddress = payload.To || payload.to || '';
     const subject = payload.Subject || payload.subject || 'No Subject';
     const body = payload.TextBody || payload.text || payload.body || '';
@@ -23,7 +23,11 @@ export async function POST(req: NextRequest) {
     }
 
     const { firestore } = initializeFirebase();
+    if (!firestore) {
+      throw new Error("Firestore not initialized in webhook context.");
+    }
 
+    // 1. Identify user by the magic inbound address
     const usersRef = collection(firestore, 'users');
     const q = query(usersRef, where('inboundEmailAddress', '==', toAddress));
     const querySnapshot = await getDocs(q);
@@ -36,42 +40,39 @@ export async function POST(req: NextRequest) {
     const userDoc = querySnapshot.docs[0];
     const userId = userDoc.id;
 
-    const cleanedBody = body
-      .split('\n')
-      .filter((line: string) => !line.trim().startsWith('>') && !line.trim().startsWith('--'))
-      .join('\n')
-      .trim();
-
+    // 2. Store the raw inbound email for the ledger
     await addDoc(collection(firestore, 'users', userId, 'inbox'), {
       userId,
       subject,
-      body: cleanedBody,
+      body,
       from: fromAddress,
       receivedAt: new Date().toISOString(),
       createdAt: serverTimestamp(),
     });
 
-    // Run analysis directly using the server action internally
+    // 3. Trigger High-IQ Analysis on the email content
     const analysisResult = await analyzeFinancialDocument({
-      documentText: `Subject: ${subject}\n\n${cleanedBody}`,
+      documentText: `Subject: ${subject}\nFrom: ${fromAddress}\n\n${body}`,
+      source: 'email'
     });
 
+    // 4. Save the analysis result so it appears in Dashboard/History
     const analysesRef = collection(firestore, 'users', userId, 'analyses');
     const analysisDoc = await addDoc(analysesRef, {
       userId,
       source: 'email',
       title: analysisResult.title,
       summary: analysisResult.summary,
-      estimatedMonthlySavings: analysisResult.savingsEstimate,
+      estimatedMonthlySavings: analysisResult.savingsEstimate || 0,
       analysisDate: new Date().toISOString(),
       status: 'completed',
       inputMethod: 'email',
-      inputContent: cleanedBody,
+      inputContent: body,
       beforeComparison: JSON.stringify(analysisResult.beforeAfterComparison),
-      afterComparison: JSON.stringify(analysisResult.beforeAfterComparison),
       createdAt: serverTimestamp(),
     });
 
+    // 5. Store detected findings for actionability
     const itemsRef = collection(firestore, 'users', userId, 'analyses', analysisDoc.id, 'detected_items');
     for (const item of (analysisResult.detectedItems || [])) {
       await addDoc(itemsRef, {
@@ -83,7 +84,11 @@ export async function POST(req: NextRequest) {
       });
     }
 
-    return NextResponse.json({ success: true, analysisId: analysisDoc.id });
+    return NextResponse.json({ 
+      success: true, 
+      analysisId: analysisDoc.id, 
+      findings: analysisResult.detectedItems?.length || 0 
+    });
   } catch (error: any) {
     console.error('Inbound Email Webhook Error:', error);
     return NextResponse.json({ error: error.message }, { status: 500 });
