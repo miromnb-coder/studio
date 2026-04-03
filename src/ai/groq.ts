@@ -1,8 +1,8 @@
+
 import Groq from 'groq-sdk';
 
 /**
- * @fileOverview Groq SDK:n alustus.
- * Käyttää GROQ_API_KEY-ympäristömuuttujaa.
+ * @fileOverview Groq SDK Initialization.
  */
 
 export const groq = new Groq({

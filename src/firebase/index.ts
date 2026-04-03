@@ -1,12 +1,13 @@
 
-'use client';
-
 import { firebaseConfig } from '@/firebase/config';
 import { initializeApp, getApps, getApp, FirebaseApp } from 'firebase/app';
 import { getAuth } from 'firebase/auth';
 import { getFirestore } from 'firebase/firestore';
 
-// Core SDK initialization logic that is safe for both client and server (Route Handlers)
+/**
+ * @fileOverview Server-safe Firebase initialization.
+ */
+
 export function initializeFirebase() {
   if (getApps().length > 0) {
     const app = getApp();
@@ -17,8 +18,6 @@ export function initializeFirebase() {
     };
   }
 
-  const isApiKeyMissing = !firebaseConfig.apiKey || firebaseConfig.apiKey === 'undefined' || firebaseConfig.apiKey === '';
-
   try {
     const firebaseApp = initializeApp(firebaseConfig);
     return {
@@ -27,11 +26,7 @@ export function initializeFirebase() {
       firestore: getFirestore(firebaseApp)
     };
   } catch (e) {
-    if (isApiKeyMissing) {
-      console.warn('CRITICAL: Firebase API Key is missing. Returning placeholder SDKs.');
-    } else {
-      console.error('Firebase Initialization Error:', e);
-    }
+    console.error('Firebase Init Error:', e);
     return {
       firebaseApp: null as any,
       auth: null as any,
@@ -40,7 +35,6 @@ export function initializeFirebase() {
   }
 }
 
-// Re-export everything from the modular files
 export * from './provider';
 export * from './client-provider';
 export * from './firestore/use-collection';

@@ -1,11 +1,14 @@
 
+export const dynamic = 'force-dynamic';
+export const runtime = 'nodejs';
+
 import { NextRequest, NextResponse } from 'next/server';
 import { initializeFirebase } from '@/firebase';
 import { collection, query, where, getDocs, addDoc, serverTimestamp } from 'firebase/firestore';
-import { analyzeFinancialDocument } from '@/ai/flows/analyze-financial-document';
+import { runAgent } from '@/agent/agent';
 
 /**
- * @fileOverview Inbound Email Webhook Handler using Groq directly.
+ * @fileOverview Inbound Email Webhook Handler using Agent v3.
  */
 
 export async function POST(req: NextRequest) {
@@ -23,7 +26,7 @@ export async function POST(req: NextRequest) {
 
     const { firestore } = initializeFirebase();
     if (!firestore) {
-      throw new Error("Firestore not initialized in webhook context.");
+      throw new Error("Firestore not initialized.");
     }
 
     const usersRef = collection(firestore, 'users');
@@ -31,7 +34,6 @@ export async function POST(req: NextRequest) {
     const querySnapshot = await getDocs(q);
 
     if (querySnapshot.empty) {
-      console.warn(`No user found for inbound address: ${toAddress}`);
       return NextResponse.json({ error: 'User not found' }, { status: 404 });
     }
 
@@ -47,44 +49,29 @@ export async function POST(req: NextRequest) {
       createdAt: serverTimestamp(),
     });
 
-    const analysisResult = await analyzeFinancialDocument({
-      documentText: `Subject: ${subject}\nFrom: ${fromAddress}\n\n${body}`,
-      source: 'email'
-    });
+    const agentResult = await runAgent(`Email Analysis Request: Subject: ${subject}\n\n${body}`);
 
     const analysesRef = collection(firestore, 'users', userId, 'analyses');
     const analysisDoc = await addDoc(analysesRef, {
       userId,
       source: 'email',
-      title: analysisResult.title,
-      summary: analysisResult.summary,
-      estimatedMonthlySavings: analysisResult.savingsEstimate || 0,
+      title: subject,
+      summary: agentResult.content,
+      estimatedMonthlySavings: 0,
       analysisDate: new Date().toISOString(),
       status: 'completed',
       inputMethod: 'email',
       inputContent: body,
-      beforeComparison: JSON.stringify(analysisResult.beforeAfterComparison),
       createdAt: serverTimestamp(),
     });
 
-    const itemsRef = collection(firestore, 'users', userId, 'analyses', analysisDoc.id, 'detected_items');
-    for (const item of (analysisResult.detectedItems || [])) {
-      await addDoc(itemsRef, {
-        ...item,
-        userId,
-        analysisId: analysisDoc.id,
-        status: 'active',
-        createdAt: serverTimestamp(),
-      });
-    }
-
     return NextResponse.json({ 
       success: true, 
-      analysisId: analysisDoc.id, 
-      findings: analysisResult.detectedItems?.length || 0 
+      analysisId: analysisDoc.id,
+      intent: agentResult.intent
     });
   } catch (error: any) {
-    console.error('Inbound Email Webhook Error:', error);
+    console.error('Email Webhook Error:', error);
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 }
