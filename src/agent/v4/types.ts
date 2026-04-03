@@ -14,6 +14,12 @@ export interface ToolResult {
   action: string;
   output: any;
   error?: string;
+  errorType?: 'invalid_output' | 'timeout' | 'unknown_action' | 'execution_failed';
+  retry?: {
+    attempts: number;
+    maxRetries: number;
+    backoffMs: number[];
+  };
 }
 
 export interface CriticFeedback {

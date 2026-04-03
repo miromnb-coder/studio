@@ -17,11 +17,16 @@ export async function POST(req: Request) {
     }
 
     const { stream, fastPathResponse, metadata } = await runAgentV4Stream(input, userId, history, imageUri);
+    const normalizedMetadata = {
+      ...metadata,
+      toolResults: metadata?.toolResults ?? []
+    };
 
     if (fastPathResponse) {
       return NextResponse.json({ 
         content: fastPathResponse, 
-        ...metadata 
+        ...normalizedMetadata,
+        metadata: normalizedMetadata
       });
     }
 
@@ -29,7 +34,7 @@ export async function POST(req: Request) {
     const readableStream = new ReadableStream({
       async start(controller) {
         // First, send the metadata as a separate chunk
-        controller.enqueue(encoder.encode(`__METADATA__:${JSON.stringify(metadata)}\n`));
+        controller.enqueue(encoder.encode(`__METADATA__:${JSON.stringify(normalizedMetadata)}\n`));
 
         for await (const chunk of stream!) {
           const content = chunk.choices[0]?.delta?.content || "";
