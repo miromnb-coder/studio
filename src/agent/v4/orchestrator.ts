@@ -2,9 +2,9 @@ import { routeIntent } from './router';
 import { createPlan } from './planner';
 import { executeTools } from './tools';
 import { evaluateReasoning } from './critic';
-import { generateStreamResponse } from './generator';
+import { generateStreamResponse, generateToolCallResponse } from './generator';
 import { fetchMemory } from './memory';
-import { AgentContext } from './types';
+import { AgentContext, AgentOutputMode } from './types';
 
 /**
  * @fileOverview Orchestrator Agent v4.2: Streaming multi-agent pipeline.
@@ -20,6 +20,13 @@ async function checkFastPath(input: string): Promise<string | null> {
   return null;
 }
 
+const TOOL_ACTIONS = new Set([
+  'detect_leaks',
+  'optimize_time',
+  'generate_strategy',
+  'technical_debug'
+]);
+
 export async function runAgentV4Stream(input: string, userId: string, history: any[] = [], imageUri?: string) {
   console.log(`[AGENT_V4.2] Processing: "${input.slice(0, 50)}..."`);
 
@@ -27,6 +34,8 @@ export async function runAgentV4Stream(input: string, userId: string, history: a
   const fastPathResponse = await checkFastPath(input);
   if (fastPathResponse) {
     return {
+      mode: 'final_answer' as AgentOutputMode,
+      toolCall: null,
       stream: null,
       fastPathResponse,
       metadata: { intent: 'general', fastPathUsed: true }
@@ -42,10 +51,11 @@ export async function runAgentV4Stream(input: string, userId: string, history: a
   // 3. Structured Planning
   const plan = await createPlan(input, intent, history);
 
-  // 4. Tool Execution (Ground Truth)
-  const toolResults = await executeTools(plan, input, imageUri);
+  // 4. Decision Phase: tool_call vs final_answer
+  const mode: AgentOutputMode = plan.some((step) => TOOL_ACTIONS.has(step.action))
+    ? 'tool_call'
+    : 'final_answer';
 
-  // 5. Context Building
   const context: AgentContext = {
     input,
     history,
@@ -54,11 +64,33 @@ export async function runAgentV4Stream(input: string, userId: string, history: a
     intent,
     language,
     plan,
-    toolResults,
+    toolResults: [],
     fastPathUsed: false
   };
 
-  // 6. Critic / Self-Evaluation Loop
+  if (mode === 'tool_call') {
+    const toolCall = await generateToolCallResponse(context);
+    return {
+      mode,
+      toolCall,
+      stream: null,
+      fastPathResponse: null,
+      metadata: {
+        intent,
+        plan,
+        memoryUsed: !!memory,
+        fastPathUsed: false
+      }
+    };
+  }
+
+  // 5. Tool Execution (Ground Truth)
+  const toolResults = await executeTools(plan, input, imageUri);
+
+  // 6. Context Building
+  context.toolResults = toolResults;
+
+  // 7. Critic / Self-Evaluation Loop
   let feedback = await evaluateReasoning(input, context);
   if (feedback.needs_revision && feedback.score < 7) {
     console.log("[ORCHESTRATOR] Low confidence, re-planning logic chain...");
@@ -68,11 +100,13 @@ export async function runAgentV4Stream(input: string, userId: string, history: a
   }
   context.criticFeedback = feedback;
 
-  // 7. Streaming Response Generation
+  // 8. Streaming Response Generation
   const stream = await generateStreamResponse(context);
 
   return {
+    mode,
     stream,
+    toolCall: null,
     fastPathResponse: null,
     metadata: {
       intent,

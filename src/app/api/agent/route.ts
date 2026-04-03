@@ -16,12 +16,21 @@ export async function POST(req: Request) {
       throw new Error('GROQ_API_KEY is not configured.');
     }
 
-    const { stream, fastPathResponse, metadata } = await runAgentV4Stream(input, userId, history, imageUri);
+    const { mode, toolCall, stream, fastPathResponse, metadata } = await runAgentV4Stream(input, userId, history, imageUri);
 
     if (fastPathResponse) {
       return NextResponse.json({ 
+        mode: 'final_answer',
         content: fastPathResponse, 
         ...metadata 
+      });
+    }
+
+    if (mode === 'tool_call') {
+      return NextResponse.json({
+        mode,
+        ...toolCall,
+        metadata
       });
     }
 

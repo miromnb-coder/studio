@@ -22,6 +22,14 @@ export interface CriticFeedback {
   needs_revision: boolean;
 }
 
+export type AgentOutputMode = 'tool_call' | 'final_answer';
+
+export interface ToolCallPayload {
+  tool: string;
+  action: string;
+  input: string;
+}
+
 export interface AgentContext {
   input: string;
   history: any[];
