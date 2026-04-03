@@ -3,7 +3,7 @@ import { createPlan } from './planner';
 import { executeTools } from './tools';
 import { evaluateReasoning } from './critic';
 import { generateStreamResponse } from './generator';
-import { fetchMemory } from './memory';
+import { extractMemoryUpdates, fetchMemory, updateMemory } from './memory';
 import { AgentContext } from './types';
 
 /**
@@ -35,7 +35,7 @@ export async function runAgentV4Stream(input: string, userId: string, history: a
 
   // 2. Intent Routing & Memory Retrieval
   const [memory, { intent, language }] = await Promise.all([
-    fetchMemory(userId),
+    fetchMemory(userId, input),
     routeIntent(input, history)
   ]);
 
@@ -70,6 +70,8 @@ export async function runAgentV4Stream(input: string, userId: string, history: a
 
   // 7. Streaming Response Generation
   const stream = await generateStreamResponse(context);
+  const memoryUpdates = extractMemoryUpdates(context);
+  await updateMemory(userId, memoryUpdates);
 
   return {
     stream,
@@ -79,7 +81,8 @@ export async function runAgentV4Stream(input: string, userId: string, history: a
       plan,
       toolResults,
       critic: feedback,
-      memoryUsed: !!memory,
+      memoryUsed: !!memory?.profile || (memory?.records?.length ?? 0) > 0,
+      memoryRecordsRetrieved: memory?.records?.length ?? 0,
       fastPathUsed: false
     }
   };
