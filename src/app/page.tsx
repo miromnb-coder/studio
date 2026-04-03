@@ -83,6 +83,13 @@ function ChatContent() {
     setMounted(true);
   }, []);
 
+  // Fix: Move router.push into useEffect to avoid updating Router during render
+  useEffect(() => {
+    if (mounted && !isUserLoading && !user) {
+      router.push('/login');
+    }
+  }, [mounted, isUserLoading, user, router]);
+
   const messagesQuery = useMemoFirebase(() => {
     try {
       if (!db || !user || !conversationId) return null;
@@ -143,8 +150,16 @@ function ChatContent() {
     }
   };
 
-  if (mounted && !isUserLoading && !user) {
-    router.push('/login');
+  // Safe Rendering: Handle loading and unauthorized states before UI render
+  if (!mounted || isUserLoading) {
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center">
+        <Loader2 className="w-10 h-10 text-primary animate-spin" />
+      </div>
+    );
+  }
+
+  if (!user) {
     return null;
   }
 
