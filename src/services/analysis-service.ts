@@ -1,6 +1,6 @@
 /**
  * @fileOverview Client-side service wrapper for the AI Analysis API.
- * Guarantees a friendly, non-technical response even during complete failures.
+ * Hardened to handle timeouts and network errors gracefully.
  */
 
 export interface AnalysisInput {
@@ -15,7 +15,7 @@ export interface AnalysisInput {
 export interface AnalysisOutput {
   title: string;
   summary: string;
-  strategy: 'direct_answer' | 'guided_analysis' | 'proactive_alert' | 'concise_summary' | 'follow_up' | 'action_recommendation' | 'clarification' | 'checklist';
+  strategy: string;
   mode: 'alert' | 'advisor' | 'analyst' | 'planner' | 'executor' | 'reminder';
   detectedItems?: any[];
   savingsEstimate?: number;
@@ -23,27 +23,15 @@ export interface AnalysisOutput {
     currentSituation: string;
     optimizedSituation: string;
   };
-  followUpQuestion?: string;
   isActionable: boolean;
-  memoryUpdates?: {
-    newGoals?: string[];
-    newPreferences?: string[];
-    newSubscriptions?: string[];
-    newIgnoredSuggestions?: string[];
-    behaviorSummaryUpdate?: string;
-  };
+  memoryUpdates?: any;
 }
 
 export class AnalysisService {
   static async analyze(input: AnalysisInput): Promise<AnalysisOutput> {
-    const combinedText = [
-      input?.documentText,
-      input?.notes ? `User Notes: ${input.notes}` : null
-    ].filter(Boolean).join('\n\n');
-
     const fallbackResponse: AnalysisOutput = {
       title: "Advisor Update",
-      summary: "I'm currently processing the details. While I finalize the full audit, I recommend keeping an eye on any upcoming renewal dates for this service.",
+      summary: "I've encountered a connection delay. Please ensure your intelligence source is clear and try again.",
       strategy: 'direct_answer',
       mode: 'advisor',
       isActionable: false,
@@ -52,18 +40,16 @@ export class AnalysisService {
     };
 
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 35000); // 35s timeout
+    const timeoutId = setTimeout(() => controller.abort(), 45000); // 45s client-side limit
 
     try {
       const response = await fetch('/api/analyze', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
+        headers: { 'Content-Type': 'application/json' },
         signal: controller.signal,
         body: JSON.stringify({
           imageDataUri: input?.imageDataUri,
-          documentText: combinedText || "Manual audit request.",
+          documentText: input?.documentText || "Manual audit request.",
           history: input?.history || [],
           userMemory: input?.userMemory || null
         }),
@@ -72,34 +58,15 @@ export class AnalysisService {
       clearTimeout(timeoutId);
 
       if (!response.ok) {
+        console.warn(`Analysis API responded with status: ${response.status}`);
         return fallbackResponse;
       }
 
       const result = await response.json();
-      
-      return {
-        title: result?.title || "Audit Report",
-        summary: result?.summary || "Analysis finalized.",
-        strategy: result?.strategy || 'direct_answer',
-        mode: result?.mode || 'advisor',
-        isActionable: !!result?.isActionable,
-        detectedItems: Array.isArray(result?.detectedItems) ? result.detectedItems : [],
-        savingsEstimate: typeof result?.savingsEstimate === 'number' ? result.savingsEstimate : 0,
-        beforeAfterComparison: result?.beforeAfterComparison || undefined,
-        followUpQuestion: result?.followUpQuestion || undefined,
-        memoryUpdates: result?.memoryUpdates || undefined
-      };
+      return result;
     } catch (error: any) {
       clearTimeout(timeoutId);
-      console.error('Analysis Service Exception:', error);
-      
-      if (error.name === 'AbortError') {
-        return {
-          ...fallbackResponse,
-          summary: "This request is taking a bit longer to process due to its complexity. Let's try breaking it down into smaller details so I can provide a more immediate audit."
-        };
-      }
-      
+      console.error('Analysis Service Error:', error);
       return fallbackResponse;
     }
   }

@@ -1,16 +1,14 @@
 import { NextResponse } from 'next/server';
 import { analyzeFinancialDocument } from '@/ai/flows/analyze-financial-document';
 
-/**
- * @fileOverview API Route Handler for Financial Analysis.
- * Hardened to prevent system-style errors from reaching the user.
- */
+export const maxDuration = 60; // Increase timeout for Vercel Pro if applicable, or just explicitly set it
 
 export async function POST(req: Request) {
   try {
     const body = await req.json();
     
-    // Execute the analysis flow
+    console.log("API Route: Received request for analysis");
+
     const result = await analyzeFinancialDocument({
       imageDataUri: body.imageDataUri,
       documentText: body.documentText,
@@ -18,15 +16,18 @@ export async function POST(req: Request) {
       userMemory: body.userMemory
     });
 
-    // Ensure we always return a valid structure even if flow had internal issues
     return NextResponse.json(result);
   } catch (error: any) {
-    console.error('API Analysis Error:', error);
+    console.error('FATAL API ERROR:', {
+      message: error.message,
+      stack: error.stack,
+      cause: error.cause
+    });
     
-    // Return a 200 OK with a friendly fallback payload
+    // Return a structured response that the UI can handle without triggering a hard error
     return NextResponse.json({ 
-      title: "Intelligence Briefing",
-      summary: "I've reviewed the information provided. To give you a more detailed audit of your savings, could you share a bit more detail or a clear screenshot of the specific bill?",
+      title: "Sync Status: Advisor Mode",
+      summary: "I'm currently looking into this. There's a slight delay in my reasoning engine, but I'm still here. Could you try sending that again or share a bit more detail?",
       strategy: 'direct_answer',
       mode: 'advisor',
       isActionable: false,
