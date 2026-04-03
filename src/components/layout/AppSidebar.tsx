@@ -94,10 +94,10 @@ export function AppSidebar() {
   }, [conversations, searchTerm, showArchived]);
 
   const coreItems = [
-    { icon: LayoutDashboard, href: '/dashboard', label: 'Console' },
-    { icon: History, href: '/history', label: 'Audit Ledger' },
-    { icon: Zap, href: '/money-saver', label: 'Optimizer' },
-    { icon: Settings, href: '/settings', label: 'Sync' },
+    { icon: LayoutDashboard, href: '/dashboard', label: 'Command Center' },
+    { icon: History, href: '/history', label: 'Neural Memory' },
+    { icon: Zap, href: '/money-saver', label: 'Efficiency Autopilot' },
+    { icon: Settings, href: '/settings', label: 'Core Integration' },
   ];
 
   const handleRename = async (id: string, currentTitle: string) => {
@@ -213,7 +213,7 @@ export function AppSidebar() {
         <div className="px-4 mt-4 relative">
           <Search className="absolute left-7 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground/30" />
           <Input 
-            placeholder="Search ledger..." 
+            placeholder="Search Neural Memory..." 
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
             className="h-10 pl-10 bg-white/[0.03] border-white/5 text-[11px] font-medium rounded-xl focus:ring-primary/20 text-white placeholder:text-muted-foreground/20"

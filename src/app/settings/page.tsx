@@ -5,23 +5,20 @@ import { useState, useEffect } from 'react';
 import { Navbar } from '@/components/layout/Navbar';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Switch } from '@/components/ui/switch';
 import { Label } from '@/components/ui/label';
 import { 
   User, 
-  Bell, 
   Shield, 
   Mail,
   Copy,
   Check,
-  Zap,
   Info,
-  RefreshCw,
   Cpu,
   Loader2,
   Lock,
-  LogOut,
-  MailCheck
+  MailCheck,
+  Server,
+  Activity
 } from 'lucide-react';
 import { useUser, useFirestore, useDoc, useMemoFirebase } from '@/firebase';
 import { doc, updateDoc } from 'firebase/firestore';
@@ -39,7 +36,6 @@ export default function SettingsPage() {
 
   useEffect(() => {
     setMounted(true);
-    // Check local storage for persistent connection status in prototype
     const status = localStorage.getItem('operator_gmail_connected');
     if (status === 'true') setGmailConnected(true);
   }, []);
@@ -118,9 +114,43 @@ export default function SettingsPage() {
       
       <main className="max-w-4xl mx-auto px-6 space-y-16">
         <header className="space-y-4 pt-8">
-          <h1 className="text-5xl md:text-7xl font-bold font-headline tracking-tighter leading-[0.9] text-white">Sync.</h1>
-          <p className="text-xl text-muted-foreground font-medium">Protocol configuration and passive intelligence settings.</p>
+          <div className="flex items-center gap-3 text-primary mb-4">
+            <Server className="w-6 h-6" />
+            <span className="text-[10px] font-bold uppercase tracking-[0.4em]">System Configuration</span>
+          </div>
+          <h1 className="text-5xl md:text-7xl font-bold font-headline tracking-tighter leading-[0.9] text-white">Core Integration.</h1>
+          <p className="text-xl text-muted-foreground font-medium">Manage neural pathways, external ingestions, and system health.</p>
         </header>
+
+        <section className="premium-card bg-white/[0.02] border-white/5 p-8">
+           <h3 className="text-[10px] font-bold uppercase tracking-[0.3em] text-muted-foreground mb-6 flex items-center gap-2">
+              <Activity className="w-3.5 h-3.5" />
+              System Health
+           </h3>
+           <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+              <div className="p-4 rounded-xl bg-black/20 border border-white/5 space-y-2">
+                 <p className="text-[8px] font-bold uppercase text-muted-foreground tracking-widest">Intelligence Engine</p>
+                 <div className="flex items-center justify-between">
+                    <span className="text-xs font-bold text-white">Operational</span>
+                    <span className="w-1.5 h-1.5 rounded-full bg-success" />
+                 </div>
+              </div>
+              <div className="p-4 rounded-xl bg-black/20 border border-white/5 space-y-2">
+                 <p className="text-[8px] font-bold uppercase text-muted-foreground tracking-widest">Neural Database</p>
+                 <div className="flex items-center justify-between">
+                    <span className="text-xs font-bold text-white">Synchronized</span>
+                    <span className="w-1.5 h-1.5 rounded-full bg-success" />
+                 </div>
+              </div>
+              <div className="p-4 rounded-xl bg-black/20 border border-white/5 space-y-2">
+                 <p className="text-[8px] font-bold uppercase text-muted-foreground tracking-widest">Gmail Protocol</p>
+                 <div className="flex items-center justify-between">
+                    <span className="text-xs font-bold text-white">{gmailConnected ? 'Active' : 'Standby'}</span>
+                    <span className={cn("w-1.5 h-1.5 rounded-full", gmailConnected ? "bg-success" : "bg-warning")} />
+                 </div>
+              </div>
+           </div>
+        </section>
 
         <div className="grid grid-cols-1 gap-12">
           <div className="space-y-12">
@@ -130,9 +160,9 @@ export default function SettingsPage() {
               <div className="space-y-1">
                 <h2 className="text-xl font-bold font-headline tracking-tight uppercase tracking-widest text-[12px] flex items-center gap-2 text-white">
                   <MailCheck className="w-4 h-4 text-accent" />
-                  Direct Intelligence
+                  Primary Ingestion
                 </h2>
-                <p className="text-sm text-muted-foreground font-medium">Connect your primary inbox for autonomous audit scanning.</p>
+                <p className="text-sm text-muted-foreground font-medium">Connect your primary inbox for autonomous pattern scanning.</p>
               </div>
 
               <div className="premium-card bg-accent/5 border-accent/10 p-8 space-y-6">
@@ -140,7 +170,7 @@ export default function SettingsPage() {
                   <div className="space-y-2 text-center md:text-left">
                     <h3 className="text-2xl font-bold text-white tracking-tight">Gmail Connectivity</h3>
                     <p className="text-sm text-muted-foreground max-w-sm">
-                      The Operator will scan your recent receipts, invoices, and billing alerts. We only request read-only access.
+                      The Operator will scan your recent receipts and billing alerts. We only request read-only access.
                     </p>
                   </div>
                   
@@ -151,7 +181,7 @@ export default function SettingsPage() {
                         Protocol Active
                       </div>
                       <Button variant="ghost" onClick={handleDisconnectGmail} className="text-danger hover:text-danger hover:bg-danger/10 text-[10px] font-bold uppercase tracking-widest">
-                        Disconnect
+                        Sever Protocol
                       </Button>
                     </div>
                   ) : (
@@ -161,14 +191,14 @@ export default function SettingsPage() {
                       className="h-14 px-8 rounded-2xl bg-white text-background hover:bg-white/90 font-bold uppercase tracking-widest text-[10px] gap-3"
                     >
                       {isConnectingGmail ? <Loader2 className="w-4 h-4 animate-spin" /> : <Lock className="w-4 h-4" />}
-                      Connect Gmail
+                      Initialize Gmail
                     </Button>
                   )}
                 </div>
                 
                 <div className="pt-6 border-t border-white/5 flex items-center gap-3 text-[9px] font-bold uppercase tracking-[0.2em] text-muted-foreground/50">
                   <Shield className="w-3 h-3" />
-                  Privacy Protocol: No full message bodies are stored permanently.
+                  Privacy Protocol: No full message bodies are stored permanently in Neural Memory.
                 </div>
               </div>
             </section>
@@ -177,14 +207,14 @@ export default function SettingsPage() {
               <div className="space-y-1">
                 <h2 className="text-xl font-bold font-headline tracking-tight uppercase tracking-widest text-[12px] flex items-center gap-2 text-white">
                   <Mail className="w-4 h-4 text-primary" />
-                  Inbound Protocol
+                  Manual Ingestion
                 </h2>
-                <p className="text-sm text-muted-foreground font-medium">Magic address for manual document ingestion.</p>
+                <p className="text-sm text-muted-foreground font-medium">Neural forwarding address for individual document ingestion.</p>
               </div>
 
               <div className="premium-card bg-primary/5 border-primary/10 p-8 space-y-8">
                 <div className="space-y-3">
-                  <Label className="text-[10px] uppercase font-bold tracking-widest text-primary">Magic Forwarding Address</Label>
+                  <Label className="text-[10px] uppercase font-bold tracking-widest text-primary">Neural Forwarding Address</Label>
                   <div className="flex gap-3">
                     <Input 
                       readOnly 
@@ -198,7 +228,7 @@ export default function SettingsPage() {
                 </div>
                 <div className="p-4 rounded-xl bg-white/[0.02] border border-white/5 flex gap-4 text-xs text-muted-foreground leading-relaxed">
                   <Info className="w-4 h-4 text-primary shrink-0" />
-                  <p>Forward any receipt or bank statement to this address. The Operator will automatically audit the contents within 30 seconds.</p>
+                  <p>Forward any receipt or bank statement to this address. The Operator will scan for patterns within 30 seconds.</p>
                 </div>
               </div>
             </section>
@@ -207,18 +237,18 @@ export default function SettingsPage() {
               <div className="space-y-1">
                 <h2 className="text-xl font-bold font-headline tracking-tight uppercase tracking-widest text-[12px] flex items-center gap-2 text-white">
                   <User className="w-4 h-4 text-muted-foreground" />
-                  Operator Profile
+                  Identity Profile
                 </h2>
               </div>
 
               <div className="premium-card p-8 space-y-6">
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
                   <div className="space-y-2">
-                    <Label className="text-[10px] uppercase font-bold tracking-widest text-muted-foreground">Display Identity</Label>
+                    <Label className="text-[10px] uppercase font-bold tracking-widest text-muted-foreground">Identity Handle</Label>
                     <Input value={profile?.displayName || ''} readOnly className="h-12 bg-white/5 border-white/5 rounded-xl" />
                   </div>
                   <div className="space-y-2">
-                    <Label className="text-[10px] uppercase font-bold tracking-widest text-muted-foreground">Communication Channel</Label>
+                    <Label className="text-[10px] uppercase font-bold tracking-widest text-muted-foreground">Contact Channel</Label>
                     <Input value={profile?.email || ''} readOnly className="h-12 bg-white/5 border-white/5 rounded-xl" />
                   </div>
                 </div>
