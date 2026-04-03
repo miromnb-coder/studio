@@ -1,11 +1,11 @@
-
 import { firebaseConfig } from '@/firebase/config';
-import { initializeApp, getApps, getApp, FirebaseApp } from 'firebase/app';
+import { initializeApp, getApps, getApp } from 'firebase/app';
 import { getAuth } from 'firebase/auth';
 import { getFirestore } from 'firebase/firestore';
 
 /**
  * @fileOverview Server-safe Firebase initialization.
+ * Shared entry point for both client and server components.
  */
 
 export function initializeFirebase() {
@@ -26,7 +26,7 @@ export function initializeFirebase() {
       firestore: getFirestore(firebaseApp)
     };
   } catch (e) {
-    console.error('Firebase Init Error:', e);
+    console.error('Firebase Initialization Failure:', e);
     return {
       firebaseApp: null as any,
       auth: null as any,

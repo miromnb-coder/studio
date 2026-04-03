@@ -1,34 +1,45 @@
-
 import { NextResponse } from 'next/server';
-import { analyzeFinancialDocument } from '@/ai/flows/analyze-financial-document';
+import { runAgent } from '@/agent/agent';
 
-export const maxDuration = 60; 
+/**
+ * @fileOverview Legacy API Wrapper.
+ * Redirects legacy /api/analyze calls to the unified Agent v3 Pipeline.
+ */
+
+export const dynamic = 'force-dynamic';
+export const runtime = 'nodejs';
 
 export async function POST(req: Request) {
   try {
     const body = await req.json();
     
-    console.log("API Route: Processing analysis request via Groq...");
+    console.log("LEGACY_REDIRECT: Routing to Agent v3...");
+    const result = await runAgent(
+      body.documentText || "Analysis Request",
+      body.history || [],
+      body.userMemory || null,
+      body.imageDataUri
+    );
 
-    const result = await analyzeFinancialDocument({
-      imageDataUri: body.imageDataUri,
-      documentText: body.documentText,
-      history: body.history,
-      userMemory: body.userMemory
+    // Maintain backwards compatibility for the return format
+    return NextResponse.json({
+      title: result.data?.title || "Audit Report",
+      summary: result.content,
+      strategy: result.data?.strategy || "Standard advisor protocol.",
+      mode: result.mode,
+      isActionable: result.isActionable,
+      detectedItems: result.data?.data?.detectedItems || result.data?.detectedItems || [],
+      savingsEstimate: result.data?.data?.savingsEstimate || result.data?.savingsEstimate || 0,
+      beforeAfterComparison: result.data?.beforeAfterComparison || null,
+      memoryUpdates: result.data?.memoryUpdates || null
     });
-
-    return NextResponse.json(result);
   } catch (error: any) {
-    console.error('CRITICAL API ERROR:', error.message);
-    
+    console.error('LEGACY_API_ERROR:', error.message);
     return NextResponse.json({ 
-      title: "Yhteyshäiriö",
-      summary: "Huomasin pienen viiveen älymoottorissa. Tarkista, että GROQ_API_KEY on asetettu oikein Vercel-ympäristöön.",
-      strategy: 'Suosittelen tarkistamaan järjestelmän tilan.',
-      mode: 'advisor',
+      title: "Sync Delayed",
+      summary: "I'm reconnecting with my reasoning engine. Please standby.",
       isActionable: false,
-      detectedItems: [],
-      savingsEstimate: 0
+      mode: 'general'
     });
   }
 }

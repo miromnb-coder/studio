@@ -1,23 +1,21 @@
-
 /**
- * @fileOverview Client-side service wrapper for the AI Analysis API.
- * Hardened to handle timeouts and network errors gracefully.
+ * @fileOverview AI Agent Service Wrapper.
+ * Unifies all intelligence calls through the Agent v3 pipeline.
  */
 
 export interface AnalysisInput {
   imageDataUri?: string;
   documentText?: string;
-  notes?: string;
-  source?: 'screenshot' | 'pasted_text' | 'email' | 'chat';
   history?: Array<{role: 'user' | 'assistant', content: string}>;
   userMemory?: any;
+  source?: string;
 }
 
 export interface AnalysisOutput {
   title: string;
   summary: string;
   strategy: string;
-  mode: 'alert' | 'advisor' | 'analyst' | 'planner' | 'executor' | 'reminder' | 'time_optimizer' | 'monetization' | 'technical' | 'general';
+  mode: string;
   detectedItems?: any[];
   savingsEstimate?: number;
   beforeAfterComparison?: {
@@ -29,45 +27,51 @@ export interface AnalysisOutput {
 }
 
 export class AnalysisService {
+  /**
+   * Main entry point for all AI intelligence.
+   * Routes requests through the Agent v3 Pipeline.
+   */
   static async analyze(input: AnalysisInput): Promise<AnalysisOutput> {
     const fallbackResponse: AnalysisOutput = {
-      title: "Advisor Update",
-      summary: "I've encountered a connection delay. Please ensure your intelligence source is clear and try again.",
-      strategy: 'direct_answer',
+      title: "Agent Standby",
+      summary: "I've encountered a connection delay with the reasoning core. Please retry your instruction.",
+      strategy: 'Verify API status.',
       mode: 'general',
       isActionable: false,
       detectedItems: [],
       savingsEstimate: 0,
     };
 
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 55000); // 55s client-side limit for complex planning
-
     try {
-      const response = await fetch('/api/analyze', {
+      const response = await fetch('/api/agent', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        signal: controller.signal,
         body: JSON.stringify({
-          imageDataUri: input?.imageDataUri,
-          documentText: input?.documentText || "Manual audit request.",
-          history: input?.history || [],
-          userMemory: input?.userMemory || null
+          input: input.documentText || "Analyze visual source.",
+          history: input.history || [],
+          memory: input.userMemory || null,
+          imageUri: input.imageDataUri
         }),
       });
 
-      clearTimeout(timeoutId);
-
-      if (!response.ok) {
-        console.warn(`Analysis API responded with status: ${response.status}`);
-        return fallbackResponse;
-      }
+      if (!response.ok) return fallbackResponse;
 
       const result = await response.json();
-      return result;
+      
+      // Map AgentResult back to the legacy AnalysisOutput format for UI compatibility
+      return {
+        title: result.data?.title || result.intent.toUpperCase() + " Audit",
+        summary: result.content,
+        strategy: result.data?.strategy || "Execution protocol generated.",
+        mode: result.mode,
+        isActionable: result.isActionable,
+        detectedItems: result.data?.data?.detectedItems || result.data?.detectedItems || [],
+        savingsEstimate: result.data?.data?.savingsEstimate || result.data?.savingsEstimate || 0,
+        beforeAfterComparison: result.data?.beforeAfterComparison || null,
+        memoryUpdates: result.data?.memoryUpdates || null
+      };
     } catch (error: any) {
-      clearTimeout(timeoutId);
-      console.error('Analysis Service Error:', error);
+      console.error('Agent Service Error:', error);
       return fallbackResponse;
     }
   }
