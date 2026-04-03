@@ -35,3 +35,14 @@ export interface AgentContext {
   finalResponse?: any;
   fastPathUsed: boolean;
 }
+
+export interface SessionMemoryRecord {
+  scope: 'conversation' | 'session';
+  topic: string;
+  decision: string;
+  confidence: number;
+  outcomeSummary: string;
+  keywords: string[];
+  tags: string[];
+  timestamp: number;
+}
