@@ -60,11 +60,41 @@ export async function runAgentV4Stream(input: string, userId: string, history: a
 
   // 6. Critic / Self-Evaluation Loop
   let feedback = await evaluateReasoning(input, context);
-  if (feedback.needs_revision && feedback.score < 7) {
-    console.log("[ORCHESTRATOR] Low confidence, re-planning logic chain...");
-    context.plan = await createPlan(input, intent, history);
-    context.toolResults = await executeTools(context.plan, input, imageUri);
+  const hasToolError = context.toolResults.some((result) => !!result.errorType);
+  const invalidOutputError = context.toolResults.some((result) => result.errorType === 'invalid_output');
+  const timeoutError = context.toolResults.some((result) => result.errorType === 'timeout');
+  const unknownActionError = context.toolResults.some((result) => result.errorType === 'unknown_action');
+
+  if ((feedback.needs_revision && feedback.score < 7) || hasToolError) {
+    let strategy = 'full_replan';
+    console.log("[ORCHESTRATOR] Critic revision or tool error detected. Selecting correction strategy...");
+
+    if (invalidOutputError) {
+      strategy = 'schema_recovery';
+      // Keep same plan but re-run with retries already baked into tool execution.
+      context.toolResults = await executeTools(context.plan, input, imageUri);
+    } else if (timeoutError) {
+      strategy = 'timeout_reduction';
+      // Timeout can improve with smaller plan footprint.
+      context.plan = context.plan.slice(0, Math.max(1, Math.min(2, context.plan.length)));
+      context.toolResults = await executeTools(context.plan, input, imageUri);
+    } else if (unknownActionError) {
+      strategy = 'known_actions_replan';
+      // Unknown actions indicate planner drift; fully re-plan and keep known tool actions only.
+      const replanned = await createPlan(input, intent, history);
+      const knownActions = new Set(['analyze', 'detect_leaks', 'optimize_time', 'generate_strategy', 'technical_debug', 'suggest_actions']);
+      context.plan = replanned.filter((step) => knownActions.has(step.action));
+      if (!context.plan.length) {
+        context.plan = [{ action: 'analyze', priority: 'high' }];
+      }
+      context.toolResults = await executeTools(context.plan, input, imageUri);
+    } else {
+      context.plan = await createPlan(input, intent, history);
+      context.toolResults = await executeTools(context.plan, input, imageUri);
+    }
+
     feedback = await evaluateReasoning(input, context);
+    feedback.issues = [...feedback.issues, `correction_strategy:${strategy}`];
   }
   context.criticFeedback = feedback;
 
@@ -76,8 +106,8 @@ export async function runAgentV4Stream(input: string, userId: string, history: a
     fastPathResponse: null,
     metadata: {
       intent,
-      plan,
-      toolResults,
+      plan: context.plan,
+      toolResults: context.toolResults,
       critic: feedback,
       memoryUsed: !!memory,
       fastPathUsed: false
