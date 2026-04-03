@@ -1,3 +1,4 @@
+
 /**
  * @fileOverview Client-side service wrapper for the AI Analysis API.
  * Hardened to handle timeouts and network errors gracefully.
@@ -16,7 +17,7 @@ export interface AnalysisOutput {
   title: string;
   summary: string;
   strategy: string;
-  mode: 'alert' | 'advisor' | 'analyst' | 'planner' | 'executor' | 'reminder';
+  mode: 'alert' | 'advisor' | 'analyst' | 'planner' | 'executor' | 'reminder' | 'time_optimizer' | 'monetization' | 'technical' | 'general';
   detectedItems?: any[];
   savingsEstimate?: number;
   beforeAfterComparison?: {
@@ -33,14 +34,14 @@ export class AnalysisService {
       title: "Advisor Update",
       summary: "I've encountered a connection delay. Please ensure your intelligence source is clear and try again.",
       strategy: 'direct_answer',
-      mode: 'advisor',
+      mode: 'general',
       isActionable: false,
       detectedItems: [],
       savingsEstimate: 0,
     };
 
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 45000); // 45s client-side limit
+    const timeoutId = setTimeout(() => controller.abort(), 55000); // 55s client-side limit for complex planning
 
     try {
       const response = await fetch('/api/analyze', {

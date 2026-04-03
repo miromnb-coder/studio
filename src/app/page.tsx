@@ -27,7 +27,10 @@ import {
   Trash2,
   Archive,
   Edit2,
-  ArrowDown
+  ArrowDown,
+  Clock,
+  Coins,
+  Map
 } from 'lucide-react';
 import { AnalysisService } from '@/services/analysis-service';
 import { MemoryService } from '@/services/memory-service';
@@ -60,19 +63,11 @@ interface Message {
   timestamp: any;
 }
 
-/**
- * Robust date formatting for chat messages.
- * Handles Firestore Timestamps, Dates, and pending server values.
- */
 const formatSafeTime = (timestamp: any) => {
   if (!timestamp) return '...';
-  
-  // Handle Firestore Timestamp
   if (timestamp && typeof timestamp.toDate === 'function') {
     return timestamp.toDate().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
   }
-  
-  // Handle Date or string
   try {
     const d = new Date(timestamp);
     if (isNaN(d.getTime())) return '...';
@@ -259,7 +254,7 @@ function ChatContent() {
       const assistantMessage: Message = {
         id: Math.random().toString(36).substr(2, 9),
         role: 'assistant',
-        content: result?.summary || "Audit complete. I'm standing by for your next instruction.",
+        content: result?.summary || "Agent synchronized. Standing by for intent.",
         type: result?.isActionable ? 'analysis_result' : 'text',
         strategy: result?.strategy,
         mode: result?.mode,
@@ -281,7 +276,7 @@ function ChatContent() {
         role: 'assistant',
         content: "I've encountered a slight delay in processing. I'm still here to help—could you please re-share that last detail so I can finish the audit?",
         type: 'text',
-        mode: 'advisor',
+        mode: 'general',
         timestamp: new Date(),
       };
 
@@ -307,6 +302,10 @@ function ChatContent() {
       case 'analyst': return <BrainCircuit className="w-3.5 h-3.5 text-primary" />;
       case 'planner': return <ListChecks className="w-3.5 h-3.5 text-accent" />;
       case 'executor': return <ShieldCheck className="w-3.5 h-3.5 text-success" />;
+      case 'time_optimizer': return <Clock className="w-3.5 h-3.5 text-primary" />;
+      case 'monetization': return <Coins className="w-3.5 h-3.5 text-warning" />;
+      case 'technical': return <Cpu className="w-3.5 h-3.5 text-muted-foreground" />;
+      case 'planning': return <Map className="w-3.5 h-3.5 text-accent" />;
       default: return <Cpu className="w-3.5 h-3.5 text-muted-foreground" />;
     }
   };
@@ -340,7 +339,7 @@ function ChatContent() {
                     <div className="flex items-center gap-3 mb-2 ml-1">
                       <div className="p-1.5 rounded-lg bg-white/5 border border-white/5">{getModeIcon(msg.mode)}</div>
                       <span className="text-[10px] font-bold uppercase tracking-[0.2em] text-muted-foreground/40">
-                        {msg.mode || 'Operator'} • {msg.strategy?.replace('_', ' ') || 'Advisor'}
+                        {msg.mode?.replace('_', ' ') || 'Operator'} • {msg.strategy?.slice(0, 20).replace('_', ' ') || 'Advisor'}
                       </span>
                     </div>
                   )}
@@ -380,7 +379,7 @@ function ChatContent() {
               <Cpu className="w-16 h-16 text-primary" />
               <div className="space-y-2">
                 <p className="text-2xl font-bold font-headline tracking-tighter">Ready to Audit</p>
-                <p className="text-sm font-medium uppercase tracking-[0.3em]">Operator Online • Logic Engaged</p>
+                <p className="text-sm font-medium uppercase tracking-[0.3em]">Agent v3 Online • Adaptive Intent Active</p>
               </div>
             </div>
           )}
