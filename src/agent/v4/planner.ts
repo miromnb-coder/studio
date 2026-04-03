@@ -11,7 +11,7 @@ Input: ${input}
 Return ONLY valid JSON in this format:
 {
   "steps": [
-    { "action": "analyze", "priority": "high" }
+    { "action": "analyze", "priority": "high", "payload": {} }
   ]
 }
 
@@ -34,7 +34,12 @@ No explanation. No markdown.
 
     // TURVALLINEN PARSE
     const parsed = JSON.parse(content);
-    const plan: AgentStep[] = parsed.steps || [];
+    const plan: AgentStep[] = (parsed.steps || []).map((step: any) => ({
+      action: step.action,
+      priority: step.priority,
+      description: step.description,
+      payload: step.payload
+    }));
 
     if (!plan.length) {
       return [{ action: 'analyze', priority: 'high' }];
