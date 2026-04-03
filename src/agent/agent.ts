@@ -12,5 +12,6 @@ import { runAgentV4 } from './v4/orchestrator';
 
 export async function runAgent(input: string, history: any[] = [], memory: any = null, imageUri?: string) {
   console.log(`[AGENT_V4] Processing instruction: "${input.slice(0, 50)}..."`);
+  // Legacy consumers expect a finalized, non-stream response shape.
   return runAgentV4(input, history, memory, imageUri);
 }
