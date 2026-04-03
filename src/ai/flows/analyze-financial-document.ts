@@ -1,14 +1,12 @@
-
 'use server';
 /**
  * @fileOverview High-IQ "AI Life Operator" reasoning engine.
  * Implements dynamic strategy selection, intent routing, and memory-aware behavior.
- * Hardened for production-grade JSON reliability and safe fallback recovery.
+ * Standardized to use Genkit 1.x for reliable AI orchestration.
  */
 
-import {ai} from '@/ai/genkit';
-import {z} from 'genkit';
-import Groq from 'groq-sdk';
+import { ai } from '@/ai/genkit';
+import { z } from 'genkit';
 
 const DetectedItemSchema = z.object({
   title: z.string().describe('The name of the service or category.'),
@@ -40,8 +38,8 @@ const UserMemorySchema = z.object({
 }).optional();
 
 const AnalyzeFinancialDocumentInputSchema = z.object({
-  imageDataUri: z.string().optional(),
-  documentText: z.string().optional(),
+  imageDataUri: z.string().optional().describe("A photo of a document as a data URI."),
+  documentText: z.string().optional().describe("The text content of the document."),
   history: z.array(z.object({
     role: z.enum(['user', 'assistant']),
     content: z.string(),
@@ -81,122 +79,77 @@ const AnalyzeFinancialDocumentOutputSchema = z.object({
 });
 
 export type AnalyzeFinancialDocumentOutput = z.infer<typeof AnalyzeFinancialDocumentOutputSchema>;
+export type AnalyzeFinancialDocumentInput = z.infer<typeof AnalyzeFinancialDocumentInputSchema>;
 
-export async function analyzeFinancialDocument(input: z.infer<typeof AnalyzeFinancialDocumentInputSchema>): Promise<AnalyzeFinancialDocumentOutput> {
-  const apiKey = process.env.GROQ_API_KEY;
-  
-  const fallback: AnalyzeFinancialDocumentOutput = {
-    title: "Intelligence Update",
-    summary: "I've reviewed your request. To provide a precise audit of your savings, could you share a bit more detail or a clear screenshot of the specific bill?",
-    strategy: 'direct_answer',
-    mode: 'advisor',
-    isActionable: false,
-    detectedItems: [],
-    savingsEstimate: 0,
-  };
-
-  if (!apiKey) {
-    console.warn("GROQ_API_KEY is missing. Returning safe advisor mode.");
-    return fallback;
-  }
-
-  const groq = new Groq({ apiKey });
-
-  const historyContext = input.history?.map(msg => `${msg.role.toUpperCase()}: ${msg.content}`).join('\n') || "No previous history.";
-  const latestMessage = input.history?.slice(-1)[0]?.content || input.documentText || "No input provided";
-  
-  const memoryContext = input.userMemory ? `
-USER MEMORY PROTOCOL:
-- Behavior Summary: ${input.userMemory.behaviorSummary || 'Passive gathering active.'}
-- Goals: ${input.userMemory.goals?.join(', ') || 'None set.'}
-- Subscriptions: ${input.userMemory.subscriptions?.join(', ') || 'None detected.'}
-- Preferences: ${input.userMemory.preferences?.join(', ') || 'No explicit preferences.'}
-- Ignored/Rejected: ${input.userMemory.ignoredSuggestions?.join(', ') || 'None.'}
-  ` : "USER MEMORY: Not initialized.";
-
-  const systemPrompt = `You are a "High-IQ Life Operator Assistant". You are refined, intelligent, proactive, and analytical.
+/**
+ * Prompt definition using Handlebars templating.
+ */
+const analyzePrompt = ai.definePrompt({
+  name: 'analyzeFinancialDocumentPrompt',
+  input: { schema: AnalyzeFinancialDocumentInputSchema },
+  output: { schema: AnalyzeFinancialDocumentOutputSchema },
+  prompt: `You are a "High-IQ Life Operator Assistant". You are refined, intelligent, proactive, and analytical.
 Your primary directive is to save the user time and money through strategic oversight.
 
 OPERATIONAL GUIDELINES:
 1. CHAIN OF THOUGHT: Analyze the user's intent, conversation history, and user memory before selecting a strategy.
 2. ADAPTIVE STRATEGY: Do not use the same tone or format every time. Choose the best 'strategy' and 'mode' for the context.
-3. MEMORY AWARENESS: Respect past decisions. If a user ignored a suggestion, do not suggest it again unless the context has changed.
+3. MEMORY AWARENESS: Respect past decisions.
 4. FRESH DIALOGUE: Avoid repetitive phrases. Be conversational, concise, and professional.
-5. INTENT ROUTING: 
-   - Financial Audit (statements/receipts) -> 'analyst' mode, 'guided_analysis' strategy.
-   - High Waste Found -> 'alert' mode, 'proactive_alert' strategy.
-   - General Planning -> 'planner' mode, 'checklist' strategy.
-   - Quick Question -> 'advisor' mode, 'direct_answer' strategy.
 
-MEMORY CONTEXT:
-${memoryContext}
+USER MEMORY PROTOCOL:
+- Behavior Summary: {{{userMemory.behaviorSummary}}}
+- Goals: {{#each userMemory.goals}}{{{this}}}, {{/each}}
+- Subscriptions: {{#each userMemory.subscriptions}}{{{this}}}, {{/each}}
 
 THREAD HISTORY:
-${historyContext}
+{{#each history}}
+- {{{role}}}: {{{content}}}
+{{/each}}
 
-USER INTENT:
-"${latestMessage}"
+LATEST USER INPUT:
+{{{documentText}}}
 
-CURRENT INPUT:
-${input.documentText || latestMessage}
+{{#if imageDataUri}}
+VISUAL SOURCE PROVIDED:
+{{media url=imageDataUri}}
+{{/if}}
 
-OUTPUT SCHEMA REQUIREMENT:
-You MUST return a JSON object exactly matching the schema. Select the most strategic 'mode' and 'strategy'.`;
+OUTPUT REQUIREMENT:
+Analyze the input and return a JSON object. Select the most strategic 'mode' and 'strategy'.`,
+});
 
-  try {
-    const completion = await groq.chat.completions.create({
-      messages: [
-        { role: 'system', content: 'You are a High-IQ Life Operator Assistant. Always output valid JSON.' },
-        { role: 'user', content: systemPrompt },
-      ],
-      model: 'llama-3.3-70b-versatile',
-      response_format: { type: 'json_object' },
-      temperature: 0.1,
-    });
-
-    const content = completion.choices[0]?.message?.content;
+/**
+ * The main Genkit Flow for financial document analysis.
+ */
+const analyzeFinancialDocumentFlow = ai.defineFlow(
+  {
+    name: 'analyzeFinancialDocumentFlow',
+    inputSchema: AnalyzeFinancialDocumentInputSchema,
+    outputSchema: AnalyzeFinancialDocumentOutputSchema,
+  },
+  async (input) => {
+    const { output } = await analyzePrompt(input);
     
-    if (!content) {
-      console.error('Groq returned an empty response content.');
-      return fallback;
+    if (!output) {
+      return {
+        title: "Intelligence Briefing",
+        summary: "I've reviewed the information. To give you a more detailed audit, could you share a bit more detail or a clearer source?",
+        strategy: 'direct_answer',
+        mode: 'advisor',
+        isActionable: false,
+        detectedItems: [],
+        savingsEstimate: 0
+      };
     }
 
-    // Attempt to parse JSON with recovery logic
-    let result;
-    try {
-      result = JSON.parse(content);
-    } catch (e) {
-      console.warn("Initial JSON parse failed. Attempting cleanup/recovery.");
-      try {
-        const jsonMatch = content.match(/\{[\s\S]*\}/);
-        if (jsonMatch) {
-          result = JSON.parse(jsonMatch[0]);
-        } else {
-          throw new Error("No JSON structure found in response content.");
-        }
-      } catch (recoveryError) {
-        console.error("JSON Recovery failed:", content);
-        return fallback;
-      }
-    }
-
-    // Validate with Zod for safe runtime usage
-    const parsed = AnalyzeFinancialDocumentOutputSchema.safeParse({
-      ...result,
-      detectedItems: Array.isArray(result.detectedItems) ? result.detectedItems : [],
-      savingsEstimate: typeof result.savingsEstimate === 'number' ? result.savingsEstimate : 0,
-      isActionable: !!result.isActionable,
-    });
-
-    if (!parsed.success) {
-      console.error('Zod Validation Failed for model output:', parsed.error.format());
-      return fallback;
-    }
-
-    return parsed.data;
-
-  } catch (error) {
-    console.error('Groq Intelligence Error:', error);
-    return fallback;
+    return output;
   }
+);
+
+/**
+ * Wrapper function for the flow to be called by API routes or client components.
+ */
+export async function analyzeFinancialDocument(input: AnalyzeFinancialDocumentInput): Promise<AnalyzeFinancialDocumentOutput> {
+  return analyzeFinancialDocumentFlow(input);
 }
