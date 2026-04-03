@@ -81,18 +81,45 @@ const tools = {
   }
 };
 
+const DETERMINISTIC_CACHEABLE_ACTIONS = new Set([
+  'detect_leaks',
+  'technical_debug',
+  'analyze'
+]);
+
+const VOLATILE_ACTION_HINTS = ['search', 'weather', 'quote', 'price', 'time', 'date', 'news'];
+
+export function isToolActionVolatile(action: string): boolean {
+  const normalized = action.toLowerCase();
+  return VOLATILE_ACTION_HINTS.some((hint) => normalized.includes(hint));
+}
+
+export function isCacheableToolAction(action: string, imageUri?: string): boolean {
+  if (imageUri) return false;
+  return DETERMINISTIC_CACHEABLE_ACTIONS.has(action);
+}
+
+export async function executeToolStep(step: AgentStep, input: string, imageUri?: string): Promise<ToolResult> {
+  const tool = tools[step.action as keyof typeof tools];
+  if (!tool) {
+    return { action: step.action, output: null, error: 'Unsupported tool action.' };
+  }
+
+  try {
+    const result = await tool(input, imageUri);
+    return { action: step.action, output: result };
+  } catch {
+    return { action: step.action, output: null, error: 'Execution failed.' };
+  }
+}
+
 export async function executeTools(plan: AgentStep[], input: string, imageUri?: string): Promise<ToolResult[]> {
   console.log("[TOOLS] Executing tools...");
   const results: ToolResult[] = [];
   for (const step of plan) {
-    const tool = tools[step.action as keyof typeof tools];
-    if (tool) {
-      try {
-        const result = await tool(input, imageUri);
-        results.push({ action: step.action, output: result });
-      } catch (err) {
-        results.push({ action: step.action, output: null, error: "Execution failed." });
-      }
+    const result = await executeToolStep(step, input, imageUri);
+    if (!result.error || result.error !== 'Unsupported tool action.') {
+      results.push(result);
     }
   }
   return results;
