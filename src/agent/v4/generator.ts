@@ -2,35 +2,37 @@ import { groq } from '@/ai/groq';
 import { AgentContext } from './types';
 
 /**
- * @fileOverview Streaming Response Generator Agent.
+ * @fileOverview Streaming Response Generator Agent v4.2.
+ * Strictly produces the final answer based on context and tools.
  */
 
 export async function generateStreamResponse(context: AgentContext) {
-  console.log("[GENERATOR] Initializing stream...");
-  const prompt = `
-    User Input: ${context.input}
-    Language: ${context.language}
-    Intent: ${context.intent}
-    Tool Outputs: ${JSON.stringify(context.toolResults)}
-    Memory: ${JSON.stringify(context.memory || {})}
-    Critic Feedback: ${JSON.stringify(context.criticFeedback || {})}
+  const systemPrompt = `
+    You are Agent v4.2 within the Operator system.
+    
+    RULES:
+    - Respond in ${context.language}.
+    - Be concise and precise.
+    - Base your response ONLY on the provided context, tool results, and memory.
+    - Do NOT include internal reasoning or plan details.
+    - Do NOT hallucinate.
+    - If tools failed, state clearly that information is unavailable.
 
-    Objective: Provide a clear, actionable, and grounded response in ${context.language}.
-    
-    Structure your response naturally. If the intent is finance, include estimated savings. 
-    If the intent is technical, provide implementation steps.
-    
-    NEVER explain that you are an AI or using tools. Be the Operator.
+    CONTEXT:
+    Intent: ${context.intent}
+    Memory: ${JSON.stringify(context.memory || {})}
+    Tool Outputs: ${JSON.stringify(context.toolResults)}
+    Critic Evaluation: ${JSON.stringify(context.criticFeedback || {})}
   `;
 
   return groq.chat.completions.create({
     model: 'llama-3.3-70b-versatile',
     messages: [
-      { role: 'system', content: 'You are the AI Life Operator v4.2. Speak directly and efficiently.' },
-      ...context.history.slice(-5),
-      { role: 'user', content: prompt }
+      { role: 'system', content: systemPrompt },
+      ...context.history.slice(-10),
+      { role: 'user', content: context.input }
     ],
-    temperature: 0.2,
+    temperature: 0.1, // Low temperature for high precision
     stream: true,
   });
 }
