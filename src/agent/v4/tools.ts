@@ -1,5 +1,5 @@
 import { groq } from '@/ai/groq';
-import { AgentStep, ToolResult } from './types';
+import { AgentStep, MonetizationReport, TimeOptimizationReport, ToolResult } from './types';
 
 /**
  * @fileOverview Tool Execution Agent: Runs specialized logic modules.
@@ -36,24 +36,44 @@ const tools = {
     const res = await groq.chat.completions.create({
       model: 'llama-3.3-70b-versatile',
       messages: [
-        { role: 'system', content: 'Identify schedule friction and low-value tasks. Suggest removal, movement, or combination.' },
+        {
+          role: 'system',
+          content: 'Identify schedule friction and low-value tasks. Return JSON: {"remove":[],"optimize":[],"automate":[],"estimatedTimeSavings":"0h/week"}'
+        },
         { role: 'user', content: input }
       ],
-      temperature: 0.1
+      response_format: { type: 'json_object' },
+      temperature: 0
     });
-    return { timeAudit: res.choices[0]?.message?.content || '' };
+    const fallback: TimeOptimizationReport = {
+      remove: [],
+      optimize: [],
+      automate: [],
+      estimatedTimeSavings: '0h/week'
+    };
+    return parseJSON<TimeOptimizationReport>(res.choices[0]?.message?.content, fallback);
   },
 
   generate_strategy: async (input: string) => {
     const res = await groq.chat.completions.create({
       model: 'llama-3.3-70b-versatile',
       messages: [
-        { role: 'system', content: 'Develop actionable business or personal growth strategies. Focus on revenue and efficiency.' },
+        {
+          role: 'system',
+          content: 'Develop monetization strategy. Return JSON: {"revenueOpportunities":[],"inefficiencies":[],"actionPlan":[],"expectedImpact":""}'
+        },
         { role: 'user', content: input }
       ],
-      temperature: 0.1
+      response_format: { type: 'json_object' },
+      temperature: 0
     });
-    return { strategy: res.choices[0]?.message?.content || '' };
+    const fallback: MonetizationReport = {
+      revenueOpportunities: [],
+      inefficiencies: [],
+      actionPlan: [],
+      expectedImpact: ''
+    };
+    return parseJSON<MonetizationReport>(res.choices[0]?.message?.content, fallback);
   },
 
   technical_debug: async (input: string) => {
@@ -80,6 +100,15 @@ const tools = {
     return { actions: res.choices[0]?.message?.content || '' };
   }
 };
+
+function parseJSON<T>(value: string | null | undefined, fallback: T): T {
+  if (!value) return fallback;
+  try {
+    return JSON.parse(value) as T;
+  } catch {
+    return fallback;
+  }
+}
 
 export async function executeTools(plan: AgentStep[], input: string, imageUri?: string): Promise<ToolResult[]> {
   console.log("[TOOLS] Executing tools...");

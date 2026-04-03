@@ -16,6 +16,20 @@ export interface ToolResult {
   error?: string;
 }
 
+export interface TimeOptimizationReport {
+  remove: string[];
+  optimize: string[];
+  automate: string[];
+  estimatedTimeSavings: string;
+}
+
+export interface MonetizationReport {
+  revenueOpportunities: string[];
+  inefficiencies: string[];
+  actionPlan: string[];
+  expectedImpact: string;
+}
+
 export interface CriticFeedback {
   score: number;
   issues: string[];
