@@ -214,31 +214,68 @@ function ChatContent() {
 
       if (!response.ok) throw new Error("Stream connection failed");
 
-      const reader = response.body?.getReader();
+      if (!response.body) {
+        toast({
+          variant: 'destructive',
+          title: "Neural Link Unavailable",
+          description: "Streaming is unavailable right now. Please try again in a moment."
+        });
+        throw new Error("Response stream unavailable");
+      }
+
+      const reader = response.body.getReader();
       const decoder = new TextDecoder();
       let fullContent = "";
       let metadata: any = null;
+      let buffer = "";
 
       while (true) {
-        const { done, value } = await reader!.read();
+        const { done, value } = await reader.read();
         if (done) break;
 
-        const chunk = decoder.decode(value);
-        if (chunk.startsWith("__METADATA__:")) {
-          const metaLine = chunk.split('\n')[0];
-          metadata = JSON.parse(metaLine.replace("__METADATA__:", ""));
-          continue;
-        }
+        buffer += decoder.decode(value, { stream: true });
 
-        fullContent += chunk;
-        setLocalMessages(prev => prev.map(m => 
-          m.id === assistantMsgId ? { ...m, content: fullContent } : m
-        ));
+        const frames = buffer.split('\n');
+        buffer = frames.pop() ?? "";
+
+        for (const frame of frames) {
+          if (!frame) continue;
+
+          if (frame.startsWith("__METADATA__:")) {
+            try {
+              metadata = JSON.parse(frame.replace("__METADATA__:", ""));
+            } catch (parseErr) {
+              console.error('Failed to parse metadata frame:', parseErr);
+            }
+            continue;
+          }
+
+          fullContent += frame;
+          setLocalMessages(prev => prev.map(m =>
+            m.id === assistantMsgId ? { ...m, content: fullContent } : m
+          ));
+        }
+      }
+
+      buffer += decoder.decode();
+      if (buffer) {
+        if (buffer.startsWith("__METADATA__:")) {
+          try {
+            metadata = JSON.parse(buffer.replace("__METADATA__:", ""));
+          } catch (parseErr) {
+            console.error('Failed to parse trailing metadata frame:', parseErr);
+          }
+        } else {
+          fullContent += buffer;
+          setLocalMessages(prev => prev.map(m =>
+            m.id === assistantMsgId ? { ...m, content: fullContent } : m
+          ));
+        }
       }
 
       // Finalize the message in Firestore
       const finalAssistantMessage = {
-        role: 'assistant',
+        role: 'assistant' as const,
         content: fullContent,
         intent: metadata?.intent || 'general',
         data: metadata || null,
