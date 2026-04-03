@@ -1,4 +1,3 @@
-
 "use client";
 
 import { useState, useRef, useEffect, Suspense } from 'react';
@@ -214,6 +213,7 @@ function ChatContent() {
         userMemory: userMemory || null
       });
 
+      // Update conversation title if this is the first real message
       if (localMessages.length <= 1 && result?.title) {
         updateDoc(doc(db, 'users', user.uid, 'conversations', activeConvId!), {
           title: result.title,
@@ -236,6 +236,7 @@ function ChatContent() {
         timestamp: new Date(),
       };
 
+      setLocalMessages(prev => [...prev, assistantMessage]);
       addDocumentNonBlocking(collection(db, 'users', user.uid, 'conversations', activeConvId!, 'messages'), {
         ...assistantMessage,
         timestamp: serverTimestamp(),
@@ -243,7 +244,22 @@ function ChatContent() {
 
     } catch (err) {
       console.error('Processing error:', err);
-      toast({ variant: 'destructive', title: "Protocol Interrupt", description: "Failed to process intelligence. Please retry." });
+      
+      const errorMessage: Message = {
+        id: Math.random().toString(36).substr(2, 9),
+        role: 'assistant',
+        content: "I've encountered a protocol stability issue. My core auditing functions remain active, but this specific analysis was interrupted. Please try re-sending the data.",
+        type: 'error',
+        timestamp: new Date(),
+      };
+
+      setLocalMessages(prev => [...prev, errorMessage]);
+      addDocumentNonBlocking(collection(db, 'users', user.uid, 'conversations', activeConvId!, 'messages'), {
+        ...errorMessage,
+        timestamp: serverTimestamp(),
+      });
+
+      toast({ variant: 'destructive', title: "Protocol Interrupt", description: "Failed to process intelligence. Fallback active." });
     } finally {
       setIsProcessing(false);
     }
@@ -362,7 +378,6 @@ function ChatContent() {
         )}
       </div>
 
-      {/* Floating Scroll to Bottom Button */}
       <AnimatePresence>
         {showScrollButton && (
           <motion.div 

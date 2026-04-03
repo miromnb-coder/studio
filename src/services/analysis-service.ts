@@ -1,7 +1,6 @@
-
 /**
  * @fileOverview Client-side service wrapper for the AI Analysis API.
- * Updated to support high-IQ strategy selection and adaptive modes.
+ * Hardened to guarantee a structured response even during failures.
  */
 
 export interface AnalysisInput {
@@ -43,8 +42,8 @@ export class AnalysisService {
     ].filter(Boolean).join('\n\n');
 
     const fallbackResponse: AnalysisOutput = {
-      title: "Protocol Sync",
-      summary: "I'm having a brief connection issue while consulting the intelligence ledger. Please try again.",
+      title: "Protocol Stability Check",
+      summary: "I've encountered a brief interruption in my reasoning framework, but my passive monitoring remains active. Please re-state your intent or provide the source again.",
       strategy: 'direct_answer',
       mode: 'advisor',
       isActionable: false,
@@ -52,9 +51,8 @@ export class AnalysisService {
       savingsEstimate: 0,
     };
 
-    // Implement a 30-second timeout for the AI response
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 30000);
+    const timeoutId = setTimeout(() => controller.abort(), 35000); // 35s timeout
 
     try {
       const response = await fetch('/api/analyze', {
@@ -73,13 +71,24 @@ export class AnalysisService {
 
       clearTimeout(timeoutId);
 
-      if (!response.ok) return fallbackResponse;
+      if (!response.ok) {
+        // Even on 500, try to get JSON if available, otherwise return fallback
+        try {
+          const errorResult = await response.json();
+          return {
+            ...fallbackResponse,
+            summary: errorResult.summary || fallbackResponse.summary
+          };
+        } catch {
+          return fallbackResponse;
+        }
+      }
 
       const result = await response.json();
       
       return {
         title: result?.title || "Audit Report",
-        summary: result?.summary || "Analysis complete.",
+        summary: result?.summary || "Analysis finalized.",
         strategy: result?.strategy || 'direct_answer',
         mode: result?.mode || 'advisor',
         isActionable: !!result?.isActionable,
@@ -91,13 +100,15 @@ export class AnalysisService {
       };
     } catch (error: any) {
       clearTimeout(timeoutId);
-      console.error('Client Analysis Service Exception:', error);
+      console.error('Analysis Service Exception:', error);
+      
       if (error.name === 'AbortError') {
         return {
           ...fallbackResponse,
-          summary: "The reasoning protocol timed out. This statement might be complex. Try focusing on a smaller section."
+          summary: "The reasoning protocol timed out due to context complexity. I recommend breaking your request into smaller logical chunks."
         };
       }
+      
       return fallbackResponse;
     }
   }
