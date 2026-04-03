@@ -1,3 +1,4 @@
+
 "use client";
 
 import { useState, useRef, useEffect, Suspense } from 'react';
@@ -45,7 +46,6 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { RichAnalysisCard } from '@/components/chat/RichAnalysisCard';
 import { DailyDigestCard } from '@/components/chat/DailyDigestCard';
-import { OnboardingOverlay } from '@/components/onboarding/OnboardingOverlay';
 import { useToast } from '@/hooks/use-toast';
 import { Skeleton } from '@/components/ui/skeleton';
 
@@ -65,11 +65,11 @@ function ChatContent() {
   const [input, setInput] = useState('');
   const [isProcessing, setIsProcessing] = useState(false);
   const [copiedId, setCopiedId] = useState<string | null>(null);
-  const [showOnboarding, setShowOnboarding] = useState(false);
   const [showScrollButton, setShowScrollButton] = useState(false);
   
   const scrollRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
   const { user, isUserLoading } = useUser();
   const db = useFirestore();
   const router = useRouter();
@@ -110,20 +110,17 @@ function ChatContent() {
     if (Array.isArray(storedMessages) && storedMessages.length > 0) {
       const validMessages = storedMessages.filter(m => m && m.id && (m.content || m.data));
       setLocalMessages(validMessages as Message[]);
-      setShowOnboarding(false);
-    } else if (!conversationId && mounted) {
-      setLocalMessages([{
-        id: 'welcome',
-        role: 'assistant',
-        content: "Operator active. Intelligence ledger synchronized and awaiting operational intent.",
-        mode: 'advisor',
-        timestamp: new Date(),
-      }]);
-      setShowOnboarding(true);
     } else {
       setLocalMessages([]);
     }
   }, [storedMessages, conversationId, mounted]);
+
+  // Focus textarea on mount and when conversation changes
+  useEffect(() => {
+    if (mounted && !isProcessing) {
+      textareaRef.current?.focus();
+    }
+  }, [mounted, conversationId, isProcessing]);
 
   const scrollToBottom = () => {
     if (scrollRef.current) {
@@ -278,20 +275,6 @@ function ChatContent() {
   return (
     <div className="flex flex-col h-screen bg-background relative overflow-hidden">
       <Navbar />
-      <AnimatePresence>
-        {showOnboarding && (
-          <OnboardingOverlay 
-            onSelectGoal={(g) => { 
-              setShowOnboarding(false); 
-              if (g === 'analyze_visual') {
-                fileInputRef.current?.click();
-              } else {
-                sendMessage(g === 'save_money' ? "Audit my recurring expenses and subscription waste." : "Help me optimize my financial protocol."); 
-              }
-            }} 
-          />
-        )}
-      </AnimatePresence>
       
       <div 
         ref={scrollRef} 
@@ -304,56 +287,66 @@ function ChatContent() {
               <Skeleton className="h-24 w-3/4 rounded-3xl bg-white/[0.03]" />
               <Skeleton className="h-24 w-1/2 ml-auto rounded-3xl bg-primary/10" />
             </div>
-          ) : (Array.isArray(localMessages) ? localMessages : []).map((msg) => (
-            <motion.div 
-              key={msg.id} 
-              initial={{ opacity: 0, y: 15 }} 
-              animate={{ opacity: 1, y: 0 }} 
-              className={cn("flex w-full group", msg.role === 'user' ? "justify-end" : "justify-start")}
-            >
-              <div className={cn("max-w-[95%] md:max-w-[85%] space-y-4", msg.role === 'user' ? "items-end text-right" : "items-start text-left")}>
-                
-                {msg.role === 'assistant' && (
-                  <div className="flex items-center gap-3 mb-2 ml-1">
-                    <div className="p-1.5 rounded-lg bg-white/5 border border-white/5">{getModeIcon(msg.mode)}</div>
-                    <span className="text-[10px] font-bold uppercase tracking-[0.2em] text-muted-foreground/40">
-                      {msg.mode || 'Operator'} • {msg.strategy?.replace('_', ' ') || 'Protocol'}
-                    </span>
-                  </div>
-                )}
-
-                <div className="flex items-center gap-5">
+          ) : localMessages.length > 0 ? (
+            (Array.isArray(localMessages) ? localMessages : []).map((msg) => (
+              <motion.div 
+                key={msg.id} 
+                initial={{ opacity: 0, y: 15 }} 
+                animate={{ opacity: 1, y: 0 }} 
+                className={cn("flex w-full group", msg.role === 'user' ? "justify-end" : "justify-start")}
+              >
+                <div className={cn("max-w-[95%] md:max-w-[85%] space-y-4", msg.role === 'user' ? "items-end text-right" : "items-start text-left")}>
+                  
                   {msg.role === 'assistant' && (
-                    <Button 
-                      variant="ghost" 
-                      size="icon" 
-                      onClick={() => handleCopy(msg.content, msg.id)}
-                      className="opacity-0 group-hover:opacity-100 transition-opacity w-9 h-9 rounded-xl hover:bg-white/5"
-                    >
-                      {copiedId === msg.id ? <Check className="w-3.5 h-3.5 text-success" /> : <Copy className="w-3.5 h-3.5 text-muted-foreground/50" />}
-                    </Button>
-                  )}
-                  <div className={cn(
-                    "p-6 rounded-[28px] text-sm md:text-lg leading-relaxed font-medium shadow-2xl relative",
-                    msg.role === 'user' 
-                      ? "bg-primary text-background rounded-tr-none shadow-primary/10" 
-                      : "bg-white/[0.03] border border-white/5 text-foreground rounded-tl-none shadow-black/40",
-                    msg.type === 'error' ? "border-danger/30 bg-danger/5" : ""
-                  )}>
-                    {msg.content}
-                    {msg.timestamp && (
-                      <span className="absolute -bottom-6 right-1 text-[8px] font-bold text-muted-foreground/20 uppercase tracking-[0.2em]">
-                        {new Date(msg.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                    <div className="flex items-center gap-3 mb-2 ml-1">
+                      <div className="p-1.5 rounded-lg bg-white/5 border border-white/5">{getModeIcon(msg.mode)}</div>
+                      <span className="text-[10px] font-bold uppercase tracking-[0.2em] text-muted-foreground/40">
+                        {msg.mode || 'Operator'} • {msg.strategy?.replace('_', ' ') || 'Protocol'}
                       </span>
-                    )}
-                  </div>
-                </div>
+                    </div>
+                  )}
 
-                {msg.type === 'analysis_result' && msg.data && <RichAnalysisCard data={msg.data} />}
-                {msg.type === 'daily_digest' && msg.data && <DailyDigestCard digest={msg.data} />}
+                  <div className="flex items-center gap-5">
+                    {msg.role === 'assistant' && (
+                      <Button 
+                        variant="ghost" 
+                        size="icon" 
+                        onClick={() => handleCopy(msg.content, msg.id)}
+                        className="opacity-0 group-hover:opacity-100 transition-opacity w-9 h-9 rounded-xl hover:bg-white/5"
+                      >
+                        {copiedId === msg.id ? <Check className="w-3.5 h-3.5 text-success" /> : <Copy className="w-3.5 h-3.5 text-muted-foreground/50" />}
+                      </Button>
+                    )}
+                    <div className={cn(
+                      "p-6 rounded-[28px] text-sm md:text-lg leading-relaxed font-medium shadow-2xl relative",
+                      msg.role === 'user' 
+                        ? "bg-primary text-background rounded-tr-none shadow-primary/10" 
+                        : "bg-white/[0.03] border border-white/5 text-foreground rounded-tl-none shadow-black/40",
+                      msg.type === 'error' ? "border-danger/30 bg-danger/5" : ""
+                    )}>
+                      {msg.content}
+                      {msg.timestamp && (
+                        <span className="absolute -bottom-6 right-1 text-[8px] font-bold text-muted-foreground/20 uppercase tracking-[0.2em]">
+                          {new Date(msg.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                        </span>
+                      )}
+                    </div>
+                  </div>
+
+                  {msg.type === 'analysis_result' && msg.data && <RichAnalysisCard data={msg.data} />}
+                  {msg.type === 'daily_digest' && msg.data && <DailyDigestCard digest={msg.data} />}
+                </div>
+              </motion.div>
+            ))
+          ) : (
+            <div className="flex flex-col items-center justify-center h-full text-center space-y-6 opacity-20 pt-32">
+              <Cpu className="w-16 h-16 text-primary" />
+              <div className="space-y-2">
+                <p className="text-2xl font-bold font-headline tracking-tighter">Protocol Awaiting Intent</p>
+                <p className="text-sm font-medium uppercase tracking-[0.3em]">Operator Active • Logic Standby</p>
               </div>
-            </motion.div>
-          ))}
+            </div>
+          )}
         </AnimatePresence>
 
         {isProcessing && (
@@ -389,7 +382,7 @@ function ChatContent() {
             <Button 
               size="icon" 
               onClick={scrollToBottom}
-              className="w-12 h-12 rounded-full shadow-2xl bg-primary text-background hover:scale-110 active:scale-95 transition-transform"
+              className="w-12 h-12 rounded-full shadow-2xl bg-primary text-background hover:scale-110 transition-transform"
             >
               <ArrowDown className="w-5 h-5" />
             </Button>
@@ -415,6 +408,7 @@ function ChatContent() {
 
             <input type="file" className="hidden" ref={fileInputRef} accept="image/*" onChange={(e) => { const f = e.target.files?.[0]; if (f) { const r = new FileReader(); r.onloadend = () => sendMessage(undefined, r.result as string); r.readAsDataURL(f); } }} />
             <Textarea 
+              ref={textareaRef}
               value={input} 
               onChange={(e) => setInput(e.target.value)} 
               onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMessage(); } }} 
