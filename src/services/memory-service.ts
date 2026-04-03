@@ -3,8 +3,9 @@
  * @fileOverview Service for managing user long-term memory and behavioral intelligence.
  */
 
-import { doc, getDoc, setDoc, updateDoc, Firestore } from 'firebase/firestore';
+import { doc, getDoc, setDoc, Firestore } from 'firebase/firestore';
 import { serverTimestamp } from 'firebase/firestore';
+import { logMemoryAuditRejections, sanitizeMemoryPayload } from './memory-sanitizer';
 
 export interface UserMemory {
   userId: string;
@@ -41,16 +42,28 @@ export class MemoryService {
       const memoryRef = doc(db, 'users', userId, 'memory', 'main');
       const currentMemory = await this.getMemory(db, userId);
 
-      const dataToSave = {
-        userId,
-        goals: Array.from(new Set([...(currentMemory?.goals || []), ...(updates.newGoals || [])])),
-        preferences: Array.from(new Set([...(currentMemory?.preferences || []), ...(updates.newPreferences || [])])),
-        subscriptions: Array.from(new Set([...(currentMemory?.subscriptions || []), ...(updates.newSubscriptions || [])])),
-        behaviorSummary: updates.behaviorSummaryUpdate || currentMemory?.behaviorSummary || 'Passive intelligence gathering in progress.',
-        lastUpdated: serverTimestamp(),
+      const candidatePayload = {
+        goals: Array.from(new Set([...(currentMemory?.goals || []), ...(updates?.newGoals || [])])),
+        preferences: Array.from(new Set([...(currentMemory?.preferences || []), ...(updates?.newPreferences || [])])),
+        subscriptions: Array.from(new Set([...(currentMemory?.subscriptions || []), ...(updates?.newSubscriptions || [])])),
+        behaviorSummary: updates?.behaviorSummaryUpdate || currentMemory?.behaviorSummary || 'Passive intelligence gathering in progress.',
       };
 
-      await setDoc(memoryRef, dataToSave, { merge: true });
+      const sanitizedResult = sanitizeMemoryPayload(candidatePayload);
+      logMemoryAuditRejections('service', sanitizedResult.rejectedKeys);
+
+      if (!sanitizedResult.isValid) {
+        console.warn('Rejected invalid memory update payload shape:', sanitizedResult.invalidReasons);
+        return;
+      }
+
+      if (!Object.keys(sanitizedResult.sanitized).length) return;
+
+      await setDoc(memoryRef, {
+        userId,
+        ...sanitizedResult.sanitized,
+        lastUpdated: serverTimestamp(),
+      }, { merge: true });
     } catch (error) {
       console.error('Failed to update user memory:', error);
     }
