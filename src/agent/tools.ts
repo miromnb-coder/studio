@@ -1,5 +1,5 @@
 import { groq } from '@/ai/groq';
-import { AgentStep } from './agent';
+import { AgentStep } from './v4/types';
 
 /**
  * @fileOverview Modular Tools for the AI Agent v3.
@@ -83,9 +83,9 @@ export const tools = {
 };
 
 export async function executeTools(plan: AgentStep[], input: string, imageUri?: string) {
-  const results = [];
+  const results: Array<{ action: string; output?: any; error?: string }> = [];
   for (const step of plan) {
-    const tool = tools[step.action];
+    const tool = tools[step.action as keyof typeof tools];
     if (tool) {
       try {
         const result = await tool(input, imageUri);
