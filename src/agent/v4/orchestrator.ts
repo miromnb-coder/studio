@@ -4,7 +4,7 @@ import { executeTools } from './tools';
 import { evaluateReasoning } from './critic';
 import { generateStreamResponse } from './generator';
 import { fetchMemory } from './memory';
-import { AgentContext } from './types';
+import { AgentApiResponse, AgentContext, RunAgentV4StreamResult } from './types';
 
 /**
  * @fileOverview Orchestrator Agent v4.2: Streaming multi-agent pipeline.
@@ -20,16 +20,35 @@ async function checkFastPath(input: string): Promise<string | null> {
   return null;
 }
 
-export async function runAgentV4Stream(input: string, userId: string, history: any[] = [], imageUri?: string) {
+function buildAnalysis(intent: string, fastPathUsed: boolean): string {
+  if (fastPathUsed) {
+    return 'Handled by fast-path greeting/status intent for immediate response.';
+  }
+  return `Routed to ${intent} intent; generated plan, executed tools, and synthesized a grounded answer.`;
+}
+
+export async function runAgentV4Stream(
+  input: string,
+  userId: string,
+  history: any[] = [],
+  imageUri?: string
+): Promise<RunAgentV4StreamResult> {
   console.log(`[AGENT_V4.2] Processing: "${input.slice(0, 50)}..."`);
 
   // 1. Fast Path
   const fastPathResponse = await checkFastPath(input);
   if (fastPathResponse) {
+    const response: AgentApiResponse = {
+      analysis: buildAnalysis('general', true),
+      plan: ['Detect greeting/status intent', 'Return static health response'],
+      actions: [],
+      result: fastPathResponse
+    };
+
     return {
       stream: null,
-      fastPathResponse,
-      metadata: { intent: 'general', fastPathUsed: true }
+      response,
+      metadata: { intent: 'general', fastPathUsed: true, plan: response.plan, actions: response.actions }
     };
   }
 
@@ -71,13 +90,19 @@ export async function runAgentV4Stream(input: string, userId: string, history: a
   // 7. Streaming Response Generation
   const stream = await generateStreamResponse(context);
 
+  const mappedPlan = plan.map((step) => step.description?.trim() || step.action);
+  const mappedActions = toolResults.map((tool) =>
+    tool.error ? `${tool.action} (failed: ${tool.error})` : `${tool.action} (executed)`
+  );
+
   return {
     stream,
-    fastPathResponse: null,
+    response: null,
     metadata: {
       intent,
-      plan,
-      toolResults,
+      language,
+      plan: mappedPlan,
+      actions: mappedActions,
       critic: feedback,
       memoryUsed: !!memory,
       fastPathUsed: false

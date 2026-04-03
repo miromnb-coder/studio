@@ -35,3 +35,29 @@ export interface AgentContext {
   finalResponse?: any;
   fastPathUsed: boolean;
 }
+
+export interface AgentApiResponse {
+  analysis: string;
+  plan: string[];
+  actions: string[];
+  result: string;
+}
+
+export interface AgentStreamEvent {
+  type: 'metadata' | 'token' | 'final' | 'error';
+  payload: unknown;
+}
+
+export interface RunAgentV4StreamResult {
+  stream: AsyncIterable<any> | null;
+  response: AgentApiResponse | null;
+  metadata: {
+    intent: Intent;
+    fastPathUsed: boolean;
+    language?: string;
+    plan?: string[];
+    actions?: string[];
+    memoryUsed?: boolean;
+    critic?: CriticFeedback;
+  };
+}
