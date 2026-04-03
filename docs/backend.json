@@ -63,6 +63,8 @@
         "id": { "type": "string" },
         "userId": { "type": "string" },
         "title": { "type": "string" },
+        "isArchived": { "type": "boolean" },
+        "isPinned": { "type": "boolean" },
         "createdAt": { "type": "string", "format": "date-time" },
         "updatedAt": { "type": "string", "format": "date-time" }
       },
@@ -164,7 +166,7 @@
   "auth": {
     "providers": [
       "password",
-      "anonymous"
+      "google.com"
     ]
   },
   "firestore": {

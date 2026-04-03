@@ -1,3 +1,4 @@
+
 "use client";
 
 import { useState, useRef, useEffect, Suspense } from 'react';
@@ -10,25 +11,29 @@ import {
   Plus, 
   ImageIcon, 
   Zap, 
-  CheckCircle2,
   ChevronRight,
   Loader2,
   AlertCircle,
   MailCheck,
-  RefreshCw,
   CalendarDays,
   Cpu,
   BrainCircuit,
   ShieldCheck,
   ListChecks,
-  MessageSquareQuote
+  Copy,
+  Check,
+  RefreshCcw,
+  MoreVertical,
+  Trash2,
+  Archive,
+  Edit2
 } from 'lucide-react';
 import { AnalysisService } from '@/services/analysis-service';
 import { MemoryService } from '@/services/memory-service';
 import { GmailService } from '@/services/gmail-service';
 import { DigestService } from '@/services/digest-service';
 import { useFirestore, useUser, addDocumentNonBlocking, useCollection, useMemoFirebase, useDoc } from '@/firebase';
-import { collection, serverTimestamp, doc, updateDoc, query, orderBy, setDoc } from 'firebase/firestore';
+import { collection, serverTimestamp, doc, updateDoc, query, orderBy, setDoc, deleteDoc } from 'firebase/firestore';
 import { motion, AnimatePresence } from 'framer-motion';
 import { cn } from '@/lib/utils';
 import { useRouter, useSearchParams } from 'next/navigation';
@@ -42,6 +47,7 @@ import { RichAnalysisCard } from '@/components/chat/RichAnalysisCard';
 import { DailyDigestCard } from '@/components/chat/DailyDigestCard';
 import { OnboardingOverlay } from '@/components/onboarding/OnboardingOverlay';
 import { useToast } from '@/hooks/use-toast';
+import { Skeleton } from '@/components/ui/skeleton';
 
 interface Message {
   id: string;
@@ -64,9 +70,8 @@ function ChatContent() {
   const [mounted, setMounted] = useState(false);
   const [input, setInput] = useState('');
   const [isProcessing, setIsProcessing] = useState(false);
-  const [currentStep, setCurrentStep] = useState(0);
+  const [copiedId, setCopiedId] = useState<string | null>(null);
   const [showOnboarding, setShowOnboarding] = useState(false);
-  const [isSyncingEmail, setIsSyncingEmail] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const { user, isUserLoading } = useUser();
@@ -94,7 +99,7 @@ function ChatContent() {
     }
   }, [db, user, conversationId]);
 
-  const { data: storedMessages } = useCollection(messagesQuery);
+  const { data: storedMessages, isLoading: isMessagesLoading } = useCollection(messagesQuery);
 
   const memoryRef = useMemoFirebase(() => {
     if (!db || !user) return null;
@@ -108,17 +113,19 @@ function ChatContent() {
 
     if (Array.isArray(storedMessages) && storedMessages.length > 0) {
       const validMessages = storedMessages.filter(m => m && m.id && (m.content || m.data));
-      setLocalMessages(validMessages);
+      setLocalMessages(validMessages as Message[]);
       setShowOnboarding(false);
-    } else if (!conversationId) {
+    } else if (!conversationId && mounted) {
       setLocalMessages([{
         id: 'welcome',
         role: 'assistant',
         content: "Operator active. My intelligence ledger is synchronized and ready for intent.",
         mode: 'advisor',
-        timestamp: null,
+        timestamp: new Date(),
       }]);
       setShowOnboarding(true);
+    } else {
+      setLocalMessages([]);
     }
   }, [storedMessages, conversationId, mounted]);
 
@@ -126,19 +133,28 @@ function ChatContent() {
     if (scrollRef.current) {
       scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
     }
-  }, [localMessages, isProcessing, isSyncingEmail]);
+  }, [localMessages, isProcessing]);
 
   if (mounted && !isUserLoading && !user) {
     router.push('/login');
     return null;
   }
 
-  const createNewConversation = async () => {
+  const handleCopy = (text: string, id: string) => {
+    navigator.clipboard.writeText(text);
+    setCopiedId(id);
+    setTimeout(() => setCopiedId(null), 2000);
+  };
+
+  const createNewConversation = async (title = 'Audit Session') => {
     if (!user || !db) return '';
     const newConvRef = doc(collection(db, 'users', user.uid, 'conversations'));
     await setDoc(newConvRef, {
+      id: newConvRef.id,
       userId: user.uid,
-      title: 'Audit Session',
+      title,
+      isArchived: false,
+      isPinned: false,
       createdAt: serverTimestamp(),
       updatedAt: serverTimestamp(),
     });
@@ -152,7 +168,9 @@ function ChatContent() {
     if (!user || !db) return;
 
     let activeConvId = conversationId;
-    if (!activeConvId) activeConvId = await createNewConversation();
+    if (!activeConvId) {
+      activeConvId = await createNewConversation(content.slice(0, 30));
+    }
 
     const userMessage: Message = {
       id: Math.random().toString(36).substr(2, 9),
@@ -161,6 +179,9 @@ function ChatContent() {
       timestamp: new Date(),
     };
 
+    // Optimistic update
+    setLocalMessages(prev => [...prev, userMessage]);
+
     addDocumentNonBlocking(collection(db, 'users', user.uid, 'conversations', activeConvId!, 'messages'), {
       ...userMessage,
       timestamp: serverTimestamp(),
@@ -168,18 +189,12 @@ function ChatContent() {
 
     setInput('');
     setIsProcessing(true);
-    setCurrentStep(0);
 
     try {
       const history = (Array.isArray(localMessages) ? localMessages : [])
         .filter(m => m && m.content)
         .slice(-10)
         .map(m => ({ role: m.role, content: m.content }));
-
-      for (let i = 0; i < STEPS.length; i++) {
-        await new Promise(r => setTimeout(r, STEPS[i].duration));
-        setCurrentStep(i + 1);
-      }
 
       const result = await AnalysisService.analyze({ 
         documentText: rawContext || content,
@@ -188,7 +203,7 @@ function ChatContent() {
         userMemory: userMemory || null
       });
 
-      if (localMessages.length <= 2 && result?.title) {
+      if (localMessages.length <= 1 && result?.title) {
         updateDoc(doc(db, 'users', user.uid, 'conversations', activeConvId!), {
           title: result.title,
           updatedAt: serverTimestamp(),
@@ -202,7 +217,7 @@ function ChatContent() {
       const assistantMessage: Message = {
         id: Math.random().toString(36).substr(2, 9),
         role: 'assistant',
-        content: result?.summary || "Audit complete.",
+        content: result?.summary || "Audit complete. Protocol execution successful.",
         type: result?.isActionable ? 'analysis_result' : 'text',
         strategy: result?.strategy,
         mode: result?.mode,
@@ -216,12 +231,19 @@ function ChatContent() {
       });
 
       if (result?.followUpQuestion) {
-        // AI specifically wants a clarification
         toast({ title: "Clarification Needed", description: result.followUpQuestion });
       }
 
     } catch (err) {
       console.error('Processing error:', err);
+      const errorMessage: Message = {
+        id: 'err-' + Date.now(),
+        role: 'assistant',
+        content: "I encountered a protocol interruption. The intelligence engine is resetting. Please retry.",
+        type: 'error',
+        timestamp: new Date(),
+      };
+      setLocalMessages(prev => [...prev, errorMessage]);
     } finally {
       setIsProcessing(false);
     }
@@ -237,15 +259,64 @@ function ChatContent() {
     }
   };
 
+  const handleArchive = async () => {
+    if (!user || !db || !conversationId) return;
+    await updateDoc(doc(db, 'users', user.uid, 'conversations', conversationId), {
+      isArchived: true,
+      updatedAt: serverTimestamp()
+    });
+    router.push('/');
+    toast({ title: "Archived", description: "Conversation moved to archives." });
+  };
+
+  const handleDelete = async () => {
+    if (!user || !db || !conversationId) return;
+    if (confirm("Permanently delete this intelligence thread? This cannot be undone.")) {
+      await deleteDoc(doc(db, 'users', user.uid, 'conversations', conversationId));
+      router.push('/');
+      toast({ title: "Deleted", description: "Thread purged from ledger." });
+    }
+  };
+
   return (
     <div className="flex flex-col h-screen bg-background relative overflow-hidden">
       <Navbar />
-      <AnimatePresence>{showOnboarding && <OnboardingOverlay onSelectGoal={(g) => { setShowOnboarding(false); sendMessage(g === 'save_money' ? "I want to audit my recurring expenses." : "Analyze a financial document."); }} />}</AnimatePresence>
+      <AnimatePresence>
+        {showOnboarding && (
+          <OnboardingOverlay 
+            onSelectGoal={(g) => { 
+              setShowOnboarding(false); 
+              sendMessage(g === 'save_money' ? "I want to audit my recurring expenses." : "Analyze a financial document."); 
+            }} 
+          />
+        )}
+      </AnimatePresence>
       
       <div ref={scrollRef} className="flex-1 overflow-y-auto pt-24 pb-40 px-6 md:px-24 lg:px-48 space-y-12">
+        {conversationId && (
+          <div className="flex justify-end gap-2 opacity-50 hover:opacity-100 transition-opacity">
+            <Button variant="ghost" size="sm" onClick={handleArchive} className="h-8 text-[9px] font-bold uppercase tracking-widest gap-2">
+              <Archive className="w-3 h-3" /> Archive
+            </Button>
+            <Button variant="ghost" size="sm" onClick={handleDelete} className="h-8 text-[9px] font-bold uppercase tracking-widest gap-2 text-danger hover:text-danger">
+              <Trash2 className="w-3 h-3" /> Purge
+            </Button>
+          </div>
+        )}
+
         <AnimatePresence initial={false}>
-          {mounted && (Array.isArray(localMessages) ? localMessages : []).map((msg) => (
-            <motion.div key={msg.id} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className={cn("flex w-full", msg.role === 'user' ? "justify-end" : "justify-start")}>
+          {isMessagesLoading ? (
+            <div className="space-y-8">
+              <Skeleton className="h-20 w-3/4 rounded-2xl bg-white/5" />
+              <Skeleton className="h-20 w-1/2 ml-auto rounded-2xl bg-primary/20" />
+            </div>
+          ) : (Array.isArray(localMessages) ? localMessages : []).map((msg) => (
+            <motion.div 
+              key={msg.id} 
+              initial={{ opacity: 0, y: 10 }} 
+              animate={{ opacity: 1, y: 0 }} 
+              className={cn("flex w-full group", msg.role === 'user' ? "justify-end" : "justify-start")}
+            >
               <div className={cn("max-w-[90%] md:max-w-[80%] space-y-4", msg.role === 'user' ? "items-end text-right" : "items-start text-left")}>
                 
                 {msg.role === 'assistant' && (
@@ -257,16 +328,38 @@ function ChatContent() {
                   </div>
                 )}
 
-                <div className={cn(
-                  "p-5 rounded-[24px] text-sm md:text-base leading-relaxed font-medium shadow-sm",
-                  msg.role === 'user' ? "bg-primary text-background rounded-tr-none" : "bg-white/[0.03] border border-white/5 text-foreground rounded-tl-none",
-                  msg.strategy === 'proactive_alert' ? "border-danger/30 bg-danger/5" : ""
-                )}>
-                  {msg.content}
+                <div className="flex items-center gap-4">
+                  {msg.role === 'assistant' && (
+                    <Button 
+                      variant="ghost" 
+                      size="icon" 
+                      onClick={() => handleCopy(msg.content, msg.id)}
+                      className="opacity-0 group-hover:opacity-100 transition-opacity w-8 h-8 rounded-lg"
+                    >
+                      {copiedId === msg.id ? <Check className="w-3 h-3 text-success" /> : <Copy className="w-3 h-3" />}
+                    </Button>
+                  )}
+                  <div className={cn(
+                    "p-5 rounded-[24px] text-sm md:text-base leading-relaxed font-medium shadow-sm relative",
+                    msg.role === 'user' ? "bg-primary text-background rounded-tr-none" : "bg-white/[0.03] border border-white/5 text-foreground rounded-tl-none",
+                    msg.type === 'error' ? "border-danger/30 bg-danger/5" : ""
+                  )}>
+                    {msg.content}
+                    {msg.timestamp && (
+                      <span className="absolute -bottom-5 right-0 text-[8px] font-bold text-muted-foreground/30 uppercase tracking-widest">
+                        {new Date(msg.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                      </span>
+                    )}
+                  </div>
                 </div>
 
                 {msg.type === 'analysis_result' && msg.data && <RichAnalysisCard data={msg.data} />}
                 {msg.type === 'daily_digest' && msg.data && <DailyDigestCard digest={msg.data} />}
+                {msg.type === 'error' && (
+                  <Button variant="outline" size="sm" onClick={() => sendMessage(localMessages[localMessages.length-2]?.content)} className="rounded-xl h-8 text-[9px] font-bold uppercase tracking-widest gap-2 border-white/10">
+                    <RefreshCcw className="w-3 h-3" /> Retry Protocol
+                  </Button>
+                )}
               </div>
             </motion.div>
           ))}
@@ -276,7 +369,19 @@ function ChatContent() {
           <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="flex flex-col items-start space-y-6">
             <div className="flex items-center gap-3 p-5 rounded-[24px] bg-white/[0.03] border border-white/5 rounded-tl-none">
               <Loader2 className="w-4 h-4 text-primary animate-spin" />
-              <span className="text-sm font-medium text-muted-foreground italic">Running Intelligence Protocol...</span>
+              <div className="flex flex-col gap-1">
+                <span className="text-sm font-medium text-muted-foreground italic">Running Intelligence Protocol...</span>
+                <div className="flex gap-1">
+                  {[0, 1, 2].map(i => (
+                    <motion.div 
+                      key={i}
+                      animate={{ opacity: [0.2, 1, 0.2] }}
+                      transition={{ duration: 1.5, repeat: Infinity, delay: i * 0.2 }}
+                      className="w-1 h-1 bg-primary rounded-full"
+                    />
+                  ))}
+                </div>
+              </div>
             </div>
           </motion.div>
         )}
@@ -297,7 +402,14 @@ function ChatContent() {
             </DropdownMenu>
 
             <input type="file" className="hidden" ref={fileInputRef} accept="image/*" onChange={(e) => { const f = e.target.files?.[0]; if (f) { const r = new FileReader(); r.onloadend = () => sendMessage(undefined, r.result as string); r.readAsDataURL(f); } }} />
-            <Textarea value={input} onChange={(e) => setInput(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMessage(); } }} placeholder="Message operator..." className="flex-1 border-0 focus-visible:ring-0 bg-transparent min-h-[48px] py-3 text-base font-medium resize-none overflow-hidden text-white" rows={1} />
+            <Textarea 
+              value={input} 
+              onChange={(e) => setInput(e.target.value)} 
+              onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMessage(); } }} 
+              placeholder="Message operator..." 
+              className="flex-1 border-0 focus-visible:ring-0 bg-transparent min-h-[48px] py-3 text-base font-medium resize-none overflow-hidden text-white" 
+              rows={1} 
+            />
             <Button size="icon" disabled={!input.trim() || isProcessing} onClick={() => sendMessage()} className="w-12 h-12 rounded-full shadow-2xl transition-transform hover:scale-105 active:scale-95 shrink-0">
               {isProcessing ? <Loader2 className="w-5 h-5 animate-spin" /> : <Send className="w-5 h-5" />}
             </Button>
