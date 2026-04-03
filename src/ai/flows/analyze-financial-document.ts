@@ -2,6 +2,7 @@
 /**
  * @fileOverview High-IQ "AI Life Operator" reasoning engine.
  * Implements dynamic strategy selection, intent routing, and memory-aware behavior.
+ * Hardened for production-grade JSON reliability and safe fallback recovery.
  */
 
 import {ai} from '@/ai/genkit';
@@ -84,8 +85,8 @@ export async function analyzeFinancialDocument(input: z.infer<typeof AnalyzeFina
   const apiKey = process.env.GROQ_API_KEY;
   
   const fallback: AnalyzeFinancialDocumentOutput = {
-    title: "Advisor Review",
-    summary: "I've reviewed your latest request. To provide a truly tailored savings audit, could you provide a bit more context or a clear screenshot of the bill in question?",
+    title: "Intelligence Briefing",
+    summary: "I've reviewed the information provided. To give you a more detailed audit of your savings, could you share a bit more detail or a clear screenshot of the specific bill?",
     strategy: 'direct_answer',
     mode: 'advisor',
     isActionable: false,
@@ -94,6 +95,7 @@ export async function analyzeFinancialDocument(input: z.infer<typeof AnalyzeFina
   };
 
   if (!apiKey) {
+    console.warn("GROQ_API_KEY is missing. Returning safe fallback.");
     return fallback;
   }
 
@@ -144,27 +146,54 @@ You MUST return a JSON object exactly matching the schema. Select the most strat
       ],
       model: 'llama-3.3-70b-versatile',
       response_format: { type: 'json_object' },
+      temperature: 0.1, // Low temperature for more deterministic JSON
     });
 
     const content = completion.choices[0]?.message?.content;
-    if (!content) throw new Error('Empty response');
-
-    let result;
-    try {
-      result = JSON.parse(content);
-    } catch (e) {
-      console.warn("LLM JSON Parse failed, attempting fallback parsing.");
+    
+    if (!content) {
+      console.error('Groq returned an empty response content.');
       return fallback;
     }
 
-    return AnalyzeFinancialDocumentOutputSchema.parse({
+    // Attempt to parse JSON with recovery logic
+    let result;
+    try {
+      // 1. Standard parse
+      result = JSON.parse(content);
+    } catch (e) {
+      console.warn("Initial JSON parse failed. Attempting cleanup/recovery.");
+      try {
+        // 2. Recovery: Extract JSON if wrapped in markdown blocks or has leading/trailing text
+        const jsonMatch = content.match(/\{[\s\S]*\}/);
+        if (jsonMatch) {
+          result = JSON.parse(jsonMatch[0]);
+        } else {
+          throw new Error("No JSON structure found in response content.");
+        }
+      } catch (recoveryError) {
+        console.error("JSON Recovery failed:", content);
+        return fallback;
+      }
+    }
+
+    // Validate with Zod for safe runtime usage
+    const parsed = AnalyzeFinancialDocumentOutputSchema.safeParse({
       ...result,
       detectedItems: Array.isArray(result.detectedItems) ? result.detectedItems : [],
       savingsEstimate: typeof result.savingsEstimate === 'number' ? result.savingsEstimate : 0,
       isActionable: !!result.isActionable,
     });
+
+    if (!parsed.success) {
+      console.error('Zod Validation Failed for model output:', parsed.error.format());
+      return fallback;
+    }
+
+    return parsed.data;
+
   } catch (error) {
-    console.error('Groq Analysis Error:', error);
+    console.error('Groq Intelligence Error:', error);
     return fallback;
   }
 }
