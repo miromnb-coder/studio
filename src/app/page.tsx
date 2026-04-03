@@ -46,6 +46,7 @@ import { RichAnalysisCard } from '@/components/chat/RichAnalysisCard';
 import { DailyDigestCard } from '@/components/chat/DailyDigestCard';
 import { useToast } from '@/hooks/use-toast';
 import { Skeleton } from '@/components/ui/skeleton';
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 
 interface Message {
   id: string;
@@ -269,6 +270,12 @@ function ChatContent() {
     }
   };
 
+  const hasSupplementaryAnalysis = (data?: any) => {
+    if (!data) return false;
+    const hasDetectedItems = Array.isArray(data.detectedItems) && data.detectedItems.length > 0;
+    return Boolean(data.beforeAfterComparison || hasDetectedItems);
+  };
+
   if (!mounted || isUserLoading) {
     return (
       <div className="min-h-screen bg-background flex items-center justify-center">
@@ -315,6 +322,40 @@ function ChatContent() {
                       msg.isStreaming ? "animate-pulse" : ""
                     )}>
                       {msg.content}
+
+                      {msg.role === 'assistant' && msg.data?.toolResults && msg.data.toolResults.length > 0 && !msg.isStreaming && (
+                        <Collapsible className="mt-4 border-t border-white/10 pt-4 text-left">
+                          <CollapsibleTrigger className="group flex w-full items-center justify-between rounded-xl border border-white/10 bg-white/[0.02] px-3 py-2 text-left transition-colors hover:bg-white/[0.04]">
+                            <span className="text-[10px] font-bold uppercase tracking-[0.2em] text-muted-foreground/80">
+                              OPERATIIVINEN STRATEGIA
+                            </span>
+                            <ChevronRight className="h-4 w-4 text-muted-foreground/70 transition-transform duration-300 group-data-[state=open]:rotate-90" />
+                          </CollapsibleTrigger>
+                          <CollapsibleContent className="overflow-hidden data-[state=closed]:animate-accordion-up data-[state=open]:animate-accordion-down data-[state=closed]:opacity-0 data-[state=open]:opacity-100 transition-opacity duration-300">
+                            <div className="mt-3 space-y-3 rounded-xl border border-primary/20 bg-primary/5 p-3">
+                              <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-primary">
+                                OPERATIIVINEN STRATEGIA
+                              </p>
+                              <p className="text-sm font-semibold text-white">Reaktiosuunnitelma</p>
+                              <p className="text-sm italic text-white/80">“Strategiaa valmistellaan…”</p>
+                              <div className="grid gap-2 border-t border-white/10 pt-3 md:grid-cols-2">
+                                <div className="space-y-1">
+                                  <p className="text-[8px] font-bold uppercase tracking-widest text-muted-foreground">ARVIOITU VUOTUINEN SÄÄSTÖ</p>
+                                  <p className="text-base font-bold text-success">
+                                    ${((typeof msg.data?.savingsEstimate === 'number' ? msg.data.savingsEstimate : 0) * 12).toFixed(0)}
+                                  </p>
+                                </div>
+                                <div className="space-y-1">
+                                  <p className="text-[8px] font-bold uppercase tracking-widest text-muted-foreground">KUUKAUSITTAINEN LIKVIDITEETTI</p>
+                                  <p className="text-base font-bold text-primary">
+                                    +${(typeof msg.data?.savingsEstimate === 'number' ? msg.data.savingsEstimate : 0).toFixed(0)}
+                                  </p>
+                                </div>
+                              </div>
+                            </div>
+                          </CollapsibleContent>
+                        </Collapsible>
+                      )}
                       {!msg.isStreaming && (
                         <span className="absolute -bottom-6 right-1 text-[8px] font-bold text-muted-foreground/20 uppercase tracking-[0.2em]">
                           {formatSafeTime(msg.timestamp)}
@@ -323,8 +364,8 @@ function ChatContent() {
                     </div>
                   </div>
 
-                  {msg.data?.toolResults && msg.data.toolResults.length > 0 && !msg.isStreaming && (
-                    <RichAnalysisCard data={{ ...msg.data, summary: msg.content }} />
+                  {msg.data?.toolResults && msg.data.toolResults.length > 0 && !msg.isStreaming && hasSupplementaryAnalysis(msg.data) && (
+                    <RichAnalysisCard data={{ ...msg.data, summary: msg.content, hideStrategy: true }} />
                   )}
                 </div>
               </motion.div>
