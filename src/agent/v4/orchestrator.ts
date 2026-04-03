@@ -84,3 +84,28 @@ export async function runAgentV4Stream(input: string, userId: string, history: a
     }
   };
 }
+
+/**
+ * Non-streaming wrapper for Agent v4.2.
+ * Returns a stable object shape for non-stream callers.
+ */
+export async function runAgentV4(input: string, userId: string = 'anonymous', history: any[] = [], imageUri?: string) {
+  const { stream, fastPathResponse, metadata } = await runAgentV4Stream(input, userId, history, imageUri);
+
+  if (fastPathResponse) {
+    return {
+      content: fastPathResponse,
+      metadata
+    };
+  }
+
+  let content = '';
+  for await (const chunk of stream!) {
+    content += chunk.choices[0]?.delta?.content || '';
+  }
+
+  return {
+    content,
+    metadata
+  };
+}
