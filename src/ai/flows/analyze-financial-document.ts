@@ -1,9 +1,9 @@
 
 'use server';
 /**
- * @fileOverview AI Life Operator analysis engine using Groq models directly.
- * Standard async function replacing Genkit flows with intelligent persona switching
- * and automatic language detection.
+ * @fileOverview AI Engine v2: Multi-intent reasoning engine.
+ * Adapts to user intent (Finance, Technical, General, Analysis, Advice) 
+ * with automatic language detection and persona switching.
  */
 
 import { groq } from '@/ai/groq';
@@ -42,21 +42,15 @@ export interface AnalyzeFinancialDocumentOutput {
   memoryUpdates?: any;
 }
 
-/**
- * Robust JSON extraction from LLM response.
- */
 function extractJSON(text: string): any {
   try {
-    // Attempt direct parse first
     return JSON.parse(text);
   } catch (e) {
-    // Attempt to extract from markdown blocks
     const match = text.match(/```json\s*([\s\S]*?)\s*```/) || text.match(/\{[\s\S]*\}/);
     if (match) {
       try {
         return JSON.parse(match[1] || match[0]);
       } catch (innerE) {
-        console.error("JSON Extraction failed:", innerE);
         return null;
       }
     }
@@ -65,7 +59,7 @@ function extractJSON(text: string): any {
 }
 
 /**
- * Analyzes input using Groq with advanced language detection and dual-mode behavior.
+ * AI Engine v2: Adaptive multi-modal analysis.
  */
 export async function analyzeFinancialDocument(input: AnalyzeFinancialDocumentInput): Promise<AnalyzeFinancialDocumentOutput> {
   const hasImage = !!input.imageDataUri;
@@ -77,47 +71,43 @@ export async function analyzeFinancialDocument(input: AnalyzeFinancialDocumentIn
 
   const latestUserMessage = input.history?.slice(-1)[0]?.content || input.documentText || "";
 
-  const systemPrompt = `You are "AI Life Operator", an intelligent and highly adaptive assistant.
+  const systemPrompt = `You are "AI Engine v2", the intelligence core of the Operator system.
 
-1. LANGUAGE PROTOCOL:
-   - Detect the user's language automatically from their latest message or history.
-   - RESPOND ENTIRELY IN THE DETECTED LANGUAGE (e.g., if they write in Finnish, reply in Finnish).
-   - If the user mixes languages, use the dominant or most recent language.
-   - Maintain the detected language for all fields in the JSON output.
+ENGINE RULES:
+1. RE-EVALUATE: Every message is evaluated independently for its specific intent.
+2. LANGUAGE: Detect user's language (Finnish, English, etc.) automatically and reply entirely in that language. 
+3. INTENT DETECTION: Identify intent before answering (Finance, General, Technical, Advice, Analysis).
+4. NO LOCK-IN: Switch modes instantly if the user changes topic.
 
-2. BEHAVIOR MODES:
-   - FINANCIAL MODE (Topics: money, savings, subscriptions, bills, costs, audits):
-     - Persona: "Elite Auditor". Sharp, professional, savings-oriented.
-     - Goal: Identify waste, price increases, or optimization opportunities.
-     - Responses should be structured, actionable, and data-driven.
-   - GENERAL MODE (Non-financial topics):
-     - Persona: "Helpful Assistant". Conversational, informative, and natural.
-     - DO NOT force financial themes or savings into the response if it doesn't fit.
-     - Respond to the user's intent naturally.
+INTENT MODES:
+- FINANCE (Money/Bills/Savings): Persona "Elite Auditor". Structured, practical, focused on reclaimed liquidity.
+- GENERAL (Casual/Broad): Persona "Helpful Assistant". Natural and conversational. Do not force financial framing.
+- TECHNICAL (Code/Systems): Persona "Lead Engineer". Concise, solution-focused, exact.
+- ADVICE (Recommendations): Persona "Strategist". Compare options, show tradeoffs, give clear direction.
+- ANALYSIS (Reasoning): Persona "Logical Analyst". Step-by-step breakdown of patterns.
 
-3. LOGIC GUIDELINES:
-   - Be concise, accurate, and practical.
-   - If the request is genuinely ambiguous, ask ONE clear clarifying question in the "summary" field.
-   - Never invent details.
-   - Explain things in a simple, useful way.
+OUTPUT FORMAT:
+Return ONLY a valid JSON object. All user-facing strings MUST be in the user's detected language.
+{
+  "title": "Short descriptive header",
+  "summary": "Main natural language response or 1 clarifying question if intent is ambiguous",
+  "strategy": "The core advice, implementation plan, or reasoning logic",
+  "mode": "advisor|analyst|executor|planner|alert",
+  "detectedItems": [], // Populate ONLY for Finance intent
+  "savingsEstimate": 0, // Populate ONLY for Finance intent
+  "beforeAfterComparison": null, // { "currentSituation": "", "optimizedSituation": "" }
+  "isActionable": boolean, // True if there is a concrete next step
+  "memoryUpdates": {}
+}
 
-4. JSON OUTPUT FORMAT:
-   Return ONLY a valid JSON object with the following keys. All string values must be in the detected USER LANGUAGE.
-   {
-     "title": "Short descriptive title",
-     "summary": "The main response text or clarifying question",
-     "strategy": "The core advice or action plan",
-     "mode": "advisor|alert|analyst|planner|executor",
-     "detectedItems": [], // Only fill for financial topics
-     "savingsEstimate": 0, // Only fill for financial topics
-     "beforeAfterComparison": null, // { "currentSituation": "", "optimizedSituation": "" }
-     "isActionable": true,
-     "memoryUpdates": {}
-   }`;
+FAILSAFE:
+- If uncertain, say so. 
+- Ask at most ONE follow-up question in the "summary" field if the request is genuinely ambiguous.
+- Prioritize topic fit over repeating old context.`;
 
   const userContent: any[] = [];
   if (hasImage) {
-    userContent.push({ type: 'text', text: 'Analyze this visual source in the context of our protocol.' });
+    userContent.push({ type: 'text', text: 'Analyze this visual source using Engine v2 protocols.' });
     userContent.push({ type: 'image_url', image_url: { url: input.imageDataUri } });
   } else {
     userContent.push({ 
@@ -140,27 +130,25 @@ export async function analyzeFinancialDocument(input: AnalyzeFinancialDocumentIn
     const rawContent = completion.choices[0]?.message?.content || '{}';
     const parsed = extractJSON(rawContent);
 
-    if (!parsed) {
-      throw new Error("Failed to parse AI response into JSON");
-    }
+    if (!parsed) throw new Error("JSON Extraction failed");
 
     return {
-      title: parsed.title || "Intelligence Report",
-      summary: parsed.summary || "Ready for your next instruction.",
+      title: parsed.title || "Intelligence Briefing",
+      summary: parsed.summary || "Ready for next instruction.",
       strategy: parsed.strategy || "Maintain current protocol.",
       mode: parsed.mode || 'advisor',
-      isActionable: !!(parsed.detectedItems && parsed.detectedItems.length > 0),
+      isActionable: !!parsed.isActionable,
       detectedItems: parsed.detectedItems || [],
       savingsEstimate: parsed.savingsEstimate || 0,
       beforeAfterComparison: parsed.beforeAfterComparison || null,
       memoryUpdates: parsed.memoryUpdates || {}
     };
   } catch (error: any) {
-    console.error('Groq Execution Error:', error.message);
+    console.error('AI Engine Error:', error.message);
     return {
       title: "Sync Interrupted",
-      summary: "I've encountered a connection delay with the intelligence engine. Please re-share your intent so I can re-sync.",
-      strategy: "Verify GROQ_API_KEY and network status.",
+      summary: "I've encountered a connection delay with the reasoning engine. Please re-share your intent.",
+      strategy: "Verify API status and intent clarity.",
       mode: 'advisor',
       isActionable: false,
       detectedItems: [],
