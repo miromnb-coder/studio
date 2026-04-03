@@ -2,7 +2,7 @@
 'use server';
 /**
  * @fileOverview AI Life Operator analysis engine using Groq models directly.
- * Standard async function replacing Genkit flows.
+ * Standard async function replacing Genkit flows with intelligent persona switching.
  */
 
 import { groq } from '@/ai/groq';
@@ -42,52 +42,44 @@ export interface AnalyzeFinancialDocumentOutput {
 }
 
 /**
- * Analysoi taloudellisen dokumentin tai viestin Groq-mallilla.
+ * Analysoi syötteen Groq-mallilla käyttäen kontekstuaalista persoonallisuutta.
  */
 export async function analyzeFinancialDocument(input: AnalyzeFinancialDocumentInput): Promise<AnalyzeFinancialDocumentOutput> {
   const hasImage = !!input.imageDataUri;
-  const isEmailAudit = input.documentText?.includes('Subject:') || input.source === 'email';
   const modelId = hasImage ? 'llama-3.2-11b-vision-preview' : 'llama-3.3-70b-versatile';
   
   if (!process.env.GROQ_API_KEY) {
-    throw new Error("GROQ_API_KEY is missing.");
+    throw new Error("GROQ_API_KEY is missing from environment.");
   }
 
-  const latestUserMessage = input.history?.slice(-1)[0]?.content || input.documentText || "Analysoi kuluja.";
+  const latestUserMessage = input.history?.slice(-1)[0]?.content || input.documentText || "Analysoi tilanne.";
 
-  const systemPrompt = `Olet "AI Life Operator", armoton mutta sivistynyt säästöarkkitehti ja talousvisionääri.
-ÄLÄ KOSKAAN vastaa geneerisesti. Sinun on annettava syvällinen, analyyttinen ja jopa provosoiva katsaus käyttäjän talouteen.
+  const systemPrompt = `Olet "AI Life Operator", älykäs ja mukautuva tekoälyavustaja.
 
-LÄHDE: ${isEmailAudit ? 'SÄHKÖPOSTIAUDITOINTI (Inbox Sync)' : 'MANUAALINEN SYÖTE'}
+KÄYTTÄYTYMISSÄÄNNÖT:
+1. RAHA JA TALOUS: Jos käyttäjän viesti liittyy rahaan, säästöihin, tilauksiin tai kuluihin:
+   - Ole "Elite Auditor": armoton mutta sivistynyt säästöarkkitehti.
+   - Vastaa LYHYESTI, SELKEÄSTI ja KÄYTÄNNÖLLISESTI.
+   - Etsi säästökohteita ja haasta kuluja.
 
-TEHTÄVÄSI:
-1. RADIKAALI AUDITOINTI: Haasta jokainen euro. Etsi kalliita tilauksia, piilomaksuja ja säästökohteita.
-2. BRIEFING (Summary): Kirjoita älykäs katsaus havaintoihisi.
-3. STRATEGIA: Kirjoita konkreettinen suunnitelma (esim. "Irtisano X", "Vaihda Y").
-4. DETECTED ITEMS: Listaa jokainen havaittu kulu tai säästökohde tarkasti.
+2. MUUT AIHEET: Jos viesti ei liity rahaan tai talouteen:
+   - Ole "Sivistynyt Avustaja": vastaa yleisemmin ja selitä asioita syvällisemmin.
+   - ÄLÄ pakota rahateemaa tai säästöjä vastaukseen.
+   - Ole keskusteleva ja avoin.
 
-PALAUTA VASTAUS TIUKASTI JSON-MUODOSSA, JOKA NOUDATTAA TÄTÄ RAKENNETTA:
+3. EPÄSELVÄ AIHE: Jos et ole varma mitä käyttäjä tarkoittaa:
+   - Kysy YKSI tarkentava kysymys ennen kuin teet analyysia. Laita tämä kysymys "summary"-kenttään.
+
+VASTAUKSEN MUOTO:
+Palauta vastaus AINA tiukasti JSON-muodossa:
 {
-  "title": "Analyysin otsikko",
-  "summary": "Syvällinen yhteenveto suomeksi",
-  "strategy": "Konkreettinen toimintasuunnitelma",
+  "title": "Lyhyt otsikko aiheesta",
+  "summary": "Päävastaus tai tarkentava kysymys suomeksi",
+  "strategy": "Toimintasuunnitelma tai neuvon ydin",
   "mode": "advisor|alert|analyst|planner|executor",
-  "detectedItems": [
-    {
-      "title": "Kohteen nimi",
-      "summary": "Miksi tämä on kallis/turha",
-      "type": "subscription|recurring_charge|...",
-      "estimatedSavings": 12.50,
-      "urgencyLevel": "low|medium|high|urgent",
-      "copyableMessage": "Peruutusviesti/neuvotteluviesti suomeksi",
-      "alternativeSuggestion": "Halvempi vaihtoehto"
-    }
-  ],
-  "savingsEstimate": 45.00,
-  "beforeAfterComparison": {
-    "currentSituation": "Nykyinen kallis tila",
-    "optimizedSituation": "Säästetty ja optimoitu tila"
-  },
+  "detectedItems": [], // Täytä vain talousaiheissa
+  "savingsEstimate": 0, // Täytä vain talousaiheissa
+  "beforeAfterComparison": null,
   "isActionable": true,
   "memoryUpdates": {}
 }
@@ -96,10 +88,10 @@ KAIKKI VASTAUKSET ON OLTAVA SUOMEKSI.`;
 
   const userContent: any[] = [];
   if (hasImage) {
-    userContent.push({ type: 'text', text: 'Analysoi tämä kuva tarkasti ja haasta kaikki siinä näkyvät kulut.' });
+    userContent.push({ type: 'text', text: 'Analysoi tämä kuva tarkasti.' });
     userContent.push({ type: 'image_url', image_url: { url: input.imageDataUri } });
   } else {
-    userContent.push({ type: 'text', text: `KÄYTTÄJÄN VIESTI/DATA:\n${latestUserMessage}\n\nUSER MEMORY:\n${JSON.stringify(input.userMemory || {})}` });
+    userContent.push({ type: 'text', text: `KÄYTTÄJÄN VIESTI:\n${latestUserMessage}\n\nHISTORIA:\n${JSON.stringify(input.history || [])}` });
   }
 
   try {
@@ -110,33 +102,25 @@ KAIKKI VASTAUKSET ON OLTAVA SUOMEKSI.`;
         { role: 'user', content: userContent }
       ],
       response_format: { type: 'json_object' },
-      temperature: 0.1,
+      temperature: 0.2,
     });
 
     const rawContent = completion.choices[0]?.message?.content || '{}';
-    let jsonString = rawContent.trim();
-    if (jsonString.startsWith('```')) {
-      jsonString = jsonString.replace(/^```json\s*|```$/g, '').trim();
-    }
-
-    const parsed = JSON.parse(jsonString);
+    const parsed = JSON.parse(rawContent);
 
     return {
-      title: parsed.title || "Strateginen Operatiivinen Katsaus",
-      summary: parsed.summary || "Analyysi valmistui, mutta malli ei tuottanut yhteenvetoa.",
-      strategy: parsed.strategy || "Suosittelen välitöntä kulukartoitusta.",
+      title: parsed.title || "Järjestelmän analyysi",
+      summary: parsed.summary || "Vastaus valmistui.",
+      strategy: parsed.strategy || "Jatka kommunikointia.",
       mode: parsed.mode || 'advisor',
       isActionable: !!(parsed.detectedItems && parsed.detectedItems.length > 0),
       detectedItems: parsed.detectedItems || [],
       savingsEstimate: parsed.savingsEstimate || 0,
-      beforeAfterComparison: parsed.beforeAfterComparison || {
-        currentSituation: "Talous sisältää optimoimattomia kulueriä.",
-        optimizedSituation: "Likviditeetti on maksimoitu."
-      },
-      memoryUpdates: parsed.memoryUpdates
+      beforeAfterComparison: parsed.beforeAfterComparison || null,
+      memoryUpdates: parsed.memoryUpdates || {}
     };
   } catch (error: any) {
-    console.error('Groq Analysis Error:', error);
+    console.error('Groq Execution Error:', error);
     throw error;
   }
 }
