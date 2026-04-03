@@ -1,3 +1,4 @@
+
 'use server';
 /**
  * @fileOverview High-IQ "AI Life Operator" reasoning engine.
@@ -85,7 +86,7 @@ export async function analyzeFinancialDocument(input: z.infer<typeof AnalyzeFina
   const apiKey = process.env.GROQ_API_KEY;
   
   const fallback: AnalyzeFinancialDocumentOutput = {
-    title: "Advisor Update",
+    title: "Intelligence Update",
     summary: "I've reviewed your request. To provide a precise audit of your savings, could you share a bit more detail or a clear screenshot of the specific bill?",
     strategy: 'direct_answer',
     mode: 'advisor',
@@ -95,7 +96,7 @@ export async function analyzeFinancialDocument(input: z.infer<typeof AnalyzeFina
   };
 
   if (!apiKey) {
-    console.warn("GROQ_API_KEY is missing. Returning safe fallback.");
+    console.warn("GROQ_API_KEY is missing. Returning safe advisor mode.");
     return fallback;
   }
 

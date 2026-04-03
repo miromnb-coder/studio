@@ -25,6 +25,23 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { ProactiveAlerts } from '@/components/dashboard/ProactiveAlerts';
 import { DigestService, DailyDigest } from '@/services/digest-service';
 
+/**
+ * Robust date formatting for log entries.
+ */
+const formatLogTime = (timestamp: any) => {
+  if (!timestamp) return '--:--:--';
+  if (timestamp && typeof timestamp.toDate === 'function') {
+    return timestamp.toDate().toLocaleTimeString([], { hour12: false });
+  }
+  try {
+    const d = new Date(timestamp);
+    if (isNaN(d.getTime())) return '--:--:--';
+    return d.toLocaleTimeString([], { hour12: false });
+  } catch (e) {
+    return '--:--:--';
+  }
+};
+
 export default function DashboardPage() {
   const [mounted, setMounted] = useState(false);
   const [latestDigest, setLatestDigest] = useState<DailyDigest | null>(null);
@@ -102,7 +119,7 @@ export default function DashboardPage() {
               ) : Array.isArray(analyses) && analyses.length > 0 ? (
                 analyses.map((a, i) => (
                   <div key={a.id} className="flex gap-4 border-l border-white/5 pl-4 py-1">
-                    <span className="text-primary/40">[{new Date(a.createdAt?.seconds * 1000).toLocaleTimeString([], {hour12: false})}]</span>
+                    <span className="text-primary/40">[{formatLogTime(a.createdAt)}]</span>
                     <span>INGEST_SUCCESS: {a.title} processed via {a.source}</span>
                   </div>
                 ))
@@ -110,7 +127,7 @@ export default function DashboardPage() {
                 <div className="py-4 text-center">Waiting for system ingestion...</div>
               )}
               <div className="flex gap-4 border-l border-white/5 pl-4 py-1 animate-pulse">
-                <span className="text-primary/40">[{new Date().toLocaleTimeString([], {hour12: false})}]</span>
+                <span className="text-primary/40">[{formatLogTime(new Date())}]</span>
                 <span>IDLE: Monitoring neural pathways...</span>
               </div>
             </div>

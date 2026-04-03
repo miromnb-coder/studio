@@ -1,3 +1,4 @@
+
 "use client";
 
 import { useState, useRef, useEffect, Suspense } from 'react';
@@ -59,6 +60,28 @@ interface Message {
   timestamp: any;
 }
 
+/**
+ * Robust date formatting for chat messages.
+ * Handles Firestore Timestamps, Dates, and pending server values.
+ */
+const formatSafeTime = (timestamp: any) => {
+  if (!timestamp) return '...';
+  
+  // Handle Firestore Timestamp
+  if (timestamp && typeof timestamp.toDate === 'function') {
+    return timestamp.toDate().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  }
+  
+  // Handle Date or string
+  try {
+    const d = new Date(timestamp);
+    if (isNaN(d.getTime())) return '...';
+    return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  } catch (e) {
+    return '...';
+  }
+};
+
 function ChatContent() {
   const [mounted, setMounted] = useState(false);
   const [input, setInput] = useState('');
@@ -115,10 +138,10 @@ function ChatContent() {
     if (Array.isArray(storedMessages) && storedMessages.length > 0) {
       const validMessages = storedMessages.filter(m => m && m.id && (m.content || m.data));
       setLocalMessages(validMessages as Message[]);
-    } else {
+    } else if (!isMessagesLoading) {
       setLocalMessages([]);
     }
-  }, [storedMessages, conversationId, mounted]);
+  }, [storedMessages, conversationId, mounted, isMessagesLoading]);
 
   useEffect(() => {
     if (mounted && !isProcessing) {
@@ -236,7 +259,7 @@ function ChatContent() {
       const assistantMessage: Message = {
         id: Math.random().toString(36).substr(2, 9),
         role: 'assistant',
-        content: result?.summary || "I've reviewed the information provided. I'm standing by to help with any adjustments you'd like to make.",
+        content: result?.summary || "Audit complete. I'm standing by for your next instruction.",
         type: result?.isActionable ? 'analysis_result' : 'text',
         strategy: result?.strategy,
         mode: result?.mode,
@@ -250,8 +273,8 @@ function ChatContent() {
         timestamp: serverTimestamp(),
       });
 
-    } catch (err) {
-      console.error('Processing error:', err);
+    } catch (err: any) {
+      console.error('Intelligence Sync Error:', err);
       
       const assistantMessage: Message = {
         id: Math.random().toString(36).substr(2, 9),
@@ -268,7 +291,11 @@ function ChatContent() {
         timestamp: serverTimestamp(),
       });
 
-      toast({ variant: 'destructive', title: "Sync Interrupted", description: "Defaulting to safe advisor mode." });
+      toast({ 
+        variant: 'destructive', 
+        title: "Intelligence Interrupted", 
+        description: "Standard advisor mode active while I reconnect." 
+      });
     } finally {
       setIsProcessing(false);
     }
@@ -294,7 +321,7 @@ function ChatContent() {
         className="flex-1 overflow-y-auto pt-24 pb-48 px-6 md:px-24 lg:px-48 space-y-12 scroll-smooth"
       >
         <AnimatePresence initial={false}>
-          {isMessagesLoading ? (
+          {isMessagesLoading && localMessages.length === 0 ? (
             <div className="space-y-12">
               <Skeleton className="h-24 w-3/4 rounded-3xl bg-white/[0.03]" />
               <Skeleton className="h-24 w-1/2 ml-auto rounded-3xl bg-primary/10" />
@@ -337,11 +364,9 @@ function ChatContent() {
                       msg.type === 'error' ? "border-danger/30 bg-danger/5" : ""
                     )}>
                       {msg.content}
-                      {msg.timestamp && (
-                        <span className="absolute -bottom-6 right-1 text-[8px] font-bold text-muted-foreground/20 uppercase tracking-[0.2em]">
-                          {new Date(msg.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                        </span>
-                      )}
+                      <span className="absolute -bottom-6 right-1 text-[8px] font-bold text-muted-foreground/20 uppercase tracking-[0.2em]">
+                        {formatSafeTime(msg.timestamp)}
+                      </span>
                     </div>
                   </div>
 
