@@ -1,16 +1,16 @@
 'use server';
 /**
- * @fileOverview High-IQ "AI Life Operator" reasoning engine.
- * Implements dynamic strategy selection, intent routing, and memory-aware behavior.
- * Standardized to use Genkit 1.x for reliable AI orchestration.
+ * @fileOverview "AI Life Operator" analyysimoottori, joka käyttää Groq-malleja.
+ * Toteuttaa dynaamisen mallin valinnan (Vision vs. Text) ja robustin JSON-paukkauksen.
  */
 
 import { ai } from '@/ai/genkit';
+import { groq } from '@/ai/groq';
 import { z } from 'genkit';
 
 const DetectedItemSchema = z.object({
-  title: z.string().describe('The name of the service or category.'),
-  summary: z.string().describe('Why this is an optimization opportunity.'),
+  title: z.string().describe('Palvelun tai kategorian nimi.'),
+  summary: z.string().describe('Miksi tämä on säästömahdollisuus.'),
   type: z.enum([
     'subscription',
     'recurring_charge',
@@ -21,35 +21,27 @@ const DetectedItemSchema = z.object({
     'savings_opportunity',
     'duplicate_charge'
   ]),
-  estimatedSavings: z.number().describe('Monthly USD savings.'),
+  estimatedSavings: z.number().describe('Arvioitu kuukausittainen säästö dollareina/euroina.'),
   alternativeSuggestion: z.string().optional(),
   alternativeLink: z.string().optional(),
   urgencyLevel: z.enum(['low', 'medium', 'high', 'urgent']),
-  copyableMessage: z.string().describe('Professional script for negotiation or cancellation.'),
-  actionLabel: z.string().describe('Button label for the action.'),
+  copyableMessage: z.string().describe('Valmis viestipohja peruutukseen tai neuvotteluun.'),
+  actionLabel: z.string().describe('Toimintopainikkeen teksti.'),
 });
 
-const UserMemorySchema = z.object({
-  behaviorSummary: z.string().optional(),
-  goals: z.array(z.string()).optional(),
-  preferences: z.array(z.string()).optional(),
-  subscriptions: z.array(z.string()).optional(),
-  ignoredSuggestions: z.array(z.string()).optional(),
-}).optional();
-
 const AnalyzeFinancialDocumentInputSchema = z.object({
-  imageDataUri: z.string().optional().describe("A photo of a document as a data URI."),
-  documentText: z.string().optional().describe("The text content of the document."),
+  imageDataUri: z.string().optional().describe("Dokumentin kuva data-urina."),
+  documentText: z.string().optional().describe("Dokumentin tekstisisältö."),
   history: z.array(z.object({
     role: z.enum(['user', 'assistant']),
     content: z.string(),
   })).optional(),
-  userMemory: UserMemorySchema,
+  userMemory: z.any().optional(),
 });
 
 const AnalyzeFinancialDocumentOutputSchema = z.object({
-  title: z.string().describe('A refined title for the session.'),
-  summary: z.string().describe('The core conversational response, adapted to the selected strategy.'),
+  title: z.string(),
+  summary: z.string(),
   strategy: z.enum([
     'direct_answer',
     'guided_analysis',
@@ -59,21 +51,20 @@ const AnalyzeFinancialDocumentOutputSchema = z.object({
     'action_recommendation',
     'clarification',
     'checklist'
-  ]).describe('The chosen response strategy for this specific interaction.'),
-  mode: z.enum(['alert', 'advisor', 'analyst', 'planner', 'executor', 'reminder']).describe('The active operational mode.'),
+  ]),
+  mode: z.enum(['alert', 'advisor', 'analyst', 'planner', 'executor', 'reminder']),
   detectedItems: z.array(DetectedItemSchema).optional(),
   savingsEstimate: z.number().optional(),
   beforeAfterComparison: z.object({
     currentSituation: z.string(),
     optimizedSituation: z.string(),
   }).optional(),
-  followUpQuestion: z.string().optional().describe('A single high-value question if further data is needed.'),
-  isActionable: z.boolean().describe('True if this triggered a structured financial audit.'),
+  followUpQuestion: z.string().optional(),
+  isActionable: z.boolean(),
   memoryUpdates: z.object({
     newGoals: z.array(z.string()).optional(),
     newPreferences: z.array(z.string()).optional(),
     newSubscriptions: z.array(z.string()).optional(),
-    newIgnoredSuggestions: z.array(z.string()).optional(),
     behaviorSummaryUpdate: z.string().optional(),
   }).optional(),
 });
@@ -82,59 +73,85 @@ export type AnalyzeFinancialDocumentOutput = z.infer<typeof AnalyzeFinancialDocu
 export type AnalyzeFinancialDocumentInput = z.infer<typeof AnalyzeFinancialDocumentInputSchema>;
 
 /**
- * Prompt definition using Handlebars templating.
+ * Pääasiallinen Genkit Flow, joka kutsuu Groq-malleja.
  */
-const analyzePrompt = ai.definePrompt({
-  name: 'analyzeFinancialDocumentPrompt',
-  input: { schema: AnalyzeFinancialDocumentInputSchema },
-  output: { schema: AnalyzeFinancialDocumentOutputSchema },
-  prompt: `You are a "High-IQ Life Operator Assistant". You are refined, intelligent, proactive, and analytical.
-Your primary directive is to save the user time and money through strategic oversight.
-
-OPERATIONAL GUIDELINES:
-1. CHAIN OF THOUGHT: Analyze the user's intent, conversation history, and user memory before selecting a strategy.
-2. ADAPTIVE STRATEGY: Do not use the same tone or format every time. Choose the best 'strategy' and 'mode' for the context.
-3. MEMORY AWARENESS: Respect past decisions.
-4. FRESH DIALOGUE: Avoid repetitive phrases. Be conversational, concise, and professional.
-
-USER MEMORY PROTOCOL:
-- Behavior Summary: {{{userMemory.behaviorSummary}}}
-- Goals: {{#each userMemory.goals}}{{{this}}}, {{/each}}
-- Subscriptions: {{#each userMemory.subscriptions}}{{{this}}}, {{/each}}
-
-THREAD HISTORY:
-{{#each history}}
-- {{{role}}}: {{{content}}}
-{{/each}}
-
-LATEST USER INPUT:
-{{{documentText}}}
-
-{{#if imageDataUri}}
-VISUAL SOURCE PROVIDED:
-{{media url=imageDataUri}}
-{{/if}}
-
-OUTPUT REQUIREMENT:
-Analyze the input and return a JSON object. Select the most strategic 'mode' and 'strategy'.`,
-});
-
-/**
- * The main Genkit Flow for financial document analysis.
- */
-const analyzeFinancialDocumentFlow = ai.defineFlow(
+export const analyzeFinancialDocumentFlow = ai.defineFlow(
   {
     name: 'analyzeFinancialDocumentFlow',
     inputSchema: AnalyzeFinancialDocumentInputSchema,
     outputSchema: AnalyzeFinancialDocumentOutputSchema,
   },
   async (input) => {
-    const { output } = await analyzePrompt(input);
+    const hasImage = !!input.imageDataUri;
+    const modelId = hasImage ? 'llama-3.2-11b-vision-preview' : 'llama-3.3-70b-versatile';
     
-    if (!output) {
+    const messages: any[] = [
+      {
+        role: 'system',
+        content: `Olet "AI Life Operator" - huippuälykäs ja analyyttinen talousassistentti.
+Tavoitteesi on löytää käyttäjän kuluista säästöjä, turhia tilauksia ja piilokuluja.
+
+OHJEET:
+1. Analysoi käyttäjän syöte (teksti tai kuva).
+2. Jos havaitset tilausmaksuja tai toistuvia kuluja, listaa ne 'detectedItems' kenttään.
+3. Valitse tilanteeseen sopivin 'strategy' ja 'mode'.
+4. Palauta vastaus AINA pelkkänä JSON-objektina, joka noudattaa annettua skeemaa.
+
+SYÖTE:
+${input.documentText || 'Analysoi oheinen kuva.'}
+
+HISTORIA:
+${JSON.stringify(input.history || [])}
+
+MUISTI:
+${JSON.stringify(input.userMemory || {})}
+`
+      }
+    ];
+
+    if (hasImage) {
+      messages.push({
+        role: 'user',
+        content: [
+          { type: 'text', text: 'Analysoi tämä taloudellinen dokumentti.' },
+          { type: 'image_url', image_url: { url: input.imageDataUri } }
+        ]
+      });
+    } else {
+      messages.push({
+        role: 'user',
+        content: input.documentText || 'Tee taloudellinen auditointi.'
+      });
+    }
+
+    try {
+      const completion = await groq.chat.completions.create({
+        model: modelId,
+        messages,
+        response_format: { type: 'json_object' },
+        temperature: 0.1,
+      });
+
+      const rawContent = completion.choices[0]?.message?.content || '{}';
+      const parsed = JSON.parse(rawContent);
+
       return {
-        title: "Intelligence Briefing",
-        summary: "I've reviewed the information. To give you a more detailed audit, could you share a bit more detail or a clearer source?",
+        title: parsed.title || "Talousraportti",
+        summary: parsed.summary || "Analyysi valmistui.",
+        strategy: parsed.strategy || 'direct_answer',
+        mode: parsed.mode || 'advisor',
+        isActionable: !!parsed.detectedItems?.length,
+        detectedItems: parsed.detectedItems || [],
+        savingsEstimate: parsed.savingsEstimate || 0,
+        beforeAfterComparison: parsed.beforeAfterComparison,
+        followUpQuestion: parsed.followUpQuestion,
+        memoryUpdates: parsed.memoryUpdates
+      };
+    } catch (error) {
+      console.error('Groq Analysis Error:', error);
+      return {
+        title: "Huomio",
+        summary: "Analyysimoottori kohtasi pienen häiriön, mutta olen edelleen tavoitettavissa. Voitko kokeilla lähettää tiedot uudelleen?",
         strategy: 'direct_answer',
         mode: 'advisor',
         isActionable: false,
@@ -142,14 +159,9 @@ const analyzeFinancialDocumentFlow = ai.defineFlow(
         savingsEstimate: 0
       };
     }
-
-    return output;
   }
 );
 
-/**
- * Wrapper function for the flow to be called by API routes or client components.
- */
 export async function analyzeFinancialDocument(input: AnalyzeFinancialDocumentInput): Promise<AnalyzeFinancialDocumentOutput> {
   return analyzeFinancialDocumentFlow(input);
 }
