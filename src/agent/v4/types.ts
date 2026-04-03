@@ -22,6 +22,13 @@ export interface CriticFeedback {
   needs_revision: boolean;
 }
 
+export interface TaskState {
+  isComplete: boolean;
+  iteration: number;
+  remainingGoals: string[];
+  lastObservation: string;
+}
+
 export interface AgentContext {
   input: string;
   history: any[];
@@ -34,4 +41,5 @@ export interface AgentContext {
   criticFeedback?: CriticFeedback;
   finalResponse?: any;
   fastPathUsed: boolean;
+  taskState: TaskState;
 }
