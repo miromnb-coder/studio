@@ -9,6 +9,7 @@ export const runtime = 'nodejs';
  */
 
 export async function POST(req: Request) {
+  const correlationId = crypto.randomUUID();
   try {
     const { input, history, imageUri, userId } = await req.json();
 
@@ -48,11 +49,20 @@ export async function POST(req: Request) {
       },
     });
   } catch (error: any) {
-    console.error('AGENT_V4_CRITICAL_ERROR:', error.message);
+    console.error('AGENT_V4_CRITICAL_ERROR:', {
+      correlationId,
+      message: error?.message,
+      code: error?.code,
+      retryable: error?.retryable,
+      context: error?.context
+    });
     return NextResponse.json(
       { 
-        content: "I've encountered a slight sync delay in my reasoning core. Neural pathways are recalibrating.",
-        error: error.message 
+        content: "I hit a temporary issue while processing your request. Please try again in a moment.",
+        error: {
+          summary: 'Temporary processing issue.',
+          correlationId
+        }
       }, 
       { status: 500 }
     );

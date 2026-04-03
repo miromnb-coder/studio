@@ -1,5 +1,5 @@
 import { groq } from '@/ai/groq';
-import { AgentStep, ToolResult } from './types';
+import { AgentStep, ToolExecutionError, ToolResult } from './types';
 
 /**
  * @fileOverview Tool Execution Agent: Runs specialized logic modules.
@@ -81,17 +81,132 @@ const tools = {
   }
 };
 
-export async function executeTools(plan: AgentStep[], input: string, imageUri?: string): Promise<ToolResult[]> {
-  console.log("[TOOLS] Executing tools...");
+interface RetryConfig {
+  maxRetries: number;
+  initialDelayMs: number;
+  backoffMultiplier: number;
+  maxDelayMs: number;
+}
+
+const DEFAULT_RETRY_CONFIG: RetryConfig = {
+  maxRetries: 2,
+  initialDelayMs: 300,
+  backoffMultiplier: 2,
+  maxDelayMs: 3000
+};
+
+function delay(ms: number) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function getErrorCode(error: unknown): string {
+  const status = (error as any)?.status;
+  const code = (error as any)?.code;
+  if (code) return String(code).toUpperCase();
+  if (status) return `HTTP_${status}`;
+  return 'TOOL_EXECUTION_FAILED';
+}
+
+function isTransientFailure(error: unknown): boolean {
+  const status = Number((error as any)?.status);
+  const code = String((error as any)?.code || '').toLowerCase();
+  const message = String((error as any)?.message || '').toLowerCase();
+
+  if ([408, 409, 425, 429, 500, 502, 503, 504].includes(status)) return true;
+  if (['rate_limit_exceeded', 'timeout', 'etimedout', 'econnreset', 'temporarily_unavailable'].includes(code)) return true;
+  return message.includes('rate limit') || message.includes('timeout') || message.includes('temporar');
+}
+
+function toToolExecutionError(
+  error: unknown,
+  action: string,
+  attempts: number,
+  retryable: boolean
+): ToolExecutionError {
+  const err = error as any;
+  return {
+    phase: 'tools',
+    tool: action,
+    attempts,
+    code: getErrorCode(error),
+    message: err?.message || 'Tool execution failed.',
+    retryable,
+    context: {
+      status: err?.status,
+      type: err?.type,
+      rawCode: err?.code
+    }
+  };
+}
+
+async function executeWithRetry(
+  action: string,
+  tool: (input: string, imageUri?: string) => Promise<any>,
+  input: string,
+  imageUri: string | undefined,
+  retryConfig: RetryConfig
+) {
+  let attempt = 0;
+  let delayMs = retryConfig.initialDelayMs;
+
+  while (true) {
+    attempt += 1;
+    try {
+      const result = await tool(input, imageUri);
+      return { result, attempts: attempt };
+    } catch (error) {
+      const retryable = isTransientFailure(error);
+      const hasRemainingRetries = attempt <= retryConfig.maxRetries;
+
+      if (!retryable || !hasRemainingRetries) {
+        throw toToolExecutionError(error, action, attempt, retryable);
+      }
+
+      await delay(delayMs);
+      delayMs = Math.min(Math.round(delayMs * retryConfig.backoffMultiplier), retryConfig.maxDelayMs);
+    }
+  }
+}
+
+export async function executeTools(
+  plan: AgentStep[],
+  input: string,
+  imageUri?: string,
+  options?: { retry?: Partial<RetryConfig>; correlationId?: string }
+): Promise<ToolResult[]> {
+  const retryConfig: RetryConfig = { ...DEFAULT_RETRY_CONFIG, ...(options?.retry ?? {}) };
+  console.log(
+    JSON.stringify({
+      phase: 'tools',
+      event: 'execute_start',
+      correlationId: options?.correlationId,
+      steps: plan.length
+    })
+  );
   const results: ToolResult[] = [];
   for (const step of plan) {
     const tool = tools[step.action as keyof typeof tools];
     if (tool) {
       try {
-        const result = await tool(input, imageUri);
+        const { result } = await executeWithRetry(step.action, tool, input, imageUri, retryConfig);
         results.push({ action: step.action, output: result });
       } catch (err) {
-        results.push({ action: step.action, output: null, error: "Execution failed." });
+        const error = err as ToolExecutionError;
+        results.push({
+          action: step.action,
+          output: null,
+          error,
+          safeErrorSummary: `The ${step.action} tool is temporarily unavailable.`
+        });
+        console.error(
+          JSON.stringify({
+            phase: 'tools',
+            event: 'execute_failed',
+            correlationId: options?.correlationId,
+            action: step.action,
+            error
+          })
+        );
       }
     }
   }
