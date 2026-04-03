@@ -6,6 +6,7 @@ import { Navbar } from '@/components/layout/Navbar';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Badge } from '@/components/ui/badge';
 import { 
   User, 
   Shield, 
@@ -18,16 +19,22 @@ import {
   Lock,
   MailCheck,
   Server,
-  Activity
+  Activity,
+  Database,
+  Globe,
+  RefreshCcw,
+  Zap
 } from 'lucide-react';
 import { useUser, useFirestore, useDoc, useMemoFirebase } from '@/firebase';
 import { doc, updateDoc } from 'firebase/firestore';
 import { GmailService } from '@/services/gmail-service';
 import { useToast } from '@/hooks/use-toast';
+import { motion } from 'framer-motion';
+import { cn } from '@/lib/utils';
 
 export default function SettingsPage() {
   const [mounted, setMounted] = useState(false);
-  const { user } = useUser();
+  const { user, isUserLoading } = useUser();
   const db = useFirestore();
   const [copied, setCopied] = useState(false);
   const [isConnectingGmail, setIsConnectingGmail] = useState(false);
@@ -36,32 +43,36 @@ export default function SettingsPage() {
 
   useEffect(() => {
     setMounted(true);
-    const status = localStorage.getItem('operator_gmail_connected');
+    const status = typeof window !== 'undefined' ? localStorage.getItem('operator_gmail_connected') : null;
     if (status === 'true') setGmailConnected(true);
   }, []);
 
   const userRef = useMemoFirebase(() => {
     try {
-      if (!db || !user) return null;
+      if (!db || !user?.uid) return null;
       return doc(db, 'users', user.uid);
     } catch (e) {
+      console.error('Settings: userRef error', e);
       return null;
     }
-  }, [db, user]);
+  }, [db, user?.uid]);
 
-  const { data: profile } = useDoc(userRef);
+  const { data: profile, isLoading: isProfileLoading } = useDoc(userRef);
 
+  // Initialize magic forwarding email if missing
   useEffect(() => {
-    if (db && user && profile && !profile.inboundEmailAddress) {
+    if (mounted && db && user?.uid && profile && !profile.inboundEmailAddress) {
       const randomSuffix = Math.floor(1000 + Math.random() * 9000);
       const username = (user.email || 'user').split('@')[0].replace(/[^a-zA-Z0-9]/g, '');
       const magicEmail = `${username}${randomSuffix}@operator.protocol`;
       
-      updateDoc(doc(db, 'users', user.uid), {
-        inboundEmailAddress: magicEmail
-      });
+      const docRef = doc(db, 'users', user.uid);
+      updateDoc(docRef, {
+        inboundEmailAddress: magicEmail,
+        updatedAt: new Date().toISOString()
+      }).catch(err => console.error("Failed to initialize magic email", err));
     }
-  }, [db, user, profile]);
+  }, [mounted, db, user?.uid, profile]);
 
   const handleConnectGmail = async () => {
     setIsConnectingGmail(true);
@@ -100,7 +111,7 @@ export default function SettingsPage() {
     }
   };
 
-  if (!mounted) {
+  if (!mounted || isUserLoading) {
     return (
       <div className="min-h-screen bg-background flex items-center justify-center">
         <Loader2 className="w-8 h-8 text-primary animate-spin" />
@@ -122,31 +133,58 @@ export default function SettingsPage() {
           <p className="text-xl text-muted-foreground font-medium">Manage neural pathways, external ingestions, and system health.</p>
         </header>
 
-        <section className="premium-card bg-white/[0.02] border-white/5 p-8">
-           <h3 className="text-[10px] font-bold uppercase tracking-[0.3em] text-muted-foreground mb-6 flex items-center gap-2">
-              <Activity className="w-3.5 h-3.5" />
-              System Health
-           </h3>
+        {/* System Health Dashboard */}
+        <section className="premium-card bg-white/[0.02] border-white/5 p-8 space-y-8">
+           <div className="flex items-center justify-between">
+              <h3 className="text-[10px] font-bold uppercase tracking-[0.3em] text-muted-foreground flex items-center gap-2">
+                <Activity className="w-3.5 h-3.5" />
+                Live System Health
+              </h3>
+              <Badge variant="outline" className="text-[8px] border-primary/20 text-primary">V3_AGENT_OPERATIONAL</Badge>
+           </div>
+           
            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-              <div className="p-4 rounded-xl bg-black/20 border border-white/5 space-y-2">
-                 <p className="text-[8px] font-bold uppercase text-muted-foreground tracking-widest">Intelligence Engine</p>
+              <div className="p-6 rounded-2xl bg-black/20 border border-white/5 space-y-4 relative overflow-hidden group">
+                 <div className="absolute top-0 right-0 p-3 opacity-10">
+                    <Cpu className="w-12 h-12" />
+                 </div>
+                 <p className="text-[8px] font-bold uppercase text-muted-foreground tracking-widest">Logic Engine</p>
                  <div className="flex items-center justify-between">
-                    <span className="text-xs font-bold text-white">Operational</span>
-                    <span className="w-1.5 h-1.5 rounded-full bg-success" />
+                    <span className="text-sm font-bold text-white">Groq Llama-3</span>
+                    <div className="flex items-center gap-2">
+                      <span className="text-[8px] font-bold text-success">READY</span>
+                      <span className="w-1.5 h-1.5 rounded-full bg-success animate-pulse" />
+                    </div>
                  </div>
               </div>
-              <div className="p-4 rounded-xl bg-black/20 border border-white/5 space-y-2">
+
+              <div className="p-6 rounded-2xl bg-black/20 border border-white/5 space-y-4 relative overflow-hidden">
+                 <div className="absolute top-0 right-0 p-3 opacity-10">
+                    <Database className="w-12 h-12" />
+                 </div>
                  <p className="text-[8px] font-bold uppercase text-muted-foreground tracking-widest">Neural Database</p>
                  <div className="flex items-center justify-between">
-                    <span className="text-xs font-bold text-white">Synchronized</span>
-                    <span className="w-1.5 h-1.5 rounded-full bg-success" />
+                    <span className="text-sm font-bold text-white">Firestore</span>
+                    <div className="flex items-center gap-2">
+                      <span className="text-[8px] font-bold text-success">SYNCED</span>
+                      <span className="w-1.5 h-1.5 rounded-full bg-success" />
+                    </div>
                  </div>
               </div>
-              <div className="p-4 rounded-xl bg-black/20 border border-white/5 space-y-2">
+
+              <div className="p-6 rounded-2xl bg-black/20 border border-white/5 space-y-4 relative overflow-hidden">
+                 <div className="absolute top-0 right-0 p-3 opacity-10">
+                    <Globe className="w-12 h-12" />
+                 </div>
                  <p className="text-[8px] font-bold uppercase text-muted-foreground tracking-widest">Gmail Protocol</p>
                  <div className="flex items-center justify-between">
-                    <span className="text-xs font-bold text-white">{gmailConnected ? 'Active' : 'Standby'}</span>
-                    <span className={cn("w-1.5 h-1.5 rounded-full", gmailConnected ? "bg-success" : "bg-warning")} />
+                    <span className="text-sm font-bold text-white">{gmailConnected ? 'Enabled' : 'Standby'}</span>
+                    <div className="flex items-center gap-2">
+                      <span className={cn("text-[8px] font-bold", gmailConnected ? "text-success" : "text-warning")}>
+                        {gmailConnected ? 'ACTIVE' : 'OFFLINE'}
+                      </span>
+                      <span className={cn("w-1.5 h-1.5 rounded-full", gmailConnected ? "bg-success" : "bg-warning")} />
+                    </div>
                  </div>
               </div>
            </div>
@@ -155,7 +193,7 @@ export default function SettingsPage() {
         <div className="grid grid-cols-1 gap-12">
           <div className="space-y-12">
             
-            {/* Gmail Intelligence Section */}
+            {/* Gmail Ingestion */}
             <section className="space-y-6">
               <div className="space-y-1">
                 <h2 className="text-xl font-bold font-headline tracking-tight uppercase tracking-widest text-[12px] flex items-center gap-2 text-white">
@@ -170,7 +208,7 @@ export default function SettingsPage() {
                   <div className="space-y-2 text-center md:text-left">
                     <h3 className="text-2xl font-bold text-white tracking-tight">Gmail Connectivity</h3>
                     <p className="text-sm text-muted-foreground max-w-sm">
-                      The Operator will scan your recent receipts and billing alerts. We only request read-only access.
+                      The Operator scans recent receipts and billing alerts using read-only access.
                     </p>
                   </div>
                   
@@ -198,11 +236,12 @@ export default function SettingsPage() {
                 
                 <div className="pt-6 border-t border-white/5 flex items-center gap-3 text-[9px] font-bold uppercase tracking-[0.2em] text-muted-foreground/50">
                   <Shield className="w-3 h-3" />
-                  Privacy Protocol: No full message bodies are stored permanently in Neural Memory.
+                  No full message bodies are stored permanently in Neural Memory.
                 </div>
               </div>
             </section>
 
+            {/* Manual Ingestion */}
             <section className="space-y-6 pt-12 border-t border-white/5">
               <div className="space-y-1">
                 <h2 className="text-xl font-bold font-headline tracking-tight uppercase tracking-widest text-[12px] flex items-center gap-2 text-white">
@@ -218,7 +257,7 @@ export default function SettingsPage() {
                   <div className="flex gap-3">
                     <Input 
                       readOnly 
-                      value={profile?.inboundEmailAddress || 'Initializing...'} 
+                      value={profile?.inboundEmailAddress || 'Initializing neural path...'} 
                       className="h-14 bg-white/5 border-white/5 font-mono text-primary text-sm px-5 rounded-xl flex-1" 
                     />
                     <Button variant="outline" size="icon" className="w-14 h-14 rounded-xl border-white/5 hover:bg-white/5" onClick={handleCopy}>
@@ -228,11 +267,12 @@ export default function SettingsPage() {
                 </div>
                 <div className="p-4 rounded-xl bg-white/[0.02] border border-white/5 flex gap-4 text-xs text-muted-foreground leading-relaxed">
                   <Info className="w-4 h-4 text-primary shrink-0" />
-                  <p>Forward any receipt or bank statement to this address. The Operator will scan for patterns within 30 seconds.</p>
+                  <p>Forward any receipt to this address. The Operator will process patterns in background mode.</p>
                 </div>
               </div>
             </section>
 
+            {/* Identity Profile */}
             <section className="space-y-6 pt-12 border-t border-white/5">
               <div className="space-y-1">
                 <h2 className="text-xl font-bold font-headline tracking-tight uppercase tracking-widest text-[12px] flex items-center gap-2 text-white">
@@ -241,15 +281,15 @@ export default function SettingsPage() {
                 </h2>
               </div>
 
-              <div className="premium-card p-8 space-y-6">
+              <div className="premium-card p-8 space-y-6 bg-white/[0.01]">
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
                   <div className="space-y-2">
                     <Label className="text-[10px] uppercase font-bold tracking-widest text-muted-foreground">Identity Handle</Label>
-                    <Input value={profile?.displayName || ''} readOnly className="h-12 bg-white/5 border-white/5 rounded-xl" />
+                    <Input value={profile?.displayName || user?.displayName || 'Unknown'} readOnly className="h-12 bg-white/5 border-white/5 rounded-xl" />
                   </div>
                   <div className="space-y-2">
                     <Label className="text-[10px] uppercase font-bold tracking-widest text-muted-foreground">Contact Channel</Label>
-                    <Input value={profile?.email || ''} readOnly className="h-12 bg-white/5 border-white/5 rounded-xl" />
+                    <Input value={profile?.email || user?.email || ''} readOnly className="h-12 bg-white/5 border-white/5 rounded-xl" />
                   </div>
                 </div>
               </div>
