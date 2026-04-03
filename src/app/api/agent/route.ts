@@ -10,7 +10,33 @@ export const runtime = 'nodejs';
 
 export async function POST(req: Request) {
   try {
-    const { input, history, imageUri, userId } = await req.json();
+    let parsedBody: any = {};
+    try {
+      parsedBody = await req.json();
+    } catch {
+      return NextResponse.json(
+        {
+          content: "Invalid JSON payload.",
+          error: "Request body must be valid JSON."
+        },
+        { status: 400 }
+      );
+    }
+
+    const input = typeof parsedBody?.input === 'string' ? parsedBody.input : '';
+    const history = Array.isArray(parsedBody?.history) ? parsedBody.history : [];
+    const imageUri = typeof parsedBody?.imageUri === 'string' ? parsedBody.imageUri : undefined;
+    const userId = typeof parsedBody?.userId === 'string' ? parsedBody.userId : 'anonymous';
+
+    if (!input.trim()) {
+      return NextResponse.json(
+        {
+          content: "Please provide an input message.",
+          error: "Field `input` is required."
+        },
+        { status: 400 }
+      );
+    }
 
     if (!process.env.GROQ_API_KEY) {
       throw new Error('GROQ_API_KEY is not configured.');
@@ -28,22 +54,27 @@ export async function POST(req: Request) {
     const encoder = new TextEncoder();
     const readableStream = new ReadableStream({
       async start(controller) {
-        // First, send the metadata as a separate chunk
-        controller.enqueue(encoder.encode(`__METADATA__:${JSON.stringify(metadata)}\n`));
+        try {
+          controller.enqueue(encoder.encode(`${JSON.stringify({ type: 'metadata', data: metadata })}\n`));
 
-        for await (const chunk of stream!) {
-          const content = chunk.choices[0]?.delta?.content || "";
-          if (content) {
-            controller.enqueue(encoder.encode(content));
+          for await (const chunk of stream!) {
+            const content = chunk?.choices?.[0]?.delta?.content || "";
+            if (content) {
+              controller.enqueue(encoder.encode(`${JSON.stringify({ type: 'chunk', data: content })}\n`));
+            }
           }
+          controller.enqueue(encoder.encode(`${JSON.stringify({ type: 'done' })}\n`));
+        } catch (streamError: any) {
+          controller.enqueue(encoder.encode(`${JSON.stringify({ type: 'error', error: streamError?.message || 'Streaming failed.' })}\n`));
+        } finally {
+          controller.close();
         }
-        controller.close();
       },
     });
 
     return new Response(readableStream, {
       headers: {
-        'Content-Type': 'text/plain; charset=utf-8',
+        'Content-Type': 'application/x-ndjson; charset=utf-8',
         'Cache-Control': 'no-cache',
       },
     });

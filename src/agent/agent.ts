@@ -1,5 +1,5 @@
 
-import { runAgentV4 } from './v4/orchestrator';
+import { runAgentV4Stream } from './v4/orchestrator';
 
 /**
  * @fileOverview Agent v4.1 Entry Point.
@@ -10,7 +10,39 @@ import { runAgentV4 } from './v4/orchestrator';
  * 3. Verified Output Delivery
  */
 
-export async function runAgent(input: string, history: any[] = [], memory: any = null, imageUri?: string) {
+export interface AgentRunResult {
+  content: string;
+  intent: string;
+  mode: string;
+  isActionable: boolean;
+  data: Record<string, any> | null;
+}
+
+export async function runAgent(input: string, history: any[] = [], memory: any = null, imageUri?: string): Promise<AgentRunResult> {
   console.log(`[AGENT_V4] Processing instruction: "${input.slice(0, 50)}..."`);
-  return runAgentV4(input, history, memory, imageUri);
+  const { stream, fastPathResponse, metadata } = await runAgentV4Stream(input, memory?.userId || 'anonymous', history, imageUri);
+  const normalizedMetadata = (metadata || null) as Record<string, any> | null;
+
+  if (fastPathResponse) {
+    return {
+      content: fastPathResponse,
+      intent: normalizedMetadata?.intent || 'general',
+      mode: normalizedMetadata?.intent || 'general',
+      isActionable: false,
+      data: normalizedMetadata
+    };
+  }
+
+  let content = '';
+  for await (const chunk of stream || []) {
+    content += chunk?.choices?.[0]?.delta?.content || '';
+  }
+
+  return {
+    content,
+    intent: normalizedMetadata?.intent || 'general',
+    mode: normalizedMetadata?.intent || 'general',
+    isActionable: true,
+    data: normalizedMetadata
+  };
 }

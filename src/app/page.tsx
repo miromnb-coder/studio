@@ -218,27 +218,69 @@ function ChatContent() {
       const decoder = new TextDecoder();
       let fullContent = "";
       let metadata: any = null;
+      let pendingBuffer = "";
 
       while (true) {
         const { done, value } = await reader!.read();
         if (done) break;
 
         const chunk = decoder.decode(value);
-        if (chunk.startsWith("__METADATA__:")) {
-          const metaLine = chunk.split('\n')[0];
-          metadata = JSON.parse(metaLine.replace("__METADATA__:", ""));
-          continue;
-        }
+        pendingBuffer += chunk;
 
-        fullContent += chunk;
-        setLocalMessages(prev => prev.map(m => 
-          m.id === assistantMsgId ? { ...m, content: fullContent } : m
-        ));
+        const lines = pendingBuffer.split('\n');
+        pendingBuffer = lines.pop() ?? "";
+
+        for (const line of lines) {
+          if (!line.trim()) continue;
+
+          // Backward compatibility for the previous metadata format
+          if (line.startsWith("__METADATA__:")) {
+            metadata = JSON.parse(line.replace("__METADATA__:", ""));
+            continue;
+          }
+
+          try {
+            const event = JSON.parse(line);
+            if (event?.type === 'metadata') {
+              metadata = event.data;
+              continue;
+            }
+            if (event?.type === 'chunk') {
+              fullContent += event.data || "";
+              setLocalMessages(prev => prev.map(m => 
+                m.id === assistantMsgId ? { ...m, content: fullContent } : m
+              ));
+              continue;
+            }
+            if (event?.type === 'error') {
+              throw new Error(event.error || 'Agent stream error');
+            }
+            if (event?.type === 'done') {
+              continue;
+            }
+          } catch {
+            // Non-JSON chunk fallback (legacy plain text stream)
+            fullContent += line;
+            setLocalMessages(prev => prev.map(m => 
+              m.id === assistantMsgId ? { ...m, content: fullContent } : m
+            ));
+          }
+        }
+      }
+
+      if (pendingBuffer.trim()) {
+        try {
+          const event = JSON.parse(pendingBuffer);
+          if (event?.type === 'metadata') metadata = event.data;
+          if (event?.type === 'chunk') fullContent += event.data || "";
+        } catch {
+          fullContent += pendingBuffer;
+        }
       }
 
       // Finalize the message in Firestore
       const finalAssistantMessage = {
-        role: 'assistant',
+        role: 'assistant' as const,
         content: fullContent,
         intent: metadata?.intent || 'general',
         data: metadata || null,
