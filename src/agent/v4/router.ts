@@ -1,4 +1,3 @@
-
 import { groq } from '@/ai/groq';
 import { Intent } from './types';
 
@@ -7,6 +6,7 @@ import { Intent } from './types';
  */
 
 export async function routeIntent(input: string, history: any[]): Promise<{ intent: Intent; language: string }> {
+  console.log("[ROUTER] Analyzing intent...");
   const prompt = `
     Analyze user input and history.
     1. Detect language (e.g., Finnish, English).
@@ -28,10 +28,10 @@ export async function routeIntent(input: string, history: any[]): Promise<{ inte
     });
     
     const content = JSON.parse(res.choices[0]?.message?.content || '{}');
-    return {
-      intent: (content.intent as Intent) || 'general',
-      language: content.language || 'English'
-    };
+    const intent = (content.intent as Intent) || 'general';
+    const language = content.language || 'English';
+    console.log(`[ROUTER] Detected Intent: ${intent}, Language: ${language}`);
+    return { intent, language };
   } catch (err) {
     return { intent: 'general', language: 'English' };
   }

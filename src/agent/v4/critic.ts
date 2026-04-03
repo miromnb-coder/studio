@@ -1,17 +1,19 @@
-
 import { groq } from '@/ai/groq';
 import { CriticFeedback } from './types';
 
 /**
- * @fileOverview Critic Agent: Evaluates the draft response for grounding and quality.
+ * @fileOverview Critic Agent: Evaluates the draft plan and context for quality.
  */
 
-export async function evaluateResponse(input: string, response: any): Promise<CriticFeedback> {
+export async function evaluateReasoning(input: string, context: any): Promise<CriticFeedback> {
+  console.log("[CRITIC] Evaluating reasoning chain...");
   const prompt = `
-    Evaluate the following AI response against user input.
-    Check for: Hallucinations, grounding, conciseness, and actionability.
+    Evaluate the following reasoning chain for user input.
+    Check for: Hallucinations, grounding, tool relevance, and actionability.
     
-    Response: ${JSON.stringify(response)}
+    Intent: ${context.intent}
+    Plan: ${JSON.stringify(context.plan)}
+    Tool Results: ${JSON.stringify(context.toolResults)}
     Input: ${input}
 
     Return ONLY JSON: {"score": 0-10, "issues": [], "needs_revision": boolean}
@@ -27,7 +29,9 @@ export async function evaluateResponse(input: string, response: any): Promise<Cr
       temperature: 0,
     });
     
-    return JSON.parse(res.choices[0]?.message?.content || '{"score": 10, "issues": [], "needs_revision": false}');
+    const feedback = JSON.parse(res.choices[0]?.message?.content || '{"score": 10, "issues": [], "needs_revision": false}');
+    console.log(`[CRITIC] Evaluation Score: ${feedback.score}`);
+    return feedback;
   } catch (err) {
     return { score: 10, issues: [], needs_revision: false };
   }

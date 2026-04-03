@@ -1,43 +1,36 @@
-
 import { groq } from '@/ai/groq';
 import { AgentContext } from './types';
 
 /**
- * @fileOverview Response Generator Agent: Produces the final structured answer.
+ * @fileOverview Streaming Response Generator Agent.
  */
 
-export async function generateResponse(context: AgentContext, attempt = 1): Promise<any> {
+export async function generateStreamResponse(context: AgentContext) {
+  console.log("[GENERATOR] Initializing stream...");
   const prompt = `
     User Input: ${context.input}
     Language: ${context.language}
     Intent: ${context.intent}
     Tool Outputs: ${JSON.stringify(context.toolResults)}
     Memory: ${JSON.stringify(context.memory || {})}
-    Critic Feedback (Attempt ${attempt}): ${JSON.stringify(context.criticFeedback || {})}
+    Critic Feedback: ${JSON.stringify(context.criticFeedback || {})}
 
     Objective: Provide a clear, actionable, and grounded response in ${context.language}.
     
-    Return ONLY JSON:
-    {
-      "summary": "Main message",
-      "strategy": "Plan/Advice",
-      "title": "Header",
-      "mode": "${context.intent}",
-      "isActionable": true,
-      "data": {}
-    }
+    Structure your response naturally. If the intent is finance, include estimated savings. 
+    If the intent is technical, provide implementation steps.
+    
+    NEVER explain that you are an AI or using tools. Be the Operator.
   `;
 
-  const res = await groq.chat.completions.create({
+  return groq.chat.completions.create({
     model: 'llama-3.3-70b-versatile',
     messages: [
-      { role: 'system', content: 'You are the AI Life Operator v4.1.' },
+      { role: 'system', content: 'You are the AI Life Operator v4.2. Speak directly and efficiently.' },
       ...context.history.slice(-5),
       { role: 'user', content: prompt }
     ],
-    response_format: { type: 'json_object' },
     temperature: 0.2,
+    stream: true,
   });
-
-  return JSON.parse(res.choices[0]?.message?.content || '{}');
 }

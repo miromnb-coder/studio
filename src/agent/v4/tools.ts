@@ -1,4 +1,3 @@
-
 import { groq } from '@/ai/groq';
 import { AgentStep, ToolResult } from './types';
 
@@ -83,6 +82,7 @@ const tools = {
 };
 
 export async function executeTools(plan: AgentStep[], input: string, imageUri?: string): Promise<ToolResult[]> {
+  console.log("[TOOLS] Executing tools...");
   const results: ToolResult[] = [];
   for (const step of plan) {
     const tool = tools[step.action as keyof typeof tools];

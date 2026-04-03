@@ -1,4 +1,3 @@
-
 import { groq } from '@/ai/groq';
 import { Intent, AgentStep } from './types';
 
@@ -7,6 +6,7 @@ import { Intent, AgentStep } from './types';
  */
 
 export async function createPlan(input: string, intent: Intent, history: any[]): Promise<AgentStep[]> {
+  console.log("[PLANNER] Creating execution plan...");
   const prompt = `
     User Intent: ${intent}
     Input: ${input}
@@ -34,6 +34,7 @@ export async function createPlan(input: string, intent: Intent, history: any[]):
     const plan = Array.isArray(parsed) ? parsed : (parsed.plan || parsed.steps || []);
     
     if (plan.length === 0) return [{ action: 'analyze', priority: 'high' }];
+    console.log("[PLANNER] Plan created:", plan.map(s => s.action).join(" -> "));
     return plan;
   } catch (err) {
     return [{ action: 'analyze', priority: 'high' }];

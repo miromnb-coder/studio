@@ -1,6 +1,5 @@
-
 /**
- * @fileOverview Core types for Agent v4.1 Multi-Agent Architecture.
+ * @fileOverview Core types for Agent v4.2 Multi-Agent Architecture.
  */
 
 export type Intent = 'finance' | 'time_optimizer' | 'monetization' | 'technical' | 'analysis' | 'general';

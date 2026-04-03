@@ -1,4 +1,3 @@
-
 "use client";
 
 import { useState, useRef, useEffect, Suspense } from 'react';
@@ -32,10 +31,6 @@ import {
   Coins,
   Map
 } from 'lucide-react';
-import { AnalysisService } from '@/services/analysis-service';
-import { MemoryService } from '@/services/memory-service';
-import { GmailService } from '@/services/gmail-service';
-import { DigestService } from '@/services/digest-service';
 import { useFirestore, useUser, addDocumentNonBlocking, useCollection, useMemoFirebase, useDoc } from '@/firebase';
 import { collection, serverTimestamp, doc, updateDoc, query, orderBy, setDoc, deleteDoc } from 'firebase/firestore';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -56,11 +51,12 @@ interface Message {
   id: string;
   role: 'user' | 'assistant';
   content: string;
-  type?: 'text' | 'analysis_result' | 'daily_digest' | 'error' | 'system' | 'strategy_alert';
-  strategy?: string;
+  type?: 'text' | 'analysis_result' | 'daily_digest' | 'error' | 'system';
+  intent?: string;
   mode?: string;
   data?: any;
   timestamp: any;
+  isStreaming?: boolean;
 }
 
 const formatSafeTime = (timestamp: any) => {
@@ -120,29 +116,14 @@ function ChatContent() {
 
   const { data: storedMessages, isLoading: isMessagesLoading } = useCollection(messagesQuery);
 
-  const memoryRef = useMemoFirebase(() => {
-    if (!db || !user) return null;
-    return doc(db, 'users', user.uid, 'memory', 'main');
-  }, [db, user]);
-  
-  const { data: userMemory } = useDoc(memoryRef);
-
   useEffect(() => {
     if (!mounted) return;
-
     if (Array.isArray(storedMessages) && storedMessages.length > 0) {
-      const validMessages = storedMessages.filter(m => m && m.id && (m.content || m.data));
-      setLocalMessages(validMessages as Message[]);
+      setLocalMessages(storedMessages as Message[]);
     } else if (!isMessagesLoading) {
       setLocalMessages([]);
     }
   }, [storedMessages, conversationId, mounted, isMessagesLoading]);
-
-  useEffect(() => {
-    if (mounted && !isProcessing) {
-      textareaRef.current?.focus();
-    }
-  }, [mounted, conversationId, isProcessing]);
 
   const scrollToBottom = () => {
     if (scrollRef.current) {
@@ -165,25 +146,6 @@ function ChatContent() {
     }
   };
 
-  if (!mounted || isUserLoading) {
-    return (
-      <div className="min-h-screen bg-background flex items-center justify-center">
-        <Loader2 className="w-10 h-10 text-primary animate-spin" />
-      </div>
-    );
-  }
-
-  if (!user) {
-    return null;
-  }
-
-  const handleCopy = (text: string, id: string) => {
-    if (!text) return;
-    navigator.clipboard.writeText(text);
-    setCopiedId(id);
-    setTimeout(() => setCopiedId(null), 2000);
-  };
-
   const createNewConversation = async (title = 'New Protocol') => {
     if (!user || !db) return '';
     const newConvRef = doc(collection(db, 'users', user.uid, 'conversations'));
@@ -200,9 +162,9 @@ function ChatContent() {
     return newConvRef.id;
   };
 
-  const sendMessage = async (text?: string, fileData?: string, rawContext?: string) => {
+  const sendMessage = async (text?: string, fileData?: string) => {
     const content = text || input;
-    if (!content && !fileData && !rawContext) return;
+    if (!content && !fileData) return;
     if (!user || !db) return;
 
     let activeConvId = conversationId;
@@ -213,12 +175,11 @@ function ChatContent() {
     const userMessage: Message = {
       id: Math.random().toString(36).substr(2, 9),
       role: 'user',
-      content: content.startsWith('[SYSTEM]') ? 'System Request' : (content || 'Visual source uploaded'),
+      content,
       timestamp: new Date(),
     };
 
     setLocalMessages(prev => [...prev, userMessage]);
-
     addDocumentNonBlocking(collection(db, 'users', user.uid, 'conversations', activeConvId!, 'messages'), {
       ...userMessage,
       timestamp: serverTimestamp(),
@@ -227,70 +188,72 @@ function ChatContent() {
     setInput('');
     setIsProcessing(true);
 
-    try {
-      const history = (Array.isArray(localMessages) ? localMessages : [])
-        .filter(m => m && m.content)
-        .slice(-10)
-        .map(m => ({ role: m.role, content: m.content }));
+    const assistantMsgId = Math.random().toString(36).substr(2, 9);
+    const assistantMessage: Message = {
+      id: assistantMsgId,
+      role: 'assistant',
+      content: '',
+      timestamp: new Date(),
+      isStreaming: true
+    };
+    setLocalMessages(prev => [...prev, assistantMessage]);
 
-      const result = await AnalysisService.analyze({ 
-        documentText: rawContext || content,
-        imageDataUri: fileData,
-        history,
-        userMemory: userMemory || null
+    try {
+      const history = localMessages.slice(-10).map(m => ({ role: m.role, content: m.content }));
+      
+      const response = await fetch('/api/agent', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          input: content,
+          history,
+          imageUri: fileData,
+          userId: user.uid
+        }),
       });
 
-      if (localMessages.length <= 1 && result?.title) {
-        updateDoc(doc(db, 'users', user.uid, 'conversations', activeConvId!), {
-          title: result.title,
-          updatedAt: serverTimestamp(),
-        });
+      if (!response.ok) throw new Error("Stream connection failed");
+
+      const reader = response.body?.getReader();
+      const decoder = new TextDecoder();
+      let fullContent = "";
+      let metadata: any = null;
+
+      while (true) {
+        const { done, value } = await reader!.read();
+        if (done) break;
+
+        const chunk = decoder.decode(value);
+        if (chunk.startsWith("__METADATA__:")) {
+          const metaLine = chunk.split('\n')[0];
+          metadata = JSON.parse(metaLine.replace("__METADATA__:", ""));
+          continue;
+        }
+
+        fullContent += chunk;
+        setLocalMessages(prev => prev.map(m => 
+          m.id === assistantMsgId ? { ...m, content: fullContent } : m
+        ));
       }
 
-      if (result?.memoryUpdates) {
-        MemoryService.updateMemory(db, user.uid, result.memoryUpdates);
-      }
-
-      const assistantMessage: Message = {
-        id: Math.random().toString(36).substr(2, 9),
+      // Finalize the message in Firestore
+      const finalAssistantMessage = {
         role: 'assistant',
-        content: result?.summary || "Agent synchronized. Standing by for intent.",
-        type: result?.isActionable ? 'analysis_result' : 'text',
-        strategy: result?.strategy,
-        mode: result?.mode,
-        data: result || null,
-        timestamp: new Date(),
+        content: fullContent,
+        intent: metadata?.intent || 'general',
+        data: metadata || null,
+        timestamp: serverTimestamp(),
       };
 
-      setLocalMessages(prev => [...prev, assistantMessage]);
-      addDocumentNonBlocking(collection(db, 'users', user.uid, 'conversations', activeConvId!, 'messages'), {
-        ...assistantMessage,
-        timestamp: serverTimestamp(),
-      });
+      setLocalMessages(prev => prev.map(m => 
+        m.id === assistantMsgId ? { ...m, ...finalAssistantMessage, isStreaming: false, timestamp: new Date() } : m
+      ));
+
+      addDocumentNonBlocking(collection(db, 'users', user.uid, 'conversations', activeConvId!, 'messages'), finalAssistantMessage);
 
     } catch (err: any) {
-      console.error('Intelligence Sync Error:', err);
-      
-      const assistantMessage: Message = {
-        id: Math.random().toString(36).substr(2, 9),
-        role: 'assistant',
-        content: "I've encountered a slight delay in processing. I'm still here to help—could you please re-share that last detail so I can finish the audit?",
-        type: 'text',
-        mode: 'general',
-        timestamp: new Date(),
-      };
-
-      setLocalMessages(prev => [...prev, assistantMessage]);
-      addDocumentNonBlocking(collection(db, 'users', user.uid, 'conversations', activeConvId!, 'messages'), {
-        ...assistantMessage,
-        timestamp: serverTimestamp(),
-      });
-
-      toast({ 
-        variant: 'destructive', 
-        title: "Intelligence Interrupted", 
-        description: "Standard advisor mode active while I reconnect." 
-      });
+      console.error('Streaming Error:', err);
+      toast({ variant: 'destructive', title: "Neural Link Severed", description: "I've lost the stream. Recalibrating." });
     } finally {
       setIsProcessing(false);
     }
@@ -298,17 +261,21 @@ function ChatContent() {
 
   const getModeIcon = (mode?: string) => {
     switch (mode) {
-      case 'alert': return <Zap className="w-3.5 h-3.5 text-danger" />;
-      case 'analyst': return <BrainCircuit className="w-3.5 h-3.5 text-primary" />;
-      case 'planner': return <ListChecks className="w-3.5 h-3.5 text-accent" />;
-      case 'executor': return <ShieldCheck className="w-3.5 h-3.5 text-success" />;
-      case 'time_optimizer': return <Clock className="w-3.5 h-3.5 text-primary" />;
-      case 'monetization': return <Coins className="w-3.5 h-3.5 text-warning" />;
+      case 'finance': return <Coins className="w-3.5 h-3.5 text-primary" />;
+      case 'time_optimizer': return <Clock className="w-3.5 h-3.5 text-accent" />;
+      case 'monetization': return <Zap className="w-3.5 h-3.5 text-warning" />;
       case 'technical': return <Cpu className="w-3.5 h-3.5 text-muted-foreground" />;
-      case 'planning': return <Map className="w-3.5 h-3.5 text-accent" />;
-      default: return <Cpu className="w-3.5 h-3.5 text-muted-foreground" />;
+      default: return <BrainCircuit className="w-3.5 h-3.5 text-primary" />;
     }
   };
+
+  if (!mounted || isUserLoading) {
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center">
+        <Loader2 className="w-10 h-10 text-primary animate-spin" />
+      </div>
+    );
+  }
 
   return (
     <div className="flex flex-col h-screen bg-background relative overflow-hidden">
@@ -320,13 +287,8 @@ function ChatContent() {
         className="flex-1 overflow-y-auto pt-24 pb-48 px-6 md:px-24 lg:px-48 space-y-12 scroll-smooth"
       >
         <AnimatePresence initial={false}>
-          {isMessagesLoading && localMessages.length === 0 ? (
-            <div className="space-y-12">
-              <Skeleton className="h-24 w-3/4 rounded-3xl bg-white/[0.03]" />
-              <Skeleton className="h-24 w-1/2 ml-auto rounded-3xl bg-primary/10" />
-            </div>
-          ) : localMessages.length > 0 ? (
-            (Array.isArray(localMessages) ? localMessages : []).map((msg) => (
+          {localMessages.length > 0 ? (
+            localMessages.map((msg) => (
               <motion.div 
                 key={msg.id} 
                 initial={{ opacity: 0, y: 15 }} 
@@ -337,40 +299,33 @@ function ChatContent() {
                   
                   {msg.role === 'assistant' && (
                     <div className="flex items-center gap-3 mb-2 ml-1">
-                      <div className="p-1.5 rounded-lg bg-white/5 border border-white/5">{getModeIcon(msg.mode)}</div>
+                      <div className="p-1.5 rounded-lg bg-white/5 border border-white/5">{getModeIcon(msg.intent)}</div>
                       <span className="text-[10px] font-bold uppercase tracking-[0.2em] text-muted-foreground/40">
-                        {msg.mode?.replace('_', ' ') || 'Operator'} • {msg.strategy?.slice(0, 20).replace('_', ' ') || 'Advisor'}
+                        {msg.intent?.replace('_', ' ') || 'Operator'} • Neural Stream Active
                       </span>
                     </div>
                   )}
 
                   <div className="flex items-center gap-5">
-                    {msg.role === 'assistant' && (
-                      <Button 
-                        variant="ghost" 
-                        size="icon" 
-                        onClick={() => handleCopy(msg.content, msg.id)}
-                        className="opacity-0 group-hover:opacity-100 transition-opacity w-9 h-9 rounded-xl hover:bg-white/5"
-                      >
-                        {copiedId === msg.id ? <Check className="w-3.5 h-3.5 text-success" /> : <Copy className="w-3.5 h-3.5 text-muted-foreground/50" />}
-                      </Button>
-                    )}
                     <div className={cn(
                       "p-6 rounded-[28px] text-sm md:text-lg leading-relaxed font-medium shadow-2xl relative",
                       msg.role === 'user' 
-                        ? "bg-primary text-background rounded-tr-none shadow-primary/10" 
+                        ? "bg-primary text-background rounded-tr-none" 
                         : "bg-white/[0.03] border border-white/5 text-foreground rounded-tl-none shadow-black/40",
-                      msg.type === 'error' ? "border-danger/30 bg-danger/5" : ""
+                      msg.isStreaming ? "animate-pulse" : ""
                     )}>
                       {msg.content}
-                      <span className="absolute -bottom-6 right-1 text-[8px] font-bold text-muted-foreground/20 uppercase tracking-[0.2em]">
-                        {formatSafeTime(msg.timestamp)}
-                      </span>
+                      {!msg.isStreaming && (
+                        <span className="absolute -bottom-6 right-1 text-[8px] font-bold text-muted-foreground/20 uppercase tracking-[0.2em]">
+                          {formatSafeTime(msg.timestamp)}
+                        </span>
+                      )}
                     </div>
                   </div>
 
-                  {msg.type === 'analysis_result' && msg.data && <RichAnalysisCard data={msg.data} />}
-                  {msg.type === 'daily_digest' && msg.data && <DailyDigestCard digest={msg.data} />}
+                  {msg.data?.toolResults && msg.data.toolResults.length > 0 && !msg.isStreaming && (
+                    <RichAnalysisCard data={{ ...msg.data, summary: msg.content }} />
+                  )}
                 </div>
               </motion.div>
             ))
@@ -378,71 +333,21 @@ function ChatContent() {
             <div className="flex flex-col items-center justify-center h-full text-center space-y-6 opacity-20 pt-32">
               <Cpu className="w-16 h-16 text-primary" />
               <div className="space-y-2">
-                <p className="text-2xl font-bold font-headline tracking-tighter">Ready to Audit</p>
-                <p className="text-sm font-medium uppercase tracking-[0.3em]">Agent v3 Online • Adaptive Intent Active</p>
+                <p className="text-2xl font-bold font-headline tracking-tighter">Operator v4.2</p>
+                <p className="text-sm font-medium uppercase tracking-[0.3em]">Multi-Agent Streaming Core Online</p>
               </div>
             </div>
           )}
         </AnimatePresence>
-
-        {isProcessing && (
-          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="flex flex-col items-start">
-            <div className="flex items-center gap-4 p-6 rounded-[28px] bg-white/[0.03] border border-white/5 rounded-tl-none">
-              <Loader2 className="w-5 h-5 text-primary animate-spin" />
-              <div className="flex flex-col gap-1">
-                <span className="text-sm font-bold text-primary tracking-tight italic">Analyzing Context...</span>
-                <div className="flex gap-1.5">
-                  {[0, 1, 2].map(i => (
-                    <motion.div 
-                      key={i}
-                      animate={{ opacity: [0.2, 1, 0.2] }}
-                      transition={{ duration: 1.5, repeat: Infinity, delay: i * 0.2 }}
-                      className="w-1.5 h-1.5 bg-primary/40 rounded-full"
-                    />
-                  ))}
-                </div>
-              </div>
-            </div>
-          </motion.div>
-        )}
       </div>
-
-      <AnimatePresence>
-        {showScrollButton && (
-          <motion.div 
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: 20 }}
-            className="fixed bottom-32 right-12 z-50"
-          >
-            <Button 
-              size="icon" 
-              onClick={scrollToBottom}
-              className="w-12 h-12 rounded-full shadow-2xl bg-primary text-background hover:scale-110 transition-transform"
-            >
-              <ArrowDown className="w-5 h-5" />
-            </Button>
-          </motion.div>
-        )}
-      </AnimatePresence>
 
       <div className="fixed bottom-0 right-0 left-0 lg:left-[var(--sidebar-width)] p-6 md:p-12 pointer-events-none">
         <div className="max-w-4xl mx-auto w-full pointer-events-auto">
           <Card className="glass !p-2.5 flex items-end gap-3 rounded-[36px] border-white/10 shadow-[0_32px_80px_-12px_rgba(0,0,0,0.6)]">
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button size="icon" variant="ghost" className="w-14 h-14 rounded-full hover:bg-white/5 text-muted-foreground transition-colors">
-                  <Plus className="w-6 h-6" />
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="start" className="w-72 bg-card border-white/10 rounded-2xl p-2 mb-6 shadow-2xl">
-                <DropdownMenuItem onClick={() => DigestService.generateDigest(db!, user!.uid).then(d => d && sendMessage("[SYSTEM] Generate Intelligence Briefing", undefined, "Synthesize latest records into a digest.")) } className="rounded-xl h-12 cursor-pointer gap-4"><CalendarDays className="w-4 h-4 text-primary" /><span className="font-bold text-sm text-white">Daily Briefing</span></DropdownMenuItem>
-                <DropdownMenuItem onClick={() => GmailService.connect().then(t => t && GmailService.fetchFinancialEmails(t).then(e => e.length > 0 && sendMessage(`[SYSTEM] Inbox Analysis Sync`, undefined, e.map(i => i.snippet).join('\n')))) } className="rounded-xl h-12 cursor-pointer gap-4"><MailCheck className="w-4 h-4 text-accent" /><span className="font-bold text-sm text-white">Gmail Audit</span></DropdownMenuItem>
-                <DropdownMenuItem onClick={() => fileInputRef.current?.click()} className="rounded-xl h-12 cursor-pointer gap-4"><ImageIcon className="w-4 h-4 text-success" /><span className="font-bold text-sm text-white">Upload visual source</span></DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
-
-            <input type="file" className="hidden" ref={fileInputRef} accept="image/*" onChange={(e) => { const f = e.target.files?.[0]; if (f) { const r = new FileReader(); r.onloadend = () => sendMessage(undefined, r.result as string); r.readAsDataURL(f); } }} />
+            <Button size="icon" variant="ghost" onClick={() => fileInputRef.current?.click()} className="w-14 h-14 rounded-full hover:bg-white/5 text-muted-foreground">
+              <ImageIcon className="w-6 h-6" />
+            </Button>
+            <input type="file" className="hidden" ref={fileInputRef} accept="image/*" />
             <Textarea 
               ref={textareaRef}
               value={input} 
@@ -456,7 +361,7 @@ function ChatContent() {
               size="icon" 
               disabled={!input.trim() || isProcessing} 
               onClick={() => sendMessage()} 
-              className="w-14 h-14 rounded-full shadow-2xl transition-all hover:scale-105 active:scale-95 shrink-0"
+              className="w-14 h-14 rounded-full shadow-2xl transition-all"
             >
               {isProcessing ? <Loader2 className="w-6 h-6 animate-spin" /> : <Send className="w-6 h-6" />}
             </Button>
