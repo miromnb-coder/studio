@@ -14,6 +14,7 @@ import {
   Cpu
 } from 'lucide-react';
 import Link from 'next/link';
+import { cn } from '@/lib/utils';
 
 interface DailyDigestCardProps {
   digest: {
@@ -27,6 +28,8 @@ interface DailyDigestCardProps {
 
 export function DailyDigestCard({ digest }: DailyDigestCardProps) {
   if (!digest) return null;
+
+  const topActions = Array.isArray(digest.topActions) ? digest.topActions : [];
 
   return (
     <motion.div
@@ -56,35 +59,37 @@ export function DailyDigestCard({ digest }: DailyDigestCardProps) {
           <div className="flex flex-col md:flex-row gap-8 items-start">
             <div className="flex-1 space-y-4">
               <p className="text-lg text-muted-foreground font-medium leading-relaxed italic">
-                "{digest.summary}"
+                "{digest.summary || 'Summary finalized for the current period.'}"
               </p>
               <div className="flex items-center gap-4 pt-2">
                 <div className="px-4 py-2 rounded-xl bg-success/10 border border-success/20 text-success text-[10px] font-bold uppercase tracking-widest flex items-center gap-2">
                   <TrendingUp className="w-3.5 h-3.5" />
-                  +${digest.estimatedMonthlySavings}/mo saved
+                  +${(digest.estimatedMonthlySavings || 0).toFixed(0)}/mo saved
                 </div>
                 <div className="text-[9px] font-bold uppercase tracking-widest text-muted-foreground/50">
-                  {digest.findingsCount} Audits Processed
+                  {digest.findingsCount || 0} Audits Processed
                 </div>
               </div>
             </div>
 
-            <div className="w-full md:w-64 space-y-4">
-              <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">Top Reclaimed Items</p>
-              <div className="space-y-2">
-                {digest.topActions.map((action, i) => (
-                  <div key={i} className="p-3 rounded-xl bg-white/[0.02] border border-white/5 flex items-center justify-between group cursor-pointer hover:bg-white/5 transition-colors">
-                    <span className="text-[11px] font-bold text-white truncate max-w-[120px]">{action.title}</span>
-                    <Badge className={cn(
-                      "text-[8px] px-1.5 h-4 font-bold uppercase",
-                      action.urgency === 'high' ? "bg-danger/20 text-danger border-0" : "bg-primary/20 text-primary border-0"
-                    )}>
-                      {action.urgency}
-                    </Badge>
-                  </div>
-                ))}
+            {topActions.length > 0 && (
+              <div className="w-full md:w-64 space-y-4">
+                <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">Top Reclaimed Items</p>
+                <div className="space-y-2">
+                  {topActions.map((action, i) => (
+                    <div key={i} className="p-3 rounded-xl bg-white/[0.02] border border-white/5 flex items-center justify-between group cursor-pointer hover:bg-white/5 transition-colors">
+                      <span className="text-[11px] font-bold text-white truncate max-w-[120px]">{action.title}</span>
+                      <Badge className={cn(
+                        "text-[8px] px-1.5 h-4 font-bold uppercase",
+                        action.urgency === 'high' ? "bg-danger/20 text-danger border-0" : "bg-primary/20 text-primary border-0"
+                      )}>
+                        {action.urgency || 'medium'}
+                      </Badge>
+                    </div>
+                  ))}
+                </div>
               </div>
-            </div>
+            )}
           </div>
         </div>
 
@@ -103,8 +108,4 @@ export function DailyDigestCard({ digest }: DailyDigestCardProps) {
       </Card>
     </motion.div>
   );
-}
-
-function cn(...classes: any[]) {
-  return classes.filter(Boolean).join(' ');
 }

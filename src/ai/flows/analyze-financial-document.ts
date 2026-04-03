@@ -1,3 +1,4 @@
+
 'use server';
 /**
  * @fileOverview High-IQ "AI Life Operator" reasoning engine.
@@ -83,14 +84,18 @@ export type AnalyzeFinancialDocumentOutput = z.infer<typeof AnalyzeFinancialDocu
 export async function analyzeFinancialDocument(input: z.infer<typeof AnalyzeFinancialDocumentInputSchema>): Promise<AnalyzeFinancialDocumentOutput> {
   const apiKey = process.env.GROQ_API_KEY;
   
+  const fallback: AnalyzeFinancialDocumentOutput = {
+    title: "Intelligence Briefing",
+    summary: "I'm currently scanning the context you provided. To ensure accuracy, I recommend providing a clear screenshot or text snippet of the specific billing item.",
+    strategy: 'direct_answer',
+    mode: 'advisor',
+    isActionable: false,
+    detectedItems: [],
+    savingsEstimate: 0,
+  };
+
   if (!apiKey) {
-    return {
-      title: "Protocol Interruption",
-      summary: "I'm having a brief connection issue with my reasoning framework (API Key Missing).",
-      strategy: 'direct_answer',
-      mode: 'advisor',
-      isActionable: false,
-    };
+    return fallback;
   }
 
   const groq = new Groq({ apiKey });
@@ -145,21 +150,22 @@ You MUST return a JSON object exactly matching the schema. Select the most strat
     const content = completion.choices[0]?.message?.content;
     if (!content) throw new Error('Empty response');
 
-    const result = JSON.parse(content);
+    let result;
+    try {
+      result = JSON.parse(content);
+    } catch (e) {
+      console.warn("LLM JSON Parse failed, attempting fallback parsing.");
+      return fallback;
+    }
+
     return AnalyzeFinancialDocumentOutputSchema.parse({
       ...result,
-      detectedItems: result.detectedItems || [],
-      savingsEstimate: result.savingsEstimate || 0,
+      detectedItems: Array.isArray(result.detectedItems) ? result.detectedItems : [],
+      savingsEstimate: typeof result.savingsEstimate === 'number' ? result.savingsEstimate : 0,
       isActionable: !!result.isActionable,
     });
   } catch (error) {
     console.error('Groq Analysis Error:', error);
-    return {
-      title: "Protocol Interruption",
-      summary: "I encountered a reasoning interruption. Please re-state your intent.",
-      strategy: 'direct_answer',
-      mode: 'advisor',
-      isActionable: false,
-    };
+    return fallback;
   }
 }

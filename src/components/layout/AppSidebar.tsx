@@ -81,6 +81,7 @@ export function AppSidebar() {
     if (!Array.isArray(conversations)) return [];
     return conversations
       .filter(conv => {
+        if (!conv) return false;
         const matchesSearch = (conv.title || '').toLowerCase().includes(searchTerm.toLowerCase());
         const matchesArchive = showArchived ? conv.isArchived : !conv.isArchived;
         return matchesSearch && matchesArchive;
@@ -100,17 +101,18 @@ export function AppSidebar() {
   ];
 
   const handleRename = async (id: string, currentTitle: string) => {
+    if (!db || !user) return;
     const newTitle = prompt("Rename Protocol Thread:", currentTitle);
     if (newTitle && newTitle !== currentTitle) {
       try {
-        await updateDoc(doc(db!, 'users', user!.uid, 'conversations', id), {
+        await updateDoc(doc(db, 'users', user.uid, 'conversations', id), {
           title: newTitle,
           updatedAt: serverTimestamp()
         });
         toast({ title: "Thread Renamed", description: "Ledger updated successfully." });
       } catch (err: any) {
         errorEmitter.emit('permission-error', new FirestorePermissionError({
-          path: `users/${user!.uid}/conversations/${id}`,
+          path: `users/${user.uid}/conversations/${id}`,
           operation: 'update',
           requestResourceData: { title: newTitle }
         }));
@@ -119,8 +121,9 @@ export function AppSidebar() {
   };
 
   const handleArchive = async (id: string, isArchived: boolean) => {
+    if (!db || !user) return;
     try {
-      await updateDoc(doc(db!, 'users', user!.uid, 'conversations', id), {
+      await updateDoc(doc(db, 'users', user.uid, 'conversations', id), {
         isArchived: !isArchived,
         updatedAt: serverTimestamp()
       });
@@ -130,7 +133,7 @@ export function AppSidebar() {
       });
     } catch (err: any) {
       errorEmitter.emit('permission-error', new FirestorePermissionError({
-        path: `users/${user!.uid}/conversations/${id}`,
+        path: `users/${user.uid}/conversations/${id}`,
         operation: 'update',
         requestResourceData: { isArchived: !isArchived }
       }));
@@ -138,8 +141,9 @@ export function AppSidebar() {
   };
 
   const handlePin = async (id: string, isPinned: boolean) => {
+    if (!db || !user) return;
     try {
-      await updateDoc(doc(db!, 'users', user!.uid, 'conversations', id), {
+      await updateDoc(doc(db, 'users', user.uid, 'conversations', id), {
         isPinned: !isPinned,
         updatedAt: serverTimestamp()
       });
@@ -149,7 +153,7 @@ export function AppSidebar() {
       });
     } catch (err: any) {
       errorEmitter.emit('permission-error', new FirestorePermissionError({
-        path: `users/${user!.uid}/conversations/${id}`,
+        path: `users/${user.uid}/conversations/${id}`,
         operation: 'update',
         requestResourceData: { isPinned: !isPinned }
       }));
@@ -157,9 +161,10 @@ export function AppSidebar() {
   };
 
   const handleDelete = async (id: string) => {
+    if (!db || !user) return;
     if (confirm("CRITICAL: Permanently purge this intelligence thread? This cannot be undone.")) {
       try {
-        const docRef = doc(db!, 'users', user!.uid, 'conversations', id);
+        const docRef = doc(db, 'users', user.uid, 'conversations', id);
         await deleteDoc(docRef);
         
         if (activeId === id) {
@@ -169,7 +174,7 @@ export function AppSidebar() {
         toast({ title: "Thread Purged", description: "Record removed from secure ledger." });
       } catch (err: any) {
         errorEmitter.emit('permission-error', new FirestorePermissionError({
-          path: `users/${user!.uid}/conversations/${id}`,
+          path: `users/${user.uid}/conversations/${id}`,
           operation: 'delete'
         }));
         toast({ variant: 'destructive', title: "Purge Failed", description: "Insufficient clearance to remove this record." });
@@ -269,7 +274,7 @@ export function AppSidebar() {
                         <DropdownMenuItem onClick={() => handlePin(conv.id, !!conv.isPinned)} className="rounded-xl h-10 gap-3 cursor-pointer">
                           <Pin className="w-3.5 h-3.5" /> <span className="text-sm font-medium">{conv.isPinned ? 'Unpin' : 'Pin to Top'}</span>
                         </DropdownMenuItem>
-                        <DropdownMenuItem onClick={() => handleRename(conv.id, conv.title)} className="rounded-xl h-10 gap-3 cursor-pointer">
+                        <DropdownMenuItem onClick={() => handleRename(conv.id, conv.title || '')} className="rounded-xl h-10 gap-3 cursor-pointer">
                           <Edit2 className="w-3.5 h-3.5" /> <span className="text-sm font-medium">Rename</span>
                         </DropdownMenuItem>
                         <DropdownMenuItem onClick={() => handleArchive(conv.id, !!conv.isArchived)} className="rounded-xl h-10 gap-3 cursor-pointer">

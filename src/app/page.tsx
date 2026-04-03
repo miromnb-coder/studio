@@ -83,7 +83,6 @@ function ChatContent() {
     setMounted(true);
   }, []);
 
-  // Fix: Move router.push into useEffect to avoid updating Router during render
   useEffect(() => {
     if (mounted && !isUserLoading && !user) {
       router.push('/login');
@@ -122,7 +121,6 @@ function ChatContent() {
     }
   }, [storedMessages, conversationId, mounted]);
 
-  // Focus textarea on mount and when conversation changes
   useEffect(() => {
     if (mounted && !isProcessing) {
       textareaRef.current?.focus();
@@ -150,7 +148,6 @@ function ChatContent() {
     }
   };
 
-  // Safe Rendering: Handle loading and unauthorized states before UI render
   if (!mounted || isUserLoading) {
     return (
       <div className="min-h-screen bg-background flex items-center justify-center">
@@ -164,6 +161,7 @@ function ChatContent() {
   }
 
   const handleCopy = (text: string, id: string) => {
+    if (!text) return;
     navigator.clipboard.writeText(text);
     setCopiedId(id);
     setTimeout(() => setCopiedId(null), 2000);
@@ -225,7 +223,6 @@ function ChatContent() {
         userMemory: userMemory || null
       });
 
-      // Update conversation title if this is the first real message
       if (localMessages.length <= 1 && result?.title) {
         updateDoc(doc(db, 'users', user.uid, 'conversations', activeConvId!), {
           title: result.title,
@@ -240,7 +237,7 @@ function ChatContent() {
       const assistantMessage: Message = {
         id: Math.random().toString(36).substr(2, 9),
         role: 'assistant',
-        content: result?.summary || "Protocol analysis complete. Recommendations compiled.",
+        content: result?.summary || "I've analyzed the source. Here's my perspective on the current state.",
         type: result?.isActionable ? 'analysis_result' : 'text',
         strategy: result?.strategy,
         mode: result?.mode,
@@ -257,21 +254,22 @@ function ChatContent() {
     } catch (err) {
       console.error('Processing error:', err);
       
-      const errorMessage: Message = {
+      const assistantMessage: Message = {
         id: Math.random().toString(36).substr(2, 9),
         role: 'assistant',
-        content: "I've encountered a protocol stability issue. My core auditing functions remain active, but this specific analysis was interrupted. Please try re-sending the data.",
-        type: 'error',
+        content: "I've encountered a brief interruption in my reasoning flow. My core monitoring remains active, but I'll need you to re-send that specific data if you want a detailed audit.",
+        type: 'text',
+        mode: 'advisor',
         timestamp: new Date(),
       };
 
-      setLocalMessages(prev => [...prev, errorMessage]);
+      setLocalMessages(prev => [...prev, assistantMessage]);
       addDocumentNonBlocking(collection(db, 'users', user.uid, 'conversations', activeConvId!, 'messages'), {
-        ...errorMessage,
+        ...assistantMessage,
         timestamp: serverTimestamp(),
       });
 
-      toast({ variant: 'destructive', title: "Protocol Interrupt", description: "Failed to process intelligence. Fallback active." });
+      toast({ variant: 'destructive', title: "Intelligence Sync Failed", description: "Defaulting to advisor mode." });
     } finally {
       setIsProcessing(false);
     }

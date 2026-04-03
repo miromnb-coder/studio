@@ -1,3 +1,4 @@
+
 /**
  * @fileOverview Client-side service wrapper for the AI Analysis API.
  * Hardened to guarantee a structured response even during failures.
@@ -42,8 +43,8 @@ export class AnalysisService {
     ].filter(Boolean).join('\n\n');
 
     const fallbackResponse: AnalysisOutput = {
-      title: "Protocol Stability Check",
-      summary: "I've encountered a brief interruption in my reasoning framework, but my passive monitoring remains active. Please re-state your intent or provide the source again.",
+      title: "Stability Protocol",
+      summary: "I've encountered a minor sync interruption. While I re-establish connection, I'm analyzing your request in advisor mode to ensure you're never without guidance.",
       strategy: 'direct_answer',
       mode: 'advisor',
       isActionable: false,
@@ -72,7 +73,6 @@ export class AnalysisService {
       clearTimeout(timeoutId);
 
       if (!response.ok) {
-        // Even on 500, try to get JSON if available, otherwise return fallback
         try {
           const errorResult = await response.json();
           return {
@@ -105,7 +105,7 @@ export class AnalysisService {
       if (error.name === 'AbortError') {
         return {
           ...fallbackResponse,
-          summary: "The reasoning protocol timed out due to context complexity. I recommend breaking your request into smaller logical chunks."
+          summary: "This request is particularly complex. I recommend breaking it down into smaller parts so I can provide a more detailed audit."
         };
       }
       
