@@ -1,13 +1,13 @@
 import { NextResponse } from 'next/server';
 import { analyzeFinancialDocument } from '@/ai/flows/analyze-financial-document';
 
-export const maxDuration = 60; // Increase timeout for Vercel Pro if applicable, or just explicitly set it
+export const maxDuration = 60; 
 
 export async function POST(req: Request) {
   try {
     const body = await req.json();
     
-    console.log("API Route: Received request for analysis");
+    console.log("API Route: Processing analysis request...");
 
     const result = await analyzeFinancialDocument({
       imageDataUri: body.imageDataUri,
@@ -18,16 +18,12 @@ export async function POST(req: Request) {
 
     return NextResponse.json(result);
   } catch (error: any) {
-    console.error('FATAL API ERROR:', {
-      message: error.message,
-      stack: error.stack,
-      cause: error.cause
-    });
+    console.error('CRITICAL API ERROR:', error.message);
     
-    // Return a structured response that the UI can handle without triggering a hard error
+    // Provide a localized, helpful fallback instead of a generic system error
     return NextResponse.json({ 
-      title: "Sync Status: Advisor Mode",
-      summary: "I'm currently looking into this. There's a slight delay in my reasoning engine, but I'm still here. Could you try sending that again or share a bit more detail?",
+      title: "Yhteyshäiriö",
+      summary: "Huomasin pienen viiveen älymoottorissa. Tarkista, että API-avaimet on asetettu oikein Vercel-ympäristöön ja yritä hetken kuluttua uudelleen.",
       strategy: 'direct_answer',
       mode: 'advisor',
       isActionable: false,

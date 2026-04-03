@@ -63,21 +63,28 @@ export const analyzeFinancialDocumentFlow = ai.defineFlow(
   },
   async (input) => {
     const hasImage = !!input.imageDataUri;
-    // Using faster models to stay within Vercel execution limits
+    // Using high-speed Groq models
     const modelId = hasImage ? 'llama-3.2-11b-vision-preview' : 'llama-3.3-70b-versatile';
     
     console.log(`Starting analysis with model: ${modelId}`);
+
+    if (!process.env.GROQ_API_KEY) {
+      console.error('FATAL: GROQ_API_KEY is missing in environment variables.');
+      throw new Error("GROQ_API_KEY is missing.");
+    }
+
+    const latestUserMessage = input.history?.slice(-1)[0]?.content || input.documentText || "Analysoi kuluja.";
 
     const systemPrompt = `You are "AI Life Operator", a financial intelligence agent.
 Tavoitteesi on löytää säästöjä ja optimoida kuluja.
 
 OHJEET:
-1. Analysoi käyttäjän syöte.
+1. Analysoi käyttäjän syöte ja intentti.
 2. Jos havaitset kuluja, listaa ne 'detectedItems' kenttään.
 3. Palauta vastaus AINA puhtaana JSON-objektina.
 
 USER INTENT:
-"${input.history?.slice(-1)[0]?.content || input.documentText || "Analysoi tilanne."}"
+"${latestUserMessage}"
 
 HISTORIA:
 ${JSON.stringify(input.history?.slice(-5) || [])}
@@ -85,17 +92,13 @@ ${JSON.stringify(input.history?.slice(-5) || [])}
 
     const userContent: any[] = [];
     if (hasImage) {
-      userContent.push({ type: 'text', text: 'Analyze this document.' });
+      userContent.push({ type: 'text', text: 'Analyze this visual source for financial patterns.' });
       userContent.push({ type: 'image_url', image_url: { url: input.imageDataUri } });
     } else {
-      userContent.push({ type: 'text', text: input.documentText || "Provide a summary of my financial standing based on history." });
+      userContent.push({ type: 'text', text: latestUserMessage });
     }
 
     try {
-      if (!process.env.GROQ_API_KEY) {
-        throw new Error("GROQ_API_KEY is missing in environment variables.");
-      }
-
       const completion = await groq.chat.completions.create({
         model: modelId,
         messages: [
@@ -103,16 +106,23 @@ ${JSON.stringify(input.history?.slice(-5) || [])}
           { role: 'user', content: userContent }
         ],
         response_format: { type: 'json_object' },
-        temperature: 0.2,
-        max_tokens: 2000,
+        temperature: 0.1, // Lower temperature for more stable JSON
+        max_tokens: 2048,
       });
 
       const rawContent = completion.choices[0]?.message?.content || '{}';
-      const parsed = JSON.parse(rawContent);
+      
+      // Robust JSON extraction
+      let jsonString = rawContent.trim();
+      if (jsonString.startsWith('```')) {
+        jsonString = jsonString.replace(/^```json\s*|```$/g, '').trim();
+      }
+
+      const parsed = JSON.parse(jsonString);
 
       return {
         title: parsed.title || "Audit Report",
-        summary: parsed.summary || "Analysis complete.",
+        summary: parsed.summary || "Analyysi valmistui onnistuneesti.",
         strategy: parsed.strategy || 'direct_answer',
         mode: parsed.mode || 'advisor',
         isActionable: !!parsed.detectedItems?.length,
@@ -122,8 +132,7 @@ ${JSON.stringify(input.history?.slice(-5) || [])}
         memoryUpdates: parsed.memoryUpdates
       };
     } catch (error: any) {
-      console.error('SERVER-SIDE ANALYSIS ERROR:', error.message || error);
-      // Throwing error here so the API route catches it and logs it properly
+      console.error('Groq Execution Error:', error.message || error);
       throw error;
     }
   }
