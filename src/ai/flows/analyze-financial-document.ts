@@ -85,8 +85,8 @@ export async function analyzeFinancialDocument(input: z.infer<typeof AnalyzeFina
   const apiKey = process.env.GROQ_API_KEY;
   
   const fallback: AnalyzeFinancialDocumentOutput = {
-    title: "Intelligence Briefing",
-    summary: "I've reviewed the information provided. To give you a more detailed audit of your savings, could you share a bit more detail or a clear screenshot of the specific bill?",
+    title: "Advisor Update",
+    summary: "I've reviewed your request. To provide a precise audit of your savings, could you share a bit more detail or a clear screenshot of the specific bill?",
     strategy: 'direct_answer',
     mode: 'advisor',
     isActionable: false,
@@ -102,6 +102,7 @@ export async function analyzeFinancialDocument(input: z.infer<typeof AnalyzeFina
   const groq = new Groq({ apiKey });
 
   const historyContext = input.history?.map(msg => `${msg.role.toUpperCase()}: ${msg.content}`).join('\n') || "No previous history.";
+  const latestMessage = input.history?.slice(-1)[0]?.content || input.documentText || "No input provided";
   
   const memoryContext = input.userMemory ? `
 USER MEMORY PROTOCOL:
@@ -132,8 +133,11 @@ ${memoryContext}
 THREAD HISTORY:
 ${historyContext}
 
+USER INTENT:
+"${latestMessage}"
+
 CURRENT INPUT:
-${input.documentText || "Visual source provided."}
+${input.documentText || latestMessage}
 
 OUTPUT SCHEMA REQUIREMENT:
 You MUST return a JSON object exactly matching the schema. Select the most strategic 'mode' and 'strategy'.`;
@@ -146,7 +150,7 @@ You MUST return a JSON object exactly matching the schema. Select the most strat
       ],
       model: 'llama-3.3-70b-versatile',
       response_format: { type: 'json_object' },
-      temperature: 0.1, // Low temperature for more deterministic JSON
+      temperature: 0.1,
     });
 
     const content = completion.choices[0]?.message?.content;
@@ -159,12 +163,10 @@ You MUST return a JSON object exactly matching the schema. Select the most strat
     // Attempt to parse JSON with recovery logic
     let result;
     try {
-      // 1. Standard parse
       result = JSON.parse(content);
     } catch (e) {
       console.warn("Initial JSON parse failed. Attempting cleanup/recovery.");
       try {
-        // 2. Recovery: Extract JSON if wrapped in markdown blocks or has leading/trailing text
         const jsonMatch = content.match(/\{[\s\S]*\}/);
         if (jsonMatch) {
           result = JSON.parse(jsonMatch[0]);
