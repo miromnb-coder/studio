@@ -13,7 +13,21 @@ export interface AgentStep {
 export interface ToolResult {
   action: string;
   output: any;
-  error?: string;
+  error?: ToolExecutionError;
+  safeErrorSummary?: string;
+}
+
+export interface AgentError {
+  code: string;
+  message: string;
+  retryable: boolean;
+  context?: Record<string, unknown>;
+}
+
+export interface ToolExecutionError extends AgentError {
+  phase: 'tools';
+  tool: string;
+  attempts: number;
 }
 
 export interface CriticFeedback {
