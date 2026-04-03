@@ -45,8 +45,8 @@ const AnalyzeFinancialDocumentOutputSchema = z.object({
   detectedItems: z.array(DetectedItemSchema).optional(),
   savingsEstimate: z.number().optional(),
   beforeAfterComparison: z.object({
-    currentSituation: z.string(),
-    optimizedSituation: z.string(),
+    currentSituation: "string",
+    optimizedSituation: "string",
   }).optional(),
   isActionable: z.boolean(),
   memoryUpdates: z.any().optional(),
@@ -66,43 +66,35 @@ export const analyzeFinancialDocumentFlow = ai.defineFlow(
     const modelId = hasImage ? 'llama-3.2-11b-vision-preview' : 'llama-3.3-70b-versatile';
     
     if (!process.env.GROQ_API_KEY) {
-      console.error("CRITICAL: GROQ_API_KEY is missing from environment.");
       throw new Error("GROQ_API_KEY is missing.");
     }
 
     const latestUserMessage = input.history?.slice(-1)[0]?.content || input.documentText || "Analysoi kuluja.";
 
-    const systemPrompt = `Olet "AI Life Operator", maailmanluokan talousanalyytikko ja armoton säästöarkkitehti. 
-Tehtäväsi on toimia käyttäjän edunvalvojana ja löytää jokainen sentti, joka valuu turhaan yritysten taskuihin.
+    const systemPrompt = `Olet "AI Life Operator", armoton mutta sivistynyt säästöarkkitehti ja talousvisionääri.
+ÄLÄ KOSKAAN vastaa geneerisesti kuten "Analyysi valmistui". Sinun on annettava syvällinen, analyyttinen ja jopa provosoiva katsaus käyttäjän talouteen.
 
-PROSESSI:
-1. RADIKAALI ANALYYSI: Älä vain listaa kuluja. Haasta ne. Onko käyttäjällä useita suoratoistopalveluita? Onko sähkösopimus kallis? Näkyykö piilokuluja?
-2. MARKKINATIETO: Käytä sisäistä tietoasi yleisistä hinnoista (esim. Netflix, Spotify, kuntosalit, sähkönsiirto). Jos näet hinnan, joka on yli markkinatason, merkitse se 'savings_opportunity'.
-3. STRATEGIA: Kirjoita 'strategy'-kenttään vähintään 3 lausetta pitkä, strateginen suunnitelma siitä, miten käyttäjä voi optimoida taloutensa seuraavan 3 kuukauden aikana.
-4. TOIMINTA: Luo jokaiselle löydökselle 'copyableMessage', joka on niin vakuuttava, että yrityksen on pakko antaa alennusta tai hyväksyä peruutus.
-5. VERTAILU: Maalaa visio 'beforeAfterComparison'-kentässä: näytä nykyinen "vuotava" tilanne vs. optimoitu "rahavirrat hallussa" -tilanne.
+TEHTÄVÄSI:
+1. RADIKAALI AUDITOINTI: Haasta jokainen euro. Jos näet tilauspalvelun, mieti onko se tarpeellinen. Jos näet hinnan, vertaa sitä markkinoiden parhaisiin hintoihin.
+2. BRIEFING (Summary): Kirjoita vähintään 4 lausetta pitkä, älykäs ja tiivistetty katsaus havaintoihisi. Käytä ammattimaista termistöä (esim. "likviditeetin vuoto", "pääoman optimointi").
+3. STRATEGIA: Kirjoita konkreettinen, monivaiheinen suunnitelma siitä, miten käyttäjä voi säästää satoja euroja vuodessa. Älä sano "suosittelen säästämistä", vaan sano "Eliminoi X ja siirrä Y säästötilille välittömästi".
+4. MARKKINATIETO: Käytä tietoasi suoratoiston, sähkön, puhelinliittymien ja vakuutusten tyypillisistä hinnoista Suomessa. Jos hinta on yli markkinatason, se on 'savings_opportunity'.
 
-KIELI: Vastaa AINA suomeksi, mutta käytä ammattimaista ja jämäkkää termistöä.
+KÄYTTÄJÄN HISTORIA JA MUISTI:
+${JSON.stringify(input.userMemory || {})}
 
-PALAUTA AINA PUHDAS JSON-OBJEKTI AnalyzeFinancialDocumentOutput-SKEEMAN MUKAISESTI.
-
-KÄYTTÄJÄN TILANNE JA TOIVE:
-"${latestUserMessage}"
-
-HISTORIA:
-${JSON.stringify(input.history?.slice(-5) || [])}
-`;
+PALAUTA AINA AnalyzeFinancialDocumentOutput-SKEEMAN MUKAINEN JSON.
+KAIKKI VASTAUKSET ON OLTAVA SUOMEKSI.`;
 
     const userContent: any[] = [];
     if (hasImage) {
-      userContent.push({ type: 'text', text: 'Analysoi tämä kuva tarkasti. Etsi tilausmaksuja, toistuvia kuluja ja mahdollisia säästökohteita. Ole erittäin tarkka summien ja palveluiden nimien kanssa.' });
+      userContent.push({ type: 'text', text: 'Analysoi tämä kuva tarkasti ja haasta kaikki siinä näkyvät kulut.' });
       userContent.push({ type: 'image_url', image_url: { url: input.imageDataUri } });
     } else {
       userContent.push({ type: 'text', text: latestUserMessage });
     }
 
     try {
-      console.log(`Calling Groq with model ${modelId}...`);
       const completion = await groq.chat.completions.create({
         model: modelId,
         messages: [
@@ -110,12 +102,10 @@ ${JSON.stringify(input.history?.slice(-5) || [])}
           { role: 'user', content: userContent }
         ],
         response_format: { type: 'json_object' },
-        temperature: 0.1, // Alhaisempi lämpötila takaa loogisemmat talousvastaukset
+        temperature: 0.1,
       });
 
       const rawContent = completion.choices[0]?.message?.content || '{}';
-      console.log("Raw content received from Groq.");
-      
       let jsonString = rawContent.trim();
       if (jsonString.startsWith('```')) {
         jsonString = jsonString.replace(/^```json\s*|```$/g, '').trim();
@@ -124,21 +114,21 @@ ${JSON.stringify(input.history?.slice(-5) || [])}
       const parsed = JSON.parse(jsonString);
 
       return {
-        title: parsed.title || "Strateginen Talousanalyysi",
-        summary: parsed.summary || "Analyysi suoritettu. Tarkista löydetyt säästömahdollisuudet alta.",
-        strategy: parsed.strategy || "Suosittelen aloittamaan karsimalla päällekkäiset palvelut ja kilpailuttamalla säännölliset sopimukset välittömästi.",
+        title: parsed.title || "Strateginen Operatiivinen Katsaus",
+        summary: parsed.summary || "Analyysi valmistui, mutta malli ei tuottanut yhteenvetoa.",
+        strategy: parsed.strategy || "Suosittelen välitöntä kulukartoitusta ja karsintaa.",
         mode: parsed.mode || 'advisor',
         isActionable: !!(parsed.detectedItems && parsed.detectedItems.length > 0),
         detectedItems: parsed.detectedItems || [],
         savingsEstimate: parsed.savingsEstimate || 0,
         beforeAfterComparison: parsed.beforeAfterComparison || {
-          currentSituation: "Talous sisältää useita optimoimattomia kuluja ja päällekkäisiä sopimuksia.",
-          optimizedSituation: "Kaikki turha on karsittu ja rahavirrat on ohjattu säästöön tai sijoituksiin."
+          currentSituation: "Talous sisältää hallitsemattomia kulueriä.",
+          optimizedSituation: "Likviditeetti on maksimoitu ja turhat kulut eliminoitu."
         },
         memoryUpdates: parsed.memoryUpdates
       };
     } catch (error: any) {
-      console.error('Groq Execution Error:', error.message);
+      console.error('Groq Error:', error);
       throw error;
     }
   }
