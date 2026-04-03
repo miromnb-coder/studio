@@ -65,7 +65,7 @@ const AnalyzeFinancialDocumentOutputSchema = z.object({
   savingsEstimate: z.number().optional(),
   beforeAfterComparison: z.object({
     currentSituation: z.string(),
-    optimizedSituation: string,
+    optimizedSituation: z.string(),
   }).optional(),
   followUpQuestion: z.string().optional().describe('A single high-value question if further data is needed.'),
   isActionable: z.boolean().describe('True if this triggered a structured financial audit.'),
