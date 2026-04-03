@@ -1,7 +1,7 @@
 'use server';
 /**
  * @fileOverview AI Life Operator analysis engine using Groq models.
- * Optimized for speed and reliability to avoid Vercel timeouts.
+ * Optimized for deep financial intelligence and actionable insights.
  */
 
 import { ai } from '@/ai/genkit';
@@ -9,8 +9,8 @@ import { groq } from '@/ai/groq';
 import { z } from 'genkit';
 
 const DetectedItemSchema = z.object({
-  title: z.string().describe('Service or category name.'),
-  summary: z.string().describe('Brief reasoning for the finding.'),
+  title: z.string().describe('Palvelun tai kategorian nimi (esim. Netflix, Palvelumaksu).'),
+  summary: z.string().describe('Analyysi siitä, miksi tämä on huomioitava löydös.'),
   type: z.enum([
     'subscription',
     'recurring_charge',
@@ -21,10 +21,10 @@ const DetectedItemSchema = z.object({
     'savings_opportunity',
     'duplicate_charge'
   ]),
-  estimatedSavings: z.number().describe('Estimated monthly savings.'),
-  alternativeSuggestion: z.string().optional(),
+  estimatedSavings: z.number().describe('Arvioitu kuukausittainen säästö euroina.'),
+  alternativeSuggestion: z.string().optional().describe('Ehdotus edullisemmasta vaihtoehdosta.'),
   urgencyLevel: z.enum(['low', 'medium', 'high', 'urgent']),
-  copyableMessage: z.string().describe('Pre-written cancellation or negotiation script.'),
+  copyableMessage: z.string().describe('Valmis viestipohja peruutukseen tai neuvotteluun.'),
 });
 
 const AnalyzeFinancialDocumentInputSchema = z.object({
@@ -63,27 +63,32 @@ export const analyzeFinancialDocumentFlow = ai.defineFlow(
   },
   async (input) => {
     const hasImage = !!input.imageDataUri;
-    // Using high-speed Groq models
     const modelId = hasImage ? 'llama-3.2-11b-vision-preview' : 'llama-3.3-70b-versatile';
     
-    console.log(`Starting analysis with model: ${modelId}`);
-
     if (!process.env.GROQ_API_KEY) {
-      console.error('FATAL: GROQ_API_KEY is missing in environment variables.');
       throw new Error("GROQ_API_KEY is missing.");
     }
 
     const latestUserMessage = input.history?.slice(-1)[0]?.content || input.documentText || "Analysoi kuluja.";
 
-    const systemPrompt = `You are "AI Life Operator", a financial intelligence agent.
-Tavoitteesi on löytää säästöjä ja optimoida kuluja.
+    const systemPrompt = `Olet "AI Life Operator", huipputason talousälyagentti. 
+Tehtäväsi on toimia käyttäjän henkilökohtaisena talousarkkitehtina ja etsiä jokainen mahdollinen säästökohde.
 
-OHJEET:
-1. Analysoi käyttäjän syöte ja intentti.
-2. Jos havaitset kuluja, listaa ne 'detectedItems' kenttään.
-3. Palauta vastaus AINA puhtaana JSON-objektina.
+ANALYYSIPROTOKOLLA:
+1. TUNNISTUS: Etsi tilausmaksuja, toistuvia kuluja, piilomaksuja ja hinnan korotuksia.
+2. KRITIIKKI: Ole kriittinen. Jos näet kalliin palvelun, etsi sille halvempi vaihtoehto.
+3. TOIMINTA: Luo jokaiselle löydökselle 'copyableMessage', joka on kohtelias mutta jämäkkä peruutus- tai neuvotteluviesti suomeksi.
+4. VERTAILU: Täytä 'beforeAfterComparison' näyttääksesi, miten käyttäjän tilanne paranee suosituksillasi.
+5. KIELI: Anna kaikki tekstivastaukset (title, summary, strategy) suomeksi.
 
-USER INTENT:
+LÖYDÖSTEN TYYPIT:
+- 'subscription': Netflix, Spotify, kuntosali jne.
+- 'hidden_fee': Pankkimaksut, käsittelykulut.
+- 'savings_opportunity': Ehdota kilpailutusta (esim. sähkö, vakuutus).
+
+PALAUTA AINA PUHDAS JSON-OBJEKTI AnalyzeFinancialDocumentOutput-SKEEMAN MUKAISESTI.
+
+KÄYTTÄJÄN INTENTTI:
 "${latestUserMessage}"
 
 HISTORIA:
@@ -92,7 +97,7 @@ ${JSON.stringify(input.history?.slice(-5) || [])}
 
     const userContent: any[] = [];
     if (hasImage) {
-      userContent.push({ type: 'text', text: 'Analyze this visual source for financial patterns.' });
+      userContent.push({ type: 'text', text: 'Analysoi tämä kuva ja etsi taloudellisia mahdollisuuksia.' });
       userContent.push({ type: 'image_url', image_url: { url: input.imageDataUri } });
     } else {
       userContent.push({ type: 'text', text: latestUserMessage });
@@ -106,13 +111,11 @@ ${JSON.stringify(input.history?.slice(-5) || [])}
           { role: 'user', content: userContent }
         ],
         response_format: { type: 'json_object' },
-        temperature: 0.1, // Lower temperature for more stable JSON
-        max_tokens: 2048,
+        temperature: 0.2,
       });
 
       const rawContent = completion.choices[0]?.message?.content || '{}';
       
-      // Robust JSON extraction
       let jsonString = rawContent.trim();
       if (jsonString.startsWith('```')) {
         jsonString = jsonString.replace(/^```json\s*|```$/g, '').trim();
@@ -121,18 +124,18 @@ ${JSON.stringify(input.history?.slice(-5) || [])}
       const parsed = JSON.parse(jsonString);
 
       return {
-        title: parsed.title || "Audit Report",
-        summary: parsed.summary || "Analyysi valmistui onnistuneesti.",
+        title: parsed.title || "Talousanalyysi",
+        summary: parsed.summary || "Analyysi valmistui, mutta tarkempia löydöksiä ei tehty.",
         strategy: parsed.strategy || 'direct_answer',
         mode: parsed.mode || 'advisor',
-        isActionable: !!parsed.detectedItems?.length,
+        isActionable: !!(parsed.detectedItems && parsed.detectedItems.length > 0),
         detectedItems: parsed.detectedItems || [],
         savingsEstimate: parsed.savingsEstimate || 0,
         beforeAfterComparison: parsed.beforeAfterComparison,
         memoryUpdates: parsed.memoryUpdates
       };
     } catch (error: any) {
-      console.error('Groq Execution Error:', error.message || error);
+      console.error('Groq Execution Error:', error);
       throw error;
     }
   }
