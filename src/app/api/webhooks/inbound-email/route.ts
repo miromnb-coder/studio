@@ -1,18 +1,17 @@
+
 import { NextRequest, NextResponse } from 'next/server';
 import { initializeFirebase } from '@/firebase';
 import { collection, query, where, getDocs, addDoc, serverTimestamp } from 'firebase/firestore';
 import { analyzeFinancialDocument } from '@/ai/flows/analyze-financial-document';
 
 /**
- * @fileOverview Inbound Email Webhook Handler.
- * Processes emails as internal server-side tasks and triggers high-IQ analysis.
+ * @fileOverview Inbound Email Webhook Handler using Groq directly.
  */
 
 export async function POST(req: NextRequest) {
   try {
     const payload = await req.json();
     
-    // Support common webhook payloads (Postmark, SendGrid, etc.)
     const toAddress = payload.To || payload.to || '';
     const subject = payload.Subject || payload.subject || 'No Subject';
     const body = payload.TextBody || payload.text || payload.body || '';
@@ -27,7 +26,6 @@ export async function POST(req: NextRequest) {
       throw new Error("Firestore not initialized in webhook context.");
     }
 
-    // 1. Identify user by the magic inbound address
     const usersRef = collection(firestore, 'users');
     const q = query(usersRef, where('inboundEmailAddress', '==', toAddress));
     const querySnapshot = await getDocs(q);
@@ -40,7 +38,6 @@ export async function POST(req: NextRequest) {
     const userDoc = querySnapshot.docs[0];
     const userId = userDoc.id;
 
-    // 2. Store the raw inbound email for the ledger
     await addDoc(collection(firestore, 'users', userId, 'inbox'), {
       userId,
       subject,
@@ -50,13 +47,11 @@ export async function POST(req: NextRequest) {
       createdAt: serverTimestamp(),
     });
 
-    // 3. Trigger High-IQ Analysis on the email content
     const analysisResult = await analyzeFinancialDocument({
       documentText: `Subject: ${subject}\nFrom: ${fromAddress}\n\n${body}`,
       source: 'email'
     });
 
-    // 4. Save the analysis result so it appears in Dashboard/History
     const analysesRef = collection(firestore, 'users', userId, 'analyses');
     const analysisDoc = await addDoc(analysesRef, {
       userId,
@@ -72,7 +67,6 @@ export async function POST(req: NextRequest) {
       createdAt: serverTimestamp(),
     });
 
-    // 5. Store detected findings for actionability
     const itemsRef = collection(firestore, 'users', userId, 'analyses', analysisDoc.id, 'detected_items');
     for (const item of (analysisResult.detectedItems || [])) {
       await addDoc(itemsRef, {

@@ -1,3 +1,4 @@
+
 import { NextResponse } from 'next/server';
 import { analyzeFinancialDocument } from '@/ai/flows/analyze-financial-document';
 
@@ -7,7 +8,7 @@ export async function POST(req: Request) {
   try {
     const body = await req.json();
     
-    console.log("API Route: Processing analysis request...");
+    console.log("API Route: Processing analysis request via Groq...");
 
     const result = await analyzeFinancialDocument({
       imageDataUri: body.imageDataUri,
@@ -20,11 +21,10 @@ export async function POST(req: Request) {
   } catch (error: any) {
     console.error('CRITICAL API ERROR:', error.message);
     
-    // Provide a localized, helpful fallback instead of a generic system error
     return NextResponse.json({ 
       title: "Yhteyshäiriö",
-      summary: "Huomasin pienen viiveen älymoottorissa. Tarkista, että API-avaimet on asetettu oikein Vercel-ympäristöön ja yritä hetken kuluttua uudelleen.",
-      strategy: 'direct_answer',
+      summary: "Huomasin pienen viiveen älymoottorissa. Tarkista, että GROQ_API_KEY on asetettu oikein Vercel-ympäristöön.",
+      strategy: 'Suosittelen tarkistamaan järjestelmän tilan.',
       mode: 'advisor',
       isActionable: false,
       detectedItems: [],
