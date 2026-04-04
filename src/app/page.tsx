@@ -26,6 +26,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { cn } from '@/lib/utils';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useToast } from '@/hooks/use-toast';
+import { RichAnalysisCard } from '@/components/chat/RichAnalysisCard';
 
 export default function ChatPage() {
   const [input, setInput] = useState('');
@@ -138,7 +139,6 @@ export default function ChatPage() {
           buffer += chunk;
 
           const lines = buffer.split('\n');
-          // Keep the last line in the buffer if it's incomplete
           buffer = lines.pop() || "";
 
           for (const line of lines) {
@@ -154,14 +154,8 @@ export default function ChatPage() {
             }
           }
         }
-        
-        // Handle remaining buffer
         if (buffer) {
-          if (buffer.startsWith("__METADATA__:")) {
-             // Metadata usually comes first, but just in case
-          } else {
-            fullContent += buffer;
-          }
+          if (!buffer.startsWith("__METADATA__:")) fullContent += buffer;
         }
       }
 
@@ -198,29 +192,14 @@ export default function ChatPage() {
                 animate={{ opacity: 1, y: 0 }}
                 className={cn("flex w-full flex-col", msg.role === 'user' ? "items-end" : "items-start")}
               >
-                <div className={cn("max-w-[85%] space-y-4", msg.role === 'user' ? "items-end text-right" : "items-start text-left")}>
+                <div className={cn("max-w-[90%] space-y-4", msg.role === 'user' ? "items-end text-right" : "items-start text-left")}>
                   {msg.role === 'assistant' && (
                     <div className="flex items-center gap-3 mb-2 px-2">
                       <StatusDot status="active" />
-                      <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Operator Engine V5.5</span>
+                      <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Operator Engine V5.6</span>
                     </div>
                   )}
                   
-                  {/* Tool Forge Notification */}
-                  {msg.metadata?.forgedTool && (
-                    <motion.div 
-                      initial={{ opacity: 0, scale: 0.95 }}
-                      animate={{ opacity: 1, scale: 1 }}
-                      className="px-4 py-3 bg-accent/10 border border-accent/20 rounded-2xl flex flex-col gap-1"
-                    >
-                      <div className="flex items-center gap-3 text-[10px] font-bold text-accent uppercase tracking-widest">
-                        <Hammer className="w-3.5 h-3.5 animate-bounce" />
-                        Forged New Capability: {msg.metadata.forgedTool.name}
-                      </div>
-                      <p className="text-[9px] text-accent/60 italic ml-6">{msg.metadata.forgedTool.description}</p>
-                    </motion.div>
-                  )}
-
                   <div className={cn(
                     "p-8 rounded-[2.5rem] text-sm font-medium leading-relaxed shadow-sm overflow-hidden",
                     msg.role === 'user' 
@@ -231,6 +210,19 @@ export default function ChatPage() {
                       <img src={msg.imageUri} alt="Uploaded source" className="max-w-full rounded-2xl mb-4 border border-white/10" />
                     )}
                     {msg.content}
+
+                    {/* Rich Data Display */}
+                    {msg.role === 'assistant' && msg.metadata?.structuredData && (
+                      <RichAnalysisCard 
+                        data={{
+                          title: msg.metadata.intent.toUpperCase() + " Report",
+                          strategy: msg.metadata.plan,
+                          savingsEstimate: msg.metadata.structuredData.estimatedMonthlySavings || 0,
+                          detectedItems: msg.metadata.structuredData.leaks || [],
+                          intent: msg.metadata.intent
+                        }} 
+                      />
+                    )}
                   </div>
                 </div>
               </motion.div>
@@ -251,11 +243,11 @@ export default function ChatPage() {
             <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="flex flex-col items-start gap-4">
               <div className="flex items-center gap-3 px-2">
                 <Loader2 className="w-4 h-4 text-primary animate-spin" />
-                <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Reasoning & Forging...</span>
+                <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Reasoning & Executing...</span>
               </div>
-              <div className="p-8 rounded-[2.5rem] glass-surface border-white/60 animate-shimmer min-w-[200px]">
+              <div className="p-8 rounded-[2.5rem] glass-surface border-white/60 animate-shimmer min-w-[300px]">
                 <div className="h-4 bg-slate-100 rounded-full w-24 mb-4" />
-                <div className="h-4 bg-slate-100 rounded-full w-48" />
+                <div className="h-4 bg-slate-100 rounded-full w-64" />
               </div>
             </motion.div>
           )}
@@ -315,7 +307,7 @@ export default function ChatPage() {
                 onChange={(e) => setInput(e.target.value)}
                 onKeyDown={handleKeyDown}
                 disabled={isProcessing}
-                placeholder={selectedImage ? "Describe this image..." : "Describe intent or ask for a new capability..."}
+                placeholder={selectedImage ? "Describe this image..." : "Describe intent or ask for analysis..."}
                 className="flex-1 bg-transparent border-0 focus:ring-0 text-sm font-medium text-slate-700 placeholder:text-slate-300 resize-none py-3 min-h-[48px] max-h-[200px] stealth-scrollbar"
               />
 

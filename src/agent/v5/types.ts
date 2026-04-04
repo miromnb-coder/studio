@@ -39,6 +39,7 @@ export interface AgentMetadata {
     name: string;
     description: string;
   };
+  structuredData?: any; // NEW: Holds rich tool results for UI
 }
 
 export interface Decision {
