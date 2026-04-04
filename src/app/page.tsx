@@ -7,82 +7,48 @@ import { Textarea } from '@/components/ui/textarea';
 import { Card } from '@/components/ui/card';
 import { 
   Send, 
-  Plus, 
   ImageIcon, 
   Zap, 
-  ChevronRight,
   Loader2,
-  AlertCircle,
-  MailCheck,
-  CalendarDays,
   Cpu,
   BrainCircuit,
-  ShieldCheck,
-  ListChecks,
-  Copy,
-  Check,
-  RefreshCcw,
-  MoreVertical,
-  Trash2,
-  Archive,
-  Edit2,
-  ArrowDown,
-  Clock,
   Coins,
-  Map
+  Clock,
+  ArrowDown,
+  Activity,
+  ChevronRight,
+  ShieldCheck,
+  LayoutDashboard
 } from 'lucide-react';
-import { useFirestore, useUser, addDocumentNonBlocking, useCollection, useMemoFirebase, useDoc } from '@/firebase';
-import { collection, serverTimestamp, doc, updateDoc, query, orderBy, setDoc, deleteDoc } from 'firebase/firestore';
+import { useFirestore, useUser, addDocumentNonBlocking, useCollection, useMemoFirebase } from '@/firebase';
+import { collection, serverTimestamp, doc, query, orderBy, setDoc } from 'firebase/firestore';
 import { motion, AnimatePresence } from 'framer-motion';
 import { cn } from '@/lib/utils';
 import { useRouter, useSearchParams } from 'next/navigation';
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
 import { RichAnalysisCard } from '@/components/chat/RichAnalysisCard';
-import { DailyDigestCard } from '@/components/chat/DailyDigestCard';
 import { useToast } from '@/hooks/use-toast';
-import { Skeleton } from '@/components/ui/skeleton';
 
 interface Message {
   id: string;
   role: 'user' | 'assistant';
   content: string;
-  type?: 'text' | 'analysis_result' | 'daily_digest' | 'error' | 'system';
+  type?: string;
   intent?: string;
-  mode?: string;
   data?: any;
   timestamp: any;
   isStreaming?: boolean;
 }
 
-const formatSafeTime = (timestamp: any) => {
-  if (!timestamp) return '...';
-  if (timestamp && typeof timestamp.toDate === 'function') {
-    return timestamp.toDate().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-  }
-  try {
-    const d = new Date(timestamp);
-    if (isNaN(d.getTime())) return '...';
-    return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-  } catch (e) {
-    return '...';
-  }
-};
-
 function ChatContent() {
   const [mounted, setMounted] = useState(false);
   const [input, setInput] = useState('');
   const [isProcessing, setIsProcessing] = useState(false);
-  const [copiedId, setCopiedId] = useState<string | null>(null);
-  const [showScrollButton, setShowScrollButton] = useState(false);
+  const [localMessages, setLocalMessages] = useState<Message[]>([]);
   
   const scrollRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  
   const { user, isUserLoading } = useUser();
   const db = useFirestore();
   const router = useRouter();
@@ -90,129 +56,60 @@ function ChatContent() {
   const conversationId = searchParams?.get('c');
   const { toast } = useToast();
 
-  const [localMessages, setLocalMessages] = useState<Message[]>([]);
+  useEffect(() => setMounted(true), []);
 
   useEffect(() => {
-    setMounted(true);
-  }, []);
-
-  useEffect(() => {
-    if (mounted && !isUserLoading && !user) {
-      router.push('/login');
-    }
+    if (mounted && !isUserLoading && !user) router.push('/login');
   }, [mounted, isUserLoading, user, router]);
 
   const messagesQuery = useMemoFirebase(() => {
-    try {
-      if (!db || !user || !conversationId) return null;
-      return query(
-        collection(db, 'users', user.uid, 'conversations', conversationId, 'messages'),
-        orderBy('timestamp', 'asc')
-      );
-    } catch (e) {
-      return null;
-    }
+    if (!db || !user || !conversationId) return null;
+    return query(
+      collection(db, 'users', user.uid, 'conversations', conversationId, 'messages'),
+      orderBy('timestamp', 'asc')
+    );
   }, [db, user, conversationId]);
 
   const { data: storedMessages, isLoading: isMessagesLoading } = useCollection(messagesQuery);
 
   useEffect(() => {
-    if (!mounted) return;
-    if (Array.isArray(storedMessages) && storedMessages.length > 0) {
-      setLocalMessages(storedMessages as Message[]);
-    } else if (!isMessagesLoading) {
-      setLocalMessages([]);
-    }
-  }, [storedMessages, conversationId, mounted, isMessagesLoading]);
-
-  const scrollToBottom = () => {
-    if (scrollRef.current) {
-      scrollRef.current.scrollTo({
-        top: scrollRef.current.scrollHeight,
-        behavior: 'smooth'
-      });
-    }
-  };
+    if (storedMessages) setLocalMessages(storedMessages as Message[]);
+  }, [storedMessages]);
 
   useEffect(() => {
-    scrollToBottom();
-  }, [localMessages, isProcessing]);
-
-  const handleScroll = () => {
     if (scrollRef.current) {
-      const { scrollTop, scrollHeight, clientHeight } = scrollRef.current;
-      const isNearBottom = scrollHeight - scrollTop - clientHeight < 200;
-      setShowScrollButton(!isNearBottom);
+      scrollRef.current.scrollTo({ top: scrollRef.current.scrollHeight, behavior: 'smooth' });
     }
-  };
-
-  const createNewConversation = async (title = 'New Protocol') => {
-    if (!user || !db) return '';
-    const newConvRef = doc(collection(db, 'users', user.uid, 'conversations'));
-    await setDoc(newConvRef, {
-      id: newConvRef.id,
-      userId: user.uid,
-      title,
-      isArchived: false,
-      isPinned: false,
-      createdAt: serverTimestamp(),
-      updatedAt: serverTimestamp(),
-    });
-    router.push(`/?c=${newConvRef.id}`);
-    return newConvRef.id;
-  };
+  }, [localMessages, isProcessing]);
 
   const sendMessage = async (text?: string, fileData?: string) => {
     const content = text || input;
-    if (!content && !fileData) return;
-    if (!user || !db) return;
+    if (!content || !user || !db) return;
 
-    let activeConvId = conversationId;
-    if (!activeConvId) {
-      activeConvId = await createNewConversation(content.slice(0, 30));
+    let activeId = conversationId;
+    if (!activeId) {
+      const newRef = doc(collection(db, 'users', user.uid, 'conversations'));
+      activeId = newRef.id;
+      await setDoc(newRef, { id: activeId, userId: user.uid, title: content.slice(0, 30), createdAt: serverTimestamp(), updatedAt: serverTimestamp() });
+      router.push(`/?c=${activeId}`);
     }
 
-    const userMessage: Message = {
-      id: Math.random().toString(36).substr(2, 9),
-      role: 'user',
-      content,
-      timestamp: new Date(),
-    };
-
-    setLocalMessages(prev => [...prev, userMessage]);
-    addDocumentNonBlocking(collection(db, 'users', user.uid, 'conversations', activeConvId!, 'messages'), {
-      ...userMessage,
-      timestamp: serverTimestamp(),
-    });
+    const userMsg: Message = { id: Date.now().toString(), role: 'user', content, timestamp: new Date() };
+    setLocalMessages(prev => [...prev, userMsg]);
+    addDocumentNonBlocking(collection(db, 'users', user.uid, 'conversations', activeId, 'messages'), { ...userMsg, timestamp: serverTimestamp() });
 
     setInput('');
     setIsProcessing(true);
 
-    const assistantMsgId = Math.random().toString(36).substr(2, 9);
-    const assistantMessage: Message = {
-      id: assistantMsgId,
-      role: 'assistant',
-      content: '',
-      timestamp: new Date(),
-      isStreaming: true
-    };
-    setLocalMessages(prev => [...prev, assistantMessage]);
+    const assistantMsgId = (Date.now() + 1).toString();
+    setLocalMessages(prev => [...prev, { id: assistantMsgId, role: 'assistant', content: '', timestamp: new Date(), isStreaming: true }]);
 
     try {
-      const history = localMessages.slice(-10).map(m => ({ role: m.role, content: m.content }));
-      
       const response = await fetch('/api/agent', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          input: content,
-          history,
-          imageUri: fileData,
-          userId: user.uid
-        }),
+        body: JSON.stringify({ input: content, history: localMessages.slice(-10).map(m => ({ role: m.role, content: m.content })), userId: user.uid }),
       });
-
-      if (!response.ok) throw new Error("Stream connection failed");
 
       const reader = response.body?.getReader();
       const decoder = new TextDecoder();
@@ -222,152 +119,120 @@ function ChatContent() {
       while (true) {
         const { done, value } = await reader!.read();
         if (done) break;
-
         const chunk = decoder.decode(value);
         if (chunk.startsWith("__METADATA__:")) {
-          const metaLine = chunk.split('\n')[0];
-          metadata = JSON.parse(metaLine.replace("__METADATA__:", ""));
+          metadata = JSON.parse(chunk.split('\n')[0].replace("__METADATA__:", ""));
           continue;
         }
-
         fullContent += chunk;
-        setLocalMessages(prev => prev.map(m => 
-          m.id === assistantMsgId ? { ...m, content: fullContent } : m
-        ));
+        setLocalMessages(prev => prev.map(m => m.id === assistantMsgId ? { ...m, content: fullContent } : m));
       }
 
-      // Finalize the message in Firestore
-      const finalAssistantMessage = {
-        role: 'assistant',
-        content: fullContent,
-        intent: metadata?.intent || 'general',
-        data: metadata || null,
-        timestamp: serverTimestamp(),
-      };
-
-      setLocalMessages(prev => prev.map(m => 
-        m.id === assistantMsgId ? { ...m, ...finalAssistantMessage, isStreaming: false, timestamp: new Date() } : m
-      ));
-
-      addDocumentNonBlocking(collection(db, 'users', user.uid, 'conversations', activeConvId!, 'messages'), finalAssistantMessage);
-
-    } catch (err: any) {
-      console.error('Streaming Error:', err);
-      toast({ variant: 'destructive', title: "Neural Link Severed", description: "I've lost the stream. Recalibrating." });
+      const finalMsg = { role: 'assistant', content: fullContent, intent: metadata?.intent, data: metadata, timestamp: serverTimestamp() };
+      addDocumentNonBlocking(collection(db, 'users', user.uid, 'conversations', activeId, 'messages'), finalMsg);
+      setLocalMessages(prev => prev.map(m => m.id === assistantMsgId ? { ...m, ...finalMsg, isStreaming: false, timestamp: new Date() } : m));
+    } catch (err) {
+      toast({ variant: 'destructive', title: "Sync Lost", description: "The neural link was severed. Reconnecting." });
     } finally {
       setIsProcessing(false);
     }
   };
 
-  const getModeIcon = (mode?: string) => {
-    switch (mode) {
-      case 'finance': return <Coins className="w-3.5 h-3.5 text-primary" />;
-      case 'time_optimizer': return <Clock className="w-3.5 h-3.5 text-accent" />;
-      case 'monetization': return <Zap className="w-3.5 h-3.5 text-warning" />;
-      case 'technical': return <Cpu className="w-3.5 h-3.5 text-muted-foreground" />;
-      default: return <BrainCircuit className="w-3.5 h-3.5 text-primary" />;
+  const getModeIcon = (intent?: string) => {
+    switch (intent) {
+      case 'finance': return <Coins className="w-4 h-4 text-primary" />;
+      case 'time_optimizer': return <Clock className="w-4 h-4 text-accent" />;
+      default: return <BrainCircuit className="w-4 h-4 text-primary" />;
     }
   };
 
-  if (!mounted || isUserLoading) {
-    return (
-      <div className="min-h-screen bg-background flex items-center justify-center">
-        <Loader2 className="w-10 h-10 text-primary animate-spin" />
-      </div>
-    );
-  }
+  if (!mounted || isUserLoading) return <div className="min-h-screen bg-background flex items-center justify-center"><Loader2 className="w-10 h-10 text-primary animate-spin" /></div>;
 
   return (
-    <div className="flex flex-col h-screen bg-background relative overflow-hidden">
+    <div className="flex h-screen bg-background overflow-hidden">
       <Navbar />
       
-      <div 
-        ref={scrollRef} 
-        onScroll={handleScroll}
-        className="flex-1 overflow-y-auto pt-24 pb-48 px-6 md:px-24 lg:px-48 space-y-12 scroll-smooth"
-      >
-        <AnimatePresence initial={false}>
-          {localMessages.length > 0 ? (
-            localMessages.map((msg) => (
-              <motion.div 
-                key={msg.id} 
-                initial={{ opacity: 0, y: 15 }} 
-                animate={{ opacity: 1, y: 0 }} 
-                className={cn("flex w-full group", msg.role === 'user' ? "justify-end" : "justify-start")}
-              >
-                <div className={cn("max-w-[95%] md:max-w-[85%] space-y-4", msg.role === 'user' ? "items-end text-right" : "items-start text-left")}>
-                  
-                  {msg.role === 'assistant' && (
-                    <div className="flex items-center gap-3 mb-2 ml-1">
-                      <div className="p-1.5 rounded-lg bg-white/5 border border-white/5">{getModeIcon(msg.intent)}</div>
-                      <span className="text-[10px] font-bold uppercase tracking-[0.2em] text-muted-foreground/40">
-                        {msg.intent?.replace('_', ' ') || 'Operator'} • Neural Stream Active
-                      </span>
-                    </div>
-                  )}
+      <main className="flex-1 flex flex-col relative">
+        <div ref={scrollRef} className="flex-1 overflow-y-auto pt-32 pb-60 px-6 md:px-24 lg:px-48 space-y-12">
+          <AnimatePresence initial={false}>
+            {localMessages.length > 0 ? (
+              localMessages.map((msg) => (
+                <motion.div 
+                  key={msg.id} 
+                  initial={{ opacity: 0, y: 20 }} 
+                  animate={{ opacity: 1, y: 0 }} 
+                  className={cn("flex w-full group", msg.role === 'user' ? "justify-end" : "justify-start")}
+                >
+                  <div className={cn("max-w-[90%] md:max-w-[80%] space-y-4", msg.role === 'user' ? "items-end text-right" : "items-start text-left")}>
+                    
+                    {msg.role === 'assistant' && (
+                      <div className="flex items-center gap-3 mb-2 px-1">
+                        <div className="p-1.5 rounded-lg bg-white/5 border border-white/5">{getModeIcon(msg.intent)}</div>
+                        <span className="text-[10px] font-bold uppercase tracking-[0.3em] text-muted-foreground/40">
+                          {msg.intent || 'Operator'} • Intelligence Feed
+                        </span>
+                      </div>
+                    )}
 
-                  <div className="flex items-center gap-5">
                     <div className={cn(
-                      "p-6 rounded-[28px] text-sm md:text-lg leading-relaxed font-medium shadow-2xl relative",
+                      "p-8 rounded-[2.5rem] text-base md:text-lg leading-relaxed font-medium transition-all duration-300",
                       msg.role === 'user' 
-                        ? "bg-primary text-background rounded-tr-none" 
-                        : "bg-white/[0.03] border border-white/5 text-foreground rounded-tl-none shadow-black/40",
-                      msg.isStreaming ? "animate-pulse" : ""
+                        ? "bg-primary text-background rounded-tr-none shadow-2xl shadow-primary/20" 
+                        : "bg-white/[0.03] border border-white/[0.05] text-foreground rounded-tl-none",
+                      msg.isStreaming ? "animate-pulse border-primary/20" : ""
                     )}>
                       {msg.content}
-                      {!msg.isStreaming && (
-                        <span className="absolute -bottom-6 right-1 text-[8px] font-bold text-muted-foreground/20 uppercase tracking-[0.2em]">
-                          {formatSafeTime(msg.timestamp)}
-                        </span>
-                      )}
                     </div>
+
+                    {msg.data?.toolResults && !msg.isStreaming && (
+                      <RichAnalysisCard data={{ ...msg.data, summary: msg.content }} />
+                    )}
                   </div>
-
-                  {msg.data?.toolResults && msg.data.toolResults.length > 0 && !msg.isStreaming && (
-                    <RichAnalysisCard data={{ ...msg.data, summary: msg.content }} />
-                  )}
+                </motion.div>
+              ))
+            ) : (
+              <div className="flex flex-col items-center justify-center h-full text-center space-y-8 opacity-20 pt-32">
+                <div className="w-24 h-24 rounded-[2rem] bg-primary/10 flex items-center justify-center">
+                  <Cpu className="w-12 h-12 text-primary" />
                 </div>
-              </motion.div>
-            ))
-          ) : (
-            <div className="flex flex-col items-center justify-center h-full text-center space-y-6 opacity-20 pt-32">
-              <Cpu className="w-16 h-16 text-primary" />
-              <div className="space-y-2">
-                <p className="text-2xl font-bold font-headline tracking-tighter">Operator v4.2</p>
-                <p className="text-sm font-medium uppercase tracking-[0.3em]">Multi-Agent Streaming Core Online</p>
+                <div className="space-y-2">
+                  <h2 className="text-4xl font-bold font-headline tracking-tighter">Operator v4.2</h2>
+                  <p className="text-[10px] font-bold uppercase tracking-[0.4em]">Multi-Agent Workspace</p>
+                </div>
               </div>
-            </div>
-          )}
-        </AnimatePresence>
-      </div>
-
-      <div className="fixed bottom-0 right-0 left-0 lg:left-[var(--sidebar-width)] p-6 md:p-12 pointer-events-none">
-        <div className="max-w-4xl mx-auto w-full pointer-events-auto">
-          <Card className="glass !p-2.5 flex items-end gap-3 rounded-[36px] border-white/10 shadow-[0_32px_80px_-12px_rgba(0,0,0,0.6)]">
-            <Button size="icon" variant="ghost" onClick={() => fileInputRef.current?.click()} className="w-14 h-14 rounded-full hover:bg-white/5 text-muted-foreground">
-              <ImageIcon className="w-6 h-6" />
-            </Button>
-            <input type="file" className="hidden" ref={fileInputRef} accept="image/*" />
-            <Textarea 
-              ref={textareaRef}
-              value={input} 
-              onChange={(e) => setInput(e.target.value)} 
-              onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMessage(); } }} 
-              placeholder="How can I optimize your finances today?" 
-              className="flex-1 border-0 focus-visible:ring-0 bg-transparent min-h-[56px] py-4 text-lg font-medium resize-none overflow-hidden text-white placeholder:text-muted-foreground/20" 
-              rows={1} 
-            />
-            <Button 
-              size="icon" 
-              disabled={!input.trim() || isProcessing} 
-              onClick={() => sendMessage()} 
-              className="w-14 h-14 rounded-full shadow-2xl transition-all"
-            >
-              {isProcessing ? <Loader2 className="w-6 h-6 animate-spin" /> : <Send className="w-6 h-6" />}
-            </Button>
-          </Card>
+            )}
+          </AnimatePresence>
         </div>
-      </div>
+
+        {/* Input Control Bar */}
+        <div className="absolute bottom-0 left-0 right-0 p-8 md:p-12 pointer-events-none">
+          <div className="max-w-4xl mx-auto w-full pointer-events-auto">
+            <Card className="glass !p-3 flex items-end gap-4 rounded-[3rem] border-white/10 shadow-[0_48px_128px_-32px_rgba(0,0,0,0.8)]">
+              <Button size="icon" variant="ghost" onClick={() => fileInputRef.current?.click()} className="w-16 h-16 rounded-full hover:bg-white/5 text-muted-foreground transition-colors">
+                <ImageIcon className="w-6 h-6" />
+              </Button>
+              <input type="file" className="hidden" ref={fileInputRef} accept="image/*" />
+              <Textarea 
+                ref={textareaRef}
+                value={input} 
+                onChange={(e) => setInput(e.target.value)} 
+                onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMessage(); } }} 
+                placeholder="Initialize protocol or ask a question..." 
+                className="flex-1 border-0 focus-visible:ring-0 bg-transparent min-h-[64px] py-5 text-xl font-medium resize-none overflow-hidden text-white placeholder:text-muted-foreground/20" 
+                rows={1} 
+              />
+              <Button 
+                size="icon" 
+                disabled={!input.trim() || isProcessing} 
+                onClick={() => sendMessage()} 
+                className="w-16 h-16 rounded-full shadow-2xl transition-all hover:scale-105 active:scale-95"
+              >
+                {isProcessing ? <Loader2 className="w-7 h-7 animate-spin" /> : <Send className="w-7 h-7" />}
+              </Button>
+            </Card>
+          </div>
+        </div>
+      </main>
     </div>
   );
 }

@@ -15,38 +15,38 @@ export default {
         code: ['monospace'],
       },
       colors: {
-        background: '#19191C',
+        background: '#121214',
         foreground: '#F5F7FA',
         card: {
-          DEFAULT: '#232327',
+          DEFAULT: '#1e1e22',
           foreground: '#F5F7FA',
         },
         popover: {
-          DEFAULT: '#232327',
+          DEFAULT: '#1e1e22',
           foreground: '#F5F7FA',
         },
         primary: {
           DEFAULT: '#9494F7',
-          foreground: '#19191C',
+          foreground: '#121214',
         },
         secondary: {
-          DEFAULT: '#2C2C31',
+          DEFAULT: '#252529',
           foreground: '#F5F7FA',
         },
         muted: {
-          DEFAULT: '#2C2C31',
-          foreground: '#A7AFBD',
+          DEFAULT: '#252529',
+          foreground: '#82828C',
         },
         accent: {
           DEFAULT: '#6BCCF2',
-          foreground: '#19191C',
+          foreground: '#121214',
         },
         destructive: {
           DEFAULT: '#FF6B6B',
           foreground: '#F5F7FA',
         },
-        border: 'rgba(255,255,255,0.08)',
-        input: '#232327',
+        border: 'rgba(255,255,255,0.06)',
+        input: '#1e1e22',
         ring: '#9494F7',
         success: '#39D98A',
         warning: '#F5C451',

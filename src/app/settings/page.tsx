@@ -1,8 +1,3 @@
-/**
- * @fileOverview Live System Status & Core Integration Control Panel.
- * Redesigned as a functional command center for data ingestion and connectivity.
- */
-
 "use client";
 
 import { useState, useEffect } from 'react';
@@ -16,7 +11,6 @@ import {
   Mail,
   Copy,
   Check,
-  Info,
   Cpu,
   Loader2,
   Activity,
@@ -25,216 +19,163 @@ import {
   Zap,
   CloudLightning,
   Network,
-  Send,
-  MailCheck
+  MailCheck,
+  Globe,
+  Lock,
+  Search
 } from 'lucide-react';
 import { useUser, useFirestore, useDoc, useMemoFirebase } from '@/firebase';
-import { doc, updateDoc } from 'firebase/firestore';
+import { doc } from 'firebase/firestore';
 import { GmailService } from '@/services/gmail-service';
 import { useToast } from '@/hooks/use-toast';
 import { cn } from '@/lib/utils';
-import { motion } from 'framer-motion';
 
 export default function IntegrationPage() {
   const [mounted, setMounted] = useState(false);
-  const { user, isUserLoading } = useUser();
+  const { user } = useUser();
   const db = useFirestore();
   const { toast } = useToast();
 
   const [copied, setCopied] = useState(false);
-  const [isConnectingGmail, setIsConnectingGmail] = useState(false);
+  const [isConnecting, setIsConnecting] = useState(false);
   const [isSyncing, setIsSyncing] = useState(false);
   const [gmailConnected, setGmailConnected] = useState(false);
   const [lastSync, setLastSync] = useState<string | null>(null);
-  const [isTesting, setIsTesting] = useState<string | null>(null);
 
   useEffect(() => {
     setMounted(true);
-    const status = localStorage.getItem('operator_gmail_connected');
-    const syncTime = localStorage.getItem('operator_gmail_last_sync');
-    if (status === 'true') setGmailConnected(true);
-    if (syncTime) setLastSync(syncTime);
+    setGmailConnected(localStorage.getItem('operator_gmail_connected') === 'true');
+    setLastSync(localStorage.getItem('operator_gmail_last_sync'));
   }, []);
 
   const userRef = useMemoFirebase(() => {
-    if (!db || !user?.uid) return null;
+    if (!db || !user) return null;
     return doc(db, 'users', user.uid);
-  }, [db, user?.uid]);
+  }, [db, user]);
 
   const { data: profile } = useDoc(userRef);
 
-  const testConnection = async (id: string) => {
-    setIsTesting(id);
-    await new Promise(r => setTimeout(r, 1500));
-    setIsTesting(null);
-    toast({
-      title: "Connection Success",
-      description: `${id} protocol responded within nominal parameters.`,
-    });
-  };
-
   const handleConnectGmail = async () => {
-    setIsConnectingGmail(true);
+    setIsConnecting(true);
     const token = await GmailService.connect();
     if (token) {
       setGmailConnected(true);
-      toast({ 
-        title: "Intelligence Connected", 
-        description: "Gmail protocol active with read/send scopes." 
-      });
-    } else {
-      toast({ 
-        variant: 'destructive',
-        title: "Connection Failed", 
-        description: "Google Auth was interrupted." 
-      });
+      toast({ title: "Signal Connected", description: "Gmail intelligence protocol active." });
     }
-    setIsConnectingGmail(false);
+    setIsConnecting(false);
   };
 
-  const handleSyncNow = async () => {
+  const handleSync = async () => {
     if (!db || !user) return;
     setIsSyncing(true);
     try {
-      const syncedCount = await GmailService.syncToFirestore(db, user.uid);
+      const count = await GmailService.syncToFirestore(db, user.uid);
       setLastSync(new Date().toISOString());
-      toast({ 
-        title: "Sync Complete", 
-        description: `Ingested ${syncedCount} new financial signals into Neural Memory.` 
-      });
-    } catch (e) {
-      toast({ 
-        variant: 'destructive',
-        title: "Sync Failed", 
-        description: "Neural link timeout during ingestion." 
-      });
-    }
-    setIsSyncing(false);
-  };
-
-  const handleCopy = () => {
-    if (profile?.inboundEmailAddress) {
-      navigator.clipboard.writeText(profile.inboundEmailAddress);
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
+      toast({ title: "Sync Complete", description: `Ingested ${count} new financial signals.` });
+    } finally {
+      setIsSyncing(false);
     }
   };
 
   if (!mounted) return null;
 
   return (
-    <div className="min-h-screen bg-background pt-24 pb-32 text-left">
+    <div className="min-h-screen bg-background pt-32 pb-40">
       <Navbar />
       
-      <main className="max-w-4xl mx-auto px-6 space-y-12">
-        <header className="flex flex-col md:flex-row md:items-end justify-between gap-8 border-b border-white/5 pb-12">
-          <div className="space-y-4">
-            <div className="flex items-center gap-2 text-primary">
-              <Network className="w-5 h-5" />
-              <span className="text-[10px] font-bold uppercase tracking-[0.4em]">Live System Status</span>
-            </div>
-            <h1 className="text-6xl md:text-8xl font-bold font-headline tracking-tighter leading-[0.9] text-white">Ingestion.</h1>
-            <p className="text-xl text-muted-foreground font-medium max-w-md">Manage data intake protocols and system connectivity.</p>
+      <main className="max-w-5xl mx-auto px-8 space-y-20">
+        <header className="space-y-6">
+          <div className="flex items-center gap-3 text-primary">
+            <Network className="w-6 h-6" />
+            <span className="text-[12px] font-bold uppercase tracking-[0.4em]">Infrastructure Control</span>
           </div>
+          <h1 className="text-7xl md:text-8xl font-bold font-headline tracking-tighter text-white">Integrations.</h1>
+          <p className="text-xl text-muted-foreground font-medium max-w-xl">Configure neural ingestion points and secure data protocols.</p>
         </header>
 
-        {/* STATUS TILES */}
-        <section className="grid grid-cols-1 md:grid-cols-3 gap-6">
+        {/* System Health Grid */}
+        <section className="grid grid-cols-1 md:grid-cols-3 gap-8">
            {[
-             { id: 'Logic Engine', icon: Cpu, status: 'Active', val: 'Groq/Llama3' },
-             { id: 'Neural DB', icon: Database, status: 'Synced', val: 'Firestore' },
-             { id: 'Ingestion', icon: CloudLightning, status: gmailConnected ? 'Connected' : 'Standby', val: 'Gmail API' }
+             { id: 'Logic Core', icon: Cpu, status: 'Active', val: 'Llama 3.3', color: 'text-primary' },
+             { id: 'Neural DB', icon: Database, status: 'Synced', val: 'Firestore', color: 'text-success' },
+             { id: 'Web Ingestion', icon: Globe, status: 'Active', val: 'Search API', color: 'text-accent' }
            ].map((item) => (
-             <div key={item.id} className="premium-card bg-white/[0.01] border-white/5 p-6 flex flex-col justify-between h-44 group relative overflow-hidden">
+             <div key={item.id} className="premium-card flex flex-col justify-between h-48 hover:bg-white/[0.02]">
                 <div className="flex justify-between items-start">
-                   <div className="w-10 h-10 rounded-xl bg-white/5 flex items-center justify-center text-muted-foreground group-hover:text-primary transition-colors">
-                      <item.icon className="w-5 h-5" />
+                   <div className="w-12 h-12 rounded-2xl bg-white/5 flex items-center justify-center text-muted-foreground">
+                      <item.icon className="w-6 h-6" />
                    </div>
-                   <Badge variant="outline" className={cn(
-                     "text-[8px] uppercase border-white/10",
-                     item.status === 'Active' || item.status === 'Synced' || item.status === 'Connected' ? "text-success border-success/20 bg-success/5" : ""
-                   )}>
+                   <Badge variant="outline" className={cn("text-[9px] uppercase tracking-widest border-white/5 bg-white/5", item.color)}>
                      {item.status}
                    </Badge>
                 </div>
-                <div>
-                   <p className="text-[8px] font-bold uppercase tracking-widest text-muted-foreground">{item.id}</p>
-                   <p className="text-lg font-bold text-white tracking-tight">{item.val}</p>
+                <div className="space-y-1">
+                   <p className="text-[9px] font-bold uppercase tracking-widest text-muted-foreground/50">{item.id}</p>
+                   <p className="text-xl font-bold text-white tracking-tight">{item.val}</p>
                 </div>
-                <button 
-                  onClick={() => testConnection(item.id)}
-                  disabled={isTesting === item.id}
-                  className="mt-4 text-[8px] font-bold uppercase text-primary/40 hover:text-primary transition-colors flex items-center gap-1.5"
-                >
-                  {isTesting === item.id ? <Loader2 className="w-2.5 h-2.5 animate-spin" /> : <Activity className="w-2.5 h-2.5" />}
-                  Test Protocol
-                </button>
              </div>
            ))}
         </section>
 
         <div className="grid grid-cols-1 gap-12">
-          {/* PRIMARY GMAIL INTEGRATION */}
-          <section className="space-y-6">
-            <div className="flex items-center justify-between">
+          {/* Gmail Protocol */}
+          <section className="space-y-8">
+            <div className="flex items-center justify-between border-b border-white/5 pb-6">
               <div className="space-y-1">
-                <h2 className="text-xl font-bold text-white flex items-center gap-2">
-                  <Zap className="w-5 h-5 text-accent" />
-                  Autonomous Gmail Protocol
+                <h2 className="text-2xl font-bold text-white flex items-center gap-3">
+                  <Zap className="w-6 h-6 text-accent" />
+                  Gmail Ingestion Protocol
                 </h2>
-                <p className="text-sm text-muted-foreground">High-frequency scanning and execution via primary inbox.</p>
+                <p className="text-sm text-muted-foreground">Autonomous high-frequency scanning for financial markers.</p>
               </div>
-              {gmailConnected && (
-                <div className="text-right">
-                  <p className="text-[8px] font-bold uppercase tracking-widest text-muted-foreground/40 mb-1">Last Neural Sync</p>
-                  <p className="text-[10px] font-bold text-white">{lastSync ? new Date(lastSync).toLocaleString() : 'Never'}</p>
-                </div>
-              )}
             </div>
 
-            <Card className="premium-card bg-accent/5 border-accent/20 p-10 flex flex-col md:flex-row items-center justify-between gap-10">
-              <div className="space-y-4 text-center md:text-left flex-1">
-                <div className="flex items-center gap-3 justify-center md:justify-start">
-                  <div className="p-3 rounded-2xl bg-accent/20 text-accent">
-                    <MailCheck className="w-6 h-6" />
+            <Card className={cn(
+              "premium-card p-12 flex flex-col md:flex-row items-center justify-between gap-12 transition-all duration-700",
+              gmailConnected ? "bg-accent/5 border-accent/20" : "bg-white/[0.02] border-white/5"
+            )}>
+              <div className="space-y-6 text-center md:text-left flex-1">
+                <div className="flex items-center gap-4 justify-center md:justify-start">
+                  <div className={cn("p-4 rounded-3xl", gmailConnected ? "bg-accent/20 text-accent" : "bg-white/5 text-muted-foreground")}>
+                    <MailCheck className="w-8 h-8" />
                   </div>
-                  <h3 className="text-3xl font-bold text-white tracking-tight">Gmail Intelligence</h3>
+                  <div>
+                    <h3 className="text-3xl font-bold text-white tracking-tight">Email Intelligence</h3>
+                    <p className="text-sm font-bold uppercase tracking-widest text-muted-foreground/40">Read/Send Execution Scopes</p>
+                  </div>
                 </div>
                 <p className="text-base text-muted-foreground/80 leading-relaxed max-w-md">
-                  Enable the Operator to read financial signals and execute cancellation protocols directly.
+                  Enable the Operator to ingest bank statements, receipts, and renewal notices directly from your inbox.
                 </p>
-                <div className="flex flex-wrap gap-2 pt-2 justify-center md:justify-start">
-                  <Badge className="bg-white/5 border-white/10 text-white/40 text-[8px] uppercase">READ_ONLY</Badge>
-                  <Badge className="bg-white/5 border-white/10 text-white/40 text-[8px] uppercase">SEND_MESSAGE</Badge>
+                <div className="flex flex-wrap gap-2 justify-center md:justify-start">
+                  <Badge variant="outline" className="text-[8px] border-white/5">GMAIL.READ</Badge>
+                  <Badge variant="outline" className="text-[8px] border-white/5">GMAIL.SEND</Badge>
+                  {lastSync && <Badge className="bg-success/10 text-success border-0 text-[8px]">Last Sync: {new Date(lastSync).toLocaleTimeString()}</Badge>}
                 </div>
               </div>
               
-              <div className="flex flex-col gap-3 min-w-[220px]">
+              <div className="flex flex-col gap-4 min-w-[240px]">
                 {!gmailConnected ? (
                   <Button 
                     onClick={handleConnectGmail} 
-                    disabled={isConnectingGmail} 
-                    className="h-14 rounded-2xl bg-white text-background font-bold uppercase tracking-widest text-[10px] shadow-2xl hover:scale-[1.02] transition-transform"
+                    disabled={isConnecting} 
+                    className="h-16 rounded-2xl bg-white text-background font-bold uppercase tracking-widest text-[11px] shadow-2xl hover:scale-105 active:scale-95 transition-all"
                   >
-                    {isConnectingGmail ? <Loader2 className="w-4 h-4 animate-spin" /> : <Shield className="w-4 h-4 mr-2" />}
-                    Initialize Gmail
+                    {isConnecting ? <Loader2 className="w-5 h-5 animate-spin" /> : <Shield className="w-5 h-5 mr-3" />}
+                    Connect Protocol
                   </Button>
                 ) : (
                   <>
                     <Button 
-                      onClick={handleSyncNow} 
+                      onClick={handleSync} 
                       disabled={isSyncing} 
-                      className="h-14 rounded-2xl bg-accent text-background font-bold uppercase tracking-widest text-[10px] shadow-2xl hover:scale-[1.02] transition-transform"
+                      className="h-16 rounded-2xl bg-accent text-background font-bold uppercase tracking-widest text-[11px] shadow-2xl hover:scale-105 transition-all"
                     >
-                      {isSyncing ? <Loader2 className="w-4 h-4 animate-spin" /> : <RefreshCcw className="w-4 h-4 mr-2" />}
-                      Sync Now
+                      {isSyncing ? <Loader2 className="w-5 h-5 animate-spin" /> : <RefreshCcw className="w-5 h-5 mr-3" />}
+                      Sync Intelligence
                     </Button>
-                    <Button 
-                      variant="outline" 
-                      className="h-10 rounded-xl border-white/5 text-danger hover:bg-danger/10 text-[9px] uppercase font-bold tracking-widest"
-                      onClick={() => { localStorage.removeItem('operator_gmail_connected'); setGmailConnected(false); }}
-                    >
-                      Disconnect Protocol
+                    <Button variant="ghost" className="text-danger text-[9px] uppercase font-bold tracking-[0.2em] hover:bg-danger/10" onClick={() => { localStorage.removeItem('operator_gmail_connected'); setGmailConnected(false); }}>
+                      Reset Connection
                     </Button>
                   </>
                 )}
@@ -242,38 +183,37 @@ export default function IntegrationPage() {
             </Card>
           </section>
 
-          {/* SECONDARY INGESTION */}
-          <section className="space-y-6 pt-12 border-t border-white/5">
+          {/* Forwarding Protocol */}
+          <section className="space-y-8 pt-12 border-t border-white/5">
             <div className="space-y-1">
-              <h2 className="text-lg font-bold text-white flex items-center gap-2">
-                <Mail className="w-4 h-4 text-primary" />
+              <h2 className="text-2xl font-bold text-white flex items-center gap-3">
+                <Mail className="w-6 h-6 text-primary" />
                 Neural Forwarding
               </h2>
-              <p className="text-sm text-muted-foreground">Direct ingestion for documents and bank statements.</p>
+              <p className="text-sm text-muted-foreground">Direct ingestion for sensitive documents and bank logs.</p>
             </div>
 
-            <Card className="premium-card bg-primary/5 border-primary/20 p-10 space-y-8">
-              <div className="space-y-3">
-                <Label className="text-[10px] uppercase font-bold tracking-widest text-primary">Magic Forwarding Address</Label>
-                <div className="flex gap-3">
-                  <Input 
-                    readOnly 
-                    value={profile?.inboundEmailAddress || 'Protocol Standby...'} 
-                    className="h-14 bg-white/5 border-white/10 font-mono text-primary text-sm px-6 rounded-2xl flex-1 focus:ring-primary/20" 
-                  />
+            <Card className="premium-card bg-primary/5 border-primary/20 p-12 space-y-10">
+              <div className="space-y-4">
+                <Label className="text-[10px] uppercase font-bold tracking-widest text-primary px-1">Magic Forwarding Address</Label>
+                <div className="flex gap-4">
+                  <div className="h-16 bg-white/5 border border-white/10 font-mono text-primary text-sm px-8 rounded-2xl flex-1 flex items-center justify-between">
+                    <span>{profile?.inboundEmailAddress || 'Standby...'}</span>
+                    <Badge variant="outline" className="border-primary/20 text-primary text-[8px] animate-pulse">Ready</Badge>
+                  </div>
                   <Button 
                     variant="outline" 
                     size="icon" 
-                    className="w-14 h-14 rounded-2xl border-white/10 hover:bg-white/5 transition-colors" 
-                    onClick={handleCopy}
+                    className="w-16 h-16 rounded-2xl border-white/10 hover:bg-white/5 transition-all" 
+                    onClick={() => { navigator.clipboard.writeText(profile?.inboundEmailAddress || ''); setCopied(true); setTimeout(() => setCopied(false), 2000); }}
                   >
-                    {copied ? <Check className="w-5 h-5 text-success" /> : <Copy className="w-5 h-5" />}
+                    {copied ? <Check className="w-6 h-6 text-success" /> : <Copy className="w-6 h-6" />}
                   </Button>
                 </div>
               </div>
-              <div className="p-6 rounded-2xl bg-black/40 border border-white/5 flex gap-4 text-xs text-muted-foreground/60 leading-relaxed italic">
-                <Info className="w-4 h-4 text-primary shrink-0" />
-                <p>Forward receipts or banking logs here. The agent will automatically extract patterns and update your optimization ledger.</p>
+              <div className="p-6 rounded-2xl bg-black/40 border border-white/5 flex gap-4 text-xs text-muted-foreground leading-relaxed italic">
+                <Lock className="w-4 h-4 text-primary shrink-0" />
+                <p>Forward receipts or statements here. The Operator will automatically extract patterns and update your optimization ledger.</p>
               </div>
             </Card>
           </section>
