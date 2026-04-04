@@ -5,7 +5,11 @@ import { runLoop } from "./loop";
 import { reflect } from "./reflection";
 import { AgentState } from "./types";
 
-export async function runAgentV5(input: string, userId: string) {
+/**
+ * @fileOverview Orchestrator v4 Compatibility Layer.
+ */
+
+export async function runAgentV4(input: string, userId: string, history: any[] = [], imageUri?: string) {
   const intent = routeIntent(input);
   const memory = await readMemory(userId);
   const plan = await createPlan(input);
@@ -32,11 +36,15 @@ export async function runAgentV5(input: string, userId: string) {
   });
 
   return {
-    output: finalStep,
-    steps: state.steps,
-    plan,
-    toolsUsed: state.toolsUsed,
-    reflection,
+    content: finalStep?.content || "Analysis finalized.",
+    data: {
+      title: intent.toUpperCase() + " Audit",
+      strategy: reflection?.content || "Proceed with caution.",
+      steps: state.steps,
+      toolsUsed: state.toolsUsed
+    },
     intent,
+    mode: intent === 'money' ? 'analyst' : 'general',
+    isActionable: true
   };
 }
