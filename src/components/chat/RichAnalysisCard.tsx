@@ -22,6 +22,7 @@ import { useState, useEffect } from 'react';
 import { cn } from '@/lib/utils';
 import { useUser, useFirestore } from '@/firebase';
 import { SubscriptionService } from '@/services/subscription-service';
+import { PaywallOverlay } from '@/components/monetization/PaywallOverlay';
 
 interface RichAnalysisCardProps {
   data: {
@@ -41,6 +42,7 @@ interface RichAnalysisCardProps {
 export function RichAnalysisCard({ data }: RichAnalysisCardProps) {
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const [isPremium, setIsPremium] = useState(true);
+  const [isPaywallOpen, setIsPaywallOpen] = useState(false);
   const { user } = useUser();
   const db = useFirestore();
 
@@ -115,14 +117,20 @@ export function RichAnalysisCard({ data }: RichAnalysisCardProps) {
 
         {/* Soft Upsell for Free Users */}
         {!isPremium && savingsEstimate > 0 && (
-          <div className="mt-8 p-6 rounded-2xl bg-warning/5 border border-warning/20 flex flex-col md:flex-row items-center justify-between gap-4">
+          <div className="mt-8 p-6 rounded-[2rem] bg-primary/5 border border-primary/20 flex flex-col md:flex-row items-center justify-between gap-4">
             <div className="flex items-center gap-3">
-              <Star className="w-5 h-5 text-warning fill-warning" />
-              <p className="text-xs font-bold text-slate-700 uppercase tracking-tight">
+              <div className="w-8 h-8 rounded-full bg-primary/20 flex items-center justify-center text-primary shrink-0">
+                <Star className="w-4 h-4 fill-primary" />
+              </div>
+              <p className="text-xs font-bold text-slate-700 leading-tight">
                 Unlock "Forensic Mode" to automate this reclamation.
               </p>
             </div>
-            <Button size="sm" className="bg-warning text-white hover:bg-warning/90 rounded-xl text-[10px] font-bold uppercase tracking-widest px-6 h-10">
+            <Button 
+              size="sm" 
+              className="bg-primary text-white hover:bg-primary/90 rounded-xl text-[9px] font-bold uppercase tracking-widest px-6 h-10 shadow-lg shadow-primary/20"
+              onClick={() => setIsPaywallOpen(true)}
+            >
               Upgrade to Ultra
             </Button>
           </div>
@@ -198,6 +206,11 @@ export function RichAnalysisCard({ data }: RichAnalysisCardProps) {
           </div>
         </div>
       )}
+
+      <PaywallOverlay 
+        isOpen={isPaywallOpen} 
+        onClose={() => setIsPaywallOpen(false)} 
+      />
     </motion.div>
   );
 }

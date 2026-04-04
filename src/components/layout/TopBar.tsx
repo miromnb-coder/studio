@@ -2,7 +2,7 @@
 
 import { useState, useCallback, useMemo, useEffect } from 'react';
 import { StatusDot } from '@/components/ui/StatusDot';
-import { Bell, LayoutGrid, User, X, Zap, Clock, LogOut, ShieldCheck, Star, Activity, TrendingUp, Menu } from 'lucide-react';
+import { Bell, User, X, Zap, LogOut, ShieldCheck, TrendingUp, Menu, Star, ArrowRight } from 'lucide-react';
 import { useUser, useFirestore, useCollection, useMemoFirebase } from '@/firebase';
 import { collection, query, limit } from 'firebase/firestore';
 import { FloatingNavMenu } from './FloatingNavMenu';
@@ -14,6 +14,8 @@ import { useRouter } from 'next/navigation';
 import { SubscriptionService } from '@/services/subscription-service';
 import { cn } from '@/lib/utils';
 import { Progress } from '@/components/ui/progress';
+import { GlassButton } from '@/components/ui/GlassButton';
+import { PaywallOverlay } from '@/components/monetization/PaywallOverlay';
 
 export function TopBar() {
   const { user } = useUser();
@@ -21,6 +23,7 @@ export function TopBar() {
   const router = useRouter();
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [status, setStatus] = useState<any>(null);
+  const [isPaywallOpen, setIsPaywallOpen] = useState(false);
 
   useEffect(() => {
     if (db && user) {
@@ -54,6 +57,7 @@ export function TopBar() {
   }, [analyses]);
 
   const usagePercent = status ? (status.usage.agentRuns / status.usage.limit) * 100 : 0;
+  const isFree = status?.plan === 'FREE';
 
   return (
     <>
@@ -83,24 +87,36 @@ export function TopBar() {
             </div>
           </div>
 
-          {/* Center: System Status */}
-          <div className="flex items-center gap-4 md:gap-8">
-            <div className="hidden sm:flex items-center gap-4">
+          {/* Center: System Status & Upgrade CTA */}
+          <div className="flex items-center gap-4 md:gap-6">
+            {isFree && (
+              <div className="flex items-center gap-4 bg-slate-50/50 border border-slate-100 rounded-full pl-4 pr-1 py-1 h-11">
+                <div className="flex flex-col w-16 gap-1">
+                  <Progress value={usagePercent} className="h-1 bg-slate-200" />
+                  <span className="text-[7px] font-black text-slate-400 uppercase tracking-widest leading-none">
+                    {status.usage.agentRuns}/{status.usage.limit} RUNS
+                  </span>
+                </div>
+                <GlassButton 
+                  size="sm" 
+                  className="!h-9 !px-4 !rounded-full !text-[9px] bg-primary shadow-lg shadow-primary/20 group/up"
+                  onClick={() => setIsPaywallOpen(true)}
+                >
+                  Upgrade <ArrowRight className="w-2.5 h-2.5 ml-1.5 group-hover/up:translate-x-0.5 transition-transform" />
+                </GlassButton>
+              </div>
+            )}
+
+            {!isFree && (
               <motion.div 
                 whileHover={{ scale: 1.02 }}
-                className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-success/5 border border-success/10 cursor-default"
+                className="flex items-center gap-2 px-4 py-2 rounded-full bg-success/5 border border-success/10 cursor-default"
               >
-                <TrendingUp className="w-3 h-3 text-success" />
-                <span className="text-[10px] font-bold text-slate-900">${totalSaved.toFixed(0)}</span>
+                <TrendingUp className="w-3.5 h-3.5 text-success" />
+                <span className="text-[10px] font-bold text-slate-900">${totalSaved.toFixed(0)} SAVED</span>
               </motion.div>
-
-              {status && status.plan === 'FREE' && (
-                <div className="hidden md:flex flex-col w-24 gap-1">
-                  <Progress value={usagePercent} className="h-1 bg-slate-100" />
-                  <span className="text-[7px] font-bold text-slate-400 text-right uppercase tracking-widest">{status.usage.agentRuns}/{status.usage.limit}</span>
-                </div>
-              )}
-            </div>
+            )}
+            
             <StatusDot status="active" />
           </div>
 
@@ -149,6 +165,15 @@ export function TopBar() {
                     {status?.plan === 'PREMIUM' ? 'Ultra Clearance' : 'Free Access'}
                   </p>
                 </div>
+                {isFree && (
+                  <button 
+                    onClick={() => setIsPaywallOpen(true)}
+                    className="w-full flex items-center gap-3 p-3 text-primary hover:bg-primary/5 rounded-2xl transition-all text-xs font-bold"
+                  >
+                    <Star className="w-4 h-4 fill-primary" />
+                    Upgrade to Ultra
+                  </button>
+                )}
                 <button 
                   onClick={handleLogout}
                   className="w-full flex items-center gap-3 p-3 text-slate-600 hover:text-danger hover:bg-danger/5 rounded-2xl transition-all text-xs font-bold"
@@ -167,6 +192,11 @@ export function TopBar() {
           <FloatingNavMenu onClose={closeMenu} />
         )}
       </AnimatePresence>
+
+      <PaywallOverlay 
+        isOpen={isPaywallOpen} 
+        onClose={() => setIsPaywallOpen(false)} 
+      />
     </>
   );
 }

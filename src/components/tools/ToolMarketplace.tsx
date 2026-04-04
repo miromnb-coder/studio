@@ -7,10 +7,13 @@ import { ToolCard } from './ToolCard';
 import { ToolFilterBar } from './ToolFilterBar';
 import { ToolDetailPanel } from './ToolDetailPanel';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Sparkles, Cpu, ShieldCheck, Plus, TrendingUp, History, LayoutGrid, Compass, CheckCircle2 } from 'lucide-react';
+import { Sparkles, Cpu, ShieldCheck, Plus, TrendingUp, History, LayoutGrid, Compass, CheckCircle2, Star, ArrowRight } from 'lucide-react';
 import { GlassCard } from '@/components/ui/GlassCard';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
+import { useUser, useFirestore } from '@/firebase';
+import { SubscriptionService } from '@/services/subscription-service';
+import { PaywallOverlay } from '@/components/monetization/PaywallOverlay';
 
 export function ToolMarketplace() {
   const [tools, setTools] = useState<ToolDefinition[]>([]);
@@ -19,14 +22,24 @@ export function ToolMarketplace() {
   const [search, setSearch] = useState('');
   const [selectedTool, setSelectedTool] = useState<ToolDefinition | null>(null);
   const [isCreating, setIsCreating] = useState(false);
+  const [userStatus, setUserStatus] = useState<any>(null);
+  const [isPaywallOpen, setIsPaywallOpen] = useState(false);
+
+  const { user } = useUser();
+  const db = useFirestore();
 
   const loadTools = () => setTools(ToolRegistryManager.getTools());
 
   useEffect(() => {
     loadTools();
     window.addEventListener('tool_registry_updated', loadTools);
+    
+    if (db && user) {
+      SubscriptionService.getUserStatus(db, user.uid).then(setUserStatus);
+    }
+
     return () => window.removeEventListener('tool_registry_updated', loadTools);
-  }, []);
+  }, [db, user]);
 
   const filteredTools = useMemo(() => {
     return tools.filter(t => {
@@ -38,7 +51,7 @@ export function ToolMarketplace() {
     });
   }, [tools, activeTab, activeCategory, search]);
 
-  const recommendedTools = useMemo(() => tools.slice(0, 2), [tools]);
+  const recommendedTools = useMemo(() => tools.filter(t => t.isPremium).slice(0, 2), [tools]);
 
   return (
     <div className="space-y-16 pb-32">
@@ -53,13 +66,25 @@ export function ToolMarketplace() {
           <p className="text-xl text-slate-500 font-medium max-w-xl">Manage your agent's neural capabilities and audit verified protocols.</p>
         </div>
         
-        <Button 
-          onClick={() => setIsCreating(true)}
-          className="h-16 px-8 rounded-2xl bg-slate-900 text-white font-bold uppercase tracking-widest text-[11px] shadow-2xl hover:scale-105 active:scale-95 transition-all"
-        >
-          <Plus className="w-5 h-5 mr-3" />
-          Create Tool
-        </Button>
+        <div className="flex gap-3">
+          {userStatus?.plan === 'FREE' && (
+            <Button 
+              onClick={() => setIsPaywallOpen(true)}
+              className="h-16 px-8 rounded-2xl bg-primary text-white font-bold uppercase tracking-widest text-[11px] shadow-2xl shadow-primary/20 hover:scale-105 active:scale-95 transition-all group"
+            >
+              <Star className="w-5 h-5 mr-3 fill-white" />
+              Upgrade to Ultra
+            </Button>
+          )}
+          <Button 
+            variant="outline"
+            onClick={() => setIsCreating(true)}
+            className="h-16 px-8 rounded-2xl border-white bg-white/40 font-bold uppercase tracking-widest text-[11px] shadow-sm hover:bg-white active:scale-95 transition-all"
+          >
+            <Plus className="w-5 h-5 mr-3" />
+            Create Tool
+          </Button>
+        </div>
       </header>
 
       {/* Proof of Intelligence Stats */}
@@ -143,9 +168,19 @@ export function ToolMarketplace() {
       {/* Recommendations - Only in Explore */}
       {activeTab === 'explore' && !search && (
         <section className="space-y-8">
-          <div className="flex items-center gap-3 px-4">
-            <Sparkles className="w-5 h-5 text-primary" />
-            <h3 className="text-[11px] font-bold uppercase tracking-[0.3em] text-slate-400">AI Personal Recommendations</h3>
+          <div className="flex items-center justify-between px-4">
+            <div className="flex items-center gap-3">
+              <Sparkles className="w-5 h-5 text-primary" />
+              <h3 className="text-[11px] font-bold uppercase tracking-[0.3em] text-slate-400">AI Personal Recommendations</h3>
+            </div>
+            {userStatus?.plan === 'FREE' && (
+              <button 
+                onClick={() => setIsPaywallOpen(true)}
+                className="text-[10px] font-bold uppercase tracking-widest text-primary hover:text-primary/80 flex items-center gap-2"
+              >
+                Unlock all protocols <ArrowRight className="w-3 h-3" />
+              </button>
+            )}
           </div>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
             {recommendedTools.map(t => <ToolCard key={t.id} tool={t} onOpen={setSelectedTool} isRecommended />)}
@@ -223,6 +258,11 @@ export function ToolMarketplace() {
       </AnimatePresence>
 
       <ToolDetailPanel tool={selectedTool} onClose={() => setSelectedTool(null)} />
+      
+      <PaywallOverlay 
+        isOpen={isPaywallOpen} 
+        onClose={() => setIsPaywallOpen(false)} 
+      />
     </div>
   );
 }

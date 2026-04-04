@@ -5,10 +5,13 @@ import { GlassCard } from '@/components/ui/GlassCard';
 import { GlassButton } from '@/components/ui/GlassButton';
 import { ToolStatusBadge } from './ToolStatusBadge';
 import * as LucideIcons from 'lucide-react';
-import { motion } from 'framer-motion';
-import { Sparkles, ArrowRight, Zap, Clock, Repeat, Calendar } from 'lucide-react';
+import { motion, AnimatePresence } from 'framer-motion';
+import { Sparkles, ArrowRight, Zap, Clock, Repeat, Calendar, Lock, Star } from 'lucide-react';
 import { useState, useEffect } from 'react';
 import { cn } from '@/lib/utils';
+import { useUser, useFirestore } from '@/firebase';
+import { SubscriptionService } from '@/services/subscription-service';
+import { PaywallOverlay } from '@/components/monetization/PaywallOverlay';
 
 interface ToolCardProps {
   tool: ToolDefinition;
@@ -19,11 +22,23 @@ interface ToolCardProps {
 export function ToolCard({ tool, onOpen, isRecommended }: ToolCardProps) {
   const Icon = (LucideIcons as any)[tool.icon] || LucideIcons.Package;
   const [stats, setStats] = useState({ uses: 0, last: '' });
+  const [isPremiumUser, setIsPremiumUser] = useState(true);
+  const [isPaywallOpen, setIsPaywallOpen] = useState(false);
+  const { user } = useUser();
+  const db = useFirestore();
 
   useEffect(() => {
     const s = localStorage.getItem(`tool_stats_${tool.id}`);
     if (s) setStats(JSON.parse(s));
-  }, [tool.id]);
+
+    if (db && user) {
+      SubscriptionService.getUserStatus(db, user.uid).then(status => {
+        setIsPremiumUser(status.plan === 'PREMIUM');
+      });
+    }
+  }, [tool.id, db, user]);
+
+  const isLocked = tool.isPremium && !isPremiumUser;
 
   return (
     <motion.div
@@ -31,15 +46,18 @@ export function ToolCard({ tool, onOpen, isRecommended }: ToolCardProps) {
       initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
       whileHover={{ y: -4, scale: 1.01 }}
-      className={cn("group relative", isRecommended && "ring-2 ring-primary/20 rounded-4xl")}
+      className={cn("group relative", isRecommended && "ring-2 ring-primary/20 rounded-[2.5rem]")}
     >
       {isRecommended && (
-        <div className="absolute -top-3 left-6 z-20 px-3 py-1 bg-primary text-white rounded-full text-[8px] font-bold uppercase tracking-widest shadow-lg">
-          AI Suggests
+        <div className="absolute -top-3 left-6 z-20 px-3 py-1 bg-primary text-white rounded-full text-[8px] font-bold uppercase tracking-widest shadow-lg flex items-center gap-1.5">
+          <Star className="w-2.5 h-2.5 fill-white" /> AI Suggests
         </div>
       )}
 
-      <GlassCard className="h-full flex flex-col justify-between !p-6 border-white/40 hover:border-primary/20 transition-all duration-500 overflow-hidden">
+      <GlassCard className={cn(
+        "h-full flex flex-col justify-between !p-6 border-white/40 hover:border-primary/20 transition-all duration-500 overflow-hidden",
+        isLocked && "grayscale-[0.5] opacity-90"
+      )}>
         {/* Hover Glow Background */}
         <div className="absolute inset-0 bg-gradient-to-br from-primary/0 via-primary/[0.03] to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-700 pointer-events-none" />
 
@@ -48,7 +66,13 @@ export function ToolCard({ tool, onOpen, isRecommended }: ToolCardProps) {
             <div className="w-12 h-12 rounded-2xl bg-white border border-slate-100 shadow-sm flex items-center justify-center text-primary group-hover:scale-110 transition-transform duration-500">
               <Icon className="w-6 h-6" />
             </div>
-            <ToolStatusBadge status={tool.status} />
+            {isLocked ? (
+              <Badge className="bg-warning/10 text-warning border-warning/20 text-[8px] px-2 h-5 font-bold uppercase tracking-widest flex items-center gap-1">
+                <Lock className="w-2.5 h-2.5" /> Ultra
+              </Badge>
+            ) : (
+              <ToolStatusBadge status={tool.status} />
+            )}
           </div>
 
           <div className="space-y-2">
@@ -94,24 +118,41 @@ export function ToolCard({ tool, onOpen, isRecommended }: ToolCardProps) {
         </div>
 
         <div className="mt-8 pt-6 border-t border-slate-50 flex gap-2 relative z-10">
-          <GlassButton 
-            size="sm" 
-            variant="primary" 
-            className="flex-1 !h-10 text-[9px] group/btn"
-            onClick={() => onOpen(tool)}
-          >
-            Open Registry <ArrowRight className="w-3 h-3 ml-1.5 group-hover/btn:translate-x-1 transition-transform" />
-          </GlassButton>
+          {isLocked ? (
+            <GlassButton 
+              size="sm" 
+              variant="primary" 
+              className="flex-1 !h-10 text-[9px] group/btn bg-slate-900 shadow-xl shadow-slate-900/20"
+              onClick={() => setIsPaywallOpen(true)}
+            >
+              Upgrade to Unlock <Star className="w-3 h-3 ml-1.5 fill-white" />
+            </GlassButton>
+          ) : (
+            <GlassButton 
+              size="sm" 
+              variant="primary" 
+              className="flex-1 !h-10 text-[9px] group/btn"
+              onClick={() => onOpen(tool)}
+            >
+              Open Registry <ArrowRight className="w-3 h-3 ml-1.5 group-hover/btn:translate-x-1 transition-transform" />
+            </GlassButton>
+          )}
           <GlassButton 
             size="sm" 
             variant="secondary" 
             className="!w-10 !h-10 !p-0"
-            title="Instant Action"
+            onClick={() => isLocked ? setIsPaywallOpen(true) : onOpen(tool)}
           >
-            <LucideIcons.Play className="w-3.5 h-3.5" />
+            {isLocked ? <Lock className="w-3.5 h-3.5 text-slate-400" /> : <LucideIcons.Play className="w-3.5 h-3.5" />}
           </GlassButton>
         </div>
       </GlassCard>
+
+      <PaywallOverlay 
+        isOpen={isPaywallOpen} 
+        onClose={() => setIsPaywallOpen(false)} 
+        reason="premium_tool"
+      />
     </motion.div>
   );
 }
