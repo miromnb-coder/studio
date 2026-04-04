@@ -1,144 +1,116 @@
 "use client";
 
-import { motion } from "framer-motion";
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
-import { Card } from "@/components/ui/card";
-import { Loader2, ArrowRight, Activity, AlertCircle, CheckCircle2 } from "lucide-react";
-import { cn } from "@/lib/utils";
-import type { SystemModule, SystemStatus } from "./types";
 import Link from "next/link";
+import { ExpandableSection } from "./ExpandableSection";
+import { SystemStatusBadge } from "./SystemStatusBadge";
+import type { SystemAction, SystemModule } from "./types";
+import { cn } from "@/lib/utils";
+import { Loader2, ArrowRight } from "lucide-react";
 
-interface SystemModuleCardProps {
-  module: SystemModule;
-  className?: string;
-}
+function ActionButton({ action }: { action: SystemAction }) {
+  const base =
+    "inline-flex items-center justify-center rounded-xl px-4 py-2.5 text-[10px] font-bold uppercase tracking-widest transition-all disabled:cursor-not-allowed disabled:opacity-50";
 
-const statusColors: Record<SystemStatus, string> = {
-  active: "text-success bg-success/10",
-  idle: "text-muted-foreground bg-white/5",
-  error: "text-danger bg-danger/10",
-  syncing: "text-primary bg-primary/10",
-  connected: "text-success bg-success/10",
-  disconnected: "text-muted-foreground bg-white/5",
-};
+  const variantClass =
+    action.variant === "ghost"
+      ? "text-muted-foreground hover:bg-white/5 hover:text-white"
+      : action.variant === "secondary"
+      ? "bg-white/5 text-foreground border border-white/10 hover:bg-white/10"
+      : "bg-primary text-background hover:scale-[1.02] shadow-lg shadow-primary/10";
 
-export function SystemModuleCard({ module, className }: SystemModuleCardProps) {
-  const isSyncing = module.status === "syncing";
+  if (action.href) {
+    return (
+      <Link className={cn(base, variantClass)} href={action.href}>
+        {action.label}
+        {action.variant === 'primary' && <ArrowRight className="w-3 h-3 ml-2" />}
+      </Link>
+    );
+  }
 
   return (
-    <Card className={cn("premium-card flex flex-col justify-between group h-full", className)}>
-      <div className="space-y-6">
-        {/* Header */}
-        <div className="flex items-start justify-between">
+    <button
+      type="button"
+      onClick={action.onClick}
+      disabled={action.disabled || action.loading}
+      className={cn(base, variantClass)}
+    >
+      {action.loading && <Loader2 className="w-3 h-3 mr-2 animate-spin" />}
+      {action.label}
+      {!action.loading && action.variant === 'primary' && <ArrowRight className="w-3 h-3 ml-2" />}
+    </button>
+  );
+}
+
+export function SystemModuleCard({ system }: { system: SystemModule }) {
+  return (
+    <section className="premium-card !p-8 bg-[#1e1e22] border border-white/5 shadow-2xl flex flex-col justify-between h-full">
+      <div>
+        <div className="flex items-start justify-between gap-4 mb-6">
           <div className="space-y-1">
-            <h3 className="text-xl font-bold font-headline text-white tracking-tight flex items-center gap-2">
-              {module.title}
-            </h3>
-            <p className="text-xs text-muted-foreground leading-relaxed max-w-[200px]">
-              {module.description}
+            <div className="flex items-center gap-3">
+              <h3 className="text-xl font-bold font-headline text-white tracking-tight">{system.title}</h3>
+              <SystemStatusBadge status={system.status} />
+            </div>
+            <p className="text-sm leading-relaxed text-muted-foreground/70 font-medium">
+              {system.description}
             </p>
           </div>
-          <Badge 
-            variant="outline" 
-            className={cn(
-              "text-[9px] font-bold uppercase tracking-widest border-0 px-2 py-0.5 rounded-full flex items-center gap-1.5",
-              statusColors[module.status]
-            )}
-          >
-            {isSyncing ? (
-              <Loader2 className="w-2.5 h-2.5 animate-spin" />
-            ) : (
-              <span className="w-1.5 h-1.5 rounded-full bg-current" />
-            )}
-            {module.status}
-          </Badge>
+
+          {system.value ? (
+            <div className="text-right">
+              <div className="text-[10px] uppercase font-bold tracking-widest text-muted-foreground/40 mb-1">
+                Impact
+              </div>
+              <div className="text-2xl font-bold font-headline text-white tracking-tighter tabular-nums">
+                {system.value}
+              </div>
+              {system.subvalue ? (
+                <div className="text-[10px] font-bold text-primary uppercase tracking-widest mt-1">{system.subvalue}</div>
+              ) : null}
+            </div>
+          ) : null}
         </div>
 
-        {/* Value/Metrics */}
-        {module.value && (
-          <div className="py-4">
-            <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground/50 mb-1">Impact Level</p>
-            <div className="flex items-baseline gap-2">
-              <span className="text-4xl font-bold font-headline text-white tracking-tighter">
-                {module.value}
-              </span>
-              {module.subvalue && (
-                <span className="text-xs font-bold text-muted-foreground">
-                  {module.subvalue}
-                </span>
-              )}
-            </div>
-          </div>
-        )}
-
-        {module.metrics && module.metrics.length > 0 && (
-          <div className="grid grid-cols-2 gap-4 pt-4 border-t border-white/5">
-            {module.metrics.map((m, i) => (
-              <div key={i} className="space-y-0.5">
-                <p className="text-[9px] font-bold uppercase tracking-widest text-muted-foreground/40">{m.label}</p>
-                <p className="text-sm font-bold text-white">{m.value}</p>
+        {system.metrics?.length ? (
+          <div className="grid gap-3 sm:grid-cols-2 mb-6">
+            {system.metrics.map((metric) => (
+              <div
+                key={metric.label}
+                className="rounded-2xl border border-white/5 bg-white/[0.02] px-4 py-3"
+              >
+                <div className="text-[9px] uppercase font-bold tracking-widest text-muted-foreground/40">
+                  {metric.label}
+                </div>
+                <div className="mt-1 text-base font-bold text-white tracking-tight">
+                  {metric.value}
+                </div>
+                {metric.hint ? (
+                  <div className="mt-1 text-[10px] font-medium text-primary/60">{metric.hint}</div>
+                ) : null}
               </div>
             ))}
           </div>
-        )}
+        ) : null}
 
-        {module.details && (
-          <div className="pt-2">
-            {module.details}
-          </div>
-        )}
+        <div className="flex flex-wrap gap-2 mb-6">
+          {system.actions.map((action) => (
+            <ActionButton
+              key={`${system.id}-${action.label}`}
+              action={action}
+            />
+          ))}
+        </div>
       </div>
 
-      {/* Actions */}
-      <div className="mt-8 flex flex-col gap-2">
-        {module.actions.map((action, i) => {
-          const isPrimary = action.variant === "primary";
-          const isGhost = action.variant === "ghost";
-
-          const content = (
-            <>
-              {action.loading ? <Loader2 className="w-3.5 h-3.5 animate-spin mr-2" /> : null}
-              {action.label}
-              {!action.loading && isPrimary && <ArrowRight className="w-3.5 h-3.5 ml-2 group-hover:translate-x-1 transition-transform" />}
-            </>
-          );
-
-          if (action.href) {
-            return (
-              <Button
-                key={i}
-                asChild
-                disabled={action.disabled || action.loading}
-                className={cn(
-                  "rounded-xl h-11 text-[10px] font-bold uppercase tracking-widest transition-all",
-                  isPrimary ? "bg-primary text-background hover:scale-[1.02]" : 
-                  isGhost ? "bg-transparent text-muted-foreground hover:text-white" :
-                  "bg-white/5 text-white hover:bg-white/10"
-                )}
-              >
-                <Link href={action.href}>{content}</Link>
-              </Button>
-            );
-          }
-
-          return (
-            <Button
-              key={i}
-              onClick={action.onClick}
-              disabled={action.disabled || action.loading}
-              className={cn(
-                "rounded-xl h-11 text-[10px] font-bold uppercase tracking-widest transition-all",
-                isPrimary ? "bg-primary text-background hover:scale-[1.02]" : 
-                isGhost ? "bg-transparent text-muted-foreground hover:text-white" :
-                "bg-white/5 text-white hover:bg-white/10"
-              )}
-            >
-              {content}
-            </Button>
-          );
-        })}
-      </div>
-    </Card>
+      <ExpandableSection label="Diagnostic Feed">
+        {system.details ? (
+          system.details
+        ) : system.emptyState ? (
+          <div className="text-xs italic opacity-50">{system.emptyState}</div>
+        ) : (
+          <div className="text-xs italic opacity-50">No operational logs available for this cycle.</div>
+        )}
+      </ExpandableSection>
+    </section>
   );
 }
