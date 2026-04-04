@@ -4,7 +4,7 @@ import { executeTools } from './tools';
 import { evaluateReasoning } from './critic';
 import { generateStreamResponse } from './generator';
 import { fetchMemory } from './memory';
-import { AgentContext } from './types';
+import { AgentContext, AgentV4Result, Intent } from './types';
 
 /**
  * @fileOverview Orchestrator Agent v4.2: Streaming multi-agent pipeline.
@@ -20,32 +20,45 @@ async function checkFastPath(input: string): Promise<string | null> {
   return null;
 }
 
-export async function runAgentV4Stream(input: string, userId: string, history: any[] = [], imageUri?: string) {
+interface AgentV4PipelineResult {
+  context: AgentContext;
+  fastPathResponse: string | null;
+}
+
+async function runAgentV4Pipeline(
+  input: string,
+  userId: string,
+  history: any[] = [],
+  imageUri?: string
+): Promise<AgentV4PipelineResult> {
   console.log(`[AGENT_V4.2] Processing: "${input.slice(0, 50)}..."`);
 
-  // 1. Fast Path
   const fastPathResponse = await checkFastPath(input);
   if (fastPathResponse) {
     return {
-      stream: null,
       fastPathResponse,
-      metadata: { intent: 'general', fastPathUsed: true }
+      context: {
+        input,
+        history,
+        memory: null,
+        imageUri,
+        intent: 'general',
+        language: 'English',
+        plan: [],
+        toolResults: [],
+        fastPathUsed: true
+      }
     };
   }
 
-  // 2. Intent Routing & Memory Retrieval
   const [memory, { intent, language }] = await Promise.all([
     fetchMemory(userId),
     routeIntent(input, history)
   ]);
 
-  // 3. Structured Planning
   const plan = await createPlan(input, intent, history);
-
-  // 4. Tool Execution (Ground Truth)
   const toolResults = await executeTools(plan, input, imageUri);
 
-  // 5. Context Building
   const context: AgentContext = {
     input,
     history,
@@ -58,7 +71,6 @@ export async function runAgentV4Stream(input: string, userId: string, history: a
     fastPathUsed: false
   };
 
-  // 6. Critic / Self-Evaluation Loop
   let feedback = await evaluateReasoning(input, context);
   if (feedback.needs_revision && feedback.score < 7) {
     console.log("[ORCHESTRATOR] Low confidence, re-planning logic chain...");
@@ -68,18 +80,63 @@ export async function runAgentV4Stream(input: string, userId: string, history: a
   }
   context.criticFeedback = feedback;
 
-  // 7. Streaming Response Generation
+  return { context, fastPathResponse: null };
+}
+
+function buildResult(content: string, intent: Intent): AgentV4Result {
+  return {
+    content,
+    intent,
+    mode: intent
+  };
+}
+
+export async function runAgentV4(
+  input: string,
+  userId: string,
+  history: any[] = [],
+  imageUri?: string
+): Promise<AgentV4Result> {
+  const { context, fastPathResponse } = await runAgentV4Pipeline(input, userId, history, imageUri);
+  if (fastPathResponse) {
+    return buildResult(fastPathResponse, 'general');
+  }
+
+  const stream = await generateStreamResponse(context);
+  let content = '';
+  for await (const chunk of stream) {
+    content += chunk.choices[0]?.delta?.content || '';
+  }
+
+  return buildResult(content, context.intent);
+}
+
+export async function runAgentV4Stream(
+  input: string,
+  userId: string,
+  history: any[] = [],
+  imageUri?: string
+) {
+  const { context, fastPathResponse } = await runAgentV4Pipeline(input, userId, history, imageUri);
+  if (fastPathResponse) {
+    return {
+      stream: null,
+      fastPathResponse,
+      metadata: { intent: 'general', fastPathUsed: true }
+    };
+  }
+
   const stream = await generateStreamResponse(context);
 
   return {
     stream,
     fastPathResponse: null,
     metadata: {
-      intent,
-      plan,
-      toolResults,
-      critic: feedback,
-      memoryUsed: !!memory,
+      intent: context.intent,
+      plan: context.plan,
+      toolResults: context.toolResults,
+      critic: context.criticFeedback,
+      memoryUsed: !!context.memory,
       fastPathUsed: false
     }
   };
