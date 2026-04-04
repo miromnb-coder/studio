@@ -6,29 +6,27 @@ import { Intent } from './types';
  */
 
 export async function routeIntent(input: string, history: any[]): Promise<{ intent: Intent; language: string }> {
-  console.log("[ROUTER] Analyzing intent...");
+  console.log('[ROUTER] Analyzing intent...');
   const prompt = `
-    Analyze user input and history.
-    1. Detect language (e.g., Finnish, English).
-    2. Classify intent: finance, time_optimizer, monetization, technical, analysis, general.
-    
-    Return ONLY JSON: {"intent": "...", "language": "..."}
-  `;
+Analyze user input and history.
+1. Detect language (e.g., Finnish, English).
+2. Classify intent using one value only:
+   finance, time_optimizer, monetization, technical, analysis, productivity, general.
+3. Use productivity when the request is mainly about personal organization workflows such as calendar/todo/notes.
+
+Return ONLY JSON: {"intent": "...", "language": "..."}
+`;
 
   try {
     const res = await groq.chat.completions.create({
       model: 'llama-3.3-70b-versatile',
-      messages: [
-        { role: 'system', content: prompt },
-        ...history.slice(-3),
-        { role: 'user', content: input }
-      ],
+      messages: [{ role: 'system', content: prompt }, ...history.slice(-3), { role: 'user', content: input }],
       response_format: { type: 'json_object' },
       temperature: 0,
     });
-    
-    const content = JSON.parse(res.choices[0]?.message?.content || '{}');
-    const intent = (content.intent as Intent) || 'general';
+
+    const content = JSON.parse(res.choices[0]?.message?.content || '{}') as { intent?: Intent; language?: string };
+    const intent = content.intent || 'general';
     const language = content.language || 'English';
     console.log(`[ROUTER] Detected Intent: ${intent}, Language: ${language}`);
     return { intent, language };
