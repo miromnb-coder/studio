@@ -1,4 +1,3 @@
-
 "use client";
 
 import { useState, useRef, useEffect } from 'react';
@@ -27,12 +26,15 @@ import { cn } from '@/lib/utils';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useToast } from '@/hooks/use-toast';
 import { RichAnalysisCard } from '@/components/chat/RichAnalysisCard';
+import { PaywallOverlay } from '@/components/monetization/PaywallOverlay';
 
 export default function ChatPage() {
   const [input, setInput] = useState('');
   const [isProcessing, setIsProcessing] = useState(false);
   const [agentMetadata, setAgentMetadata] = useState<any>(null);
   const [selectedImage, setSelectedToolImage] = useState<string | null>(null);
+  const [showPaywall, setShowPaywall] = useState(false);
+  
   const scrollRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -121,6 +123,12 @@ export default function ChatPage() {
           imageUri: currentImage
         }),
       });
+
+      if (response.status === 403) {
+        setShowPaywall(true);
+        setIsProcessing(false);
+        return;
+      }
 
       if (!response.ok) throw new Error("Operational link failed");
 
@@ -336,6 +344,12 @@ export default function ChatPage() {
           </GlassCard>
         </div>
       </div>
+
+      <PaywallOverlay 
+        isOpen={showPaywall} 
+        onClose={() => setShowPaywall(false)} 
+        reason="limit_reached" 
+      />
     </div>
   );
 }

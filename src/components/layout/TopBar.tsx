@@ -1,8 +1,8 @@
 "use client";
 
-import { useState, useCallback, useMemo } from 'react';
+import { useState, useCallback, useMemo, useEffect } from 'react';
 import { StatusDot } from '@/components/ui/StatusDot';
-import { Bell, LayoutGrid, User, X, Zap, Clock, LogOut, ShieldCheck } from 'lucide-react';
+import { Bell, LayoutGrid, User, X, Zap, Clock, LogOut, ShieldCheck, Star } from 'lucide-react';
 import { useUser, useFirestore, useCollection, useMemoFirebase } from '@/firebase';
 import { collection, query, limit } from 'firebase/firestore';
 import { FloatingNavMenu } from './FloatingNavMenu';
@@ -11,12 +11,21 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { Badge } from '@/components/ui/badge';
 import { getAuth, signOut } from 'firebase/auth';
 import { useRouter } from 'next/navigation';
+import { SubscriptionService } from '@/services/subscription-service';
+import { cn } from '@/lib/utils';
 
 export function TopBar() {
   const { user } = useUser();
   const db = useFirestore();
   const router = useRouter();
   const [isMenuOpen, setIsMenuOpen] = useState(false);
+  const [status, setStatus] = useState<any>(null);
+
+  useEffect(() => {
+    if (db && user) {
+      SubscriptionService.getUserStatus(db, user.uid).then(setStatus);
+    }
+  }, [db, user]);
 
   const toggleMenu = useCallback(() => {
     setIsMenuOpen(prev => !prev);
@@ -63,17 +72,25 @@ export function TopBar() {
             </div>
           </div>
 
-          {/* Center: System Status & Impact */}
+          {/* Center: System Status & Usage */}
           <div className="flex items-center gap-4 md:gap-8">
-            <div className="hidden lg:flex items-center gap-2">
+            <div className="hidden lg:flex items-center gap-3">
               <div className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-primary/5 border border-primary/10">
                 <Zap className="w-3 h-3 text-primary" />
                 <span className="text-[10px] font-bold text-slate-900">${totalSaved.toFixed(0)}</span>
               </div>
-              <div className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-success/5 border border-success/10">
-                <Clock className="w-3 h-3 text-success" />
-                <span className="text-[10px] font-bold text-slate-900">14.2h</span>
-              </div>
+              
+              {status && (
+                <div className={cn(
+                  "flex items-center gap-2 px-3 py-1.5 rounded-full border transition-all",
+                  status.plan === 'PREMIUM' ? "bg-warning/5 border-warning/20" : "bg-slate-50 border-slate-100"
+                )}>
+                  {status.plan === 'PREMIUM' ? <Star className="w-3 h-3 text-warning fill-warning" /> : <Activity className="w-3 h-3 text-slate-400" />}
+                  <span className="text-[9px] font-bold text-slate-900 uppercase">
+                    {status.plan === 'PREMIUM' ? 'Ultra' : `${status.usage.agentRuns}/${status.usage.limit} Runs`}
+                  </span>
+                </div>
+              )}
             </div>
             <StatusDot status="active" />
           </div>
@@ -119,7 +136,9 @@ export function TopBar() {
               <PopoverContent className="w-56 glass-panel p-2 shadow-xl mt-4 rounded-3xl border-white/60" align="end">
                 <div className="p-3 border-b border-slate-100/60 mb-1">
                   <p className="text-xs font-bold text-slate-900 truncate">{user?.displayName || 'Active Operator'}</p>
-                  <p className="text-[9px] font-bold text-primary uppercase tracking-widest mt-0.5">Level 5 Clearance</p>
+                  <p className="text-[9px] font-bold text-primary uppercase tracking-widest mt-0.5">
+                    {status?.plan === 'PREMIUM' ? 'Ultra Clearance' : 'Free Access'}
+                  </p>
                 </div>
                 <button 
                   onClick={handleLogout}
