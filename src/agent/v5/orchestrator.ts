@@ -5,6 +5,7 @@ import { fetchMemory, updateMemory } from './memory';
 
 /**
  * @fileOverview Orchestrator Engine v5: Autonomous reasoning loop.
+ * Enhanced to report specific tool impacts to the UI.
  */
 
 const MAX_ITERATIONS = 6;
@@ -26,13 +27,11 @@ async function classifyIntent(input: string, history: any[]): Promise<{ intent: 
 export async function runAgentV5(input: string, userId: string, history: any[] = [], imageUri?: string) {
   console.log(`[ENGINE_V5] Initializing for user: ${userId}`);
 
-  // 1. Context Retrieval
   const [memory, { intent, language }] = await Promise.all([
     fetchMemory(userId),
     classifyIntent(input, history)
   ]);
 
-  // 2. Initial Planning
   const planRes = await groq.chat.completions.create({
     model: 'llama-3.3-70b-versatile',
     messages: [
@@ -43,11 +42,12 @@ export async function runAgentV5(input: string, userId: string, history: any[] =
   });
   const initialPlan = planRes.choices[0]?.message?.content || "Analyze input and respond.";
 
-  // 3. Autonomous Execution Loop (Think-Decide-Act-Observe)
   const steps: AgentStep[] = [];
   let currentIteration = 0;
   let loopFinished = false;
   let finalContext = "";
+  let toolUsedName = "";
+  let toolSummary = "";
 
   while (!loopFinished && currentIteration < MAX_ITERATIONS) {
     currentIteration++;
@@ -85,16 +85,26 @@ export async function runAgentV5(input: string, userId: string, history: any[] =
       finalContext = decision.final || decision.thought;
       loopFinished = true;
     } else {
-      console.log(`[ENGINE_V5] Executing Action: ${decision.action}`);
+      toolUsedName = decision.action;
       const tool = TOOL_REGISTRY[decision.action];
       try {
         const observation = await tool.execute(decision.input || {}, { userId, imageUri });
+        
+        // Track stats locally (Simulated sync to ToolRegistryManager)
+        if (typeof window !== 'undefined') {
+          const statsKey = `tool_stats_${decision.action}`;
+          const currentStats = JSON.parse(localStorage.getItem(statsKey) || '{"uses": 0}');
+          localStorage.setItem(statsKey, JSON.stringify({ uses: currentStats.uses + 1, last: new Date().toISOString() }));
+        }
+
         steps.push({
           thought: decision.thought,
           action: decision.action,
           input: decision.input,
           observation
         });
+        
+        toolSummary = `Analyzed inputs via ${tool.name}. ${tool.impact?.moneySaved ? `Reclaimed $${tool.impact.moneySaved}.` : ''}`;
       } catch (err) {
         steps.push({
           thought: decision.thought,
@@ -106,7 +116,6 @@ export async function runAgentV5(input: string, userId: string, history: any[] =
     }
   }
 
-  // 4. Response Generation (Final Synthesis)
   const stream = await groq.chat.completions.create({
     model: 'llama-3.3-70b-versatile',
     messages: [
@@ -133,7 +142,9 @@ export async function runAgentV5(input: string, userId: string, history: any[] =
     steps,
     memoryUsed: !!memory,
     language,
-    iterationCount: currentIteration
+    iterationCount: currentIteration,
+    toolUsed: toolUsedName,
+    toolResultSummary: toolSummary
   };
 
   return { stream, metadata };

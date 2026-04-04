@@ -16,6 +16,10 @@ export interface ToolDefinition {
   description: string;
   inputSchema: any;
   execute: (input: any, context: any) => Promise<any>;
+  impact?: {
+    moneySaved?: number;
+    timeSavedMinutes?: number;
+  };
 }
 
 export interface AgentMetadata {
@@ -25,6 +29,8 @@ export interface AgentMetadata {
   memoryUsed: boolean;
   language: string;
   iterationCount: number;
+  toolUsed?: string;
+  toolResultSummary?: string;
 }
 
 export interface Decision {

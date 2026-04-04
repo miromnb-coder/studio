@@ -10,7 +10,11 @@ import {
   Cpu,
   ArrowRight,
   Terminal,
-  Loader2
+  Loader2,
+  Zap,
+  Activity,
+  CheckCircle2,
+  Sparkles
 } from 'lucide-react';
 import { useFirestore, useUser, addDocumentNonBlocking, useCollection, useMemoFirebase } from '@/firebase';
 import { collection, serverTimestamp, doc, query, orderBy, setDoc } from 'firebase/firestore';
@@ -22,6 +26,7 @@ import { useToast } from '@/hooks/use-toast';
 export default function ChatPage() {
   const [input, setInput] = useState('');
   const [isProcessing, setIsProcessing] = useState(false);
+  const [agentMetadata, setAgentMetadata] = useState<any>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
   
   const { user, isUserLoading } = useUser();
@@ -63,6 +68,7 @@ export default function ChatPage() {
     
     setInput('');
     setIsProcessing(true);
+    setAgentMetadata(null);
 
     try {
       const response = await fetch('/api/agent', {
@@ -79,14 +85,19 @@ export default function ChatPage() {
         const { done, value } = await reader!.read();
         if (done) break;
         const chunk = decoder.decode(value);
-        if (chunk.startsWith("__METADATA__:")) continue;
+        if (chunk.startsWith("__METADATA__:")) {
+          const meta = JSON.parse(chunk.replace("__METADATA__:", ""));
+          setAgentMetadata(meta);
+          continue;
+        }
         fullContent += chunk;
       }
 
       addDocumentNonBlocking(collection(db, 'users', user.uid, 'conversations', activeId, 'messages'), {
         role: 'assistant',
         content: fullContent,
-        timestamp: serverTimestamp()
+        timestamp: serverTimestamp(),
+        metadata: agentMetadata
       });
     } catch (err) {
       toast({ variant: 'destructive', title: "Sync Interrupted", description: "Re-establishing link with intelligence core." });
@@ -102,18 +113,39 @@ export default function ChatPage() {
           {(messages || []).length > 0 ? (
             messages!.map((msg, idx) => (
               <motion.div 
-                key={msg.id} 
+                key={msg.id || idx} 
                 initial={{ opacity: 0, y: 10 }} 
                 animate={{ opacity: 1, y: 0 }}
-                className={cn("flex w-full", msg.role === 'user' ? "justify-end" : "justify-start")}
+                className={cn("flex w-full flex-col", msg.role === 'user' ? "items-end" : "items-start")}
               >
-                <div className={cn("max-w-[85%] space-y-2", msg.role === 'user' ? "items-end text-right" : "items-start text-left")}>
-                  {msg.role === 'assistant' && <StatusDot status="active" />}
+                <div className={cn("max-w-[85%] space-y-4", msg.role === 'user' ? "items-end text-right" : "items-start text-left")}>
+                  {msg.role === 'assistant' && (
+                    <div className="flex items-center gap-3 mb-2 px-2">
+                      <StatusDot status="active" />
+                      <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Operator Engine V5.2</span>
+                    </div>
+                  )}
+                  
+                  {/* Tool Activity Notification */}
+                  {msg.metadata?.toolUsed && (
+                    <motion.div 
+                      initial={{ opacity: 0, scale: 0.95 }}
+                      animate={{ opacity: 1, scale: 1 }}
+                      className="px-4 py-2 bg-primary/5 border border-primary/10 rounded-2xl flex items-center gap-3 text-[10px] font-bold text-primary uppercase tracking-widest"
+                    >
+                      <Activity className="w-3.5 h-3.5 animate-pulse" />
+                      Executed Tool: {msg.metadata.toolUsed}
+                      <span className="text-slate-300">•</span>
+                      <Sparkles className="w-3 h-3" />
+                      {msg.metadata.toolResultSummary || 'Optimized parameters.'}
+                    </motion.div>
+                  )}
+
                   <div className={cn(
-                    "p-6 rounded-4xl text-sm font-medium leading-relaxed",
+                    "p-8 rounded-[2.5rem] text-sm font-medium leading-relaxed shadow-sm",
                     msg.role === 'user' 
-                      ? "bg-primary text-white shadow-glow" 
-                      : "glass-surface text-slate-700"
+                      ? "bg-slate-900 text-white" 
+                      : "glass-surface text-slate-700 border-white/60"
                   )}>
                     {msg.content}
                   </div>
@@ -122,30 +154,34 @@ export default function ChatPage() {
             ))
           ) : (
             <div className="flex flex-col items-center justify-center py-20 text-center space-y-8">
-              <div className="w-20 h-20 rounded-[2.5rem] bg-white border border-slate-100 flex items-center justify-center shadow-sm">
+              <div className="w-24 h-24 rounded-[3rem] bg-white border border-slate-100 flex items-center justify-center shadow-xl">
                 <Terminal className="w-10 h-10 text-slate-200" />
               </div>
               <div className="space-y-2">
-                <h2 className="text-4xl font-bold tracking-tighter text-slate-900">Intelligence Briefing</h2>
-                <p className="text-xs font-bold text-slate-400 uppercase tracking-[0.4em]">Autonomous Reasoning Active</p>
+                <h2 className="text-5xl font-bold tracking-tighter text-slate-900 leading-none">Command Center</h2>
+                <p className="text-xs font-bold text-slate-400 uppercase tracking-[0.4em]">Autonomous Logic Loops Active</p>
               </div>
             </div>
           )}
+          
           {isProcessing && (
-            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="flex justify-start">
-              <div className="p-6 rounded-4xl glass-surface flex items-center gap-3">
+            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="flex flex-col items-start gap-4">
+              <div className="flex items-center gap-3 px-2">
                 <Loader2 className="w-4 h-4 text-primary animate-spin" />
-                <span className="text-xs font-bold text-slate-400 uppercase tracking-widest">Processing...</span>
+                <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Reasoning...</span>
+              </div>
+              <div className="p-8 rounded-[2.5rem] glass-surface border-white/60 animate-shimmer min-w-[200px]">
+                <div className="h-4 bg-slate-100 rounded-full w-24 mb-4" />
+                <div className="h-4 bg-slate-100 rounded-full w-48" />
               </div>
             </motion.div>
           )}
         </AnimatePresence>
       </div>
 
-      {/* Pill-shaped Floating Input */}
       <div className="fixed bottom-10 left-1/2 -translate-x-1/2 w-full max-w-2xl px-6">
-        <GlassCard className="!p-2 rounded-full flex items-center gap-2 shadow-xl border-white/60">
-          <button className="w-12 h-12 rounded-full flex items-center justify-center text-slate-400 hover:bg-slate-50 transition-all">
+        <GlassCard className="!p-2 rounded-full flex items-center gap-2 shadow-[0_32px_64px_-16px_rgba(0,0,0,0.12)] border-white/80">
+          <button className="w-12 h-12 rounded-full flex items-center justify-center text-slate-400 hover:bg-slate-50 transition-all active:scale-95">
             <ImageIcon className="w-5 h-5" />
           </button>
           <input 
@@ -157,7 +193,7 @@ export default function ChatPage() {
           />
           <GlassButton 
             size="sm" 
-            className="!rounded-full !w-12 !h-12 !p-0"
+            className="!rounded-full !w-12 !h-12 !p-0 shadow-lg shadow-primary/20"
             onClick={sendMessage}
             loading={isProcessing}
           >

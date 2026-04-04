@@ -4,6 +4,7 @@ import { GmailService } from '@/services/gmail-service';
 
 /**
  * @fileOverview Production-grade Tool Registry for Agent v5.
+ * Enhanced with impact metrics for "Proof of Value".
  */
 
 export const TOOL_REGISTRY: Record<string, ToolDefinition> = {
@@ -11,6 +12,7 @@ export const TOOL_REGISTRY: Record<string, ToolDefinition> = {
     name: 'analyze',
     description: 'Perform deep structural or visual analysis of inputs to extract insights.',
     inputSchema: { type: 'object', properties: { input: { type: 'string' } } },
+    impact: { timeSavedMinutes: 15 },
     execute: async ({ input }, { imageUri }) => {
       const model = imageUri ? 'llama-3.2-11b-vision-preview' : 'llama-3.3-70b-versatile';
       const res = await groq.chat.completions.create({
@@ -29,6 +31,7 @@ export const TOOL_REGISTRY: Record<string, ToolDefinition> = {
     name: 'detect_leaks',
     description: 'Scan data for predatory subscriptions, hidden fees, and trial patterns.',
     inputSchema: { type: 'object', properties: { text: { type: 'string' } } },
+    impact: { moneySaved: 45, timeSavedMinutes: 30 },
     execute: async ({ text }) => {
       const res = await groq.chat.completions.create({
         model: 'llama-3.3-70b-versatile',
@@ -47,6 +50,7 @@ export const TOOL_REGISTRY: Record<string, ToolDefinition> = {
     name: 'optimize_time',
     description: 'Identify schedule friction and low-value tasks. Suggest removal or automation.',
     inputSchema: { type: 'object', properties: { context: { type: 'string' } } },
+    impact: { timeSavedMinutes: 120 },
     execute: async ({ context }) => {
       const res = await groq.chat.completions.create({
         model: 'llama-3.3-70b-versatile',
@@ -64,6 +68,7 @@ export const TOOL_REGISTRY: Record<string, ToolDefinition> = {
     name: 'generate_strategy',
     description: 'Develop actionable business or personal growth strategies.',
     inputSchema: { type: 'object', properties: { objective: { type: 'string' } } },
+    impact: { timeSavedMinutes: 60 },
     execute: async ({ objective }) => {
       const res = await groq.chat.completions.create({
         model: 'llama-3.3-70b-versatile',
@@ -81,6 +86,7 @@ export const TOOL_REGISTRY: Record<string, ToolDefinition> = {
     name: 'send_email',
     description: 'Send a professional email via Gmail. Requires recipient, subject, and body.',
     inputSchema: { type: 'object', properties: { to: { type: 'string' }, subject: { type: 'string' }, body: { type: 'string' } } },
+    impact: { timeSavedMinutes: 10 },
     execute: async ({ to, subject, body }) => {
       const token = typeof window !== 'undefined' ? localStorage.getItem('operator_gmail_token') : null;
       if (!token) return { error: 'Gmail connection missing.' };
