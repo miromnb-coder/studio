@@ -9,7 +9,8 @@ import {
   Settings,
   Zap,
   ArrowRight,
-  Home
+  Home,
+  Cpu
 } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { cn } from '@/lib/utils';
@@ -20,7 +21,7 @@ const NAV_ITEMS = [
   { icon: LayoutDashboard, href: '/dashboard', label: 'Command Center', desc: 'Real-time telemetry' },
   { icon: History, href: '/history', label: 'Neural Memory', desc: 'Context & personalization' },
   { icon: CloudLightning, href: '/money-saver', label: 'Efficiency Autopilot', desc: 'Optimization protocols' },
-  { icon: Zap, href: '/settings', label: 'Core Integration', desc: 'Signal ingestion' },
+  { icon: Cpu, href: '/tools', label: 'Tool Marketplace', desc: 'Agent capabilities' },
   { icon: Settings, href: '/settings', label: 'System Settings', desc: 'Engine configuration' },
 ];
 
@@ -35,7 +36,7 @@ export const FloatingNavMenu = memo(({ onClose }: { onClose: () => void }) => {
         animate={{ opacity: 1 }}
         exit={{ opacity: 0 }}
         onClick={onClose}
-        className="fixed inset-0 z-[140] bg-slate-900/5 backdrop-blur-sm"
+        className="fixed inset-0 z-[140] bg-slate-900/5 backdrop-blur-sm pointer-events-auto"
       />
       
       <motion.div
@@ -43,9 +44,9 @@ export const FloatingNavMenu = memo(({ onClose }: { onClose: () => void }) => {
         animate={{ opacity: 1, y: 0, scale: 1 }}
         exit={{ opacity: 0, y: -20, scale: 0.95 }}
         transition={{ duration: 0.2, ease: [0.4, 0, 0.2, 1] }}
-        className="fixed top-24 left-1/2 -translate-x-1/2 z-[150] w-[calc(100%-3rem)] max-w-2xl pointer-events-auto"
+        className="fixed top-24 left-1/2 -translate-x-1/2 z-[150] w-[calc(100%-3rem)] max-w-2xl pointer-events-none"
       >
-        <div className="glass-panel p-4 rounded-[2.5rem] border-white/80 shadow-[0_32px_64px_-16px_rgba(0,0,0,0.1)] overflow-hidden">
+        <div className="glass-panel p-4 rounded-[2.5rem] border-white/80 shadow-[0_32px_64px_-16px_rgba(0,0,0,0.1)] overflow-hidden pointer-events-auto">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
             {NAV_ITEMS.map((item) => {
               const isActive = pathname === item.href;
