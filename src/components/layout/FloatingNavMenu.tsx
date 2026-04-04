@@ -44,9 +44,9 @@ export const FloatingNavMenu = memo(({ onClose }: { onClose: () => void }) => {
         animate={{ opacity: 1, y: 0, scale: 1 }}
         exit={{ opacity: 0, y: -20, scale: 0.95 }}
         transition={{ duration: 0.3, ease: [0.4, 0, 0.2, 1] }}
-        className="fixed top-24 left-1/2 -translate-x-1/2 z-[200] w-[calc(100%-2rem)] max-w-2xl pointer-events-none"
+        className="fixed top-24 inset-x-4 md:left-1/2 md:right-auto md:-translate-x-1/2 z-[200] md:w-full md:max-w-2xl pointer-events-none"
       >
-        <div className="glass-panel p-4 rounded-[2.5rem] border-white/80 shadow-[0_32px_64px_-16px_rgba(0,0,0,0.2)] overflow-y-auto max-h-[75vh] pointer-events-auto stealth-scrollbar ring-1 ring-white/40">
+        <div className="glass-panel p-3 md:p-4 rounded-[2.5rem] border-white/80 shadow-[0_32px_64px_-16px_rgba(0,0,0,0.2)] overflow-y-auto max-h-[75vh] pointer-events-auto stealth-scrollbar ring-1 ring-white/40">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
             {NAV_ITEMS.map((item) => {
               const isActive = pathname === item.href;
@@ -63,20 +63,20 @@ export const FloatingNavMenu = memo(({ onClose }: { onClose: () => void }) => {
                   )}
                 >
                   <div className={cn(
-                    "w-12 h-12 rounded-2xl flex items-center justify-center transition-all",
+                    "w-12 h-12 rounded-2xl flex items-center justify-center transition-all shrink-0",
                     isActive ? "bg-white/20" : "bg-slate-100 group-hover:bg-white shadow-sm"
                   )}>
                     <item.icon className={cn("w-5 h-5", isActive ? "text-white" : "text-slate-400 group-hover:text-primary")} />
                   </div>
                   <div className="flex-1 min-w-0">
-                    <p className="text-xs font-bold uppercase tracking-widest">{item.label}</p>
+                    <p className="text-xs font-bold uppercase tracking-widest truncate">{item.label}</p>
                     <p className={cn(
                       "text-[10px] font-medium opacity-60 truncate",
                       isActive ? "text-white" : "text-slate-400"
                     )}>{item.desc}</p>
                   </div>
                   <ArrowRight className={cn(
-                    "w-4 h-4 opacity-0 -translate-x-2 transition-all",
+                    "w-4 h-4 opacity-0 -translate-x-2 transition-all shrink-0",
                     isActive ? "opacity-40" : "group-hover:opacity-40 group-hover:translate-x-0"
                   )} />
                 </Link>
