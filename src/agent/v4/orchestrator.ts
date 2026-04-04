@@ -3,7 +3,8 @@ import { createPlan } from './planner';
 import { executeTools } from './tools';
 import { evaluateReasoning } from './critic';
 import { generateStreamResponse } from './generator';
-import { fetchMemory } from './memory';
+import { initializeFirebase } from '@/firebase';
+import { getLongTermMemory } from '@/data/firestore';
 import { AgentContext } from './types';
 
 /**
@@ -20,6 +21,17 @@ async function checkFastPath(input: string): Promise<string | null> {
   return null;
 }
 
+
+async function fetchMemoryForUser(userId: string) {
+  const { firestore } = initializeFirebase();
+  if (!firestore || !userId) return null;
+
+  try {
+    return await getLongTermMemory(firestore, userId);
+  } catch {
+    return null;
+  }
+}
 export async function runAgentV4Stream(input: string, userId: string, history: any[] = [], imageUri?: string) {
   console.log(`[AGENT_V4.2] Processing: "${input.slice(0, 50)}..."`);
 
@@ -35,7 +47,7 @@ export async function runAgentV4Stream(input: string, userId: string, history: a
 
   // 2. Intent Routing & Memory Retrieval
   const [memory, { intent, language }] = await Promise.all([
-    fetchMemory(userId),
+    fetchMemoryForUser(userId),
     routeIntent(input, history)
   ]);
 

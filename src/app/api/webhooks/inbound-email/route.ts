@@ -3,8 +3,8 @@ export const runtime = 'nodejs';
 
 import { NextRequest, NextResponse } from 'next/server';
 import { initializeFirebase } from '@/firebase';
-import { collection, query, where, getDocs, addDoc, serverTimestamp } from 'firebase/firestore';
 import { runAgent } from '@/agent/agent';
+import { createAnalysis, createInboundEmail, findUserIdByInboundEmail } from '@/data/firestore';
 
 /**
  * @fileOverview Inbound Email Webhook Handler.
@@ -25,31 +25,23 @@ export async function POST(req: NextRequest) {
     const { firestore } = initializeFirebase();
     if (!firestore) throw new Error("Firestore not initialized.");
 
-    // Find UserProfile by magic forwarding address
-    const usersRef = collection(firestore, 'users');
-    const q = query(usersRef, where('inboundEmailAddress', '==', toAddress));
-    const querySnapshot = await getDocs(q);
+    const userId = await findUserIdByInboundEmail(firestore, toAddress);
+    if (!userId) return NextResponse.json({ error: 'User not found' }, { status: 404 });
 
-    if (querySnapshot.empty) return NextResponse.json({ error: 'User not found' }, { status: 404 });
-
-    const userId = querySnapshot.docs[0].id;
-
-    // Log the ingestion
-    await addDoc(collection(firestore, 'users', userId, 'inbox'), {
+    await createInboundEmail(firestore, userId, {
       userId,
       subject,
       body,
       from: fromAddress,
+      toAddress,
       receivedAt: new Date().toISOString(),
-      createdAt: serverTimestamp(),
     });
 
     // Execute Agent v3 Pipeline
     console.log(`WEBHOOK_INGEST: Processing email from ${fromAddress}...`);
     const agentResult = await runAgent(`Email Audit Request: Subject: ${subject}\n\nContent: ${body}`);
 
-    // Store the analysis
-    await addDoc(collection(firestore, 'users', userId, 'analyses'), {
+    await createAnalysis(firestore, userId, {
       userId,
       source: 'email',
       title: agentResult.data?.title || subject,
@@ -59,7 +51,6 @@ export async function POST(req: NextRequest) {
       status: 'completed',
       inputMethod: 'email',
       inputContent: body,
-      createdAt: serverTimestamp(),
     });
 
     return NextResponse.json({ 
