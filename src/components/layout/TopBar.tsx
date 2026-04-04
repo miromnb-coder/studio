@@ -15,7 +15,6 @@ import { useRouter } from 'next/navigation';
 import { SubscriptionService } from '@/services/subscription-service';
 import { cn } from '@/lib/utils';
 import { Progress } from '@/components/ui/progress';
-import { GlassButton } from '@/components/ui/GlassButton';
 import { UpgradeButton } from '@/components/upgrade/UpgradeButton';
 
 export function TopBar() {
@@ -56,8 +55,9 @@ export function TopBar() {
     return (analyses || []).reduce((acc, a) => acc + (a.estimatedMonthlySavings || 0), 0);
   }, [analyses]);
 
+  // Default to showing free/upgrade until premium is confirmed
+  const isPremium = status?.plan === 'PREMIUM';
   const usagePercent = status ? (status.usage.agentRuns / status.usage.limit) * 100 : 0;
-  const isFree = status?.plan === 'FREE';
 
   return (
     <>
@@ -92,7 +92,9 @@ export function TopBar() {
             
             <div className="hidden lg:flex flex-col">
               <span className="text-[10px] font-bold tracking-tighter text-slate-900 leading-none">OPERATOR</span>
-              <span className="text-[8px] font-black text-primary uppercase tracking-[0.2em] mt-0.5">{status?.plan === 'PREMIUM' ? 'ULTRA CLEARANCE' : 'V5.6 CORE'}</span>
+              <span className="text-[8px] font-black text-primary uppercase tracking-[0.2em] mt-0.5">
+                {isPremium ? 'ULTRA CLEARANCE' : 'V5.6 CORE'}
+              </span>
             </div>
           </div>
 
@@ -123,14 +125,14 @@ export function TopBar() {
               </motion.div>
             </div>
 
-            {/* Central Usage & Status Pill (Only for Free) */}
-            {isFree && (
-              <div className="flex items-center gap-2 md:gap-4 bg-slate-50/80 border border-slate-200/50 rounded-full pl-3 pr-1 py-1 h-10 md:h-11 shadow-inner max-w-fit">
+            {/* Central Usage & Status Pill (Only for Free/Loading) */}
+            {!isPremium && (
+              <div className="flex items-center gap-2 md:gap-4 bg-slate-50/80 border border-slate-200/50 rounded-full pl-3 pr-1 py-1 h-10 md:h-11 shadow-inner max-w-fit pointer-events-auto">
                 {status && (
                   <div className="hidden xs:flex flex-col w-12 md:w-16 gap-1 mr-1">
                     <Progress value={usagePercent} className="h-1 bg-slate-200" />
                     <span className="text-[7px] font-black text-slate-400 uppercase tracking-widest leading-none truncate">
-                      Quota {status.usage.agentRuns}/{status.usage.limit}
+                      {status.usage.agentRuns}/{status.usage.limit}
                     </span>
                   </div>
                 )}
@@ -191,18 +193,17 @@ export function TopBar() {
                 <div className="p-3 border-b border-slate-100/60 mb-1">
                   <p className="text-xs font-bold text-slate-900 truncate">{user?.displayName || 'Active Operator'}</p>
                   <p className="text-[9px] font-bold text-primary uppercase tracking-widest mt-0.5">
-                    {status?.plan === 'PREMIUM' ? 'Ultra Clearance' : 'Free Access'}
+                    {isPremium ? 'Ultra Clearance' : 'Free Access'}
                   </p>
                 </div>
-                {isFree && (
-                  <Link href="/upgrade">
-                    <button 
-                      className="w-full flex items-center gap-3 p-3 text-primary hover:bg-primary/5 rounded-2xl transition-all text-xs font-bold"
-                    >
-                      <Star className="w-4 h-4 fill-primary" />
-                      Upgrade to Ultra
-                    </button>
-                  </Link>
+                {!isPremium && (
+                  <button 
+                    onClick={() => router.push('/upgrade')}
+                    className="w-full flex items-center gap-3 p-3 text-primary hover:bg-primary/5 rounded-2xl transition-all text-xs font-bold"
+                  >
+                    <Star className="w-4 h-4 fill-primary" />
+                    Upgrade to Ultra
+                  </button>
                 )}
                 <button 
                   onClick={() => router.push('/settings')}

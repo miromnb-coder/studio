@@ -1,3 +1,4 @@
+
 'use client';
 
 import { useEffect } from 'react';
@@ -14,7 +15,11 @@ export function AuthGuard({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
 
   useEffect(() => {
-    if (!isUserLoading && !user && pathname !== '/login' && pathname !== '/') {
+    // Allow '/' (Landing), '/login', and '/upgrade' without forcing login immediately
+    // although upgrade page normally needs login, we don't want a crash if visited during transition
+    const isPublicPath = pathname === '/login' || pathname === '/' || pathname === '/upgrade';
+    
+    if (!isUserLoading && !user && !isPublicPath) {
       router.push('/login');
     }
   }, [user, isUserLoading, router, pathname]);
