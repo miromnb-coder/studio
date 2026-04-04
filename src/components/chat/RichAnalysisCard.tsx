@@ -14,7 +14,9 @@ import {
   ShieldCheck,
   BrainCircuit,
   ArrowRight,
-  Activity
+  Activity,
+  Target,
+  Terminal
 } from 'lucide-react';
 import { useState } from 'react';
 import { cn } from '@/lib/utils';
@@ -50,120 +52,104 @@ export function RichAnalysisCard({ data }: RichAnalysisCardProps) {
 
   return (
     <motion.div 
-      initial={{ opacity: 0, y: 20 }}
+      initial={{ opacity: 0, y: 10 }}
       animate={{ opacity: 1, y: 0 }}
-      className="grid gap-6 mt-6 w-full text-left"
+      className="grid gap-4 mt-4 w-full text-left"
     >
       {/* Intelligence Briefing Card */}
-      <Card className="premium-card bg-primary/10 border-primary/20 p-10 space-y-6">
+      <Card className="bg-stealth-onyx border-l-4 border-primary p-8 space-y-6">
         <div className="flex justify-between items-start gap-6">
-          <div className="space-y-2">
+          <div className="space-y-1">
             <div className="flex items-center gap-2">
-              <span className="w-2 h-2 rounded-full bg-primary animate-pulse" />
-              <p className="text-[10px] font-bold uppercase tracking-[0.3em] text-primary">Intelligence Briefing</p>
+              <Target className="w-3 h-3 text-primary animate-glow-pulse" />
+              <p className="text-[10px] font-bold uppercase tracking-[0.3em] text-primary glow-text">Intel_Strategic_Objective</p>
             </div>
-            <h3 className="text-4xl font-bold font-headline text-white tracking-tighter">
-              Operational Strategy
+            <h3 className="text-2xl font-bold uppercase tracking-tighter text-white">
+              Tactical_Extraction_Plan
             </h3>
           </div>
-          <div className="w-14 h-14 rounded-[1.5rem] bg-primary/20 flex items-center justify-center text-primary">
-            <BrainCircuit className="w-7 h-7" />
-          </div>
+          <Terminal className="w-6 h-6 text-primary/50" />
         </div>
         
-        <div className="p-6 rounded-[1.5rem] bg-white/[0.03] border-l-4 border-primary/50">
-          <p className="text-base font-medium text-white/90 leading-relaxed italic">
-            "{data.strategy || 'Strategizing optimized outcome...'}"
+        <div className="p-4 bg-stealth-ebon border border-stealth-slate border-l-2 border-l-primary">
+          <p className="text-xs font-bold text-foreground/90 leading-relaxed uppercase">
+            "{data.strategy || 'Calculating_Optimal_Response_Vector...'}"
           </p>
         </div>
 
-        <div className="grid grid-cols-2 gap-8 pt-6 border-t border-white/5">
+        <div className="grid grid-cols-2 gap-4 pt-4 border-t border-stealth-slate">
           <div className="space-y-1">
-            <p className="text-[9px] font-bold uppercase tracking-widest text-muted-foreground">Annual Impact</p>
-            <p className="text-3xl font-bold text-success font-headline tracking-tighter">${(savingsEstimate * 12).toFixed(0)}</p>
+            <p className="text-[8px] font-bold uppercase tracking-widest text-muted-foreground">Annual_Impact_Projection</p>
+            <p className="text-xl font-bold text-success tracking-tighter">${(savingsEstimate * 12).toFixed(0)}</p>
           </div>
           <div className="text-right space-y-1">
-            <p className="text-[9px] font-bold uppercase tracking-widest text-muted-foreground">Monthly Liquidity</p>
-            <p className="text-3xl font-bold text-primary font-headline tracking-tighter">+${savingsEstimate.toFixed(0)}</p>
+            <p className="text-[8px] font-bold uppercase tracking-widest text-muted-foreground">Monthly_Delta_Shift</p>
+            <p className="text-xl font-bold text-primary tracking-tighter glow-text">+${savingsEstimate.toFixed(0)}</p>
           </div>
         </div>
       </Card>
 
       {/* Comparison Protocol */}
       {data.beforeAfterComparison && (
-        <div className="grid md:grid-cols-2 gap-6">
-          <Card className="premium-card !p-6 bg-white/[0.02] border-white/5 space-y-4">
-            <div className="flex items-center gap-2">
-              <div className="w-1.5 h-1.5 rounded-full bg-muted-foreground/30" />
-              <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">Legacy State</p>
-            </div>
-            <p className="text-sm font-medium italic opacity-60 leading-relaxed">"{data.beforeAfterComparison.currentSituation || 'Current protocol.'}"</p>
+        <div className="grid md:grid-cols-2 gap-4">
+          <Card className="p-4 bg-stealth-onyx border border-stealth-slate space-y-2">
+            <p className="text-[8px] font-bold uppercase tracking-widest text-muted-foreground">Legacy_Operational_State</p>
+            <p className="text-[10px] font-bold uppercase opacity-50 leading-relaxed italic">"{data.beforeAfterComparison.currentSituation || 'In_Situ_Data.'}"</p>
           </Card>
-          <Card className="premium-card !p-6 bg-success/5 border-success/10 space-y-4">
-            <div className="flex items-center gap-2">
-              <div className="w-1.5 h-1.5 rounded-full bg-success animate-pulse" />
-              <p className="text-[10px] font-bold uppercase tracking-widest text-success">Optimized Target</p>
-            </div>
-            <p className="text-sm font-medium text-success/80 leading-relaxed">"{data.beforeAfterComparison.optimizedSituation || 'Target state.'}"</p>
+          <Card className="p-4 bg-stealth-onyx border border-primary/30 space-y-2">
+            <p className="text-[8px] font-bold uppercase tracking-widest text-primary">Target_Extraction_State</p>
+            <p className="text-[10px] font-bold uppercase text-primary/80 leading-relaxed">"{data.beforeAfterComparison.optimizedSituation || 'Final_Objective.'}"</p>
           </Card>
         </div>
       )}
 
       {/* Observation Ledger */}
       {detectedItems.length > 0 && (
-        <div className="space-y-4">
+        <div className="space-y-2">
           <div className="flex items-center justify-between px-2">
-            <div className="flex items-center gap-3">
-              <ShieldCheck className="w-4 h-4 text-muted-foreground" />
-              <h4 className="text-[10px] font-bold uppercase tracking-[0.4em] text-muted-foreground">Observation Ledger</h4>
-            </div>
-            <Badge variant="outline" className="border-white/5 text-[9px] opacity-40">{detectedItems.length} Markers</Badge>
+            <p className="text-[9px] font-bold uppercase tracking-[0.4em] text-muted-foreground">Observation_Ledger</p>
+            <Badge className="bg-stealth-slate text-muted-foreground border-0 text-[8px] font-bold uppercase">{detectedItems.length}_Anomalies</Badge>
           </div>
           
-          <div className="grid gap-4">
+          <div className="grid gap-2">
             {detectedItems.map((item: any, idx: number) => (
-              <Card key={idx} className="premium-card !p-0 overflow-hidden bg-white/[0.01] border-white/5 group">
-                <div className="p-6 flex items-center justify-between gap-6">
-                  <div className="flex items-center gap-6">
-                    <div className="w-12 h-12 rounded-2xl bg-white/5 flex items-center justify-center text-muted-foreground group-hover:text-primary transition-all">
-                      <Zap className="w-5 h-5" />
+              <Card key={idx} className="p-4 bg-stealth-onyx border border-stealth-slate group hover:border-primary transition-all">
+                <div className="flex items-center justify-between gap-4">
+                  <div className="flex items-center gap-4">
+                    <div className="w-10 h-10 bg-stealth-ebon border border-stealth-slate flex items-center justify-center group-hover:border-primary transition-all">
+                      <Zap className="w-4 h-4 text-primary" />
                     </div>
                     <div className="space-y-1">
-                      <p className="text-lg font-bold tracking-tight text-white">{item.title}</p>
+                      <p className="text-xs font-bold uppercase tracking-tight text-white">{item.title}</p>
                       <div className="flex items-center gap-3">
-                        <Badge variant="outline" className="text-[8px] h-4 font-bold uppercase tracking-widest px-2 border-white/10">
+                        <Badge className="text-[7px] h-3 font-bold uppercase tracking-widest px-1.5 bg-primary/10 text-primary border border-primary/30">
                           {item.urgencyLevel || 'Standard'}
                         </Badge>
-                        <span className="text-[10px] font-bold text-success uppercase tracking-widest">Reclaim ${item.estimatedSavings || 0}</span>
+                        <span className="text-[9px] font-bold text-success uppercase tracking-widest">Reclaim_${item.estimatedSavings || 0}</span>
                       </div>
                     </div>
                   </div>
-                  <Button variant="ghost" size="icon" className="w-10 h-10 rounded-xl hover:bg-white/5 opacity-0 group-hover:opacity-100 transition-all">
-                    <ChevronRight className="w-5 h-5" />
-                  </Button>
+                  <ChevronRight className="w-4 h-4 text-muted-foreground opacity-0 group-hover:opacity-100 transition-all" />
                 </div>
                 
-                <div className="px-6 pb-6 pt-0 space-y-6">
-                  <p className="text-sm text-muted-foreground leading-relaxed italic border-l-2 border-white/10 pl-4 py-1">"{item.summary}"</p>
+                <div className="mt-4 pt-4 border-t border-stealth-slate space-y-4">
+                  <p className="text-[10px] text-muted-foreground uppercase leading-relaxed font-bold">"{item.summary}"</p>
                   
                   {item.copyableMessage && (
-                    <div className="p-5 rounded-[1.5rem] bg-black/40 border border-white/5 space-y-4">
+                    <div className="p-3 bg-stealth-ebon border-l-2 border-l-primary space-y-2">
                       <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-2 text-[10px] font-bold uppercase tracking-widest text-muted-foreground/50">
-                          <MessageSquare className="w-3.5 h-3.5" />
-                          Action Protocol
-                        </div>
+                        <p className="text-[8px] font-bold uppercase tracking-widest text-primary">Transmission_Script</p>
                         <Button 
                           variant="ghost" 
                           size="sm" 
-                          className="h-8 px-4 text-[9px] font-bold uppercase tracking-widest gap-2 hover:bg-white/10"
+                          className="h-6 px-2 text-[8px] font-bold uppercase tracking-widest gap-1 hover:bg-primary hover:text-white"
                           onClick={() => handleCopy(item.copyableMessage, `item-${idx}`)}
                         >
-                          {copiedId === `item-${idx}` ? <Check className="w-3 h-3 text-success" /> : <Copy className="w-3 h-3" />}
-                          {copiedId === `item-${idx}` ? 'Stored' : 'Copy'}
+                          {copiedId === `item-${idx}` ? <Check className="w-2.5 h-2.5" /> : <Copy className="w-2.5 h-2.5" />}
+                          {copiedId === `item-${idx}` ? 'SENT' : 'COPY'}
                         </Button>
                       </div>
-                      <p className="text-xs font-mono leading-relaxed text-muted-foreground/80 line-clamp-2">
+                      <p className="text-[9px] font-mono leading-relaxed text-muted-foreground/80 line-clamp-2 uppercase">
                         {item.copyableMessage}
                       </p>
                     </div>

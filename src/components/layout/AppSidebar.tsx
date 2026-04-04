@@ -17,7 +17,9 @@ import {
   Archive,
   Edit2,
   X,
-  Pin
+  Pin,
+  Terminal,
+  Activity
 } from 'lucide-react';
 import { 
   Sidebar, 
@@ -32,21 +34,14 @@ import {
 } from '@/components/ui/sidebar';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { 
-  DropdownMenu, 
-  DropdownMenuContent, 
-  DropdownMenuItem, 
-  DropdownMenuTrigger 
-} from '@/components/ui/dropdown-menu';
 import { useUser, useFirestore, useCollection, useMemoFirebase } from '@/firebase';
-import { collection, query, orderBy, limit, doc, updateDoc, serverTimestamp, deleteDoc } from 'firebase/firestore';
+import { collection, query, orderBy, limit, doc, deleteDoc } from 'firebase/firestore';
 import { cn } from '@/lib/utils';
 import { useToast } from '@/hooks/use-toast';
 
 export function AppSidebar() {
   const [mounted, setMounted] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
-  const [showArchived, setShowArchived] = useState(false);
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const activeId = searchParams?.get('c');
@@ -79,121 +74,101 @@ export function AppSidebar() {
     return conversations
       .filter(conv => {
         if (!conv) return false;
-        const matchesSearch = (conv.title || '').toLowerCase().includes(searchTerm.toLowerCase());
-        const matchesArchive = showArchived ? conv.isArchived : !conv.isArchived;
-        return matchesSearch && matchesArchive;
-      })
-      .sort((a, b) => {
-        if (a.isPinned && !b.isPinned) return -1;
-        if (!a.isPinned && b.isPinned) return 1;
-        return 0;
+        return (conv.title || '').toLowerCase().includes(searchTerm.toLowerCase());
       });
-  }, [conversations, searchTerm, showArchived]);
+  }, [conversations, searchTerm]);
 
   const coreItems = [
-    { icon: LayoutDashboard, href: '/dashboard', label: 'Console' },
+    { icon: Terminal, href: '/dashboard', label: 'Console' },
     { icon: History, href: '/history', label: 'Memory' },
     { icon: Zap, href: '/money-saver', label: 'Optimization' },
     { icon: Settings, href: '/settings', label: 'Systems' },
   ];
 
-  const handleDelete = async (id: string) => {
-    if (!db || !user) return;
-    if (confirm("Permanently purge this record?")) {
-      try {
-        await deleteDoc(doc(db, 'users', user.uid, 'conversations', id));
-        if (activeId === id) router.push('/');
-        toast({ title: "Record Purged" });
-      } catch (err) {
-        toast({ variant: 'destructive', title: "Purge Failed" });
-      }
-    }
-  };
-
   const isSyncing = !mounted || isLoading;
 
   return (
-    <Sidebar className="border-r border-slate-100 bg-white">
+    <Sidebar className="border-r border-stealth-slate bg-stealth-ebon">
       <SidebarHeader className="p-6">
         <Link href="/" className="flex items-center gap-3 group">
-          <div className="flex items-center justify-center w-9 h-9 rounded-2xl bg-nordic-sage text-white group-hover:scale-105 transition-transform shadow-lg shadow-nordic-sage/20">
+          <div className="flex items-center justify-center w-8 h-8 bg-primary text-white transition-all group-hover:scale-110 shadow-[0_0_10px_rgba(225,29,72,0.4)]">
             <span className="font-bold text-lg">O</span>
           </div>
-          <span className="font-bold text-lg tracking-tight text-slate-900">Operator</span>
+          <span className="font-bold text-sm tracking-widest text-primary uppercase glow-text">Operator</span>
         </Link>
       </SidebarHeader>
 
       <SidebarContent>
         <SidebarGroup>
-          <SidebarMenu className="px-2">
+          <SidebarMenu className="px-4">
             <SidebarMenuItem>
               <SidebarMenuButton 
                 onClick={() => router.push('/')}
-                className="rounded-2xl h-12 bg-nordic-sage text-white hover:bg-nordic-sage/90 transition-all px-4 group shadow-md shadow-nordic-sage/10"
+                className="h-10 bg-primary text-white hover:bg-primary/90 transition-all px-4 group flex justify-between"
               >
-                <Plus className="w-4 h-4 mr-2 text-white/80 group-hover:rotate-90 transition-transform" />
-                <span className="font-bold text-sm">New Session</span>
+                <span className="font-bold text-[10px] uppercase tracking-widest">Initial_Protocol</span>
+                <Plus className="w-3.5 h-3.5 text-white/80 group-hover:rotate-90 transition-transform" />
               </SidebarMenuButton>
             </SidebarMenuItem>
           </SidebarMenu>
         </SidebarGroup>
 
         <div className="px-4 mt-4 relative">
-          <Search className="absolute left-7 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-300" />
+          <span className="absolute left-7 top-1/2 -translate-y-1/2 text-[10px] text-primary/50">{'>'}</span>
           <Input 
-            placeholder="Search context..." 
+            placeholder="Filter_Session..." 
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
-            className="h-10 pl-10 bg-slate-50 border-transparent text-xs font-medium rounded-xl focus:bg-white focus:border-nordic-moss transition-all"
+            className="h-9 pl-10 bg-stealth-onyx border-stealth-slate text-[10px] font-bold uppercase tracking-widest focus:border-primary transition-all text-muted-foreground"
           />
         </div>
 
         <SidebarGroup className="mt-4">
-          <SidebarGroupLabel className="px-4 text-[10px] font-bold uppercase tracking-widest text-slate-400">History</SidebarGroupLabel>
+          <SidebarGroupLabel className="px-4 text-[9px] font-bold uppercase tracking-[0.3em] text-muted-foreground/50">Intelligence_Log</SidebarGroupLabel>
           <SidebarMenu className="px-2 space-y-1">
             {isSyncing ? (
-              <div className="flex justify-center py-8"><Loader2 className="w-5 h-5 text-nordic-moss animate-spin" /></div>
+              <div className="flex justify-center py-8"><Loader2 className="w-4 h-4 text-primary animate-spin" /></div>
             ) : filteredConversations.length > 0 ? (
               filteredConversations.map((conv) => (
-                <SidebarMenuItem key={conv.id} className="group/item">
+                <SidebarMenuItem key={conv.id}>
                   <SidebarMenuButton 
                     asChild 
                     isActive={activeId === conv.id}
                     className={cn(
-                      "rounded-xl h-11 transition-all px-4",
-                      activeId === conv.id ? "bg-nordic-moss/20 text-nordic-sage font-semibold" : "text-slate-500 hover:text-slate-900 hover:bg-nordic-silk"
+                      "h-9 transition-all px-4 border-l-2",
+                      activeId === conv.id ? "bg-primary/10 border-primary text-primary" : "border-transparent text-muted-foreground hover:text-primary hover:bg-stealth-onyx"
                     )}
                   >
                     <Link href={`/?c=${conv.id}`}>
                       <div className="flex items-center gap-3 truncate">
                         <MessageSquare className="w-3.5 h-3.5 shrink-0 opacity-40" />
-                        <span className="truncate">{conv.title || 'Untitled'}</span>
+                        <span className="truncate text-[10px] font-bold uppercase tracking-wider">{conv.title || 'Unknown_Session'}</span>
                       </div>
                     </Link>
                   </SidebarMenuButton>
                 </SidebarMenuItem>
               ))
             ) : (
-              <div className="px-4 py-8 text-center opacity-20 italic text-[10px]">No records found</div>
+              <div className="px-4 py-8 text-center opacity-20 italic text-[9px] uppercase">No_Records_Found</div>
             )}
           </SidebarMenu>
         </SidebarGroup>
 
-        <SidebarGroup className="mt-auto pb-4">
-          <SidebarMenu className="px-2">
+        <SidebarGroup className="mt-auto pb-4 border-t border-stealth-slate">
+          <SidebarMenu className="px-2 space-y-1">
             {coreItems.map((item) => (
               <SidebarMenuItem key={item.href}>
                 <SidebarMenuButton 
                   asChild 
                   isActive={pathname === item.href}
                   className={cn(
-                    "rounded-xl h-11 transition-all px-4",
-                    pathname === item.href ? "bg-nordic-moss/20 text-nordic-sage font-semibold" : "text-slate-500 hover:text-slate-900 hover:bg-nordic-silk"
+                    "h-9 transition-all px-4 border-l-2",
+                    pathname === item.href ? "bg-primary/10 border-primary text-primary" : "border-transparent text-muted-foreground hover:text-primary hover:bg-stealth-onyx"
                   )}
                 >
                   <Link href={item.href}>
-                    <item.icon className="w-4 h-4 mr-3 opacity-60" />
-                    <span className="text-sm">{item.label}</span>
+                    <item.icon className="w-3.5 h-3.5 mr-3 opacity-60" />
+                    <span className="text-[10px] font-bold uppercase tracking-widest">{item.label}</span>
                   </Link>
                 </SidebarMenuButton>
               </SidebarMenuItem>
@@ -202,18 +177,18 @@ export function AppSidebar() {
         </SidebarGroup>
       </SidebarContent>
 
-      <SidebarFooter className="p-4 border-t border-slate-50">
-        <div className="flex items-center gap-3 px-3 py-2 rounded-2xl hover:bg-nordic-silk transition-colors cursor-pointer group">
-          <div className="w-9 h-9 rounded-full overflow-hidden border border-slate-100 bg-slate-50">
+      <SidebarFooter className="p-4 border-t border-stealth-slate bg-stealth-ebon">
+        <div className="flex items-center gap-3 px-3 py-2 border border-stealth-slate bg-stealth-ebon hover:border-primary transition-colors cursor-pointer group">
+          <div className="w-8 h-8 overflow-hidden bg-stealth-onyx border border-stealth-slate">
             {user?.uid && mounted ? (
-              <img src={`https://picsum.photos/seed/${user.uid}/64/64`} alt="Profile" className="w-full h-full object-cover" />
+              <img src={`https://picsum.photos/seed/${user.uid}/64/64`} alt="ID" className="w-full h-full object-cover grayscale brightness-50 contrast-125" />
             ) : (
-              <div className="w-full h-full bg-slate-100" />
+              <div className="w-full h-full bg-stealth-onyx" />
             )}
           </div>
           <div className="flex-1 min-w-0">
-            <p className="text-xs font-bold text-slate-900 truncate">{user?.displayName || 'User'}</p>
-            <p className="text-[9px] font-bold text-nordic-sage uppercase tracking-widest truncate">Verified Profile</p>
+            <p className="text-[10px] font-bold text-primary truncate uppercase">{user?.displayName || 'Unknown_Agent'}</p>
+            <p className="text-[8px] font-bold text-muted-foreground uppercase tracking-widest truncate">Verified_Clearance</p>
           </div>
         </div>
       </SidebarFooter>

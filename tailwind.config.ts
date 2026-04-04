@@ -10,59 +10,76 @@ export default {
   theme: {
     extend: {
       fontFamily: {
-        body: ['Inter', 'sans-serif'],
-        headline: ['Inter', 'sans-serif'],
-        code: ['monospace'],
+        body: ['JetBrains Mono', 'monospace'],
+        headline: ['JetBrains Mono', 'monospace'],
+        mono: ['JetBrains Mono', 'monospace'],
       },
       colors: {
-        background: '#F8F9FA',
-        foreground: '#1F2937',
+        background: '#020202',
+        foreground: '#F5F5F5',
         card: {
-          DEFAULT: '#FFFFFF',
-          foreground: '#1F2937',
+          DEFAULT: '#0A0A0A',
+          foreground: '#F5F5F5',
         },
         popover: {
-          DEFAULT: '#FFFFFF',
-          foreground: '#1F2937',
+          DEFAULT: '#0A0A0A',
+          foreground: '#F5F5F5',
         },
         primary: {
-          DEFAULT: '#5B6D44',
-          foreground: '#F8F9FA',
-        },
-        secondary: {
-          DEFAULT: '#E9EDC6',
-          foreground: '#5B6D44',
-        },
-        muted: {
-          DEFAULT: '#F1F5F9',
-          foreground: '#64748B',
-        },
-        accent: {
-          DEFAULT: '#E9EDC6',
-          foreground: '#5B6D44',
-        },
-        destructive: {
-          DEFAULT: '#EF4444',
+          DEFAULT: '#E11D48',
           foreground: '#FFFFFF',
         },
-        border: '#E2E8F0',
-        input: '#FFFFFF',
-        ring: '#5B6D44',
+        secondary: {
+          DEFAULT: '#1A1A1A',
+          foreground: '#E11D48',
+        },
+        muted: {
+          DEFAULT: '#111111',
+          foreground: '#666666',
+        },
+        accent: {
+          DEFAULT: '#E11D48',
+          foreground: '#FFFFFF',
+        },
+        destructive: {
+          DEFAULT: '#991B1B',
+          foreground: '#FFFFFF',
+        },
+        border: '#1F1F1F',
+        input: '#0A0A0A',
+        ring: '#E11D48',
         success: '#10B981',
         warning: '#F59E0B',
-        danger: '#EF4444',
-        nordic: {
-          silk: '#F8F9FA',
-          sage: '#5B6D44',
-          moss: '#E9EDC6',
-          slate: '#1F2937'
+        danger: '#E11D48',
+        stealth: {
+          ebon: '#020202',
+          onyx: '#0A0A0A',
+          crimson: '#E11D48',
+          slate: '#1F1F1F'
         }
       },
       borderRadius: {
-        lg: 'var(--radius)',
-        md: 'calc(var(--radius) - 2px)',
-        sm: 'calc(var(--radius) - 4px)',
+        lg: '0px',
+        md: '0px',
+        sm: '0px',
       },
+      keyframes: {
+        'glow-pulse': {
+          '0%, 100%': { opacity: '1', filter: 'drop-shadow(0 0 2px #E11D48)' },
+          '50%': { opacity: '0.5', filter: 'drop-shadow(0 0 10px #E11D48)' },
+        },
+        'scanline': {
+          '0%': { transform: 'translateY(-100%)' },
+          '100%': { transform: 'translateY(100%)' },
+        }
+      },
+      animation: {
+        'glow-pulse': 'glow-pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite',
+        'scanline': 'scanline 8s linear infinite',
+      },
+      transitionTimingFunction: {
+        'mechanical': 'cubic-bezier(0.4, 0, 0.2, 1)',
+      }
     },
   },
   plugins: [require('tailwindcss-animate')],
