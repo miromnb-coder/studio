@@ -1,3 +1,4 @@
+
 "use client";
 
 import { useState, useRef, useEffect } from 'react';
@@ -15,7 +16,9 @@ import {
   Activity,
   CheckCircle2,
   Sparkles,
-  Hammer
+  Hammer,
+  X,
+  Plus
 } from 'lucide-react';
 import { useFirestore, useUser, addDocumentNonBlocking, useCollection, useMemoFirebase } from '@/firebase';
 import { collection, serverTimestamp, doc, query, orderBy, setDoc } from 'firebase/firestore';
@@ -28,8 +31,10 @@ export default function ChatPage() {
   const [input, setInput] = useState('');
   const [isProcessing, setIsProcessing] = useState(false);
   const [agentMetadata, setAgentMetadata] = useState<any>(null);
+  const [selectedImage, setSelectedToolImage] = useState<string | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
   
   const { user } = useUser();
   const db = useFirestore();
@@ -61,21 +66,46 @@ export default function ChatPage() {
     }
   }, [input]);
 
+  const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      const reader = new FileReader();
+      reader.onloadend = () => setSelectedToolImage(reader.result as string);
+      reader.readAsDataURL(file);
+    }
+  };
+
   const sendMessage = async () => {
-    if (!input.trim() || !user || !db) return;
+    if ((!input.trim() && !selectedImage) || !user || !db) return;
 
     let activeId = conversationId;
     if (!activeId) {
       const newRef = doc(collection(db, 'users', user.uid, 'conversations'));
       activeId = newRef.id;
-      await setDoc(newRef, { id: activeId, userId: user.uid, title: input.slice(0, 30), createdAt: serverTimestamp(), updatedAt: serverTimestamp() });
+      await setDoc(newRef, { 
+        id: activeId, 
+        userId: user.uid, 
+        title: input.slice(0, 30) || "Visual Analysis", 
+        createdAt: serverTimestamp(), 
+        updatedAt: serverTimestamp() 
+      });
       router.push(`/?c=${activeId}`);
     }
 
-    const userMsg = { role: 'user', content: input, timestamp: serverTimestamp() };
+    const userMsg = { 
+      role: 'user', 
+      content: input, 
+      imageUri: selectedImage,
+      timestamp: serverTimestamp() 
+    };
+    
     addDocumentNonBlocking(collection(db, 'users', user.uid, 'conversations', activeId, 'messages'), userMsg);
     
+    const currentInput = input;
+    const currentImage = selectedImage;
+    
     setInput('');
+    setSelectedToolImage(null);
     setIsProcessing(true);
     setAgentMetadata(null);
 
@@ -83,7 +113,12 @@ export default function ChatPage() {
       const response = await fetch('/api/agent', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ input, history: (messages || []).map(m => ({ role: m.role, content: m.content })), userId: user.uid }),
+        body: JSON.stringify({ 
+          input: currentInput, 
+          history: (messages || []).map(m => ({ role: m.role, content: m.content })), 
+          userId: user.uid,
+          imageUri: currentImage
+        }),
       });
 
       const reader = response.body?.getReader();
@@ -166,27 +201,15 @@ export default function ChatPage() {
                     </motion.div>
                   )}
 
-                  {/* Standard Tool Notification */}
-                  {msg.metadata?.toolUsed && !msg.metadata?.forgedTool && (
-                    <motion.div 
-                      initial={{ opacity: 0, scale: 0.95 }}
-                      animate={{ opacity: 1, scale: 1 }}
-                      className="px-4 py-2 bg-primary/5 border border-primary/10 rounded-2xl flex items-center gap-3 text-[10px] font-bold text-primary uppercase tracking-widest"
-                    >
-                      <Activity className="w-3.5 h-3.5 animate-pulse" />
-                      Executed: {msg.metadata.toolUsed}
-                      <span className="text-slate-300">•</span>
-                      <Sparkles className="w-3 h-3" />
-                      {msg.metadata.toolResultSummary || 'Analysis complete.'}
-                    </motion.div>
-                  )}
-
                   <div className={cn(
-                    "p-8 rounded-[2.5rem] text-sm font-medium leading-relaxed shadow-sm",
+                    "p-8 rounded-[2.5rem] text-sm font-medium leading-relaxed shadow-sm overflow-hidden",
                     msg.role === 'user' 
                       ? "bg-slate-900 text-white" 
                       : "glass-surface text-slate-700 border-white/60"
                   )}>
+                    {msg.imageUri && (
+                      <img src={msg.imageUri} alt="Uploaded source" className="max-w-full rounded-2xl mb-4 border border-white/10" />
+                    )}
                     {msg.content}
                   </div>
                 </div>
@@ -219,29 +242,87 @@ export default function ChatPage() {
         </AnimatePresence>
       </div>
 
-      <div className="fixed bottom-10 left-1/2 -translate-x-1/2 w-full max-w-2xl px-6">
-        <GlassCard className="!p-2 rounded-[2.5rem] flex items-end gap-2 shadow-[0_32px_64px_-16px_rgba(0,0,0,0.12)] border-white/80 transition-all duration-300">
-          <button className="w-12 h-12 rounded-full flex items-center justify-center text-slate-400 hover:bg-slate-50 transition-all active:scale-95 mb-0.5">
-            <ImageIcon className="w-5 h-5" />
-          </button>
-          <textarea 
-            ref={textareaRef}
-            rows={1}
-            value={input}
-            onChange={(e) => setInput(e.target.value)}
-            onKeyDown={handleKeyDown}
-            placeholder="Describe intent or ask for a new capability..."
-            className="flex-1 bg-transparent border-0 focus:ring-0 text-sm font-medium text-slate-700 placeholder:text-slate-300 resize-none py-3 min-h-[48px] max-h-[200px] stealth-scrollbar"
-          />
-          <GlassButton 
-            size="sm" 
-            className="!rounded-full !w-12 !h-12 !p-0 shadow-lg shadow-primary/20 mb-0.5 shrink-0"
-            onClick={sendMessage}
-            loading={isProcessing}
-          >
-            <ArrowRight className="w-5 h-5" />
-          </GlassButton>
-        </GlassCard>
+      <div className="fixed bottom-10 left-1/2 -translate-x-1/2 w-full max-w-2xl px-6 z-50">
+        <div className="relative group">
+          {/* Active Focus Glow */}
+          <div className="absolute -inset-1 bg-gradient-to-r from-primary/20 via-accent/20 to-primary/20 rounded-[3rem] blur-xl opacity-0 group-focus-within:opacity-100 transition-opacity duration-500 pointer-events-none" />
+          
+          <GlassCard className="!p-2 rounded-[2.5rem] flex flex-col gap-2 shadow-[0_32px_64px_-16px_rgba(0,0,0,0.12)] border-white/80 transition-all duration-300 bg-white/40 backdrop-blur-3xl relative z-10">
+            {/* Image Preview Area */}
+            <AnimatePresence>
+              {selectedImage && (
+                <motion.div 
+                  initial={{ height: 0, opacity: 0 }}
+                  animate={{ height: 'auto', opacity: 1 }}
+                  exit={{ height: 0, opacity: 0 }}
+                  className="px-4 pt-4 flex gap-4 overflow-hidden"
+                >
+                  <div className="relative w-20 h-20 rounded-2xl overflow-hidden border border-white/60 shadow-inner group/preview">
+                    <img src={selectedImage} alt="Selection" className="w-full h-full object-cover" />
+                    <button 
+                      onClick={() => setSelectedToolImage(null)}
+                      className="absolute inset-0 bg-slate-900/40 opacity-0 group-hover/preview:opacity-100 flex items-center justify-center transition-opacity"
+                    >
+                      <X className="w-5 h-5 text-white" />
+                    </button>
+                  </div>
+                </motion.div>
+              )}
+            </AnimatePresence>
+
+            <div className="flex items-end gap-2">
+              <input 
+                type="file" 
+                ref={fileInputRef} 
+                onChange={handleImageUpload} 
+                accept="image/*" 
+                className="hidden" 
+              />
+              
+              <button 
+                onClick={() => fileInputRef.current?.click()}
+                className={cn(
+                  "w-12 h-12 rounded-full flex items-center justify-center transition-all active:scale-90 mb-0.5",
+                  selectedImage ? "text-primary bg-primary/10" : "text-slate-400 hover:bg-white/60 hover:text-slate-600"
+                )}
+              >
+                <ImageIcon className="w-5 h-5" />
+              </button>
+
+              <textarea 
+                ref={textareaRef}
+                rows={1}
+                value={input}
+                onChange={(e) => setInput(e.target.value)}
+                onKeyDown={handleKeyDown}
+                placeholder={selectedImage ? "Describe this image..." : "Describe intent or ask for a new capability..."}
+                className="flex-1 bg-transparent border-0 focus:ring-0 text-sm font-medium text-slate-700 placeholder:text-slate-300 resize-none py-3 min-h-[48px] max-h-[200px] stealth-scrollbar"
+              />
+
+              <div className="flex items-center gap-2 mb-0.5 mr-0.5">
+                <AnimatePresence mode="wait">
+                  {(input.trim() || selectedImage) && (
+                    <motion.div
+                      initial={{ scale: 0, opacity: 0 }}
+                      animate={{ scale: 1, opacity: 1 }}
+                      exit={{ scale: 0, opacity: 0 }}
+                    >
+                      <GlassButton 
+                        size="sm" 
+                        className="!rounded-full !w-12 !h-12 !p-0 shadow-lg shadow-primary/20 relative overflow-hidden group/send"
+                        onClick={sendMessage}
+                        loading={isProcessing}
+                      >
+                        <div className="absolute inset-0 bg-gradient-to-tr from-white/0 via-white/20 to-white/0 translate-x-[-100%] group-hover/send:translate-x-[100%] transition-transform duration-700" />
+                        <ArrowRight className="w-5 h-5" />
+                      </GlassButton>
+                    </motion.div>
+                  )}
+                </AnimatePresence>
+              </div>
+            </div>
+          </GlassCard>
+        </div>
       </div>
     </div>
   );
