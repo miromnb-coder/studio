@@ -2,7 +2,7 @@
 
 import { useState, useCallback, useMemo, useEffect } from 'react';
 import { StatusDot } from '@/components/ui/StatusDot';
-import { Bell, User, X, Zap, LogOut, ShieldCheck, TrendingUp, Menu, Star, ArrowRight } from 'lucide-react';
+import { Bell, User, X, Zap, LogOut, ShieldCheck, TrendingUp, Menu, Star, ArrowRight, Plus, Search, Clock, Activity } from 'lucide-react';
 import { useUser, useFirestore, useCollection, useMemoFirebase } from '@/firebase';
 import { collection, query, limit } from 'firebase/firestore';
 import { FloatingNavMenu } from './FloatingNavMenu';
@@ -60,11 +60,11 @@ export function TopBar() {
 
   return (
     <>
-      <header className="fixed top-4 md:top-6 left-1/2 -translate-x-1/2 z-[150] w-[calc(100%-1rem)] md:w-[calc(100%-2rem)] max-w-5xl pointer-events-none">
-        <div className="glass-panel h-14 md:h-16 px-2 md:px-6 flex items-center justify-between rounded-full border-white/80 shadow-[0_20px_40px_-12px_rgba(0,0,0,0.15)] pointer-events-auto ring-1 ring-white/20">
+      <header className="fixed top-4 md:top-6 left-1/2 -translate-x-1/2 z-[150] w-[calc(100%-1rem)] md:w-[calc(100%-2rem)] max-w-6xl pointer-events-none">
+        <div className="glass-panel h-14 md:h-16 px-2 md:px-4 flex items-center justify-between rounded-full border-white/80 shadow-[0_20px_40px_-12px_rgba(0,0,0,0.15)] pointer-events-auto ring-1 ring-white/20 bg-white/40 backdrop-blur-3xl">
           
-          {/* Left Section: Menu & Identity */}
-          <div className="flex items-center gap-1 md:gap-4 shrink-0">
+          {/* Left Section: Menu & Quick Actions */}
+          <div className="flex items-center gap-1 md:gap-3 shrink-0">
             <motion.button 
               whileHover={{ scale: 1.05 }}
               whileTap={{ scale: 0.95 }}
@@ -72,58 +72,87 @@ export function TopBar() {
               className={cn(
                 "h-10 md:h-11 px-3 md:px-4 rounded-full flex items-center gap-2 transition-all z-[160]",
                 isMenuOpen 
-                  ? "bg-slate-900 text-white" 
+                  ? "bg-slate-900 text-white shadow-lg" 
                   : "bg-white/80 hover:bg-white text-slate-900 shadow-sm border border-slate-200/50"
               )}
             >
               {isMenuOpen ? <X className="w-4 h-4" /> : <Menu className="w-4 h-4" />}
-              <span className="text-[10px] font-black uppercase tracking-[0.1em] hidden md:block">Menu</span>
+              <span className="text-[10px] font-black uppercase tracking-[0.1em] hidden sm:block">Menu</span>
             </motion.button>
             
-            <div className="h-6 w-px bg-slate-200/40 hidden sm:block" />
+            <button 
+              onClick={() => router.push('/')}
+              className="w-10 h-10 md:w-11 md:h-11 rounded-full bg-white/60 hover:bg-white flex items-center justify-center text-slate-400 hover:text-primary transition-all border border-slate-200/50 active:scale-90"
+            >
+              <Plus className="w-4 h-4" />
+            </button>
+
+            <div className="h-6 w-px bg-slate-200/40 hidden lg:block mx-1" />
             
             <div className="hidden lg:flex flex-col">
               <span className="text-[10px] font-bold tracking-tighter text-slate-900 leading-none">OPERATOR</span>
-              <span className="text-[8px] font-black text-primary uppercase tracking-[0.2em] mt-0.5">V5.6</span>
+              <span className="text-[8px] font-black text-primary uppercase tracking-[0.2em] mt-0.5">V5.6 CORE</span>
             </div>
           </div>
 
-          {/* Center Section: Usage & Status */}
-          <div className="flex items-center gap-2 md:gap-6 px-2">
-            {isFree && status && (
-              <div className="flex items-center gap-2 md:gap-4 bg-slate-50/50 border border-slate-100 rounded-full pl-3 pr-1 py-1 h-9 md:h-11">
-                <div className="hidden sm:flex flex-col w-12 md:w-16 gap-1">
-                  <Progress value={usagePercent} className="h-1 bg-slate-200" />
-                  <span className="text-[7px] font-black text-slate-400 uppercase tracking-widest leading-none truncate">
-                    {status.usage.agentRuns}/{status.usage.limit}
-                  </span>
-                </div>
-                <UpgradeButton />
-              </div>
-            )}
-
-            {!isFree && (
+          {/* Center Section: Value Metrics & Intelligence Status */}
+          <div className="flex items-center gap-2 md:gap-4 flex-1 justify-center px-2 overflow-hidden">
+            {/* Real-time Value Metrics (Desktop/Tablet) */}
+            <div className="hidden md:flex items-center gap-2">
               <motion.div 
                 whileHover={{ scale: 1.02 }}
-                className="flex items-center gap-2 px-3 md:px-4 py-1.5 md:py-2 rounded-full bg-success/5 border border-success/10 cursor-default"
+                className="flex items-center gap-3 px-4 py-2 rounded-2xl bg-white/40 border border-white/60 shadow-sm cursor-default"
               >
-                <TrendingUp className="w-3 md:w-3.5 h-3 md:h-3.5 text-success" />
-                <span className="text-[9px] md:text-[10px] font-bold text-slate-900 truncate">${totalSaved.toFixed(0)} <span className="hidden sm:inline">SAVED</span></span>
+                <Zap className="w-3.5 h-3.5 text-primary" />
+                <div className="flex flex-col">
+                  <span className="text-[8px] font-black text-slate-400 uppercase tracking-widest leading-none mb-0.5">Saved</span>
+                  <span className="text-xs font-bold text-slate-900 leading-none">${totalSaved.toFixed(0)}</span>
+                </div>
               </motion.div>
-            )}
-            
-            <div className="hidden xs:block">
+
+              <motion.div 
+                whileHover={{ scale: 1.02 }}
+                className="flex items-center gap-3 px-4 py-2 rounded-2xl bg-white/40 border border-white/60 shadow-sm cursor-default"
+              >
+                <Clock className="w-3.5 h-3.5 text-success" />
+                <div className="flex flex-col">
+                  <span className="text-[8px] font-black text-slate-400 uppercase tracking-widest leading-none mb-0.5">Reclaimed</span>
+                  <span className="text-xs font-bold text-slate-900 leading-none">14.2h</span>
+                </div>
+              </motion.div>
+            </div>
+
+            {/* Central Usage & Status Pill */}
+            <div className="flex items-center gap-2 md:gap-4 bg-slate-50/80 border border-slate-200/50 rounded-full pl-3 pr-1 py-1 h-10 md:h-11 shadow-inner max-w-fit">
+              {isFree && status && (
+                <div className="hidden xs:flex flex-col w-12 md:w-16 gap-1 mr-1">
+                  <Progress value={usagePercent} className="h-1 bg-slate-200" />
+                  <span className="text-[7px] font-black text-slate-400 uppercase tracking-widest leading-none truncate">
+                    Quota {status.usage.agentRuns}/{status.usage.limit}
+                  </span>
+                </div>
+              )}
+              <UpgradeButton />
+            </div>
+
+            {/* Neural Link Info (Large Screens Only) */}
+            <div className="hidden xl:flex items-center gap-2 px-4 py-2 bg-success/5 border border-success/10 rounded-full">
               <StatusDot status="active" />
+              <span className="text-[9px] font-bold text-success uppercase tracking-widest">Neural Link Stable</span>
             </div>
           </div>
 
-          {/* Right Section: Notifications & Profile */}
+          {/* Right Section: Alerts, Search & Profile */}
           <div className="flex items-center gap-1 md:gap-2 shrink-0">
+            <button className="hidden sm:flex w-10 h-10 rounded-full items-center justify-center text-slate-400 hover:bg-white/60 transition-all active:scale-90">
+              <Search className="w-4 h-4" />
+            </button>
+
             <Popover>
               <PopoverTrigger asChild>
-                <button className="w-9 md:w-10 h-9 md:h-10 rounded-full flex items-center justify-center text-slate-400 hover:bg-white/60 transition-all relative active:scale-90">
+                <button className="w-10 h-10 rounded-full flex items-center justify-center text-slate-400 hover:bg-white/60 transition-all relative active:scale-90">
                   <Bell className="w-4 h-4" />
-                  <span className="absolute top-2.5 md:top-3 right-2.5 md:right-3 w-1.5 h-1.5 bg-primary rounded-full border-2 border-white" />
+                  <span className="absolute top-3 right-3 w-1.5 h-1.5 bg-primary rounded-full border-2 border-white" />
                 </button>
               </PopoverTrigger>
               <PopoverContent className="w-72 md:w-80 glass-panel p-4 shadow-xl mt-4 rounded-[2rem] border-white/60" align="end">
@@ -147,7 +176,7 @@ export function TopBar() {
 
             <Popover>
               <PopoverTrigger asChild>
-                <button className="w-9 md:w-10 h-9 md:h-10 rounded-full overflow-hidden border-2 border-white shadow-sm ring-1 ring-slate-100 active:scale-90 transition-transform">
+                <button className="w-10 h-10 rounded-full overflow-hidden border-2 border-white shadow-sm ring-1 ring-slate-100 active:scale-90 transition-transform">
                   {user?.uid ? (
                     <img src={`https://picsum.photos/seed/${user.uid}/40/40`} alt="User" className="w-full h-full object-cover" />
                   ) : (
@@ -170,6 +199,13 @@ export function TopBar() {
                     Upgrade to Ultra
                   </button>
                 )}
+                <button 
+                  onClick={() => router.push('/settings')}
+                  className="w-full flex items-center gap-3 p-3 text-slate-600 hover:bg-slate-50 rounded-2xl transition-all text-xs font-bold"
+                >
+                  <Activity className="w-4 h-4" />
+                  System Metrics
+                </button>
                 <button 
                   onClick={handleLogout}
                   className="w-full flex items-center gap-3 p-3 text-slate-600 hover:text-danger hover:bg-danger/5 rounded-2xl transition-all text-xs font-bold"
