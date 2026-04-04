@@ -3,32 +3,48 @@
 
 import { useState, useCallback, useMemo, useEffect } from 'react';
 import { StatusDot } from '@/components/ui/StatusDot';
-import { Bell, User, X, Zap, LogOut, ShieldCheck, TrendingUp, Menu, Star, ArrowRight, Plus, Search, Clock, Activity } from 'lucide-react';
+import { Bell, User, X, Zap, LogOut, ShieldCheck, TrendingUp, Menu, Star, ArrowRight, Plus, Search, Clock, Activity, History, MessageSquare, Trash2, Loader2 } from 'lucide-react';
 import { useUser, useFirestore, useCollection, useMemoFirebase } from '@/firebase';
-import { collection, query, limit } from 'firebase/firestore';
+import { collection, query, limit, orderBy, deleteDoc, doc } from 'firebase/firestore';
 import { FloatingNavMenu } from './FloatingNavMenu';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Badge } from '@/components/ui/badge';
 import { getAuth, signOut } from 'firebase/auth';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { SubscriptionService } from '@/services/subscription-service';
 import { cn } from '@/lib/utils';
 import { Progress } from '@/components/ui/progress';
 import { UpgradeButton } from '@/components/upgrade/UpgradeButton';
+import { ScrollArea } from '@/components/ui/scroll-area';
 
 export function TopBar() {
   const { user } = useUser();
   const db = useFirestore();
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const activeId = searchParams?.get('c');
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [status, setStatus] = useState<any>(null);
+  const [isDeleting, setIsDeleting] = useState<string | null>(null);
 
   useEffect(() => {
     if (db && user) {
       SubscriptionService.getUserStatus(db, user.uid).then(setStatus);
     }
   }, [db, user]);
+
+  // Fetch Conversations for History Popover
+  const historyQuery = useMemoFirebase(() => {
+    if (!db || !user) return null;
+    return query(
+      collection(db, 'users', user.uid, 'conversations'),
+      orderBy('updatedAt', 'desc'),
+      limit(20)
+    );
+  }, [db, user]);
+
+  const { data: historyItems, isLoading: isHistoryLoading } = useCollection(historyQuery);
 
   const toggleMenu = useCallback(() => {
     setIsMenuOpen(prev => !prev);
@@ -44,6 +60,20 @@ export function TopBar() {
     router.push('/login');
   };
 
+  const handleDeleteConversation = async (e: React.MouseEvent, id: string) => {
+    e.stopPropagation();
+    if (!db || !user) return;
+    setIsDeleting(id);
+    try {
+      await deleteDoc(doc(db, 'users', user.uid, 'conversations', id));
+      if (activeId === id) {
+        router.push('/');
+      }
+    } finally {
+      setIsDeleting(null);
+    }
+  };
+
   const analysesQuery = useMemoFirebase(() => {
     if (!db || !user) return null;
     return query(collection(db, 'users', user.uid, 'analyses'), limit(20));
@@ -55,7 +85,6 @@ export function TopBar() {
     return (analyses || []).reduce((acc, a) => acc + (a.estimatedMonthlySavings || 0), 0);
   }, [analyses]);
 
-  // Default to showing free/upgrade until premium is confirmed
   const isPremium = status?.plan === 'PREMIUM';
   const usagePercent = status ? (status.usage.agentRuns / status.usage.limit) * 100 : 0;
 
@@ -64,8 +93,8 @@ export function TopBar() {
       <header className="fixed top-4 md:top-6 left-1/2 -translate-x-1/2 z-[150] w-[calc(100%-1rem)] md:w-[calc(100%-2rem)] max-w-6xl pointer-events-none">
         <div className="glass-panel h-14 md:h-16 px-2 md:px-4 flex items-center justify-between rounded-full border-white/80 shadow-[0_20px_40px_-12px_rgba(0,0,0,0.15)] pointer-events-auto ring-1 ring-white/20 bg-white/40 backdrop-blur-3xl">
           
-          {/* Left Section: Menu & Quick Actions */}
-          <div className="flex items-center gap-1 md:gap-3 shrink-0">
+          {/* Left Section: Menu & History */}
+          <div className="flex items-center gap-1 md:gap-2 shrink-0">
             <motion.button 
               whileHover={{ scale: 1.05 }}
               whileTap={{ scale: 0.95 }}
@@ -81,26 +110,78 @@ export function TopBar() {
               <span className="text-[10px] font-black uppercase tracking-[0.1em] hidden sm:block">Menu</span>
             </motion.button>
             
+            {/* History Popover */}
+            <Popover>
+              <PopoverTrigger asChild>
+                <button className="w-10 h-10 md:w-11 md:h-11 rounded-full bg-white/60 hover:bg-white flex items-center justify-center text-slate-400 hover:text-primary transition-all border border-slate-200/50 active:scale-90 relative">
+                  <History className="w-4 h-4" />
+                  {historyItems && historyItems.length > 0 && (
+                    <span className="absolute top-2.5 right-2.5 w-1.5 h-1.5 bg-primary rounded-full border border-white" />
+                  )}
+                </button>
+              </PopoverTrigger>
+              <PopoverContent className="w-72 glass-panel p-0 shadow-2xl mt-4 rounded-[2.5rem] border-white/60 overflow-hidden" align="start">
+                <div className="p-5 border-b border-slate-100/60 bg-white/40">
+                  <p className="text-[10px] font-black uppercase tracking-[0.3em] text-slate-400">Intelligence History</p>
+                </div>
+                <ScrollArea className="h-[350px]">
+                  <div className="p-2 space-y-1">
+                    {isHistoryLoading ? (
+                      <div className="flex justify-center py-12"><Loader2 className="w-6 h-6 text-primary/30 animate-spin" /></div>
+                    ) : historyItems && historyItems.length > 0 ? (
+                      historyItems.map((conv) => (
+                        <div 
+                          key={conv.id}
+                          onClick={() => router.push(`/?c=${conv.id}`)}
+                          className={cn(
+                            "group flex items-center justify-between p-3.5 rounded-2xl transition-all cursor-pointer border border-transparent",
+                            activeId === conv.id 
+                              ? "bg-primary/5 border-primary/10 text-primary" 
+                              : "hover:bg-slate-50 text-slate-600"
+                          )}
+                        >
+                          <div className="flex items-center gap-3 overflow-hidden">
+                            <MessageSquare className={cn("w-3.5 h-3.5 shrink-0", activeId === conv.id ? "text-primary" : "text-slate-300")} />
+                            <span className="text-[11px] font-bold truncate pr-2 tracking-tight">{conv.title || 'Untitled Session'}</span>
+                          </div>
+                          <button 
+                            onClick={(e) => handleDeleteConversation(e, conv.id)}
+                            disabled={isDeleting === conv.id}
+                            className="opacity-0 group-hover:opacity-100 p-1.5 hover:bg-danger/10 hover:text-danger rounded-xl transition-all shrink-0"
+                          >
+                            {isDeleting === conv.id ? <Loader2 className="w-3 h-3 animate-spin" /> : <Trash2 className="w-3 h-3" />}
+                          </button>
+                        </div>
+                      ))
+                    ) : (
+                      <div className="py-16 text-center space-y-3 opacity-40">
+                        <History className="w-10 h-10 mx-auto text-slate-200" />
+                        <p className="text-[9px] font-black uppercase tracking-widest text-slate-400">Zero session signals</p>
+                      </div>
+                    )}
+                  </div>
+                </ScrollArea>
+                <div className="p-4 bg-slate-50/50 border-t border-slate-100/60">
+                  <button 
+                    onClick={() => router.push('/')}
+                    className="w-full py-3 rounded-xl bg-white border border-slate-200 shadow-sm text-[9px] font-black uppercase tracking-[0.2em] text-slate-600 hover:text-primary transition-all active:scale-95"
+                  >
+                    New Intelligence Node
+                  </button>
+                </div>
+              </PopoverContent>
+            </Popover>
+
             <button 
               onClick={() => router.push('/')}
               className="w-10 h-10 md:w-11 md:h-11 rounded-full bg-white/60 hover:bg-white flex items-center justify-center text-slate-400 hover:text-primary transition-all border border-slate-200/50 active:scale-90"
             >
               <Plus className="w-4 h-4" />
             </button>
-
-            <div className="h-6 w-px bg-slate-200/40 hidden lg:block mx-1" />
-            
-            <div className="hidden lg:flex flex-col">
-              <span className="text-[10px] font-bold tracking-tighter text-slate-900 leading-none">OPERATOR</span>
-              <span className="text-[8px] font-black text-primary uppercase tracking-[0.2em] mt-0.5">
-                {isPremium ? 'ULTRA CLEARANCE' : 'V5.6 CORE'}
-              </span>
-            </div>
           </div>
 
-          {/* Center Section: Value Metrics & Intelligence Status */}
+          {/* Center Section: Value Metrics */}
           <div className="flex items-center gap-2 md:gap-4 flex-1 justify-center px-2 overflow-hidden">
-            {/* Real-time Value Metrics (Desktop/Tablet) */}
             <div className="hidden md:flex items-center gap-2">
               <motion.div 
                 whileHover={{ scale: 1.02 }}
@@ -125,7 +206,6 @@ export function TopBar() {
               </motion.div>
             </div>
 
-            {/* Central Usage & Status Pill (Only for Free/Loading) */}
             {!isPremium && (
               <div className="flex items-center gap-2 md:gap-4 bg-slate-50/80 border border-slate-200/50 rounded-full pl-3 pr-1 py-1 h-10 md:h-11 shadow-inner max-w-fit pointer-events-auto">
                 {status && (
@@ -139,15 +219,9 @@ export function TopBar() {
                 <UpgradeButton />
               </div>
             )}
-
-            {/* Neural Link Info (Large Screens Only) */}
-            <div className="hidden xl:flex items-center gap-2 px-4 py-2 bg-success/5 border border-success/10 rounded-full">
-              <StatusDot status="active" />
-              <span className="text-[9px] font-bold text-success uppercase tracking-widest">Neural Link Stable</span>
-            </div>
           </div>
 
-          {/* Right Section: Alerts, Search & Profile */}
+          {/* Right Section: Alerts & Profile */}
           <div className="flex items-center gap-1 md:gap-2 shrink-0">
             <button className="hidden sm:flex w-10 h-10 rounded-full items-center justify-center text-slate-400 hover:bg-white/60 transition-all active:scale-90">
               <Search className="w-4 h-4" />
