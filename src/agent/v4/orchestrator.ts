@@ -20,6 +20,34 @@ async function checkFastPath(input: string): Promise<string | null> {
   return null;
 }
 
+/**
+ * Standard blocking entry point for Agent v4.2 logic.
+ * Used by legacy routes and non-streaming contexts.
+ */
+export async function runAgentV4(input: string, userId: string, history: any[] = [], imageUri?: string) {
+  const { stream, fastPathResponse, metadata } = await runAgentV4Stream(input, userId, history, imageUri);
+
+  if (fastPathResponse) {
+    return { 
+      content: fastPathResponse, 
+      ...metadata 
+    };
+  }
+
+  let fullContent = "";
+  for await (const chunk of stream!) {
+    fullContent += chunk.choices[0]?.delta?.content || "";
+  }
+
+  return {
+    content: fullContent,
+    ...metadata
+  };
+}
+
+/**
+ * Streaming entry point for real-time chat interactions.
+ */
 export async function runAgentV4Stream(input: string, userId: string, history: any[] = [], imageUri?: string) {
   console.log(`[AGENT_V4.2] Processing: "${input.slice(0, 50)}..."`);
 
@@ -29,7 +57,7 @@ export async function runAgentV4Stream(input: string, userId: string, history: a
     return {
       stream: null,
       fastPathResponse,
-      metadata: { intent: 'general', fastPathUsed: true }
+      metadata: { intent: 'general' as any, fastPathUsed: true }
     };
   }
 
