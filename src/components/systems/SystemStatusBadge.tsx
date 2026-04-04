@@ -2,28 +2,28 @@ import type { SystemStatus } from "./types";
 import { cn } from "@/lib/utils";
 
 const statusStyles: Record<SystemStatus, string> = {
-  active: "bg-success/10 text-success ring-1 ring-success/30",
-  connected: "bg-success/10 text-success ring-1 ring-success/30",
-  idle: "bg-muted-foreground/10 text-muted-foreground ring-1 ring-muted-foreground/20",
-  syncing: "bg-primary/10 text-primary ring-1 ring-primary/30",
-  error: "bg-danger/10 text-danger ring-1 ring-danger/30",
-  disconnected: "bg-warning/10 text-warning ring-1 ring-warning/30",
+  active: "bg-success/10 text-success border border-success/20",
+  connected: "bg-success/10 text-success border border-success/20",
+  idle: "bg-slate-100 text-slate-400 border border-slate-200",
+  syncing: "bg-nordic-sage/10 text-nordic-sage border border-nordic-sage/20",
+  error: "bg-danger/10 text-danger border border-danger/20",
+  disconnected: "bg-amber-100 text-amber-600 border border-amber-200",
 };
 
 const labels: Record<SystemStatus, string> = {
   active: "Active",
-  connected: "Connected",
-  idle: "Idle",
+  connected: "Online",
+  idle: "Standby",
   syncing: "Syncing",
-  error: "Error",
-  disconnected: "Disconnected",
+  error: "Fault",
+  disconnected: "Offline",
 };
 
 export function SystemStatusBadge({ status }: { status: SystemStatus }) {
   return (
     <span
       className={cn(
-        "inline-flex items-center rounded-full px-2.5 py-1 text-[10px] font-bold uppercase tracking-widest",
+        "inline-flex items-center rounded-full px-3 py-1 text-[9px] font-bold uppercase tracking-widest",
         statusStyles[status]
       )}
     >

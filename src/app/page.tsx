@@ -132,84 +132,79 @@ function ChatContent() {
       addDocumentNonBlocking(collection(db, 'users', user.uid, 'conversations', activeId, 'messages'), finalMsg);
       setLocalMessages(prev => prev.map(m => m.id === assistantMsgId ? { ...m, ...finalMsg, isStreaming: false, timestamp: new Date() } : m));
     } catch (err) {
-      toast({ variant: 'destructive', title: "Sync Lost", description: "The neural link was severed. Reconnecting." });
+      toast({ variant: 'destructive', title: "Sync Interrupted", description: "The neural link was severed. Reconnecting." });
     } finally {
       setIsProcessing(false);
     }
   };
 
-  const getModeIcon = (intent?: string) => {
-    switch (intent) {
-      case 'finance': return <Coins className="w-4 h-4 text-primary" />;
-      case 'time_optimizer': return <Clock className="w-4 h-4 text-accent" />;
-      default: return <BrainCircuit className="w-4 h-4 text-primary" />;
-    }
-  };
-
-  if (!mounted || isUserLoading) return <div className="min-h-screen bg-background flex items-center justify-center"><Loader2 className="w-10 h-10 text-primary animate-spin" /></div>;
+  if (!mounted || isUserLoading) return <div className="min-h-screen bg-nordic-silk flex items-center justify-center"><Loader2 className="w-10 h-10 text-nordic-sage animate-spin" /></div>;
 
   return (
-    <div className="flex h-screen bg-background overflow-hidden">
+    <div className="flex h-screen bg-nordic-silk overflow-hidden">
       <Navbar />
       
       <main className="flex-1 flex flex-col relative">
-        <div ref={scrollRef} className="flex-1 overflow-y-auto pt-32 pb-60 px-6 md:px-24 lg:px-48 space-y-12">
+        <div ref={scrollRef} className="flex-1 overflow-y-auto pt-32 pb-60 px-6 md:px-24 lg:px-48 space-y-12 scrollbar-hide">
           <AnimatePresence initial={false}>
             {localMessages.length > 0 ? (
               localMessages.map((msg) => (
                 <motion.div 
                   key={msg.id} 
-                  initial={{ opacity: 0, y: 20 }} 
-                  animate={{ opacity: 1, y: 0 }} 
-                  className={cn("flex w-full group", msg.role === 'user' ? "justify-end" : "justify-start")}
+                  initial={{ opacity: 0, y: 20, scale: 0.95 }} 
+                  animate={{ opacity: 1, y: 0, scale: 1 }}
+                  transition={{ type: "spring", stiffness: 200, damping: 20 }}
+                  className={cn("flex w-full", msg.role === 'user' ? "justify-end" : "justify-start")}
                 >
-                  <div className={cn("max-w-[90%] md:max-w-[80%] space-y-4", msg.role === 'user' ? "items-end text-right" : "items-start text-left")}>
+                  <div className={cn("max-w-[90%] md:max-w-[80%] space-y-3", msg.role === 'user' ? "items-end text-right" : "items-start text-left")}>
                     
                     {msg.role === 'assistant' && (
-                      <div className="flex items-center gap-3 mb-2 px-1">
-                        <div className="p-1.5 rounded-lg bg-white/5 border border-white/5">{getModeIcon(msg.intent)}</div>
-                        <span className="text-[10px] font-bold uppercase tracking-[0.3em] text-muted-foreground/40">
-                          {msg.intent || 'Operator'} • Intelligence Feed
+                      <div className="flex items-center gap-2 mb-1 px-2">
+                        <div className="w-5 h-5 rounded-lg bg-nordic-moss/40 flex items-center justify-center">
+                          <Cpu className="w-3 h-3 text-nordic-sage" />
+                        </div>
+                        <span className="text-[10px] font-bold uppercase tracking-widest text-slate-400">
+                          {msg.intent || 'Operator'}
                         </span>
                       </div>
                     )}
 
                     <div className={cn(
-                      "p-8 rounded-[2.5rem] text-base md:text-lg leading-relaxed font-medium transition-all duration-300",
+                      "p-6 rounded-3xl text-sm md:text-base font-medium shadow-sm transition-all leading-relaxed",
                       msg.role === 'user' 
-                        ? "bg-primary text-background rounded-tr-none shadow-2xl shadow-primary/20" 
-                        : "bg-white/[0.03] border border-white/[0.05] text-foreground rounded-tl-none",
-                      msg.isStreaming ? "animate-pulse border-primary/20" : ""
+                        ? "bg-gradient-to-br from-slate-500 to-slate-700 text-white rounded-tr-none" 
+                        : "bg-white border border-slate-100 text-slate-800 rounded-tl-none",
+                      msg.isStreaming ? "animate-pulse border-nordic-sage/20" : ""
                     )}>
                       {msg.content}
                     </div>
 
                     {msg.data?.toolResults && !msg.isStreaming && (
-                      <RichAnalysisCard data={{ ...msg.data, summary: msg.content }} />
+                      <div className="mt-4"><RichAnalysisCard data={{ ...msg.data, summary: msg.content }} /></div>
                     )}
                   </div>
                 </motion.div>
               ))
             ) : (
-              <div className="flex flex-col items-center justify-center h-full text-center space-y-8 opacity-20 pt-32">
-                <div className="w-24 h-24 rounded-[2rem] bg-primary/10 flex items-center justify-center">
-                  <Cpu className="w-12 h-12 text-primary" />
+              <div className="flex flex-col items-center justify-center h-full text-center space-y-10 opacity-40 pt-32">
+                <div className="w-20 h-20 rounded-[2.5rem] bg-nordic-moss/30 flex items-center justify-center">
+                  <Cpu className="w-10 h-10 text-nordic-sage" />
                 </div>
-                <div className="space-y-2">
-                  <h2 className="text-4xl font-bold font-headline tracking-tighter">Operator v4.2</h2>
-                  <p className="text-[10px] font-bold uppercase tracking-[0.4em]">Multi-Agent Workspace</p>
+                <div className="space-y-3">
+                  <h2 className="text-4xl font-bold tracking-tight text-slate-900">Initialize</h2>
+                  <p className="text-[10px] font-bold uppercase tracking-[0.4em] text-nordic-sage">Neural Wellness Protocol</p>
                 </div>
               </div>
             )}
           </AnimatePresence>
         </div>
 
-        {/* Input Control Bar */}
+        {/* Input Bar */}
         <div className="absolute bottom-0 left-0 right-0 p-8 md:p-12 pointer-events-none">
           <div className="max-w-4xl mx-auto w-full pointer-events-auto">
-            <Card className="glass !p-3 flex items-end gap-4 rounded-[3rem] border-white/10 shadow-[0_48px_128px_-32px_rgba(0,0,0,0.8)]">
-              <Button size="icon" variant="ghost" onClick={() => fileInputRef.current?.click()} className="w-16 h-16 rounded-full hover:bg-white/5 text-muted-foreground transition-colors">
-                <ImageIcon className="w-6 h-6" />
+            <Card className="bg-white/80 backdrop-blur-md border border-white shadow-xl shadow-slate-200/40 p-2 rounded-[2.5rem] flex items-end gap-3">
+              <Button size="icon" variant="ghost" onClick={() => fileInputRef.current?.click()} className="w-14 h-14 rounded-full hover:bg-nordic-silk text-slate-400">
+                <ImageIcon className="w-5 h-5" />
               </Button>
               <input type="file" className="hidden" ref={fileInputRef} accept="image/*" />
               <Textarea 
@@ -217,17 +212,17 @@ function ChatContent() {
                 value={input} 
                 onChange={(e) => setInput(e.target.value)} 
                 onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMessage(); } }} 
-                placeholder="Initialize protocol or ask a question..." 
-                className="flex-1 border-0 focus-visible:ring-0 bg-transparent min-h-[64px] py-5 text-xl font-medium resize-none overflow-hidden text-white placeholder:text-muted-foreground/20" 
+                placeholder="Message the operator..." 
+                className="flex-1 border-0 focus-visible:ring-0 bg-transparent min-h-[56px] py-4 text-base font-medium resize-none text-slate-900 placeholder:text-slate-300" 
                 rows={1} 
               />
               <Button 
                 size="icon" 
                 disabled={!input.trim() || isProcessing} 
                 onClick={() => sendMessage()} 
-                className="w-16 h-16 rounded-full shadow-2xl transition-all hover:scale-105 active:scale-95"
+                className="w-14 h-14 rounded-full bg-nordic-sage text-white shadow-lg shadow-nordic-sage/20 hover:scale-105 transition-transform"
               >
-                {isProcessing ? <Loader2 className="w-7 h-7 animate-spin" /> : <Send className="w-7 h-7" />}
+                {isProcessing ? <Loader2 className="w-6 h-6 animate-spin" /> : <Send className="w-6 h-6" />}
               </Button>
             </Card>
           </div>
@@ -239,7 +234,7 @@ function ChatContent() {
 
 export default function ChatPage() {
   return (
-    <Suspense fallback={<div className="min-h-screen bg-background flex items-center justify-center"><Loader2 className="w-10 h-10 text-primary animate-spin" /></div>}>
+    <Suspense fallback={<div className="min-h-screen bg-nordic-silk flex items-center justify-center"><Loader2 className="w-10 h-10 text-nordic-sage animate-spin" /></div>}>
       <ChatContent />
     </Suspense>
   );

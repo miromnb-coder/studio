@@ -11,46 +11,52 @@ export default {
     extend: {
       fontFamily: {
         body: ['Inter', 'sans-serif'],
-        headline: ['Space Grotesk', 'sans-serif'],
+        headline: ['Inter', 'sans-serif'],
         code: ['monospace'],
       },
       colors: {
-        background: '#121214',
-        foreground: '#F5F7FA',
+        background: '#F8F9FA',
+        foreground: '#1F2937',
         card: {
-          DEFAULT: '#1e1e22',
-          foreground: '#F5F7FA',
+          DEFAULT: '#FFFFFF',
+          foreground: '#1F2937',
         },
         popover: {
-          DEFAULT: '#1e1e22',
-          foreground: '#F5F7FA',
+          DEFAULT: '#FFFFFF',
+          foreground: '#1F2937',
         },
         primary: {
-          DEFAULT: '#9494F7',
-          foreground: '#121214',
+          DEFAULT: '#5B6D44',
+          foreground: '#F8F9FA',
         },
         secondary: {
-          DEFAULT: '#252529',
-          foreground: '#F5F7FA',
+          DEFAULT: '#E9EDC6',
+          foreground: '#5B6D44',
         },
         muted: {
-          DEFAULT: '#252529',
-          foreground: '#82828C',
+          DEFAULT: '#F1F5F9',
+          foreground: '#64748B',
         },
         accent: {
-          DEFAULT: '#6BCCF2',
-          foreground: '#121214',
+          DEFAULT: '#E9EDC6',
+          foreground: '#5B6D44',
         },
         destructive: {
-          DEFAULT: '#FF6B6B',
-          foreground: '#F5F7FA',
+          DEFAULT: '#EF4444',
+          foreground: '#FFFFFF',
         },
-        border: 'rgba(255,255,255,0.06)',
-        input: '#1e1e22',
-        ring: '#9494F7',
-        success: '#39D98A',
-        warning: '#F5C451',
-        danger: '#FF6B6B',
+        border: '#E2E8F0',
+        input: '#FFFFFF',
+        ring: '#5B6D44',
+        success: '#10B981',
+        warning: '#F59E0B',
+        danger: '#EF4444',
+        nordic: {
+          silk: '#F8F9FA',
+          sage: '#5B6D44',
+          moss: '#E9EDC6',
+          slate: '#1F2937'
+        }
       },
       borderRadius: {
         lg: 'var(--radius)',

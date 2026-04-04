@@ -4,31 +4,31 @@
 
 @layer base {
   :root {
-    --background: 240 10% 4%;
-    --foreground: 210 20% 98%;
-    --card: 240 6% 7%;
-    --card-foreground: 210 20% 98%;
-    --popover: 240 6% 7%;
-    --popover-foreground: 210 20% 98%;
-    --primary: 240 87% 77%;
-    --primary-foreground: 240 10% 4%;
-    --secondary: 240 5% 12%;
-    --secondary-foreground: 210 20% 98%;
-    --muted: 240 5% 12%;
-    --muted-foreground: 215 13% 60%;
-    --accent: 198 84% 68%;
-    --accent-foreground: 240 10% 4%;
-    --destructive: 0 100% 71%;
+    --background: 210 20% 98%; /* #F8F9FA */
+    --foreground: 215 25% 17%; /* #1F2937 */
+    --card: 0 0% 100%;
+    --card-foreground: 215 25% 17%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 215 25% 17%;
+    --primary: 84 22% 35%; /* #5B6D44 */
+    --primary-foreground: 210 20% 98%;
+    --secondary: 66 45% 85%; /* #E9EDC6 */
+    --secondary-foreground: 84 22% 35%;
+    --muted: 210 20% 94%;
+    --muted-foreground: 215 16% 47%;
+    --accent: 66 45% 85%;
+    --accent-foreground: 84 22% 35%;
+    --destructive: 0 84% 60%;
     --destructive-foreground: 210 20% 98%;
-    --border: 240 5% 12%;
-    --input: 240 5% 12%;
-    --ring: 240 87% 77%;
-    --radius: 1.25rem;
+    --border: 214 32% 91%;
+    --input: 214 32% 91%;
+    --ring: 84 22% 35%;
+    --radius: 1.5rem;
     
     /* Semantic Colors */
-    --success: 145 63% 54%;
-    --warning: 41 90% 64%;
-    --danger: 0 100% 71%;
+    --success: 145 45% 45%;
+    --warning: 41 80% 50%;
+    --danger: 0 84% 60%;
   }
 }
 
@@ -37,52 +37,38 @@
     @apply border-border;
   }
   body {
-    @apply bg-background text-foreground antialiased selection:bg-primary/30;
+    @apply bg-background text-foreground antialiased selection:bg-primary/20;
     font-feature-settings: "rlig" 1, "calt" 1;
     background-image: 
-      radial-gradient(at 0% 0%, rgba(148, 148, 247, 0.03) 0px, transparent 50%),
-      radial-gradient(at 100% 0%, rgba(107, 204, 242, 0.03) 0px, transparent 50%);
+      radial-gradient(at 0% 0%, rgba(91, 109, 68, 0.02) 0px, transparent 50%),
+      radial-gradient(at 100% 0%, rgba(233, 237, 198, 0.3) 0px, transparent 50%);
     background-attachment: fixed;
   }
   h1, h2, h3, h4, h5, h6 {
-    @apply font-headline tracking-tight text-foreground;
+    @apply font-headline tracking-tight text-foreground font-semibold;
   }
 }
 
 .glass-panel {
-  @apply bg-white/[0.01] backdrop-blur-2xl border border-white/[0.05] shadow-[inset_0_1px_1px_rgba(255,255,255,0.05)];
+  @apply bg-white/60 backdrop-blur-md border border-white/20 shadow-sm;
 }
 
 .premium-card {
-  @apply relative overflow-hidden bg-[#16161a] border border-white/[0.04] shadow-[0_8px_32px_-12px_rgba(0,0,0,0.5)] p-6 rounded-[2rem] transition-all duration-500 ease-out;
-}
-
-.premium-card::before {
-  content: '';
-  @apply absolute inset-0 bg-gradient-to-br from-white/[0.02] to-transparent pointer-events-none;
+  @apply relative overflow-hidden bg-white border border-slate-100 shadow-[0_8px_30px_rgb(0,0,0,0.04)] p-6 rounded-[2rem] transition-all duration-500 ease-out;
 }
 
 .premium-card:hover {
-  @apply border-white/10 shadow-[0_24px_64px_-16px_rgba(0,0,0,0.7)] -translate-y-1;
-}
-
-.glow-primary {
-  @apply shadow-[0_0_20px_rgba(148,148,247,0.15)];
-}
-
-.glow-success {
-  @apply shadow-[0_0_20px_rgba(57,217,138,0.15)];
+  @apply border-primary/10 shadow-[0_20px_50px_rgba(91,109,68,0.08)] -translate-y-1;
 }
 
 .text-gradient {
-  @apply bg-clip-text text-transparent bg-gradient-to-b from-white to-white/50;
+  @apply bg-clip-text text-transparent bg-gradient-to-br from-slate-900 to-slate-500;
 }
 
 .status-dot {
-  @apply w-1.5 h-1.5 rounded-full animate-pulse;
+  @apply w-2 h-2 rounded-full;
 }
 
-/* Hide scrollbar but keep functionality */
 .scrollbar-hide::-webkit-scrollbar {
   display: none;
 }
@@ -92,11 +78,21 @@
 }
 
 ::-webkit-scrollbar {
-  width: 4px;
+  width: 6px;
 }
 ::-webkit-scrollbar-track {
   @apply bg-transparent;
 }
 ::-webkit-scrollbar-thumb {
-  @apply bg-white/5 rounded-full hover:bg-white/10 transition-colors;
+  @apply bg-slate-200 rounded-full hover:bg-slate-300 transition-colors;
+}
+
+@keyframes spring {
+  0% { transform: scale(0.95) translateY(10px); opacity: 0; }
+  70% { transform: scale(1.02) translateY(-2px); opacity: 1; }
+  100% { transform: scale(1) translateY(0); opacity: 1; }
+}
+
+.animate-spring {
+  animation: spring 0.5s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
 }

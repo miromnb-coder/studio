@@ -14,15 +14,15 @@ export function ExpandableSection({ label, children, defaultOpen = false }: Prop
   const [open, setOpen] = useState(defaultOpen);
 
   return (
-    <div className="mt-4 rounded-2xl border border-white/5 bg-white/[0.02]">
+    <div className="mt-4 rounded-[1.5rem] border border-slate-50 bg-slate-50/30">
       <button
         type="button"
         onClick={() => setOpen((v) => !v)}
-        className="flex w-full items-center justify-between px-4 py-3 text-left transition hover:bg-white/5"
+        className="flex w-full items-center justify-between px-6 py-4 text-left transition hover:bg-white rounded-[1.5rem]"
         aria-expanded={open}
       >
-        <span className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">{label}</span>
-        {open ? <ChevronUp className="w-3.5 h-3.5 text-muted-foreground" /> : <ChevronDown className="w-3.5 h-3.5 text-muted-foreground" />}
+        <span className="text-[10px] font-bold uppercase tracking-widest text-slate-400">{label}</span>
+        {open ? <ChevronUp className="w-3.5 h-3.5 text-slate-300" /> : <ChevronDown className="w-3.5 h-3.5 text-slate-300" />}
       </button>
 
       <div
@@ -32,7 +32,7 @@ export function ExpandableSection({ label, children, defaultOpen = false }: Prop
         )}
       >
         <div className="min-h-0">
-          <div className="border-t border-white/5 p-4 text-sm text-muted-foreground leading-relaxed">
+          <div className="border-t border-slate-50 p-6 text-sm text-slate-500 leading-relaxed font-medium">
             {children}
           </div>
         </div>

@@ -1,4 +1,3 @@
-
 "use client";
 
 import { useEffect, useState, useMemo } from 'react';
@@ -43,8 +42,6 @@ import { useUser, useFirestore, useCollection, useMemoFirebase } from '@/firebas
 import { collection, query, orderBy, limit, doc, updateDoc, serverTimestamp, deleteDoc } from 'firebase/firestore';
 import { cn } from '@/lib/utils';
 import { useToast } from '@/hooks/use-toast';
-import { errorEmitter } from '@/firebase/error-emitter';
-import { FirestorePermissionError } from '@/firebase/errors';
 
 export function AppSidebar() {
   const [mounted, setMounted] = useState(false);
@@ -94,90 +91,21 @@ export function AppSidebar() {
   }, [conversations, searchTerm, showArchived]);
 
   const coreItems = [
-    { icon: LayoutDashboard, href: '/dashboard', label: 'Command Center' },
-    { icon: History, href: '/history', label: 'Neural Memory' },
-    { icon: Zap, href: '/money-saver', label: 'Efficiency Autopilot' },
-    { icon: Settings, href: '/settings', label: 'Core Integration' },
+    { icon: LayoutDashboard, href: '/dashboard', label: 'Console' },
+    { icon: History, href: '/history', label: 'Memory' },
+    { icon: Zap, href: '/money-saver', label: 'Optimization' },
+    { icon: Settings, href: '/settings', label: 'Systems' },
   ];
-
-  const handleRename = async (id: string, currentTitle: string) => {
-    if (!db || !user) return;
-    const newTitle = prompt("Rename Protocol Thread:", currentTitle);
-    if (newTitle && newTitle !== currentTitle) {
-      try {
-        await updateDoc(doc(db, 'users', user.uid, 'conversations', id), {
-          title: newTitle,
-          updatedAt: serverTimestamp()
-        });
-        toast({ title: "Thread Renamed", description: "Ledger updated successfully." });
-      } catch (err: any) {
-        errorEmitter.emit('permission-error', new FirestorePermissionError({
-          path: `users/${user.uid}/conversations/${id}`,
-          operation: 'update',
-          requestResourceData: { title: newTitle }
-        }));
-      }
-    }
-  };
-
-  const handleArchive = async (id: string, isArchived: boolean) => {
-    if (!db || !user) return;
-    try {
-      await updateDoc(doc(db, 'users', user.uid, 'conversations', id), {
-        isArchived: !isArchived,
-        updatedAt: serverTimestamp()
-      });
-      toast({ 
-        title: isArchived ? "Thread Restored" : "Thread Archived", 
-        description: isArchived ? "Moved back to active intelligence." : "Stored in secondary archives." 
-      });
-    } catch (err: any) {
-      errorEmitter.emit('permission-error', new FirestorePermissionError({
-        path: `users/${user.uid}/conversations/${id}`,
-        operation: 'update',
-        requestResourceData: { isArchived: !isArchived }
-      }));
-    }
-  };
-
-  const handlePin = async (id: string, isPinned: boolean) => {
-    if (!db || !user) return;
-    try {
-      await updateDoc(doc(db, 'users', user.uid, 'conversations', id), {
-        isPinned: !isPinned,
-        updatedAt: serverTimestamp()
-      });
-      toast({ 
-        title: isPinned ? "Thread Unpinned" : "Thread Pinned", 
-        description: isPinned ? "Removed from priority view." : "Moved to top of protocol list." 
-      });
-    } catch (err: any) {
-      errorEmitter.emit('permission-error', new FirestorePermissionError({
-        path: `users/${user.uid}/conversations/${id}`,
-        operation: 'update',
-        requestResourceData: { isPinned: !isPinned }
-      }));
-    }
-  };
 
   const handleDelete = async (id: string) => {
     if (!db || !user) return;
-    if (confirm("CRITICAL: Permanently purge this intelligence thread? This cannot be undone.")) {
+    if (confirm("Permanently purge this record?")) {
       try {
-        const docRef = doc(db, 'users', user.uid, 'conversations', id);
-        await deleteDoc(docRef);
-        
-        if (activeId === id) {
-          router.push('/');
-        }
-        
-        toast({ title: "Thread Purged", description: "Record removed from secure ledger." });
-      } catch (err: any) {
-        errorEmitter.emit('permission-error', new FirestorePermissionError({
-          path: `users/${user.uid}/conversations/${id}`,
-          operation: 'delete'
-        }));
-        toast({ variant: 'destructive', title: "Purge Failed", description: "Insufficient clearance to remove this record." });
+        await deleteDoc(doc(db, 'users', user.uid, 'conversations', id));
+        if (activeId === id) router.push('/');
+        toast({ title: "Record Purged" });
+      } catch (err) {
+        toast({ variant: 'destructive', title: "Purge Failed" });
       }
     }
   };
@@ -185,13 +113,13 @@ export function AppSidebar() {
   const isSyncing = !mounted || isLoading;
 
   return (
-    <Sidebar className="border-r border-white/5 bg-[#19191C]">
+    <Sidebar className="border-r border-slate-100 bg-white">
       <SidebarHeader className="p-6">
         <Link href="/" className="flex items-center gap-3 group">
-          <div className="flex items-center justify-center w-8 h-8 rounded-lg bg-primary text-background group-hover:scale-105 transition-transform shadow-lg shadow-primary/20">
-            <span className="font-headline font-bold text-lg">O</span>
+          <div className="flex items-center justify-center w-9 h-9 rounded-2xl bg-nordic-sage text-white group-hover:scale-105 transition-transform shadow-lg shadow-nordic-sage/20">
+            <span className="font-bold text-lg">O</span>
           </div>
-          <span className="font-headline font-bold text-lg tracking-tight text-white">Operator</span>
+          <span className="font-bold text-lg tracking-tight text-slate-900">Operator</span>
         </Link>
       </SidebarHeader>
 
@@ -201,105 +129,57 @@ export function AppSidebar() {
             <SidebarMenuItem>
               <SidebarMenuButton 
                 onClick={() => router.push('/')}
-                className="rounded-xl h-12 bg-white/5 text-white border border-white/5 hover:bg-white/10 transition-all px-4 group"
+                className="rounded-2xl h-12 bg-nordic-sage text-white hover:bg-nordic-sage/90 transition-all px-4 group shadow-md shadow-nordic-sage/10"
               >
-                <Plus className="w-4 h-4 mr-2 text-primary group-hover:rotate-90 transition-transform" />
-                <span className="font-bold text-sm tracking-tight">New Protocol</span>
+                <Plus className="w-4 h-4 mr-2 text-white/80 group-hover:rotate-90 transition-transform" />
+                <span className="font-bold text-sm">New Session</span>
               </SidebarMenuButton>
             </SidebarMenuItem>
           </SidebarMenu>
         </SidebarGroup>
 
         <div className="px-4 mt-4 relative">
-          <Search className="absolute left-7 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground/30" />
+          <Search className="absolute left-7 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-300" />
           <Input 
-            placeholder="Search Neural Memory..." 
+            placeholder="Search context..." 
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
-            className="h-10 pl-10 bg-white/[0.03] border-white/5 text-[11px] font-medium rounded-xl focus:ring-primary/20 text-white placeholder:text-muted-foreground/20"
+            className="h-10 pl-10 bg-slate-50 border-transparent text-xs font-medium rounded-xl focus:bg-white focus:border-nordic-moss transition-all"
           />
-          {searchTerm && (
-            <button onClick={() => setSearchTerm('')} className="absolute right-7 top-1/2 -translate-y-1/2">
-              <X className="w-3 h-3 text-muted-foreground/30 hover:text-white" />
-            </button>
-          )}
         </div>
 
         <SidebarGroup className="mt-4">
-          <div className="flex items-center justify-between px-4 mb-2">
-            <SidebarGroupLabel className="p-0 text-[9px] font-bold uppercase tracking-[0.2em] text-muted-foreground/40">
-              {showArchived ? 'Archives' : 'Active Threads'}
-            </SidebarGroupLabel>
-            <button 
-              onClick={() => setShowArchived(!showArchived)}
-              className="text-[8px] font-bold uppercase tracking-widest text-primary/40 hover:text-primary transition-colors flex items-center gap-1"
-            >
-              {showArchived ? 'Active' : 'Archives'}
-              <Archive className="w-2.5 h-2.5" />
-            </button>
-          </div>
+          <SidebarGroupLabel className="px-4 text-[10px] font-bold uppercase tracking-widest text-slate-400">History</SidebarGroupLabel>
           <SidebarMenu className="px-2 space-y-1">
             {isSyncing ? (
-              <div className="flex justify-center py-8">
-                <Loader2 className="w-5 h-5 text-primary/20 animate-spin" />
-              </div>
+              <div className="flex justify-center py-8"><Loader2 className="w-5 h-5 text-nordic-moss animate-spin" /></div>
             ) : filteredConversations.length > 0 ? (
               filteredConversations.map((conv) => (
-                <SidebarMenuItem key={conv.id} className="group/item relative">
-                  <div className="flex items-center gap-1">
-                    <SidebarMenuButton 
-                      asChild 
-                      isActive={activeId === conv.id}
-                      className={cn(
-                        "flex-1 rounded-xl h-11 transition-all px-4 relative",
-                        activeId === conv.id ? "bg-white/5 text-primary border-l-2 border-l-primary" : "text-muted-foreground hover:text-white hover:bg-white/[0.02]"
-                      )}
-                    >
-                      <Link href={`/?c=${conv.id}`}>
-                        <div className="flex items-center gap-3 min-w-0">
-                          <MessageSquare className={cn("w-3.5 h-3.5 shrink-0", activeId === conv.id ? "text-primary" : "text-muted-foreground/40")} />
-                          <span className="truncate font-medium text-xs">{conv.title || 'Untitled Audit'}</span>
-                          {conv.isPinned && <Pin className="w-2.5 h-2.5 text-primary fill-primary shrink-0" />}
-                        </div>
-                      </Link>
-                    </SidebarMenuButton>
-                    
-                    <DropdownMenu>
-                      <DropdownMenuTrigger asChild>
-                        <Button variant="ghost" size="icon" className="w-8 h-8 opacity-0 group-hover/item:opacity-100 transition-opacity rounded-lg hover:bg-white/5">
-                          <MoreVertical className="w-3 h-3 text-muted-foreground" />
-                        </Button>
-                      </DropdownMenuTrigger>
-                      <DropdownMenuContent align="end" className="w-52 bg-card border-white/10 rounded-2xl p-2 shadow-2xl">
-                        <DropdownMenuItem onClick={() => handlePin(conv.id, !!conv.isPinned)} className="rounded-xl h-10 gap-3 cursor-pointer">
-                          <Pin className="w-3.5 h-3.5" /> <span className="text-sm font-medium">{conv.isPinned ? 'Unpin' : 'Pin to Top'}</span>
-                        </DropdownMenuItem>
-                        <DropdownMenuItem onClick={() => handleRename(conv.id, conv.title || '')} className="rounded-xl h-10 gap-3 cursor-pointer">
-                          <Edit2 className="w-3.5 h-3.5" /> <span className="text-sm font-medium">Rename</span>
-                        </DropdownMenuItem>
-                        <DropdownMenuItem onClick={() => handleArchive(conv.id, !!conv.isArchived)} className="rounded-xl h-10 gap-3 cursor-pointer">
-                          <Archive className="w-3.5 h-3.5" /> <span className="text-sm font-medium">{conv.isArchived ? 'Restore' : 'Archive'}</span>
-                        </DropdownMenuItem>
-                        <div className="h-px bg-white/5 my-1" />
-                        <DropdownMenuItem onClick={() => handleDelete(conv.id)} className="rounded-xl h-10 gap-3 cursor-pointer text-danger hover:bg-danger/10">
-                          <Trash2 className="w-3.5 h-3.5" /> <span className="text-sm font-medium">Purge Record</span>
-                        </DropdownMenuItem>
-                      </DropdownMenuContent>
-                    </DropdownMenu>
-                  </div>
+                <SidebarMenuItem key={conv.id} className="group/item">
+                  <SidebarMenuButton 
+                    asChild 
+                    isActive={activeId === conv.id}
+                    className={cn(
+                      "rounded-xl h-11 transition-all px-4",
+                      activeId === conv.id ? "bg-nordic-moss/20 text-nordic-sage font-semibold" : "text-slate-500 hover:text-slate-900 hover:bg-nordic-silk"
+                    )}
+                  >
+                    <Link href={`/?c=${conv.id}`}>
+                      <div className="flex items-center gap-3 truncate">
+                        <MessageSquare className="w-3.5 h-3.5 shrink-0 opacity-40" />
+                        <span className="truncate">{conv.title || 'Untitled'}</span>
+                      </div>
+                    </Link>
+                  </SidebarMenuButton>
                 </SidebarMenuItem>
               ))
             ) : (
-              <div className="px-4 py-12 text-center space-y-2 opacity-20">
-                <MessageSquare className="w-6 h-6 mx-auto mb-2" />
-                <p className="text-[10px] italic uppercase tracking-[0.2em]">No intelligence found</p>
-              </div>
+              <div className="px-4 py-8 text-center opacity-20 italic text-[10px]">No records found</div>
             )}
           </SidebarMenu>
         </SidebarGroup>
 
         <SidebarGroup className="mt-auto pb-4">
-          <SidebarGroupLabel className="px-4 text-[9px] font-bold uppercase tracking-[0.3em] text-muted-foreground/30">Systems</SidebarGroupLabel>
           <SidebarMenu className="px-2">
             {coreItems.map((item) => (
               <SidebarMenuItem key={item.href}>
@@ -308,12 +188,12 @@ export function AppSidebar() {
                   isActive={pathname === item.href}
                   className={cn(
                     "rounded-xl h-11 transition-all px-4",
-                    pathname === item.href ? "bg-white/5 text-primary" : "text-muted-foreground hover:text-white hover:bg-white/[0.02]"
+                    pathname === item.href ? "bg-nordic-moss/20 text-nordic-sage font-semibold" : "text-slate-500 hover:text-slate-900 hover:bg-nordic-silk"
                   )}
                 >
                   <Link href={item.href}>
-                    <item.icon className="w-4 h-4 mr-3" />
-                    <span className="font-medium text-sm">{item.label}</span>
+                    <item.icon className="w-4 h-4 mr-3 opacity-60" />
+                    <span className="text-sm">{item.label}</span>
                   </Link>
                 </SidebarMenuButton>
               </SidebarMenuItem>
@@ -322,22 +202,18 @@ export function AppSidebar() {
         </SidebarGroup>
       </SidebarContent>
 
-      <SidebarFooter className="p-4 border-t border-white/5 bg-black/10">
-        <div className="flex items-center gap-3 px-3 py-2 rounded-2xl hover:bg-white/5 transition-colors cursor-pointer group">
-          <div className="w-9 h-9 rounded-full overflow-hidden border border-white/10 group-hover:border-primary/50 transition-colors bg-muted/50">
+      <SidebarFooter className="p-4 border-t border-slate-50">
+        <div className="flex items-center gap-3 px-3 py-2 rounded-2xl hover:bg-nordic-silk transition-colors cursor-pointer group">
+          <div className="w-9 h-9 rounded-full overflow-hidden border border-slate-100 bg-slate-50">
             {user?.uid && mounted ? (
-              <img 
-                src={`https://picsum.photos/seed/${user.uid}/64/64`} 
-                alt="Profile" 
-                className="w-full h-full object-cover" 
-              />
+              <img src={`https://picsum.photos/seed/${user.uid}/64/64`} alt="Profile" className="w-full h-full object-cover" />
             ) : (
-              <div className="w-full h-full bg-white/5" />
+              <div className="w-full h-full bg-slate-100" />
             )}
           </div>
           <div className="flex-1 min-w-0">
-            <p className="text-xs font-bold text-white truncate">{user?.displayName || 'Operator Client'}</p>
-            <p className="text-[9px] font-bold text-primary/60 uppercase tracking-widest truncate">Intelligence Active</p>
+            <p className="text-xs font-bold text-slate-900 truncate">{user?.displayName || 'User'}</p>
+            <p className="text-[9px] font-bold text-nordic-sage uppercase tracking-widest truncate">Verified Profile</p>
           </div>
         </div>
       </SidebarFooter>

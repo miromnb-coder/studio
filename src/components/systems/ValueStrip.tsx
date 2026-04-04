@@ -2,26 +2,26 @@ import type { ValueStripItem } from "./types";
 import { cn } from "@/lib/utils";
 
 const toneStyles = {
-  neutral: "text-foreground bg-white/[0.02] border border-white/[0.05] shadow-[inset_0_1px_1px_rgba(255,255,255,0.02)]",
-  positive: "text-success bg-success/5 border border-success/10 shadow-[0_0_20px_rgba(57,217,138,0.05)]",
-  warning: "text-warning bg-warning/5 border border-warning/10 shadow-[0_0_20px_rgba(245,196,81,0.05)]",
+  neutral: "text-slate-900 bg-white border border-slate-100 shadow-sm",
+  positive: "text-nordic-sage bg-nordic-moss/20 border border-nordic-moss/30 shadow-[0_8px_20px_rgba(91,109,68,0.05)]",
+  warning: "text-warning bg-amber-50 border border-amber-100 shadow-sm",
 };
 
 export function ValueStrip({ items }: { items: ValueStripItem[] }) {
   return (
-    <div className="grid gap-4 md:grid-cols-3">
+    <div className="grid gap-6 md:grid-cols-3">
       {items.map((item) => (
         <div
           key={item.label}
           className={cn(
-            "rounded-[2rem] px-8 py-6 backdrop-blur-xl transition-all duration-500 hover:scale-[1.02] group cursor-default",
+            "rounded-[2.5rem] px-10 py-8 transition-all duration-500 hover:scale-[1.02] group cursor-default",
             toneStyles[item.tone ?? "neutral"]
           )}
         >
-          <div className="text-[10px] uppercase font-bold tracking-[0.3em] opacity-40 group-hover:opacity-100 transition-opacity">
+          <div className="text-[10px] uppercase font-bold tracking-widest text-slate-400 group-hover:text-nordic-sage transition-colors">
             {item.label}
           </div>
-          <div className="mt-3 text-4xl font-bold font-headline tracking-tighter tabular-nums text-gradient group-hover:scale-105 transition-transform duration-500 origin-left">
+          <div className="mt-3 text-4xl font-bold tracking-tighter tabular-nums text-slate-900 group-hover:translate-x-1 transition-transform duration-500 origin-left">
             {item.value}
           </div>
         </div>
