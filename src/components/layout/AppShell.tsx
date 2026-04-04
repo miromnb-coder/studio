@@ -1,32 +1,12 @@
 "use client";
 
 import { ReactNode } from 'react';
-import { Sidebar } from './Sidebar';
 import { TopBar } from './TopBar';
 import { motion, AnimatePresence } from 'framer-motion';
 
 export function AppShell({ children }: { children: ReactNode }) {
   return (
-    <div className="min-h-screen w-full relative flex">
-      <Sidebar />
-      
-      <div className="flex-1 flex flex-col relative z-10 min-w-0">
-        <TopBar />
-        <main className="flex-1 w-full max-w-7xl mx-auto px-6 md:px-12 pb-32 pt-24">
-          <AnimatePresence mode="wait">
-            <motion.div
-              key="content"
-              initial={{ opacity: 0, y: 10 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -10 }}
-              transition={{ duration: 0.4, ease: [0.22, 1, 0.36, 1] }}
-            >
-              {children}
-            </motion.div>
-          </AnimatePresence>
-        </main>
-      </div>
-
+    <div className="min-h-screen w-full relative bg-[#FBFBFE] selection:bg-primary/10 selection:text-primary overflow-x-hidden">
       {/* Atmospheric visionOS Background */}
       <div className="fixed inset-0 pointer-events-none z-0 overflow-hidden">
         <motion.div 
@@ -46,6 +26,24 @@ export function AppShell({ children }: { children: ReactNode }) {
           className="absolute bottom-[-10%] right-[-10%] w-[50%] h-[50%] bg-blue-400/5 blur-[120px] rounded-full" 
         />
       </div>
+
+      <TopBar />
+      
+      <main className="relative z-10 flex flex-col items-center w-full min-h-screen pt-32 pb-32">
+        <div className="w-full max-w-5xl px-6">
+          <AnimatePresence mode="wait">
+            <motion.div
+              key="content"
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -10 }}
+              transition={{ duration: 0.4, ease: [0.22, 1, 0.36, 1] }}
+            >
+              {children}
+            </motion.div>
+          </AnimatePresence>
+        </div>
+      </main>
     </div>
   );
 }
