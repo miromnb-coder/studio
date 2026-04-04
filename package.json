@@ -1,4 +1,3 @@
-
 {
   "name": "nextn",
   "version": "0.1.0",
@@ -10,7 +9,8 @@
     "lint": "next lint",
     "typecheck": "tsc --noEmit",
     "git:sync": "git init && git add . && git commit -m 'V1 Core Engine: AI Life Operator' && gh repo create ai-life-operator --private --source=. --remote=origin --push",
-    "git:force-align": "git add . && git commit -m 'System Restore: Agent v3 Alignment' && git push origin main --force"
+    "git:force-align": "git add . && git commit -m 'System Restore: Agent v3 Alignment' && git push origin main --force",
+    "git:rebase-sync": "git stash && git pull origin main --rebase && git stash pop && git push origin main --force"
   },
   "dependencies": {
     "@hookform/resolvers": "^4.1.3",

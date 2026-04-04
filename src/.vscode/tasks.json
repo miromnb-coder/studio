@@ -16,6 +16,17 @@
       }
     },
     {
+      "label": "Rebase and Sync with Remote",
+      "type": "shell",
+      "command": "npm run git:rebase-sync",
+      "problemMatcher": [],
+      "group": "build",
+      "presentation": {
+        "reveal": "always",
+        "panel": "new"
+      }
+    },
+    {
       "label": "Login Status",
       "type": "shell",
       "command": "gh auth login",
