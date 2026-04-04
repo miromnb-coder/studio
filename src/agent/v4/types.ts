@@ -35,3 +35,20 @@ export interface AgentContext {
   finalResponse?: any;
   fastPathUsed: boolean;
 }
+
+export interface AgentStructuredData {
+  title?: string;
+  strategy?: string;
+  detectedItems?: unknown[];
+  savingsEstimate?: number;
+  beforeAfterComparison?: unknown;
+  memoryUpdates?: unknown;
+  [key: string]: unknown;
+}
+
+export interface AgentV4Result {
+  content: string;
+  intent: Intent;
+  mode: Intent;
+  data?: AgentStructuredData;
+}

@@ -16,10 +16,11 @@ export async function POST(req: Request) {
     console.log("LEGACY_REDIRECT: Routing to Agent v3...");
     const result = await runAgent(
       body.documentText || "Analysis Request",
+      body.userId || 'legacy-analyze-user',
       body.history || [],
-      body.userMemory || null,
       body.imageDataUri
     );
+    const nestedData = ((result.data as any)?.data ?? result.data) as any;
 
     // Maintain backwards compatibility for the return format
     return NextResponse.json({
@@ -27,9 +28,10 @@ export async function POST(req: Request) {
       summary: result.content,
       strategy: result.data?.strategy || "Standard advisor protocol.",
       mode: result.mode,
-      isActionable: result.isActionable,
-      detectedItems: result.data?.data?.detectedItems || result.data?.detectedItems || [],
-      savingsEstimate: result.data?.data?.savingsEstimate || result.data?.savingsEstimate || 0,
+      intent: result.intent,
+      isActionable: false,
+      detectedItems: nestedData?.detectedItems || [],
+      savingsEstimate: nestedData?.savingsEstimate || 0,
       beforeAfterComparison: result.data?.beforeAfterComparison || null,
       memoryUpdates: result.data?.memoryUpdates || null
     });

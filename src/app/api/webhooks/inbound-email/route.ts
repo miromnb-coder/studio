@@ -46,7 +46,11 @@ export async function POST(req: NextRequest) {
 
     // Execute Agent v3 Pipeline
     console.log(`WEBHOOK_INGEST: Processing email from ${fromAddress}...`);
-    const agentResult = await runAgent(`Email Audit Request: Subject: ${subject}\n\nContent: ${body}`);
+    const agentResult = await runAgent(
+      `Email Audit Request: Subject: ${subject}\n\nContent: ${body}`,
+      userId
+    );
+    const analysisData = ((agentResult.data as any)?.data ?? agentResult.data) as any;
 
     // Store the analysis
     await addDoc(collection(firestore, 'users', userId, 'analyses'), {
@@ -54,7 +58,7 @@ export async function POST(req: NextRequest) {
       source: 'email',
       title: agentResult.data?.title || subject,
       summary: agentResult.content,
-      estimatedMonthlySavings: agentResult.data?.data?.savingsEstimate || 0,
+      estimatedMonthlySavings: analysisData?.savingsEstimate || 0,
       analysisDate: new Date().toISOString(),
       status: 'completed',
       inputMethod: 'email',
