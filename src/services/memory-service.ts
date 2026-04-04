@@ -55,4 +55,23 @@ export class MemoryService {
       console.error('Failed to update user memory:', error);
     }
   }
+
+  /**
+   * Resets user memory to default state.
+   */
+  static async resetMemory(db: Firestore, userId: string) {
+    try {
+      const memoryRef = doc(db, 'users', userId, 'memory', 'main');
+      await setDoc(memoryRef, {
+        userId,
+        goals: [],
+        preferences: [],
+        subscriptions: [],
+        behaviorSummary: "Passive intelligence gathering reset.",
+        lastUpdated: serverTimestamp()
+      });
+    } catch (error) {
+      console.error('Failed to reset memory:', error);
+    }
+  }
 }

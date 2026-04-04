@@ -2,142 +2,211 @@
 "use client";
 
 import { useState, useEffect } from 'react';
-import Link from 'next/link';
 import { Navbar } from '@/components/layout/Navbar';
 import { 
-  Calendar, 
-  ChevronRight, 
-  Search,
-  FileText,
-  Mail,
+  BrainCircuit, 
+  Trash2, 
+  RefreshCcw, 
+  Target, 
+  Heart, 
+  Zap, 
+  Clock,
+  Plus,
   Loader2,
-  Cpu,
-  BrainCircuit
+  Database,
+  ArrowRight,
+  ShieldCheck,
+  X
 } from 'lucide-react';
-import { Input } from '@/components/ui/input';
-import { useUser, useFirestore, useCollection, useMemoFirebase } from '@/firebase';
-import { collection, query, orderBy } from 'firebase/firestore';
-import { motion } from 'framer-motion';
-import { Skeleton } from '@/components/ui/skeleton';
+import { Button } from '@/components/ui/button';
+import { Badge } from '@/components/ui/badge';
+import { Card } from '@/components/ui/card';
+import { useUser, useFirestore, useDoc, useMemoFirebase } from '@/firebase';
+import { doc, updateDoc, deleteField, serverTimestamp } from 'firebase/firestore';
+import { motion, AnimatePresence } from 'framer-motion';
+import { useToast } from '@/hooks/use-toast';
 
-export default function HistoryPage() {
+export default function MemoryPage() {
   const [mounted, setMounted] = useState(false);
   const { user } = useUser();
   const db = useFirestore();
-  const [searchTerm, setSearchTerm] = useState('');
+  const { toast } = useToast();
 
   useEffect(() => {
     setMounted(true);
   }, []);
 
-  const analysesQuery = useMemoFirebase(() => {
-    try {
-      if (!db || !user) return null;
-      return query(
-        collection(db, 'users', user.uid, 'analyses'),
-        orderBy('createdAt', 'desc')
-      );
-    } catch (e) {
-      console.error('History Query Error:', e);
-      return null;
-    }
+  const memoryRef = useMemoFirebase(() => {
+    if (!db || !user) return null;
+    return doc(db, 'users', user.uid, 'memory', 'main');
   }, [db, user]);
 
-  const { data: analyses, isLoading: isAnalysesLoading } = useCollection(analysesQuery);
+  const { data: memory, isLoading } = useDoc(memoryRef);
 
-  const filteredAnalyses = (Array.isArray(analyses) ? analyses : []).filter(a => 
-    a && (
-      (a.title || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
-      (a.summary || '').toLowerCase().includes(searchTerm.toLowerCase())
-    )
-  );
+  const removeMemoryItem = async (category: 'goals' | 'preferences' | 'subscriptions', item: string) => {
+    if (!memoryRef || !memory) return;
+    const updatedList = memory[category].filter((i: string) => i !== item);
+    
+    try {
+      await updateDoc(memoryRef, {
+        [category]: updatedList,
+        lastUpdated: serverTimestamp()
+      });
+      toast({ title: "Memory Updated", description: "Context item purged from neural database." });
+    } catch (e) {
+      toast({ variant: 'destructive', title: "Update Failed", description: "Insufficient clearance to modify memory." });
+    }
+  };
 
-  const isLoading = isAnalysesLoading || !mounted;
+  const clearMemory = async () => {
+    if (!memoryRef) return;
+    if (confirm("CRITICAL: Wipe all neural context? This will reset agent personalization.")) {
+      try {
+        await updateDoc(memoryRef, {
+          goals: [],
+          preferences: [],
+          subscriptions: [],
+          behaviorSummary: "Passive intelligence gathering reset.",
+          lastUpdated: serverTimestamp()
+        });
+        toast({ title: "Memory Wiped", description: "Agent context reset to default." });
+      } catch (e) {
+        toast({ variant: 'destructive', title: "Wipe Failed", description: "Database lock active." });
+      }
+    }
+  };
+
+  if (!mounted) return null;
 
   return (
-    <div className="min-h-screen bg-background pt-32 pb-32">
+    <div className="min-h-screen bg-background pt-24 pb-32">
       <Navbar />
       
-      <main className="max-w-3xl mx-auto px-6 space-y-16">
-        <header className="space-y-4">
-          <div className="flex items-center gap-3 text-primary mb-4">
-            <BrainCircuit className="w-6 h-6" />
-            <span className="text-[10px] font-bold uppercase tracking-[0.4em]">Historical Ledger</span>
+      <main className="max-w-4xl mx-auto px-6 space-y-12">
+        <header className="flex flex-col md:flex-row md:items-end justify-between gap-8 border-b border-white/5 pb-12">
+          <div className="space-y-4">
+            <div className="flex items-center gap-2 text-primary">
+              <Database className="w-5 h-5" />
+              <span className="text-[10px] font-bold uppercase tracking-[0.4em]">Memory Control Panel</span>
+            </div>
+            <h1 className="text-6xl md:text-8xl font-bold font-headline tracking-tighter leading-[0.9] text-white">Neural.</h1>
+            <p className="text-xl text-muted-foreground font-medium max-w-md">Manage persistent context and agent personalization.</p>
           </div>
-          <h1 className="text-5xl md:text-7xl font-bold font-headline tracking-tighter leading-[0.9] text-white">Neural Memory.</h1>
-          <p className="text-xl text-muted-foreground font-medium">Grouped intelligence patterns and reclaimed liquidty records.</p>
+          
+          <div className="flex items-center gap-3">
+            <Button variant="outline" onClick={clearMemory} className="rounded-xl border-white/5 hover:bg-danger/10 hover:text-danger text-[10px] font-bold uppercase tracking-widest h-12">
+              <Trash2 className="w-4 h-4 mr-2" />
+              Reset Memory
+            </Button>
+            <Button variant="outline" className="rounded-xl border-white/5 hover:bg-white/5 text-[10px] font-bold uppercase tracking-widest h-12">
+              <RefreshCcw className="w-4 h-4 mr-2" />
+              Refresh
+            </Button>
+          </div>
         </header>
 
-        <div className="relative">
-          <Search className="absolute left-5 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground/30" />
-          <Input 
-            placeholder="Search Neural Patterns..." 
-            className="pl-14 bg-white/5 border-white/5 rounded-2xl h-14 text-base font-medium focus:ring-primary/20 text-white"
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-          />
-        </div>
-
-        <section className="space-y-8">
-          <div className="flex items-center justify-between px-2">
-            <h3 className="text-[10px] font-bold uppercase tracking-[0.3em] text-muted-foreground">Pattern Recognition</h3>
-            <span className="text-[8px] font-bold uppercase text-primary tracking-widest">{filteredAnalyses.length} Records Identified</span>
+        {isLoading ? (
+          <div className="py-24 flex flex-col items-center justify-center gap-4 text-muted-foreground/30">
+            <Loader2 className="w-12 h-12 animate-spin" />
+            <p className="text-[10px] uppercase font-bold tracking-widest">Accessing Neural Database...</p>
           </div>
-
-          <div className="space-y-4">
-            {isLoading ? (
-              [...Array(5)].map((_, i) => (
-                <div key={i} className="premium-card flex items-center justify-between opacity-50">
-                  <Skeleton className="w-10 h-10 rounded-xl bg-white/5" />
-                  <div className="space-y-2 flex-1 mx-6">
-                    <Skeleton className="h-5 w-40 bg-white/5" />
-                    <Skeleton className="h-3 w-20 bg-white/5" />
-                  </div>
-                  <Skeleton className="h-8 w-16 bg-white/5" />
-                </div>
-              ))
-            ) : Array.isArray(filteredAnalyses) && filteredAnalyses.length > 0 ? (
-              filteredAnalyses.map((item, i) => (
-                <motion.div
-                  key={item.id}
-                  initial={{ opacity: 0, x: -10 }}
-                  animate={{ opacity: 1, x: 0 }}
-                  transition={{ delay: i * 0.05 }}
-                >
-                  <Link 
-                    href={`/results/${item.id}`}
-                    className="premium-card flex items-center justify-between group hover:bg-white/[0.04]"
-                  >
-                    <div className="flex items-center gap-6">
-                      <div className="w-10 h-10 rounded-xl bg-white/5 flex items-center justify-center border border-white/5 text-muted-foreground group-hover:text-primary transition-colors">
-                        {item.source === 'email' ? <Mail className="w-4 h-4" /> : <FileText className="w-4 h-4" />}
-                      </div>
-                      <div>
-                        <h3 className="font-bold text-lg font-headline tracking-tight text-white">{item.title || 'Audit Report'}</h3>
-                        <div className="flex items-center gap-3 text-[9px] text-muted-foreground font-bold uppercase tracking-widest">
-                          <span className="flex items-center gap-1">
-                            <Calendar className="w-2.5 h-2.5" />
-                            {item.analysisDate ? new Date(item.analysisDate).toLocaleDateString() : 'Recent'}
-                          </span>
-                          <span>• {item.source?.replace('_', ' ') || 'Manual'}</span>
-                        </div>
-                      </div>
-                    </div>
-                    
-                    <div className="flex items-center gap-8">
-                      <p className="text-xl font-bold text-success font-headline tracking-tight">+${item.estimatedMonthlySavings?.toFixed(0) || 0}</p>
-                      <ChevronRight className="w-4 h-4 text-muted-foreground group-hover:text-white transition-all group-hover:translate-x-1" />
-                    </div>
-                  </Link>
-                </motion.div>
-              ))
-            ) : (
-              <div className="premium-card py-24 text-center space-y-4 border-dashed border-white/10">
-                <p className="text-muted-foreground font-medium">No matching neural patterns found.</p>
+        ) : !memory ? (
+          <div className="premium-card py-24 text-center space-y-4 border-dashed border-white/10">
+            <BrainCircuit className="w-12 h-12 text-white/5 mx-auto" />
+            <div className="space-y-2">
+              <p className="text-xl font-bold text-white">No Stored Context</p>
+              <p className="text-sm text-muted-foreground max-w-xs mx-auto">Initialize an audit or chat to begin populating neural memory.</p>
+            </div>
+            <Button asChild className="rounded-xl font-bold uppercase tracking-widest text-[10px] h-12">
+              <a href="/">Initialize Agent</a>
+            </Button>
+          </div>
+        ) : (
+          <div className="grid gap-8">
+            {/* BEHAVIOR SUMMARY */}
+            <Card className="premium-card bg-primary/5 border-primary/20 p-8 space-y-4">
+              <div className="flex items-center gap-2">
+                <ShieldCheck className="w-4 h-4 text-primary" />
+                <h3 className="text-[10px] font-bold uppercase tracking-widest text-primary">Autonomous Behavior Profile</h3>
               </div>
-            )}
+              <p className="text-2xl font-bold text-white tracking-tight leading-snug">
+                "{memory.behaviorSummary}"
+              </p>
+              <div className="flex items-center gap-4 pt-4 text-[10px] font-bold text-muted-foreground/50 uppercase tracking-widest">
+                <span>Last Updated: {new Date(memory.lastUpdated?.toDate?.() || Date.now()).toLocaleString()}</span>
+                <span>• Sync Mode: REAL-TIME</span>
+              </div>
+            </Card>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+              {/* GOALS */}
+              <Card className="premium-card bg-white/[0.01] border-white/5 p-8 space-y-6">
+                <div className="flex items-center justify-between">
+                  <h3 className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground flex items-center gap-2">
+                    <Target className="w-3.5 h-3.5" />
+                    Priority Goals
+                  </h3>
+                  <Badge variant="outline" className="text-[8px] opacity-30">{memory.goals?.length || 0}</Badge>
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  {(memory.goals || []).map((goal: string) => (
+                    <Badge key={goal} variant="secondary" className="bg-white/5 border-white/5 hover:bg-white/10 text-[10px] py-1.5 px-3 rounded-xl flex items-center gap-2 group cursor-default">
+                      {goal}
+                      <X className="w-3 h-3 cursor-pointer opacity-20 group-hover:opacity-100 hover:text-danger transition-all" onClick={() => removeMemoryItem('goals', goal)} />
+                    </Badge>
+                  ))}
+                  <Button variant="ghost" className="rounded-xl h-8 px-3 text-[10px] border border-dashed border-white/10 hover:border-primary text-muted-foreground hover:text-primary">
+                    <Plus className="w-3 h-3 mr-2" /> Add Goal
+                  </Button>
+                </div>
+              </Card>
+
+              {/* PREFERENCES */}
+              <Card className="premium-card bg-white/[0.01] border-white/5 p-8 space-y-6">
+                <div className="flex items-center justify-between">
+                  <h3 className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground flex items-center gap-2">
+                    <Heart className="w-3.5 h-3.5" />
+                    Style Preferences
+                  </h3>
+                  <Badge variant="outline" className="text-[8px] opacity-30">{memory.preferences?.length || 0}</Badge>
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  {(memory.preferences || []).map((pref: string) => (
+                    <Badge key={pref} variant="secondary" className="bg-white/5 border-white/5 hover:bg-white/10 text-[10px] py-1.5 px-3 rounded-xl flex items-center gap-2 group cursor-default">
+                      {pref}
+                      <X className="w-3 h-3 cursor-pointer opacity-20 group-hover:opacity-100 hover:text-danger transition-all" onClick={() => removeMemoryItem('preferences', pref)} />
+                    </Badge>
+                  ))}
+                  <Button variant="ghost" className="rounded-xl h-8 px-3 text-[10px] border border-dashed border-white/10 hover:border-accent text-muted-foreground hover:text-accent">
+                    <Plus className="w-3 h-3 mr-2" /> Add Preference
+                  </Button>
+                </div>
+              </Card>
+
+              {/* SUBSCRIPTIONS */}
+              <Card className="md:col-span-2 premium-card bg-white/[0.01] border-white/5 p-8 space-y-6">
+                <div className="flex items-center justify-between">
+                  <h3 className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground flex items-center gap-2">
+                    <Zap className="w-3.5 h-3.5 text-warning" />
+                    Detected Subscriptions
+                  </h3>
+                  <Badge variant="outline" className="text-[8px] opacity-30">{memory.subscriptions?.length || 0}</Badge>
+                </div>
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                   {(memory.subscriptions || []).map((sub: string) => (
+                     <div key={sub} className="p-4 rounded-2xl bg-black/20 border border-white/5 flex items-center justify-between group">
+                        <span className="text-xs font-bold truncate pr-2">{sub}</span>
+                        <X className="w-3 h-3 cursor-pointer opacity-0 group-hover:opacity-100 hover:text-danger transition-all" onClick={() => removeMemoryItem('subscriptions', sub)} />
+                     </div>
+                   ))}
+                </div>
+                {(!memory.subscriptions || memory.subscriptions.length === 0) && (
+                  <p className="text-xs text-muted-foreground italic text-center py-4">No subscriptions detected in current memory cycle.</p>
+                )}
+              </Card>
+            </div>
           </div>
-        </section>
+        )}
       </main>
     </div>
   );

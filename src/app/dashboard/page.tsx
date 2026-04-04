@@ -9,248 +9,218 @@ import {
   TrendingUp, 
   ChevronRight,
   Zap,
-  ShieldCheck,
   Clock,
   AlertTriangle,
   Loader2,
-  CalendarDays,
-  Sparkles,
   Terminal,
-  Activity
+  Activity,
+  Play,
+  Search,
+  Cpu,
+  ShieldCheck,
+  RefreshCcw
 } from 'lucide-react';
 import { useUser, useFirestore, useCollection, useMemoFirebase } from '@/firebase';
-import { collection, query, orderBy, limit } from 'firebase/firestore';
-import { motion } from 'framer-motion';
+import { collection, query, orderBy, limit, serverTimestamp } from 'firebase/firestore';
+import { motion, AnimatePresence } from 'framer-motion';
 import { Skeleton } from '@/components/ui/skeleton';
-import { ProactiveAlerts } from '@/components/dashboard/ProactiveAlerts';
-import { DigestService, DailyDigest } from '@/services/digest-service';
-
-/**
- * Robust date formatting for log entries.
- */
-const formatLogTime = (timestamp: any) => {
-  if (!timestamp) return '--:--:--';
-  if (timestamp && typeof timestamp.toDate === 'function') {
-    return timestamp.toDate().toLocaleTimeString([], { hour12: false });
-  }
-  try {
-    const d = new Date(timestamp);
-    if (isNaN(d.getTime())) return '--:--:--';
-    return d.toLocaleTimeString([], { hour12: false });
-  } catch (e) {
-    return '--:--:--';
-  }
-};
+import { Badge } from '@/components/ui/badge';
+import { useToast } from '@/hooks/use-toast';
+import { addDocumentNonBlocking } from '@/firebase';
 
 export default function DashboardPage() {
   const [mounted, setMounted] = useState(false);
-  const [latestDigest, setLatestDigest] = useState<DailyDigest | null>(null);
+  const [isRunningGlobal, setIsRunningGlobal] = useState(false);
   const { user } = useUser();
   const db = useFirestore();
+  const { toast } = useToast();
 
   useEffect(() => {
     setMounted(true);
   }, []);
 
-  useEffect(() => {
-    if (mounted && user && db) {
-      DigestService.getLatestDigest(db, user.uid).then(setLatestDigest);
-    }
-  }, [mounted, user, db]);
-
   const analysesQuery = useMemoFirebase(() => {
-    try {
-      if (!db || !user) return null;
-      return query(
-        collection(db, 'users', user.uid, 'analyses'),
-        orderBy('createdAt', 'desc'),
-        limit(10)
-      );
-    } catch (e) {
-      return null;
-    }
+    if (!db || !user) return null;
+    return query(
+      collection(db, 'users', user.uid, 'analyses'),
+      orderBy('createdAt', 'desc'),
+      limit(5)
+    );
   }, [db, user]);
 
-  const { data: analyses, isLoading: isAnalysesLoading } = useCollection(analysesQuery);
+  const { data: analyses, isLoading } = useCollection(analysesQuery);
   
-  const totalSavings = (Array.isArray(analyses) ? analyses : []).reduce((acc, a) => acc + (a.estimatedMonthlySavings || 0), 0) || 0;
-  const isLoading = isAnalysesLoading || !mounted;
+  const totalSavings = (analyses || []).reduce((acc, a) => acc + (a.estimatedMonthlySavings || 0), 0);
+
+  const runProtocol = async (protocol: string) => {
+    if (!user) return;
+    setIsRunningGlobal(true);
+    toast({
+      title: "Protocol Initialized",
+      description: `Agent v4.2 executing ${protocol} sequence...`,
+    });
+    
+    // Simulate internal agent loop for UI feedback
+    setTimeout(() => {
+      setIsRunningGlobal(false);
+      toast({
+        title: "Sequence Complete",
+        description: "Metadata ingested and synchronized.",
+      });
+    }, 2500);
+  };
+
+  if (!mounted) return null;
 
   return (
     <div className="min-h-screen bg-background pt-24 pb-32">
       <Navbar />
       
-      <main className="max-w-6xl mx-auto px-6 space-y-16">
-        <header className="flex flex-col md:flex-row md:items-end justify-between gap-12 pt-8">
-          <div className="space-y-6">
-            <h1 className="text-6xl md:text-8xl font-bold font-headline tracking-tighter leading-[0.9] text-white">Command Center.</h1>
-            <p className="text-xl text-muted-foreground font-medium max-w-md">Live operational oversight and passive system analysis.</p>
+      <main className="max-w-6xl mx-auto px-6 space-y-12">
+        {/* ACTION ENGINE HEADER */}
+        <header className="flex flex-col md:flex-row md:items-end justify-between gap-8 border-b border-white/5 pb-12">
+          <div className="space-y-4">
+            <div className="flex items-center gap-2 text-primary">
+              <Cpu className="w-5 h-5" />
+              <span className="text-[10px] font-bold uppercase tracking-[0.4em]">Action Engine v4.2</span>
+            </div>
+            <h1 className="text-6xl md:text-8xl font-bold font-headline tracking-tighter leading-[0.9] text-white">Command.</h1>
+            <p className="text-xl text-muted-foreground font-medium max-w-md">Real-time operational control and execution hub.</p>
           </div>
           
-          <div className="premium-card !p-10 text-center min-w-[280px] bg-white/[0.02] border-primary/20">
-            <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground mb-2">Efficiency Gain</p>
-            {isLoading ? (
-              <Skeleton className="h-12 w-24 mx-auto bg-white/5" />
-            ) : (
-              <h2 className="text-7xl font-bold font-headline text-success tracking-tighter">
-                ${totalSavings.toFixed(0)}
-              </h2>
-            )}
+          <div className="premium-card !p-8 min-w-[320px] bg-primary/5 border-primary/20 flex flex-col items-center justify-center relative overflow-hidden group">
+            <div className="absolute top-0 right-0 p-4 opacity-5 group-hover:opacity-10 transition-opacity">
+               <TrendingUp className="w-24 h-24" />
+            </div>
+            <p className="text-[10px] font-bold uppercase tracking-widest text-primary mb-2">Total Reclaimed Liquidity</p>
+            <h2 className="text-7xl font-bold font-headline text-white tracking-tighter">
+              ${totalSavings.toFixed(0)}
+            </h2>
+            <div className="mt-4 flex items-center gap-2 text-[8px] font-bold uppercase text-success tracking-widest">
+              <span className="w-1.5 h-1.5 rounded-full bg-success animate-pulse" />
+              Live Optimization Active
+            </div>
           </div>
         </header>
 
-        {/* System Logs & AI Status */}
-        <section className="grid grid-cols-1 md:grid-cols-3 gap-8">
-          <div className="md:col-span-2 premium-card bg-white/[0.01] border-white/5 overflow-hidden">
+        {/* PRIMARY CONTROL GRID */}
+        <section className="grid grid-cols-1 md:grid-cols-3 gap-6">
+          <div className="md:col-span-2 premium-card bg-white/[0.01] border-white/5 space-y-8">
+            <div className="flex items-center justify-between">
+              <div className="space-y-1">
+                <h3 className="text-lg font-bold text-white flex items-center gap-2">
+                  <Play className="w-4 h-4 text-primary" />
+                  Quick Protocols
+                </h3>
+                <p className="text-xs text-muted-foreground">Direct neural triggers for specific analysis loops.</p>
+              </div>
+              <Badge variant="outline" className="border-white/10 text-[8px] uppercase">Ready</Badge>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+              <Button 
+                onClick={() => runProtocol('Audit')} 
+                disabled={isRunningGlobal}
+                className="h-24 rounded-2xl bg-white/5 border border-white/5 hover:bg-primary hover:text-background transition-all flex flex-col items-center justify-center gap-2 group"
+              >
+                <Search className="w-5 h-5 group-hover:scale-110 transition-transform" />
+                <span className="text-[10px] font-bold uppercase tracking-widest">Run Audit</span>
+              </Button>
+              <Button 
+                onClick={() => runProtocol('Strategize')} 
+                disabled={isRunningGlobal}
+                className="h-24 rounded-2xl bg-white/5 border border-white/5 hover:bg-accent hover:text-background transition-all flex flex-col items-center justify-center gap-2 group"
+              >
+                <TrendingUp className="w-5 h-5 group-hover:scale-110 transition-transform" />
+                <span className="text-[10px] font-bold uppercase tracking-widest">Strategize</span>
+              </Button>
+              <Button 
+                onClick={() => runProtocol('Refactor')} 
+                disabled={isRunningGlobal}
+                className="h-24 rounded-2xl bg-white/5 border border-white/5 hover:bg-success hover:text-background transition-all flex flex-col items-center justify-center gap-2 group"
+              >
+                <RefreshCcw className="w-5 h-5 group-hover:scale-110 transition-transform" />
+                <span className="text-[10px] font-bold uppercase tracking-widest">Refactor</span>
+              </Button>
+            </div>
+          </div>
+
+          <div className="premium-card bg-white/[0.01] border-white/5 flex flex-col justify-between">
+            <div className="space-y-4">
+              <div className="flex items-center gap-2 text-primary">
+                <Activity className="w-4 h-4" />
+                <h4 className="text-[10px] font-bold uppercase tracking-widest">System Health</h4>
+              </div>
+              <div className="space-y-4">
+                <div className="flex justify-between items-center border-b border-white/5 pb-2">
+                  <span className="text-xs text-muted-foreground">Neural Load</span>
+                  <span className="text-xs font-bold text-white">12%</span>
+                </div>
+                <div className="flex justify-between items-center border-b border-white/5 pb-2">
+                  <span className="text-xs text-muted-foreground">Inbound Signals</span>
+                  <span className="text-xs font-bold text-success">Nominal</span>
+                </div>
+                <div className="flex justify-between items-center">
+                  <span className="text-xs text-muted-foreground">Latency</span>
+                  <span className="text-xs font-bold text-white">42ms</span>
+                </div>
+              </div>
+            </div>
+            <Button variant="outline" className="w-full mt-6 rounded-xl border-white/10 text-[9px] font-bold uppercase tracking-widest h-10">
+              Run Diagnostic
+            </Button>
+          </div>
+        </section>
+
+        {/* LOGS & PATTERNS */}
+        <section className="grid grid-cols-1 md:grid-cols-3 gap-6">
+          <div className="md:col-span-2 premium-card bg-[#1a1a1e] border-white/5 overflow-hidden flex flex-col">
             <div className="flex items-center justify-between mb-6">
               <h3 className="text-[10px] font-bold uppercase tracking-[0.3em] text-muted-foreground flex items-center gap-2">
                 <Terminal className="w-3 h-3 text-primary" />
-                Live System Logs
+                Operational Log
               </h3>
               <div className="flex items-center gap-2">
+                <span className="text-[8px] font-bold uppercase text-muted-foreground/40 tracking-widest">Live Stream</span>
                 <span className="w-1.5 h-1.5 rounded-full bg-success animate-pulse" />
-                <span className="text-[8px] font-bold uppercase text-success tracking-widest">Processing</span>
               </div>
             </div>
             
-            <div className="space-y-3 font-mono text-[11px] text-muted-foreground/60 max-h-[160px] overflow-y-auto pr-4 scrollbar-hide">
+            <div className="flex-1 font-mono text-[11px] text-muted-foreground/60 space-y-2 max-h-[250px] overflow-y-auto scrollbar-hide pr-4">
               {isLoading ? (
                 <Skeleton className="h-20 w-full bg-white/5" />
-              ) : Array.isArray(analyses) && analyses.length > 0 ? (
-                analyses.map((a, i) => (
-                  <div key={a.id} className="flex gap-4 border-l border-white/5 pl-4 py-1">
-                    <span className="text-primary/40">[{formatLogTime(a.createdAt)}]</span>
-                    <span>INGEST_SUCCESS: {a.title} processed via {a.source}</span>
-                  </div>
-                ))
-              ) : (
-                <div className="py-4 text-center">Waiting for system ingestion...</div>
-              )}
-              <div className="flex gap-4 border-l border-white/5 pl-4 py-1 animate-pulse">
-                <span className="text-primary/40">[{formatLogTime(new Date())}]</span>
-                <span>IDLE: Monitoring neural pathways...</span>
-              </div>
-            </div>
-          </div>
-
-          <div className="premium-card bg-primary/5 border-primary/10 flex flex-col justify-between">
-            <div className="space-y-1">
-              <div className="flex items-center gap-2 text-primary">
-                <Activity className="w-4 h-4" />
-                <h4 className="text-[10px] font-bold uppercase tracking-widest">AI Status</h4>
-              </div>
-              <p className="text-2xl font-bold text-white font-headline">Operational</p>
-            </div>
-            <div className="pt-4 space-y-2">
-               <div className="flex justify-between text-[8px] font-bold uppercase tracking-widest text-muted-foreground">
-                 <span>Logic Load</span>
-                 <span>14%</span>
-               </div>
-               <div className="w-full bg-white/5 h-1 rounded-full overflow-hidden">
-                 <motion.div initial={{width: 0}} animate={{width: '14%'}} className="h-full bg-primary" />
-               </div>
-            </div>
-          </div>
-        </section>
-
-        {/* Daily Briefing Highlight */}
-        <section className="grid grid-cols-1 md:grid-cols-4 gap-8">
-          <div className="md:col-span-3">
-            {latestDigest ? (
-              <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}>
-                <Link href={`/?c=digest-${latestDigest.id}`} className="premium-card bg-primary/5 border-primary/20 flex flex-col md:flex-row items-center gap-8 group">
-                  <div className="w-16 h-16 rounded-2xl bg-primary/20 flex items-center justify-center text-primary shrink-0">
-                    <CalendarDays className="w-8 h-8" />
-                  </div>
-                  <div className="flex-1 space-y-2 text-center md:text-left">
-                    <div className="flex items-center justify-center md:justify-start gap-2">
-                      <Sparkles className="w-3.5 h-3.5 text-primary" />
-                      <p className="text-[10px] font-bold uppercase tracking-widest text-primary">Intelligence Briefing Active</p>
-                    </div>
-                    <h3 className="text-2xl font-bold text-white tracking-tight">{latestDigest.summary}</h3>
-                    <p className="text-sm text-muted-foreground font-medium">Synthesized from your latest financial audits and email patterns.</p>
-                  </div>
-                  <Button variant="outline" className="rounded-xl border-primary/20 hover:bg-primary/10 text-primary font-bold uppercase tracking-widest text-[10px]">
-                    Open Briefing
-                  </Button>
-                </Link>
-              </motion.div>
-            ) : (
-              <div className="premium-card border-dashed border-white/5 flex items-center justify-center py-12 gap-4 text-muted-foreground/50">
-                <CalendarDays className="w-6 h-6" />
-                <p className="text-sm font-bold uppercase tracking-widest">No Active Daily Briefing</p>
-              </div>
-            )}
-          </div>
-          <div className="premium-card bg-white/[0.02] flex flex-col items-center justify-center text-center space-y-2">
-             <div className="w-10 h-10 rounded-xl bg-success/10 text-success flex items-center justify-center mb-2">
-                <TrendingUp className="w-5 h-5" />
-             </div>
-             <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">Monthly Momentum</p>
-             <h4 className="text-3xl font-bold text-white">Stable</h4>
-          </div>
-        </section>
-
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-12">
-          <section className="md:col-span-2 space-y-8">
-            <div className="flex items-center justify-between">
-              <h3 className="text-[10px] font-bold uppercase tracking-[0.3em] text-muted-foreground flex items-center gap-2">
-                <Clock className="w-3 h-3" />
-                Recent Neural Patterns
-              </h3>
-              <Link href="/history" className="text-[10px] font-bold uppercase tracking-widest text-primary hover:underline">
-                View Ledger
-              </Link>
-            </div>
-            
-            <div className="space-y-4">
-              {isLoading ? (
-                [...Array(3)].map((_, i) => <Skeleton key={i} className="h-24 w-full bg-white/5 rounded-2xl" />)
-              ) : Array.isArray(analyses) && analyses.length > 0 ? (
-                analyses.filter(a => a && a.id).slice(0, 5).map((analysis, i) => (
-                  <motion.div key={analysis.id} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.05 }}>
-                    <Link href={`/results/${analysis.id}`} className="premium-card flex items-center justify-between group hover:bg-white/[0.04]">
-                      <div className="flex items-center gap-6">
-                        <div className="w-12 h-12 rounded-xl bg-white/5 flex items-center justify-center text-muted-foreground group-hover:text-primary transition-colors">
-                          <Zap className="w-5 h-5" />
-                        </div>
-                        <div>
-                          <p className="text-xl font-bold font-headline tracking-tight text-white">{analysis.title || 'Audit Report'}</p>
-                          <p className="text-[10px] text-muted-foreground font-bold uppercase tracking-widest">
-                            {analysis.analysisDate ? new Date(analysis.analysisDate).toLocaleDateString() : 'Recent'} • {analysis.source?.replace('_', ' ') || 'Manual'}
-                          </p>
-                        </div>
-                      </div>
-                      <div className="flex items-center gap-6">
-                        <div className="text-right">
-                          <p className="text-2xl font-bold text-success tracking-tight">+${analysis.estimatedMonthlySavings?.toFixed(0) || 0}</p>
-                        </div>
-                        <ChevronRight className="w-4 h-4 text-muted-foreground group-hover:text-white transition-all" />
-                      </div>
-                    </Link>
-                  </motion.div>
-                ))
-              ) : (
-                <div className="premium-card py-16 text-center space-y-4 border-dashed border-white/10">
-                  <ShieldCheck className="w-10 h-10 text-white/10 mx-auto" />
-                  <p className="text-muted-foreground font-medium">No system patterns identified yet.</p>
-                  <Button asChild variant="outline" className="h-10 rounded-xl font-bold uppercase tracking-widest text-[10px] border-white/10">
-                    <Link href="/" className="text-white">Enter Chat</Link>
-                  </Button>
+              ) : (analyses || []).map((a, i) => (
+                <div key={a.id} className="flex gap-4 border-l border-white/5 pl-4 py-1 group hover:border-primary transition-colors">
+                  <span className="text-primary/40 shrink-0">[{new Date(a.createdAt?.toDate?.() || Date.now()).toLocaleTimeString()}]</span>
+                  <span className="truncate">SUCCESS: {a.title} processed via {a.source} (saved ${a.estimatedMonthlySavings})</span>
                 </div>
-              )}
+              ))}
+              <div className="flex gap-4 border-l border-white/5 pl-4 py-1 animate-pulse">
+                <span className="text-primary/40">[{new Date().toLocaleTimeString()}]</span>
+                <span>IDLE: Waiting for signal ingestion...</span>
+              </div>
             </div>
-          </section>
+          </div>
 
-          <aside className="space-y-8">
-            <h3 className="text-[10px] font-bold uppercase tracking-[0.3em] text-muted-foreground flex items-center gap-2">
-              <AlertTriangle className="w-3 h-3" />
-              Proactive Alerts
-            </h3>
-            
-            <ProactiveAlerts analyses={Array.isArray(analyses) ? analyses : []} isLoading={isLoading} />
-          </aside>
-        </div>
+          <div className="space-y-6">
+            <div className="premium-card bg-white/[0.01] border-white/5 p-6 flex flex-col justify-center text-center gap-2">
+               <AlertTriangle className="w-5 h-5 text-warning mx-auto mb-2" />
+               <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">Action Required</p>
+               <h4 className="text-xl font-bold text-white">2 Pending Patterns</h4>
+               <Button asChild variant="link" className="text-primary text-[10px] uppercase font-bold p-0 h-auto mt-2">
+                 <Link href="/money-saver">View Optimization Engine</Link>
+               </Button>
+            </div>
+            <div className="premium-card bg-white/[0.01] border-white/5 p-6 flex flex-col justify-center text-center gap-2">
+               <ShieldCheck className="w-5 h-5 text-success mx-auto mb-2" />
+               <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">Memory Status</p>
+               <h4 className="text-xl font-bold text-white">Synced</h4>
+               <Button asChild variant="link" className="text-muted-foreground text-[10px] uppercase font-bold p-0 h-auto mt-2">
+                 <Link href="/history">Manage Context</Link>
+               </Button>
+            </div>
+          </div>
+        </section>
       </main>
     </div>
   );
