@@ -60,40 +60,42 @@ export function TopBar() {
 
   return (
     <>
-      <header className="fixed top-6 left-1/2 -translate-x-1/2 z-[150] w-[calc(100%-2rem)] max-w-5xl pointer-events-none">
-        <div className="glass-panel h-16 px-3 md:px-6 flex items-center justify-between rounded-full border-white/80 shadow-[0_20px_40px_-12px_rgba(0,0,0,0.15)] pointer-events-auto ring-1 ring-white/20">
-          {/* Left: Enhanced Navigation Trigger */}
-          <div className="flex items-center gap-2 md:gap-4">
+      <header className="fixed top-4 md:top-6 left-1/2 -translate-x-1/2 z-[150] w-[calc(100%-1rem)] md:w-[calc(100%-2rem)] max-w-5xl pointer-events-none">
+        <div className="glass-panel h-14 md:h-16 px-2 md:px-6 flex items-center justify-between rounded-full border-white/80 shadow-[0_20px_40px_-12px_rgba(0,0,0,0.15)] pointer-events-auto ring-1 ring-white/20">
+          
+          {/* Left Section: Menu & Identity */}
+          <div className="flex items-center gap-1 md:gap-4 shrink-0">
             <motion.button 
               whileHover={{ scale: 1.05 }}
               whileTap={{ scale: 0.95 }}
               onClick={toggleMenu}
-              aria-label={isMenuOpen ? "Close menu" : "Open menu"}
               className={cn(
-                "h-11 px-4 rounded-full flex items-center gap-2.5 transition-all active:shadow-inner z-[160]",
+                "h-10 md:h-11 px-3 md:px-4 rounded-full flex items-center gap-2 transition-all z-[160]",
                 isMenuOpen 
                   ? "bg-slate-900 text-white" 
                   : "bg-white/80 hover:bg-white text-slate-900 shadow-sm border border-slate-200/50"
               )}
             >
-              {isMenuOpen ? <X className="w-4" /> : <Menu className="w-4 h-4" />}
-              <span className="text-[10px] font-black uppercase tracking-[0.2em] hidden sm:block">Menu</span>
+              {isMenuOpen ? <X className="w-4 h-4" /> : <Menu className="w-4 h-4" />}
+              <span className="text-[10px] font-black uppercase tracking-[0.1em] hidden md:block">Menu</span>
             </motion.button>
-            <div className="h-6 w-px bg-slate-200/60 hidden md:block" />
+            
+            <div className="h-6 w-px bg-slate-200/40 hidden sm:block" />
+            
             <div className="hidden lg:flex flex-col">
               <span className="text-[10px] font-bold tracking-tighter text-slate-900 leading-none">OPERATOR</span>
-              <span className="text-[8px] font-bold text-primary uppercase tracking-[0.2em] mt-0.5">V5.6</span>
+              <span className="text-[8px] font-black text-primary uppercase tracking-[0.2em] mt-0.5">V5.6</span>
             </div>
           </div>
 
-          {/* Center: System Status & Upgrade CTA */}
-          <div className="flex items-center gap-4 md:gap-6">
+          {/* Center Section: Usage & Status */}
+          <div className="flex items-center gap-2 md:gap-6 px-2">
             {isFree && status && (
-              <div className="flex items-center gap-4 bg-slate-50/50 border border-slate-100 rounded-full pl-4 pr-1 py-1 h-11">
-                <div className="flex flex-col w-16 gap-1">
+              <div className="flex items-center gap-2 md:gap-4 bg-slate-50/50 border border-slate-100 rounded-full pl-3 pr-1 py-1 h-9 md:h-11">
+                <div className="hidden sm:flex flex-col w-12 md:w-16 gap-1">
                   <Progress value={usagePercent} className="h-1 bg-slate-200" />
-                  <span className="text-[7px] font-black text-slate-400 uppercase tracking-widest leading-none">
-                    {status.usage.agentRuns}/{status.usage.limit} RUNS
+                  <span className="text-[7px] font-black text-slate-400 uppercase tracking-widest leading-none truncate">
+                    {status.usage.agentRuns}/{status.usage.limit}
                   </span>
                 </div>
                 <UpgradeButton />
@@ -103,26 +105,28 @@ export function TopBar() {
             {!isFree && (
               <motion.div 
                 whileHover={{ scale: 1.02 }}
-                className="flex items-center gap-2 px-4 py-2 rounded-full bg-success/5 border border-success/10 cursor-default"
+                className="flex items-center gap-2 px-3 md:px-4 py-1.5 md:py-2 rounded-full bg-success/5 border border-success/10 cursor-default"
               >
-                <TrendingUp className="w-3.5 h-3.5 text-success" />
-                <span className="text-[10px] font-bold text-slate-900">${totalSaved.toFixed(0)} SAVED</span>
+                <TrendingUp className="w-3 md:w-3.5 h-3 md:h-3.5 text-success" />
+                <span className="text-[9px] md:text-[10px] font-bold text-slate-900 truncate">${totalSaved.toFixed(0)} <span className="hidden sm:inline">SAVED</span></span>
               </motion.div>
             )}
             
-            <StatusDot status="active" />
+            <div className="hidden xs:block">
+              <StatusDot status="active" />
+            </div>
           </div>
 
-          {/* Right: Actions */}
-          <div className="flex items-center gap-1 md:gap-2">
+          {/* Right Section: Notifications & Profile */}
+          <div className="flex items-center gap-1 md:gap-2 shrink-0">
             <Popover>
               <PopoverTrigger asChild>
-                <button className="w-10 h-10 rounded-full flex items-center justify-center text-slate-400 hover:bg-white/60 transition-all relative active:scale-90">
+                <button className="w-9 md:w-10 h-9 md:h-10 rounded-full flex items-center justify-center text-slate-400 hover:bg-white/60 transition-all relative active:scale-90">
                   <Bell className="w-4 h-4" />
-                  <span className="absolute top-3 right-3 w-1.5 h-1.5 bg-primary rounded-full border border-white" />
+                  <span className="absolute top-2.5 md:top-3 right-2.5 md:right-3 w-1.5 h-1.5 bg-primary rounded-full border-2 border-white" />
                 </button>
               </PopoverTrigger>
-              <PopoverContent className="w-80 glass-panel p-4 shadow-xl mt-4 rounded-[2rem] border-white/60" align="end">
+              <PopoverContent className="w-72 md:w-80 glass-panel p-4 shadow-xl mt-4 rounded-[2rem] border-white/60" align="end">
                 <div className="space-y-4">
                   <div className="flex items-center justify-between border-b border-slate-100/60 pb-3">
                     <p className="text-[10px] font-bold uppercase tracking-widest text-slate-400">Intelligence Alerts</p>
@@ -143,7 +147,7 @@ export function TopBar() {
 
             <Popover>
               <PopoverTrigger asChild>
-                <button className="w-10 h-10 rounded-full overflow-hidden border-2 border-white shadow-sm ring-1 ring-slate-100 active:scale-90 transition-transform">
+                <button className="w-9 md:w-10 h-9 md:h-10 rounded-full overflow-hidden border-2 border-white shadow-sm ring-1 ring-slate-100 active:scale-90 transition-transform">
                   {user?.uid ? (
                     <img src={`https://picsum.photos/seed/${user.uid}/40/40`} alt="User" className="w-full h-full object-cover" />
                   ) : (
