@@ -5,6 +5,7 @@ import { ValueStrip } from "./ValueStrip";
 import { SystemModuleCard } from "./SystemModuleCard";
 import type { SystemModule, ValueStripItem } from "./types";
 import { cn } from "@/lib/utils";
+import { motion } from "framer-motion";
 
 type FocusMode = "all" | "command" | "memory" | "autopilot" | "integrations";
 
@@ -37,7 +38,7 @@ export function SystemsPanel({
 
   return (
     <div className="space-y-12">
-      <div className="flex flex-wrap items-center gap-2 pb-2 border-b border-white/5">
+      <div className="flex flex-wrap items-center gap-3 pb-4 border-b border-slate-200/40">
         {(["all", "command", "memory", "autopilot", "integrations"] as FocusMode[]).map(
           (mode) => {
             const active = focus === mode;
@@ -47,21 +48,21 @@ export function SystemsPanel({
                 type="button"
                 onClick={() => setFocus(mode)}
                 className={cn(
-                  "rounded-full px-5 py-2 text-[10px] font-bold uppercase tracking-[0.2em] transition-all",
+                  "rounded-2xl px-6 py-2.5 text-[10px] font-bold uppercase tracking-[0.25em] transition-all duration-500 active:scale-95",
                   active
-                    ? "bg-primary text-background shadow-lg shadow-primary/20"
-                    : "text-muted-foreground hover:text-white hover:bg-white/5"
+                    ? "bg-white text-primary shadow-[0_8px_20px_rgba(59,130,246,0.15)] ring-1 ring-primary/20"
+                    : "text-slate-400 hover:text-slate-900 hover:bg-white/60"
                 )}
               >
                 {mode === "all"
-                  ? "All Modules"
+                  ? "Global"
                   : mode === "command"
                   ? "Action"
                   : mode === "memory"
-                  ? "Memory"
+                  ? "Neural"
                   : mode === "autopilot"
-                  ? "Optimizer"
-                  : "Systems"}
+                  ? "Optimize"
+                  : "Status"}
               </button>
             );
           }
@@ -70,11 +71,14 @@ export function SystemsPanel({
 
       <ValueStrip items={valueStrip} />
 
-      <div className="grid gap-6 lg:grid-cols-2">
+      <motion.div 
+        layout
+        className="grid gap-8 lg:grid-cols-2"
+      >
         {filteredSystems.map((system) => (
           <SystemModuleCard key={system.id} system={system} />
         ))}
-      </div>
+      </motion.div>
     </div>
   );
 }

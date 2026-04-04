@@ -14,7 +14,8 @@ import {
   Terminal,
   ShieldCheck,
   Activity,
-  ArrowRight
+  ArrowRight,
+  Sparkles
 } from 'lucide-react';
 import { useState } from 'react';
 import { cn } from '@/lib/utils';
@@ -50,127 +51,122 @@ export function RichAnalysisCard({ data }: RichAnalysisCardProps) {
 
   return (
     <motion.div 
-      initial={{ opacity: 0, y: 10 }}
-      animate={{ opacity: 1, y: 0 }}
-      className="grid gap-6 mt-6 w-full text-left"
+      initial={{ opacity: 0, y: 30, scale: 0.98 }}
+      animate={{ opacity: 1, y: 0, scale: 1 }}
+      transition={{ duration: 0.8, ease: [0.4, 0, 0.2, 1] }}
+      className="grid gap-8 mt-10 w-full text-left"
     >
       {/* Intelligence Briefing Card */}
-      <Card className="glass-panel p-10 rounded-[2rem] space-y-8">
-        <div className="flex justify-between items-start gap-6">
-          <div className="space-y-2">
-            <div className="flex items-center gap-2.5">
-              <div className="w-8 h-8 rounded-xl bg-primary/10 flex items-center justify-center text-primary">
-                <Target className="w-4 h-4" />
+      <Card className="glass-panel p-12 rounded-[3rem] border-white/80 shadow-2xl relative overflow-hidden group">
+        <div className="absolute top-0 right-0 w-64 h-64 bg-primary/5 rounded-full blur-3xl -mr-32 -mt-32" />
+        
+        <div className="flex justify-between items-start gap-10 relative z-10">
+          <div className="space-y-4">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-[1rem] bg-primary/10 flex items-center justify-center text-primary shadow-sm ring-1 ring-primary/20">
+                <Target className="w-5 h-5" />
               </div>
-              <p className="text-[11px] font-bold uppercase tracking-widest text-primary">Strategic Objective</p>
+              <p className="text-[11px] font-bold uppercase tracking-[0.4em] text-primary">Strategic Objective</p>
             </div>
-            <h3 className="text-3xl font-bold tracking-tight text-slate-900">
-              Extraction Protocol
+            <h3 className="text-4xl font-bold tracking-tighter text-slate-900">
+              Extraction Node
             </h3>
           </div>
-          <div className="flex items-center gap-2 px-3 py-1.5 bg-slate-50 border border-slate-100 rounded-full">
-            <Activity className="w-3.5 h-3.5 text-slate-400" />
-            <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Live Logic</span>
+          <div className="flex items-center gap-3 px-4 py-2 bg-white/60 border border-white/80 rounded-full shadow-sm">
+            <Activity className="w-4 h-4 text-primary animate-pulse" />
+            <span className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Real-Time Synthesis</span>
           </div>
         </div>
         
-        <div className="p-6 bg-slate-50 rounded-2xl border border-slate-100">
-          <p className="text-sm font-semibold text-slate-700 leading-relaxed italic">
-            "{data.strategy || 'Calculated response vector in progress...'}"
+        <div className="mt-10 p-8 bg-white/40 rounded-[2rem] border border-white/80 shadow-inner group-hover:bg-white/60 transition-all duration-700">
+          <p className="text-base font-bold text-slate-700 leading-relaxed italic opacity-80">
+            "{data.strategy || 'Calculating optimal response vector...'}"
           </p>
         </div>
 
-        <div className="grid grid-cols-2 gap-6 pt-6 border-t border-slate-100">
-          <div className="space-y-1">
-            <p className="text-[10px] font-bold uppercase tracking-widest text-slate-400">Annual Projection</p>
-            <p className="text-2xl font-bold text-success tracking-tight">${(savingsEstimate * 12).toFixed(0)}</p>
+        <div className="grid grid-cols-2 gap-10 mt-10 pt-10 border-t border-slate-100/60">
+          <div className="space-y-2">
+            <p className="text-[10px] font-bold uppercase tracking-[0.3em] text-slate-400">Annual Projection</p>
+            <div className="flex items-baseline gap-1">
+              <span className="text-sm font-bold text-success/60">$</span>
+              <p className="text-4xl font-bold text-success tracking-tighter">${(savingsEstimate * 12).toFixed(0)}</p>
+            </div>
           </div>
-          <div className="text-right space-y-1">
-            <p className="text-[10px] font-bold uppercase tracking-widest text-slate-400">Monthly Yield</p>
-            <p className="text-2xl font-bold text-primary tracking-tight">+${savingsEstimate.toFixed(0)}</p>
+          <div className="text-right space-y-2">
+            <p className="text-[10px] font-bold uppercase tracking-[0.3em] text-slate-400">Monthly Yield</p>
+            <div className="flex items-baseline justify-end gap-1">
+              <span className="text-sm font-bold text-primary/60">+</span>
+              <p className="text-4xl font-bold text-primary tracking-tighter">${savingsEstimate.toFixed(0)}</p>
+            </div>
           </div>
         </div>
       </Card>
 
-      {/* Comparison Protocol */}
-      {data.beforeAfterComparison && (
-        <div className="grid md:grid-cols-2 gap-4">
-          <div className="glass-card p-6 rounded-2xl space-y-3">
-            <div className="flex items-center gap-2 text-slate-400">
-              <ShieldCheck className="w-3.5 h-3.5" />
-              <p className="text-[10px] font-bold uppercase tracking-widest">Initial State</p>
-            </div>
-            <p className="text-xs font-semibold text-slate-500 leading-relaxed italic">"{data.beforeAfterComparison.currentSituation}"</p>
-          </div>
-          <div className="glass-card p-6 rounded-2xl space-y-3 border-primary/20">
-            <div className="flex items-center gap-2 text-primary">
-              <Zap className="w-3.5 h-3.5" />
-              <p className="text-[10px] font-bold uppercase tracking-widest">Optimized State</p>
-            </div>
-            <p className="text-xs font-bold text-slate-900 leading-relaxed">"{data.beforeAfterComparison.optimizedSituation}"</p>
-          </div>
-        </div>
-      )}
-
       {/* Observation Ledger */}
       {detectedItems.length > 0 && (
-        <div className="space-y-4">
-          <div className="flex items-center justify-between px-2">
-            <div className="flex items-center gap-2.5">
-              <Terminal className="w-4 h-4 text-slate-400" />
-              <p className="text-[11px] font-bold uppercase tracking-widest text-slate-400">Anomalies Detected</p>
+        <div className="space-y-6">
+          <div className="flex items-center justify-between px-4">
+            <div className="flex items-center gap-4">
+              <Terminal className="w-5 h-5 text-slate-400" />
+              <p className="text-[11px] font-bold uppercase tracking-[0.4em] text-slate-400">Telemetry Anomalies</p>
             </div>
-            <Badge className="bg-slate-100 text-slate-500 border-0 rounded-full text-[10px] px-2.5">{detectedItems.length} Findings</Badge>
+            <Badge className="bg-white/60 text-slate-500 border-white shadow-sm rounded-full text-[10px] font-bold px-4 py-1 uppercase tracking-widest">{detectedItems.length} Findings</Badge>
           </div>
           
-          <div className="grid gap-3">
+          <div className="grid gap-4">
             {detectedItems.map((item: any, idx: number) => (
-              <div key={idx} className="glass-card p-6 rounded-2xl group hover:border-primary/20">
-                <div className="flex items-center justify-between gap-4">
-                  <div className="flex items-center gap-4">
-                    <div className="w-11 h-11 rounded-xl bg-slate-50 border border-slate-100 flex items-center justify-center group-hover:bg-primary/10 group-hover:text-primary transition-all">
-                      <Zap className="w-5 h-5" />
+              <motion.div 
+                key={idx}
+                whileHover={{ scale: 1.01, y: -4 }}
+                className="glass-card p-8 rounded-[2.5rem] group hover:bg-white/80"
+              >
+                <div className="flex items-center justify-between gap-6">
+                  <div className="flex items-center gap-6">
+                    <div className="w-14 h-14 rounded-[1.5rem] bg-white border border-white/80 shadow-sm flex items-center justify-center group-hover:shadow-[0_8px_20px_rgba(59,130,246,0.1)] transition-all duration-500">
+                      <Zap className="w-6 h-6 text-primary" />
                     </div>
-                    <div className="space-y-1">
-                      <p className="text-sm font-bold text-slate-900">{item.title}</p>
-                      <div className="flex items-center gap-3">
+                    <div className="space-y-2">
+                      <p className="text-lg font-bold text-slate-900 tracking-tight">{item.title}</p>
+                      <div className="flex items-center gap-4">
                         <Badge className={cn(
-                          "text-[9px] font-bold uppercase tracking-wider px-2 rounded-full",
+                          "text-[9px] font-bold uppercase tracking-[0.2em] px-3 py-0.5 rounded-full border-0 shadow-sm",
                           item.urgencyLevel === 'high' ? "bg-danger/10 text-danger" : "bg-primary/10 text-primary"
                         )}>
                           {item.urgencyLevel || 'Standard'}
                         </Badge>
-                        <span className="text-[10px] font-bold text-success uppercase tracking-wider">Save ${item.estimatedSavings || 0}</span>
+                        <span className="text-[11px] font-bold text-success uppercase tracking-[0.2em] flex items-center gap-1.5">
+                          <Sparkles className="w-3 h-3" /> Save ${item.estimatedSavings || 0}
+                        </span>
                       </div>
                     </div>
                   </div>
-                  <ChevronRight className="w-5 h-5 text-slate-300 opacity-0 group-hover:opacity-100 transition-all" />
+                  <ChevronRight className="w-6 h-6 text-slate-300 opacity-0 group-hover:opacity-100 group-hover:translate-x-2 transition-all duration-500" />
                 </div>
                 
-                <div className="mt-5 pt-5 border-t border-slate-50 space-y-5">
-                  <p className="text-xs text-slate-500 font-semibold leading-relaxed">"{item.summary}"</p>
+                <div className="mt-8 pt-8 border-t border-slate-50/60 space-y-6">
+                  <p className="text-sm text-slate-500 font-bold leading-relaxed opacity-70 italic">"{item.summary}"</p>
                   
                   {item.copyableMessage && (
-                    <div className="p-4 bg-slate-50/50 rounded-xl border border-slate-100 space-y-3">
+                    <div className="p-6 bg-white/40 rounded-[1.5rem] border border-white/80 space-y-4 shadow-inner">
                       <div className="flex items-center justify-between">
-                        <p className="text-[10px] font-bold uppercase tracking-widest text-slate-400">Transmission Draft</p>
+                        <p className="text-[9px] font-bold uppercase tracking-[0.3em] text-slate-400">Transmission Protocol Draft</p>
                         <Button 
                           variant="ghost" 
                           size="sm" 
-                          className="h-7 px-3 rounded-lg text-[10px] font-bold uppercase tracking-wider gap-1.5 hover:bg-white hover:text-primary shadow-sm"
+                          className="h-8 px-4 rounded-xl text-[9px] font-bold uppercase tracking-[0.25em] gap-2 hover:bg-white hover:text-primary shadow-sm border border-transparent hover:border-white/80"
                           onClick={() => handleCopy(item.copyableMessage, `item-${idx}`)}
                         >
                           {copiedId === `item-${idx}` ? <Check className="w-3 h-3 text-success" /> : <Copy className="w-3 h-3" />}
-                          {copiedId === `item-${idx}` ? 'Copied' : 'Copy Draft'}
+                          {copiedId === `item-${idx}` ? 'Copied' : 'Copy Protocol'}
                         </Button>
                       </div>
-                      <p className="text-[11px] font-medium leading-relaxed text-slate-600 line-clamp-2 italic">
+                      <p className="text-xs font-bold leading-relaxed text-slate-600 line-clamp-2 opacity-80">
                         {item.copyableMessage}
                       </p>
                     </div>
                   )}
                 </div>
-              </div>
+              </motion.div>
             ))}
           </div>
         </div>

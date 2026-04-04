@@ -15,7 +15,8 @@ import {
   Activity,
   Cpu,
   Database,
-  CloudLightning
+  CloudLightning,
+  Sparkles
 } from 'lucide-react';
 import { 
   Sidebar, 
@@ -32,6 +33,7 @@ import { Input } from '@/components/ui/input';
 import { useUser, useFirestore, useCollection, useMemoFirebase } from '@/firebase';
 import { collection, query, orderBy, limit } from 'firebase/firestore';
 import { cn } from '@/lib/utils';
+import { motion } from 'framer-motion';
 
 export function AppSidebar() {
   const [mounted, setMounted] = useState(false);
@@ -81,46 +83,49 @@ export function AppSidebar() {
   const isSyncing = !mounted || isLoading;
 
   return (
-    <Sidebar className="border-r border-slate-200/60 bg-slate-50/50 backdrop-blur-xl">
-      <SidebarHeader className="p-6">
-        <Link href="/" className="flex items-center gap-3 group">
-          <div className="flex items-center justify-center w-9 h-9 bg-primary rounded-2xl text-white transition-all group-hover:scale-105 shadow-lg shadow-primary/20">
-            <Cpu className="w-5 h-5" />
+    <Sidebar className="border-r border-white/40 bg-white/20 backdrop-blur-3xl m-4 h-[calc(100vh-2rem)] rounded-[2.5rem] shadow-xl overflow-hidden">
+      <SidebarHeader className="p-8">
+        <Link href="/" className="flex items-center gap-4 group">
+          <div className="flex items-center justify-center w-11 h-11 bg-primary rounded-[1.25rem] text-white transition-all group-hover:scale-110 shadow-lg shadow-primary/30">
+            <Cpu className="w-6 h-6" />
           </div>
-          <span className="font-bold text-sm tracking-tight text-slate-900">Operator</span>
+          <div className="flex flex-col">
+            <span className="font-bold text-lg tracking-tighter text-slate-900 leading-none mb-1">Operator</span>
+            <span className="text-[9px] font-bold text-primary uppercase tracking-[0.25em] leading-none">Ultra Glass</span>
+          </div>
         </Link>
       </SidebarHeader>
 
-      <SidebarContent>
+      <SidebarContent className="px-4">
         <SidebarGroup>
-          <SidebarMenu className="px-4">
+          <SidebarMenu>
             <SidebarMenuItem>
               <SidebarMenuButton 
                 onClick={() => router.push('/')}
-                className="h-11 bg-primary text-white hover:bg-primary/90 rounded-2xl transition-all px-4 group flex justify-between shadow-md shadow-primary/10"
+                className="h-14 bg-primary text-white hover:bg-primary/90 rounded-[1.5rem] transition-all px-6 group flex justify-between shadow-lg shadow-primary/20 floating-button"
               >
-                <span className="font-bold text-xs">New Analysis</span>
-                <Plus className="w-4 h-4 text-white/80 group-hover:rotate-90 transition-transform" />
+                <span className="font-bold text-sm tracking-tight">New Analysis</span>
+                <Plus className="w-5 h-5 text-white/80 group-hover:rotate-90 transition-transform" />
               </SidebarMenuButton>
             </SidebarMenuItem>
           </SidebarMenu>
         </SidebarGroup>
 
-        <div className="px-4 mt-4 relative">
+        <div className="mt-8 relative px-2">
           <Input 
             placeholder="Search activity..." 
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
-            className="h-10 pl-10 bg-white/50 border-slate-200/60 rounded-2xl text-xs font-medium focus:ring-primary/20 transition-all"
+            className="h-11 pl-11 bg-white/40 border-white/60 rounded-[1.25rem] text-xs font-bold placeholder:text-slate-400 focus:ring-primary/30 transition-all shadow-sm"
           />
-          <Terminal className="absolute left-7 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400" />
+          <Terminal className="absolute left-6 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
         </div>
 
-        <SidebarGroup className="mt-4">
-          <SidebarGroupLabel className="px-4 text-[10px] font-bold uppercase tracking-widest text-slate-400">Intelligence Log</SidebarGroupLabel>
-          <SidebarMenu className="px-2 mt-2 space-y-1">
+        <SidebarGroup className="mt-8">
+          <SidebarGroupLabel className="px-4 text-[10px] font-bold uppercase tracking-[0.3em] text-slate-400 mb-4">Intelligence Feed</SidebarGroupLabel>
+          <SidebarMenu className="space-y-2">
             {isSyncing ? (
-              <div className="flex justify-center py-8"><Loader2 className="w-5 h-5 text-primary/40 animate-spin" /></div>
+              <div className="flex justify-center py-8"><Loader2 className="w-6 h-6 text-primary/30 animate-spin" /></div>
             ) : filteredConversations.length > 0 ? (
               filteredConversations.map((conv) => (
                 <SidebarMenuItem key={conv.id}>
@@ -128,40 +133,47 @@ export function AppSidebar() {
                     asChild 
                     isActive={activeId === conv.id}
                     className={cn(
-                      "h-10 transition-all px-4 rounded-xl",
-                      activeId === conv.id ? "bg-white text-primary shadow-sm border border-slate-100" : "text-slate-500 hover:text-slate-900 hover:bg-white/50"
+                      "h-12 transition-all px-5 rounded-[1.25rem] group",
+                      activeId === conv.id 
+                        ? "bg-white text-primary shadow-md border border-white/80" 
+                        : "text-slate-500 hover:text-slate-900 hover:bg-white/60"
                     )}
                   >
                     <Link href={`/?c=${conv.id}`}>
-                      <div className="flex items-center gap-3 truncate">
-                        <MessageSquare className="w-4 h-4 shrink-0 opacity-40" />
-                        <span className="truncate text-xs font-semibold">{conv.title || 'Untitled Session'}</span>
+                      <div className="flex items-center gap-4 truncate">
+                        <div className={cn(
+                          "w-2 h-2 rounded-full transition-colors",
+                          activeId === conv.id ? "bg-primary animate-pulse" : "bg-slate-200 group-hover:bg-slate-400"
+                        )} />
+                        <span className="truncate text-xs font-bold tracking-tight">{conv.title || 'Untitled Session'}</span>
                       </div>
                     </Link>
                   </SidebarMenuButton>
                 </SidebarMenuItem>
               ))
             ) : (
-              <div className="px-4 py-8 text-center text-[11px] text-slate-400 font-medium italic">Empty log</div>
+              <div className="px-4 py-8 text-center text-[10px] text-slate-400 font-bold uppercase tracking-widest italic opacity-40">Feed Empty</div>
             )}
           </SidebarMenu>
         </SidebarGroup>
 
-        <SidebarGroup className="mt-auto pb-4 border-t border-slate-100/60 pt-4">
-          <SidebarMenu className="px-2 space-y-1">
+        <SidebarGroup className="mt-auto pb-6 border-t border-slate-200/40 pt-8">
+          <SidebarMenu className="space-y-2">
             {coreItems.map((item) => (
               <SidebarMenuItem key={item.href}>
                 <SidebarMenuButton 
                   asChild 
                   isActive={pathname === item.href}
                   className={cn(
-                    "h-10 transition-all px-4 rounded-xl",
-                    pathname === item.href ? "bg-white text-primary shadow-sm border border-slate-100" : "text-slate-500 hover:text-slate-900 hover:bg-white/50"
+                    "h-12 transition-all px-5 rounded-[1.25rem]",
+                    pathname === item.href 
+                      ? "bg-white text-primary shadow-md border border-white/80" 
+                      : "text-slate-500 hover:text-slate-900 hover:bg-white/60"
                   )}
                 >
                   <Link href={item.href}>
-                    <item.icon className="w-4 h-4 mr-3 opacity-60" />
-                    <span className="text-xs font-semibold">{item.label}</span>
+                    <item.icon className="w-5 h-5 mr-4 opacity-60" />
+                    <span className="text-xs font-bold tracking-tight">{item.label}</span>
                   </Link>
                 </SidebarMenuButton>
               </SidebarMenuItem>
@@ -170,20 +182,23 @@ export function AppSidebar() {
         </SidebarGroup>
       </SidebarContent>
 
-      <SidebarFooter className="p-4 border-t border-slate-100/60 bg-white/20">
-        <div className="flex items-center gap-3 px-3 py-2.5 rounded-2xl hover:bg-white/50 transition-all cursor-pointer group border border-transparent hover:border-slate-100">
-          <div className="w-9 h-9 overflow-hidden rounded-xl border border-slate-200 bg-white">
+      <SidebarFooter className="p-6 border-t border-slate-200/40 bg-white/10">
+        <motion.div 
+          whileHover={{ scale: 1.02 }}
+          className="flex items-center gap-4 px-4 py-3 rounded-[1.5rem] bg-white/40 hover:bg-white/80 transition-all cursor-pointer group border border-white/40 shadow-sm"
+        >
+          <div className="w-10 h-10 overflow-hidden rounded-[1rem] border-2 border-white shadow-sm">
             {user?.uid && mounted ? (
               <img src={`https://picsum.photos/seed/${user.uid}/64/64`} alt="Avatar" className="w-full h-full object-cover" />
             ) : (
-              <div className="w-full h-full bg-slate-50" />
+              <div className="w-full h-full bg-slate-100" />
             )}
           </div>
           <div className="flex-1 min-w-0">
             <p className="text-xs font-bold text-slate-900 truncate">{user?.displayName || 'User'}</p>
-            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-tight">Standard Clearance</p>
+            <p className="text-[9px] font-bold text-primary uppercase tracking-[0.2em] mt-0.5">High Clearance</p>
           </div>
-        </div>
+        </motion.div>
       </SidebarFooter>
     </Sidebar>
   );
