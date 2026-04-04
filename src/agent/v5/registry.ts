@@ -3,12 +3,13 @@ import { ToolDefinition } from './types';
 import { GmailService } from '@/services/gmail-service';
 
 /**
- * @fileOverview Production-grade Tool Registry for Agent v5.
- * Enhanced with impact metrics for "Proof of Value".
+ * @fileOverview Dynamic Tool Registry for Agent v5.
+ * Supports built-in tools and tools forged at runtime.
  */
 
-export const TOOL_REGISTRY: Record<string, ToolDefinition> = {
+export const STATIC_TOOLS: Record<string, ToolDefinition> = {
   analyze: {
+    id: 'analyze',
     name: 'analyze',
     description: 'Perform deep structural or visual analysis of inputs to extract insights.',
     inputSchema: { type: 'object', properties: { input: { type: 'string' } } },
@@ -18,7 +19,7 @@ export const TOOL_REGISTRY: Record<string, ToolDefinition> = {
       const res = await groq.chat.completions.create({
         model,
         messages: [
-          { role: 'system', content: 'Extract key structural details, financial markers, and objective insights.' },
+          { role: 'system', content: 'Extract key structural details and objective insights.' },
           { role: 'user', content: imageUri ? [{ type: 'text', text: input }, { type: 'image_url', image_url: { url: imageUri } }] : input }
         ],
         temperature: 0
@@ -28,6 +29,7 @@ export const TOOL_REGISTRY: Record<string, ToolDefinition> = {
   },
 
   detect_leaks: {
+    id: 'detect_leaks',
     name: 'detect_leaks',
     description: 'Scan data for predatory subscriptions, hidden fees, and trial patterns.',
     inputSchema: { type: 'object', properties: { text: { type: 'string' } } },
@@ -47,6 +49,7 @@ export const TOOL_REGISTRY: Record<string, ToolDefinition> = {
   },
 
   optimize_time: {
+    id: 'optimize_time',
     name: 'optimize_time',
     description: 'Identify schedule friction and low-value tasks. Suggest removal or automation.',
     inputSchema: { type: 'object', properties: { context: { type: 'string' } } },
@@ -64,25 +67,8 @@ export const TOOL_REGISTRY: Record<string, ToolDefinition> = {
     }
   },
 
-  generate_strategy: {
-    name: 'generate_strategy',
-    description: 'Develop actionable business or personal growth strategies.',
-    inputSchema: { type: 'object', properties: { objective: { type: 'string' } } },
-    impact: { timeSavedMinutes: 60 },
-    execute: async ({ objective }) => {
-      const res = await groq.chat.completions.create({
-        model: 'llama-3.3-70b-versatile',
-        messages: [
-          { role: 'system', content: 'Develop a high-impact growth or monetization strategy.' },
-          { role: 'user', content: objective }
-        ],
-        temperature: 0.2
-      });
-      return { strategy: res.choices[0]?.message?.content || '' };
-    }
-  },
-
   send_email: {
+    id: 'send_email',
     name: 'send_email',
     description: 'Send a professional email via Gmail. Requires recipient, subject, and body.',
     inputSchema: { type: 'object', properties: { to: { type: 'string' }, subject: { type: 'string' }, body: { type: 'string' } } },
@@ -95,3 +81,24 @@ export const TOOL_REGISTRY: Record<string, ToolDefinition> = {
     }
   }
 };
+
+/**
+ * Dynamic registry that combines static tools with dynamically forged ones.
+ */
+export class ToolRegistry {
+  private dynamicTools: Record<string, ToolDefinition> = {};
+
+  register(tool: ToolDefinition) {
+    this.dynamicTools[tool.id] = tool;
+  }
+
+  getTool(id: string): ToolDefinition | undefined {
+    return STATIC_TOOLS[id] || this.dynamicTools[id];
+  }
+
+  getAvailableTools(): ToolDefinition[] {
+    return [...Object.values(STATIC_TOOLS), ...Object.values(this.dynamicTools)];
+  }
+}
+
+export const activeRegistry = new ToolRegistry();

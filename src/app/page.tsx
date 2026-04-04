@@ -14,7 +14,8 @@ import {
   Zap,
   Activity,
   CheckCircle2,
-  Sparkles
+  Sparkles,
+  Hammer
 } from 'lucide-react';
 import { useFirestore, useUser, addDocumentNonBlocking, useCollection, useMemoFirebase } from '@/firebase';
 import { collection, serverTimestamp, doc, query, orderBy, setDoc } from 'firebase/firestore';
@@ -30,7 +31,7 @@ export default function ChatPage() {
   const scrollRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   
-  const { user, isUserLoading } = useUser();
+  const { user } = useUser();
   const db = useFirestore();
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -53,7 +54,6 @@ export default function ChatPage() {
     }
   }, [messages, isProcessing]);
 
-  // Handle textarea height adjustment
   useEffect(() => {
     if (textareaRef.current) {
       textareaRef.current.style.height = 'auto';
@@ -89,14 +89,23 @@ export default function ChatPage() {
       const reader = response.body?.getReader();
       const decoder = new TextDecoder();
       let fullContent = "";
+      let currentMetadata: any = null;
 
       while (true) {
         const { done, value } = await reader!.read();
         if (done) break;
         const chunk = decoder.decode(value);
-        if (chunk.startsWith("__METADATA__:")) {
-          const meta = JSON.parse(chunk.replace("__METADATA__:", ""));
-          setAgentMetadata(meta);
+        
+        if (chunk.includes("__METADATA__:")) {
+          const lines = chunk.split('\n');
+          for (const line of lines) {
+            if (line.startsWith("__METADATA__:")) {
+              currentMetadata = JSON.parse(line.replace("__METADATA__:", ""));
+              setAgentMetadata(currentMetadata);
+            } else {
+              fullContent += line;
+            }
+          }
           continue;
         }
         fullContent += chunk;
@@ -106,7 +115,7 @@ export default function ChatPage() {
         role: 'assistant',
         content: fullContent,
         timestamp: serverTimestamp(),
-        metadata: agentMetadata
+        metadata: currentMetadata
       });
     } catch (err) {
       toast({ variant: 'destructive', title: "Sync Interrupted", description: "Re-establishing link with intelligence core." });
@@ -138,22 +147,37 @@ export default function ChatPage() {
                   {msg.role === 'assistant' && (
                     <div className="flex items-center gap-3 mb-2 px-2">
                       <StatusDot status="active" />
-                      <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Operator Engine V5.2</span>
+                      <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Operator Engine V5.5</span>
                     </div>
                   )}
                   
-                  {/* Tool Activity Notification */}
-                  {msg.metadata?.toolUsed && (
+                  {/* Tool Forge Notification */}
+                  {msg.metadata?.forgedTool && (
+                    <motion.div 
+                      initial={{ opacity: 0, scale: 0.95 }}
+                      animate={{ opacity: 1, scale: 1 }}
+                      className="px-4 py-3 bg-accent/10 border border-accent/20 rounded-2xl flex flex-col gap-1"
+                    >
+                      <div className="flex items-center gap-3 text-[10px] font-bold text-accent uppercase tracking-widest">
+                        <Hammer className="w-3.5 h-3.5 animate-bounce" />
+                        Forged New Capability: {msg.metadata.forgedTool.name}
+                      </div>
+                      <p className="text-[9px] text-accent/60 italic ml-6">{msg.metadata.forgedTool.description}</p>
+                    </motion.div>
+                  )}
+
+                  {/* Standard Tool Notification */}
+                  {msg.metadata?.toolUsed && !msg.metadata?.forgedTool && (
                     <motion.div 
                       initial={{ opacity: 0, scale: 0.95 }}
                       animate={{ opacity: 1, scale: 1 }}
                       className="px-4 py-2 bg-primary/5 border border-primary/10 rounded-2xl flex items-center gap-3 text-[10px] font-bold text-primary uppercase tracking-widest"
                     >
                       <Activity className="w-3.5 h-3.5 animate-pulse" />
-                      Executed Tool: {msg.metadata.toolUsed}
+                      Executed: {msg.metadata.toolUsed}
                       <span className="text-slate-300">•</span>
                       <Sparkles className="w-3 h-3" />
-                      {msg.metadata.toolResultSummary || 'Optimized parameters.'}
+                      {msg.metadata.toolResultSummary || 'Analysis complete.'}
                     </motion.div>
                   )}
 
@@ -174,8 +198,8 @@ export default function ChatPage() {
                 <Terminal className="w-10 h-10 text-slate-200" />
               </div>
               <div className="space-y-2">
-                <h2 className="text-5xl font-bold tracking-tighter text-slate-900 leading-none">Command Center</h2>
-                <p className="text-xs font-bold text-slate-400 uppercase tracking-[0.4em]">Autonomous Logic Loops Active</p>
+                <h2 className="text-5xl font-bold tracking-tighter text-slate-900 leading-none">Intelligence Hub</h2>
+                <p className="text-xs font-bold text-slate-400 uppercase tracking-[0.4em]">Autonomous Forge Active</p>
               </div>
             </div>
           )}
@@ -184,7 +208,7 @@ export default function ChatPage() {
             <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="flex flex-col items-start gap-4">
               <div className="flex items-center gap-3 px-2">
                 <Loader2 className="w-4 h-4 text-primary animate-spin" />
-                <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Reasoning...</span>
+                <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Reasoning & Forging...</span>
               </div>
               <div className="p-8 rounded-[2.5rem] glass-surface border-white/60 animate-shimmer min-w-[200px]">
                 <div className="h-4 bg-slate-100 rounded-full w-24 mb-4" />
@@ -206,7 +230,7 @@ export default function ChatPage() {
             value={input}
             onChange={(e) => setInput(e.target.value)}
             onKeyDown={handleKeyDown}
-            placeholder="Initialize intent..."
+            placeholder="Describe intent or ask for a new capability..."
             className="flex-1 bg-transparent border-0 focus:ring-0 text-sm font-medium text-slate-700 placeholder:text-slate-300 resize-none py-3 min-h-[48px] max-h-[200px] stealth-scrollbar"
           />
           <GlassButton 

@@ -2,7 +2,7 @@
  * @fileOverview Core types for Agent Engine v5.
  */
 
-export type Intent = 'finance' | 'time_optimizer' | 'monetization' | 'technical' | 'analysis' | 'general';
+export type Intent = 'finance' | 'time_optimizer' | 'monetization' | 'technical' | 'analysis' | 'general' | 'meta_forge';
 
 export interface AgentStep {
   thought: string;
@@ -11,15 +11,19 @@ export interface AgentStep {
   observation: any;
 }
 
+export interface ToolImpact {
+  moneySaved?: number;
+  timeSavedMinutes?: number;
+}
+
 export interface ToolDefinition {
+  id: string;
   name: string;
   description: string;
   inputSchema: any;
   execute: (input: any, context: any) => Promise<any>;
-  impact?: {
-    moneySaved?: number;
-    timeSavedMinutes?: number;
-  };
+  impact?: ToolImpact;
+  isDynamic?: boolean;
 }
 
 export interface AgentMetadata {
@@ -31,11 +35,15 @@ export interface AgentMetadata {
   iterationCount: number;
   toolUsed?: string;
   toolResultSummary?: string;
+  forgedTool?: {
+    name: string;
+    description: string;
+  };
 }
 
 export interface Decision {
   thought: string;
-  action: string | 'final';
+  action: string | 'final' | 'forge_tool';
   input?: any;
   final?: string;
 }

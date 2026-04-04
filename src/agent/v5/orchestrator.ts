@@ -1,11 +1,13 @@
 import { groq } from '@/ai/groq';
-import { Intent, AgentStep, Decision, AgentMetadata } from './types';
-import { TOOL_REGISTRY } from './registry';
+import { Intent, AgentStep, Decision, AgentMetadata, ToolDefinition } from './types';
+import { activeRegistry, STATIC_TOOLS } from './registry';
 import { fetchMemory, updateMemory } from './memory';
+import { collection, addDoc, serverTimestamp } from 'firebase/firestore';
+import { initializeFirebase } from '@/firebase';
 
 /**
- * @fileOverview Orchestrator Engine v5: Autonomous reasoning loop.
- * Enhanced to report specific tool impacts to the UI.
+ * @fileOverview Orchestrator Engine v5.5: Autonomous Reasoning with Dynamic Tool Forging.
+ * Allows the agent to create its own tools if a capability is missing.
  */
 
 const MAX_ITERATIONS = 6;
@@ -24,8 +26,80 @@ async function classifyIntent(input: string, history: any[]): Promise<{ intent: 
   return JSON.parse(res.choices[0]?.message?.content || '{"intent": "general", "language": "English"}');
 }
 
+/**
+ * The Forge: Uses LLM to create a new tool definition.
+ */
+async function forgeNewTool(purpose: string, userId: string): Promise<ToolDefinition> {
+  console.log(`[THE_FORGE] Forging new tool for purpose: ${purpose}`);
+  
+  const forgeRes = await groq.chat.completions.create({
+    model: 'llama-3.3-70b-versatile',
+    messages: [
+      { 
+        role: 'system', 
+        content: `
+          Forge a new AI Tool definition. 
+          The tool will be executed by an LLM sub-agent.
+          
+          Return JSON ONLY:
+          {
+            "id": "slug_style_id",
+            "name": "Human Friendly Name",
+            "description": "Short purpose of the tool",
+            "systemPrompt": "Instructions for the sub-agent that will run this tool",
+            "inputSchema": { "type": "object", "properties": { "context": { "type": "string" } } }
+          }
+        `
+      },
+      { role: 'user', content: `Purpose: ${purpose}` }
+    ],
+    response_format: { type: 'json_object' },
+    temperature: 0.2
+  });
+
+  const config = JSON.parse(forgeRes.choices[0]?.message?.content || '{}');
+  
+  const forgedTool: ToolDefinition = {
+    id: config.id || `tool_${Date.now()}`,
+    name: config.name || 'Unnamed Protocol',
+    description: config.description || 'Custom autonomous function.',
+    inputSchema: config.inputSchema,
+    isDynamic: true,
+    execute: async (input: any) => {
+      const runRes = await groq.chat.completions.create({
+        model: 'llama-3.3-70b-versatile',
+        messages: [
+          { role: 'system', content: config.systemPrompt },
+          { role: 'user', content: JSON.stringify(input) }
+        ],
+        temperature: 0
+      });
+      return { result: runRes.choices[0]?.message?.content || '' };
+    }
+  };
+
+  // Persist the forged tool to Firestore for the user's Marketplace
+  const { firestore } = initializeFirebase();
+  if (firestore && userId !== 'system_anonymous') {
+    try {
+      await addDoc(collection(firestore, 'users', userId, 'forged_tools'), {
+        ...config,
+        userId,
+        createdAt: serverTimestamp(),
+        usageCount: 0,
+        moneySaved: 0,
+        timeSaved: 0
+      });
+    } catch (e) {
+      console.warn("[ORCHESTRATOR] Failed to persist forged tool metadata.");
+    }
+  }
+
+  return forgedTool;
+}
+
 export async function runAgentV5(input: string, userId: string, history: any[] = [], imageUri?: string) {
-  console.log(`[ENGINE_V5] Initializing for user: ${userId}`);
+  console.log(`[ENGINE_V5.5] Initializing for user: ${userId}`);
 
   const [memory, { intent, language }] = await Promise.all([
     fetchMemory(userId),
@@ -35,12 +109,12 @@ export async function runAgentV5(input: string, userId: string, history: any[] =
   const planRes = await groq.chat.completions.create({
     model: 'llama-3.3-70b-versatile',
     messages: [
-      { role: 'system', content: `Create a step-by-step strategy for intent: ${intent}. User language: ${language}.` },
+      { role: 'system', content: `Create a strategy for intent: ${intent}. Language: ${language}.` },
       { role: 'user', content: input }
     ],
     temperature: 0.1
   });
-  const initialPlan = planRes.choices[0]?.message?.content || "Analyze input and respond.";
+  const initialPlan = planRes.choices[0]?.message?.content || "Analyze and respond.";
 
   const steps: AgentStep[] = [];
   let currentIteration = 0;
@@ -48,9 +122,12 @@ export async function runAgentV5(input: string, userId: string, history: any[] =
   let finalContext = "";
   let toolUsedName = "";
   let toolSummary = "";
+  let forgedToolInfo: any = null;
 
   while (!loopFinished && currentIteration < MAX_ITERATIONS) {
     currentIteration++;
+    
+    const availableTools = activeRegistry.getAvailableTools();
     
     const decisionRes = await groq.chat.completions.create({
       model: 'llama-3.3-70b-versatile',
@@ -62,15 +139,13 @@ export async function runAgentV5(input: string, userId: string, history: any[] =
             Language: ${language}. Memory: ${JSON.stringify(memory)}.
             
             TOOLS AVAILABLE:
-            ${Object.values(TOOL_REGISTRY).map(t => `${t.name}: ${t.description}`).join('\n')}
+            ${availableTools.map(t => `${t.id}: ${t.description}`).join('\n')}
 
-            HISTORY OF ACTIONS:
-            ${steps.map((s, i) => `Step ${i+1}: Action ${s.action} -> Result: ${JSON.stringify(s.observation)}`).join('\n')}
+            META-ABILITY: 
+            If NO tool matches the task perfectly, action: "forge_tool", input: {"purpose": "describe capability needed"}.
 
             DECIDE NEXT STEP. 
-            If you have enough info, action: "final".
-            If you need a tool, action: "tool_name", input: {}.
-            Return JSON ONLY: {"thought": "reasoning...", "action": "...", "input": {}, "final": "only if action is final"}
+            JSON ONLY: {"thought": "...", "action": "tool_id|forge_tool|final", "input": {}, "final": "..."}
           `
         },
         { role: 'user', content: input }
@@ -79,39 +154,29 @@ export async function runAgentV5(input: string, userId: string, history: any[] =
       temperature: 0.1
     });
 
-    const decision: Decision = JSON.parse(decisionRes.choices[0]?.message?.content || '{"action": "final", "final": "I encountered an error in decision logic."}');
+    const decision: Decision = JSON.parse(decisionRes.choices[0]?.message?.content || '{"action": "final"}');
     
-    if (decision.action === 'final' || !TOOL_REGISTRY[decision.action]) {
+    if (decision.action === 'forge_tool') {
+      const newTool = await forgeNewTool(decision.input.purpose, userId);
+      activeRegistry.register(newTool);
+      forgedToolInfo = { name: newTool.name, description: newTool.description };
+      steps.push({ thought: decision.thought, action: 'forge_tool', input: decision.input, observation: { forged: newTool.name } });
+      // Continue loop - the new tool is now available for the next iteration!
+      continue;
+    }
+
+    if (decision.action === 'final' || !activeRegistry.getTool(decision.action)) {
       finalContext = decision.final || decision.thought;
       loopFinished = true;
     } else {
-      toolUsedName = decision.action;
-      const tool = TOOL_REGISTRY[decision.action];
+      const tool = activeRegistry.getTool(decision.action)!;
+      toolUsedName = tool.name;
       try {
         const observation = await tool.execute(decision.input || {}, { userId, imageUri });
-        
-        // Track stats locally (Simulated sync to ToolRegistryManager)
-        if (typeof window !== 'undefined') {
-          const statsKey = `tool_stats_${decision.action}`;
-          const currentStats = JSON.parse(localStorage.getItem(statsKey) || '{"uses": 0}');
-          localStorage.setItem(statsKey, JSON.stringify({ uses: currentStats.uses + 1, last: new Date().toISOString() }));
-        }
-
-        steps.push({
-          thought: decision.thought,
-          action: decision.action,
-          input: decision.input,
-          observation
-        });
-        
-        toolSummary = `Analyzed inputs via ${tool.name}. ${tool.impact?.moneySaved ? `Reclaimed $${tool.impact.moneySaved}.` : ''}`;
+        steps.push({ thought: decision.thought, action: decision.action, input: decision.input, observation });
+        toolSummary = `Processed via ${tool.name}.`;
       } catch (err) {
-        steps.push({
-          thought: decision.thought,
-          action: decision.action,
-          input: decision.input,
-          observation: { error: "Action failed." }
-        });
+        steps.push({ thought: decision.thought, action: decision.action, input: decision.input, observation: { error: "Action failed." } });
       }
     }
   }
@@ -122,11 +187,11 @@ export async function runAgentV5(input: string, userId: string, history: any[] =
       { 
         role: 'system', 
         content: `
-          Synthesize final response in ${language}.
+          Final Synthesis in ${language}.
           Context: ${finalContext}
           Tools Used: ${JSON.stringify(steps)}
-          Memory: ${JSON.stringify(memory)}
-          Do NOT repeat thoughts. Just the helpful answer.
+          Forged Tools: ${JSON.stringify(forgedToolInfo)}
+          Respond directly and helpfully.
         ` 
       },
       ...history.slice(-5),
@@ -144,7 +209,8 @@ export async function runAgentV5(input: string, userId: string, history: any[] =
     language,
     iterationCount: currentIteration,
     toolUsed: toolUsedName,
-    toolResultSummary: toolSummary
+    toolResultSummary: toolSummary,
+    forgedTool: forgedToolInfo
   };
 
   return { stream, metadata };
