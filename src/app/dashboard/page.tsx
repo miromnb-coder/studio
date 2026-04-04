@@ -5,14 +5,11 @@ import { Navbar } from '@/components/layout/Navbar';
 import { 
   TrendingUp, 
   Activity, 
-  ArrowRight,
   Database,
-  LayoutGrid,
   Cpu,
   ChevronRight,
-  ShieldAlert,
   Terminal,
-  Target
+  ShieldCheck
 } from 'lucide-react';
 import { useUser, useFirestore, useCollection, useMemoFirebase } from '@/firebase';
 import { collection, query, orderBy, limit } from 'firebase/firestore';
@@ -50,8 +47,8 @@ export default function DashboardPage() {
     if (!user) return;
     setActiveProtocol(name);
     toast({
-      title: "PROT_ACTIVE",
-      description: `INITIATING_${name}_SEQUENCE...`,
+      title: "Protocol Initialized",
+      description: `Synchronizing ${name} intelligence...`,
     });
     await new Promise(r => setTimeout(r, 2000));
     setActiveProtocol(null);
@@ -60,34 +57,34 @@ export default function DashboardPage() {
   const dashboardModules: SystemModule[] = [
     {
       id: 'action-hub',
-      title: 'Action_Engine',
-      description: 'Autonomous_Reasoning_Execution_Protocols.',
+      title: 'Action Engine',
+      description: 'Autonomous reasoning loop for immediate execution.',
       status: activeProtocol ? 'syncing' : 'active',
       actions: [
-        { label: 'Global_Audit', variant: 'primary', onClick: () => triggerProtocol('Global_Audit'), loading: activeProtocol === 'Global_Audit' },
-        { label: 'Sync_Link', variant: 'secondary', onClick: () => triggerProtocol('Sync'), loading: activeProtocol === 'Sync' },
+        { label: 'Global Audit', variant: 'primary', onClick: () => triggerProtocol('Global Audit'), loading: activeProtocol === 'Global Audit' },
+        { label: 'Neural Sync', variant: 'secondary', onClick: () => triggerProtocol('Sync'), loading: activeProtocol === 'Sync' },
       ],
       details: (
-        <div className="space-y-2">
-          <p className="text-[8px] font-bold uppercase tracking-widest text-muted-foreground">Operational_Status</p>
-          <div className="p-3 bg-stealth-ebon border border-stealth-slate flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <div className="w-1.5 h-1.5 bg-success animate-pulse" />
-              <span className="text-[9px] font-bold text-foreground uppercase">Protocols_Nominal.</span>
+        <div className="space-y-3">
+          <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Operational Log</p>
+          <div className="p-4 bg-slate-50/50 rounded-2xl border border-slate-100 flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <div className="w-2 h-2 rounded-full bg-success animate-pulse" />
+              <span className="text-xs font-semibold text-slate-700">All modules synchronized.</span>
             </div>
-            <Activity className="w-3 h-3 text-muted-foreground" />
+            <Activity className="w-4 h-4 text-slate-300" />
           </div>
         </div>
       )
     },
     {
       id: 'system-status',
-      title: 'Logic_Core',
-      description: 'Hardware_Interface_Latency_Infrastructure.',
+      title: 'Logic Core',
+      description: 'Neural latency and infrastructure health tracking.',
       status: 'active',
       metrics: [
-        { label: 'Latency', value: '0.04ms', hint: 'Hardwired' },
-        { label: 'Neural_Links', value: '4_Active', hint: 'Encrypted' },
+        { label: 'Neural Latency', value: '0.04ms', hint: 'Stable' },
+        { label: 'Neural Links', value: '4 Active', hint: 'Encrypted' },
       ],
       actions: [
         { label: 'Diagnostics', variant: 'secondary', onClick: () => triggerProtocol('Diagnostics') }
@@ -95,74 +92,76 @@ export default function DashboardPage() {
     },
     {
       id: 'optimization-brief',
-      title: 'Extraction_Hub',
-      description: 'Pattern_Recognition_Results_Cycle_Final.',
+      title: 'Optimization Hub',
+      description: 'Deep pattern recognition results and cost mitigation.',
       status: 'active',
       value: `$${totalReclaimed.toFixed(0)}`,
-      subvalue: 'Reclaimed_Mo',
+      subvalue: 'Reclaimed Monthly',
       actions: [
-        { label: 'Inspect_Ledger', href: '/money-saver', variant: 'primary' }
+        { label: 'View Insights', href: '/money-saver', variant: 'primary' }
       ],
-      emptyState: analyses?.length === 0 ? "No_Active_Anomalies." : undefined
+      emptyState: analyses?.length === 0 ? "No active anomalies detected." : undefined
     }
   ];
 
   const valueStrip: ValueStripItem[] = [
-    { label: "Capital_Reclaimed", value: `$${totalReclaimed.toFixed(0)}`, tone: totalReclaimed > 0 ? "positive" : "neutral" },
-    { label: "Efficiency_Shift", value: "14.2h", tone: "positive" },
-    { label: "Agent_Directives", value: "84", tone: "neutral" }
+    { label: "Capital Reclaimed", value: `$${totalReclaimed.toFixed(0)}`, tone: totalReclaimed > 0 ? "positive" : "neutral" },
+    { label: "Efficiency Gain", value: "14.2h", tone: "positive" },
+    { label: "Directives Met", value: "84", tone: "neutral" }
   ];
 
   if (!mounted) return null;
 
   return (
-    <div className="min-h-screen bg-stealth-ebon pt-24 pb-32">
+    <div className="min-h-screen bg-background pt-24 pb-32">
       <Navbar />
       
       <main className="max-w-7xl mx-auto px-8 space-y-16">
-        <header className="flex flex-col lg:flex-row lg:items-end justify-between gap-12 border-b border-stealth-slate pb-12">
+        <header className="flex flex-col lg:flex-row lg:items-end justify-between gap-12 border-b border-slate-200/60 pb-12">
           <div className="space-y-6">
-            <div className="flex items-center gap-2 px-3 py-1 border border-primary/30 bg-primary/5 w-fit">
-              <span className="w-1.5 h-1.5 bg-primary animate-glow-pulse" />
-              <span className="text-[9px] font-bold text-primary uppercase tracking-widest">Tactical_Link_Stable</span>
+            <div className="flex items-center gap-2 px-3 py-1.5 bg-primary/5 border border-primary/10 rounded-full w-fit">
+              <ShieldCheck className="w-4 h-4 text-primary" />
+              <span className="text-[11px] font-bold text-primary uppercase tracking-wider">Tactical Integrity Stable</span>
             </div>
             
-            <div className="space-y-2">
-              <h1 className="text-7xl md:text-9xl font-bold tracking-tighter text-white leading-none uppercase glow-text">
-                Console.
+            <div className="space-y-3">
+              <h1 className="text-6xl md:text-8xl font-bold tracking-tighter text-slate-900 leading-tight">
+                Control.
               </h1>
-              <p className="text-sm text-muted-foreground font-bold uppercase tracking-[0.2em] max-w-lg leading-relaxed">
-                Strategic_Operations_Environment // Crimson_Stealth_Protocol
+              <p className="text-base text-slate-500 font-medium max-w-lg leading-relaxed">
+                Strategic operations dashboard. Manage autonomous reasoning, neural memory, and optimization protocols from one central hub.
               </p>
             </div>
           </div>
 
-          <div className="bg-stealth-onyx border-l-4 border-primary p-8 min-w-[300px] shadow-[0_0_30px_rgba(225,29,72,0.1)]">
-            <p className="text-[9px] font-bold uppercase tracking-[0.3em] text-muted-foreground mb-2">Neural_Efficiency</p>
-            <h2 className="text-7xl font-bold tracking-tighter text-primary glow-text leading-none">98%</h2>
-            <div className="mt-4 inline-flex items-center gap-2 text-[8px] font-bold uppercase tracking-[0.2em] bg-primary/10 px-3 py-1 text-primary">
-              <Activity className="w-2 h-2 animate-glow-pulse" />
-              Real_Time_Compute
+          <div className="glass-card bg-white/80 p-10 min-w-[320px] rounded-3xl">
+            <p className="text-[11px] font-bold uppercase tracking-widest text-slate-400 mb-2">Neural Health</p>
+            <h2 className="text-7xl font-bold tracking-tighter text-slate-900 leading-none">98%</h2>
+            <div className="mt-6 inline-flex items-center gap-2.5 text-[11px] font-bold uppercase tracking-wider bg-success/5 px-4 py-2 rounded-full text-success border border-success/10">
+              <Activity className="w-3.5 h-3.5" />
+              Real-Time Compute
             </div>
           </div>
         </header>
 
         <SystemsPanel systems={dashboardModules} valueStrip={valueStrip} />
 
-        <section className="bg-stealth-onyx border border-stealth-slate p-8 border-l-4 border-l-primary">
-          <div className="flex items-center justify-between mb-12 border-b border-stealth-slate pb-6">
+        <section className="glass-card p-10 rounded-[2.5rem]">
+          <div className="flex items-center justify-between mb-12 border-b border-slate-100 pb-8">
             <div className="flex items-center gap-4">
-              <Terminal className="w-5 h-5 text-primary" />
+              <div className="w-12 h-12 rounded-2xl bg-primary/10 flex items-center justify-center text-primary">
+                <Terminal className="w-6 h-6" />
+              </div>
               <div>
-                <h3 className="text-xl font-bold text-white uppercase tracking-tighter glow-text">Neural_Audit_Log</h3>
-                <p className="text-[9px] font-bold uppercase tracking-[0.3em] text-muted-foreground">Extraction_Cycle_History</p>
+                <h3 className="text-2xl font-bold text-slate-900 tracking-tight">Activity Log</h3>
+                <p className="text-xs font-medium text-slate-400 uppercase tracking-widest">Intelligence Cycle History</p>
               </div>
             </div>
           </div>
           
-          <div className="space-y-6">
+          <div className="space-y-8">
             {isLoading ? (
-              <Skeleton className="h-32 w-full bg-stealth-ebon" />
+              <Skeleton className="h-32 w-full rounded-2xl" />
             ) : (analyses || []).length > 0 ? (
               (analyses || []).map((a, idx) => (
                 <motion.div 
@@ -170,31 +169,33 @@ export default function DashboardPage() {
                   initial={{ opacity: 0, x: -10 }}
                   animate={{ opacity: 1, x: 0 }}
                   transition={{ delay: idx * 0.05 }}
-                  className="flex gap-6 group"
+                  className="flex gap-8 group"
                 >
-                  <div className="flex flex-col items-center pt-1">
-                    <div className="w-1.5 h-1.5 bg-primary/30 group-hover:bg-primary transition-colors" />
-                    <div className="w-px flex-1 bg-stealth-slate mt-2" />
+                  <div className="flex flex-col items-center pt-1.5">
+                    <div className="w-2.5 h-2.5 rounded-full border-2 border-primary/20 group-hover:bg-primary transition-all duration-300" />
+                    <div className="w-px flex-1 bg-slate-100 mt-3" />
                   </div>
-                  <div className="flex-1 pb-6 space-y-2 border-b border-stealth-slate/50">
+                  <div className="flex-1 pb-8 space-y-3 border-b border-slate-50 last:border-0">
                     <div className="flex items-center gap-4">
-                      <span className="text-[8px] font-bold text-muted-foreground uppercase tracking-widest">{new Date(a.createdAt?.toDate?.() || Date.now()).toLocaleTimeString()} // SYNC_0{idx}</span>
-                      <span className="h-px flex-1 bg-stealth-slate/30" />
+                      <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">
+                        {new Date(a.createdAt?.toDate?.() || Date.now()).toLocaleTimeString()} // ID_{a.id.slice(0, 6)}
+                      </span>
+                      <span className="h-px flex-1 bg-slate-50" />
                     </div>
-                    <div className="space-y-1">
-                      <p className="text-white font-bold text-sm tracking-widest group-hover:text-primary transition-all uppercase">{a.title}</p>
-                      <p className="text-muted-foreground leading-relaxed text-[10px] max-w-3xl font-bold uppercase tracking-wider">{a.summary.slice(0, 140)}...</p>
-                      <Link href={`/results/${a.id}`} className="inline-flex items-center gap-2 text-primary text-[9px] font-bold uppercase tracking-widest mt-2 hover:gap-4 transition-all">
-                        Telemetry_Trace <ChevronRight className="w-2.5 h-2.5" />
+                    <div className="space-y-2">
+                      <p className="text-slate-900 font-bold text-lg tracking-tight group-hover:text-primary transition-colors">{a.title}</p>
+                      <p className="text-slate-500 leading-relaxed text-sm max-w-3xl font-medium">{a.summary.slice(0, 160)}...</p>
+                      <Link href={`/results/${a.id}`} className="inline-flex items-center gap-2 text-primary text-[11px] font-bold uppercase tracking-widest mt-4 hover:gap-3 transition-all">
+                        Inspect Telemetry <ChevronRight className="w-3.5 h-3.5" />
                       </Link>
                     </div>
                   </div>
                 </motion.div>
               ))
             ) : (
-              <div className="py-24 text-center opacity-20 space-y-4">
-                <Database className="w-10 h-10 mx-auto text-primary" />
-                <p className="text-[10px] font-bold uppercase tracking-[0.5em]">No_Protocol_Activity_Logged</p>
+              <div className="py-24 text-center opacity-40 space-y-4">
+                <Database className="w-12 h-12 mx-auto text-slate-300" />
+                <p className="text-xs font-bold uppercase tracking-[0.3em] text-slate-400">No telemetry logged in this cycle</p>
               </div>
             )}
           </div>

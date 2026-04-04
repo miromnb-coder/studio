@@ -11,15 +11,10 @@ import {
   Zap, 
   Loader2,
   Cpu,
-  BrainCircuit,
-  Coins,
-  Clock,
-  ArrowDown,
+  ArrowRight,
+  Terminal,
   Activity,
-  ChevronRight,
-  ShieldCheck,
-  LayoutDashboard,
-  Terminal
+  Plus
 } from 'lucide-react';
 import { useFirestore, useUser, addDocumentNonBlocking, useCollection, useMemoFirebase } from '@/firebase';
 import { collection, serverTimestamp, doc, query, orderBy, setDoc } from 'firebase/firestore';
@@ -79,7 +74,7 @@ function ChatContent() {
 
   useEffect(() => {
     if (scrollRef.current) {
-      scrollRef.current.scrollTo({ top: scrollRef.current.scrollHeight, behavior: 'auto' });
+      scrollRef.current.scrollTo({ top: scrollRef.current.scrollHeight, behavior: 'smooth' });
     }
   }, [localMessages, isProcessing]);
 
@@ -133,46 +128,45 @@ function ChatContent() {
       addDocumentNonBlocking(collection(db, 'users', user.uid, 'conversations', activeId, 'messages'), finalMsg);
       setLocalMessages(prev => prev.map(m => m.id === assistantMsgId ? { ...m, ...finalMsg, isStreaming: false, timestamp: new Date() } : m));
     } catch (err) {
-      toast({ variant: 'destructive', title: "Signal_Lost", description: "Re-establishing_Link." });
+      toast({ variant: 'destructive', title: "Sync Interrupted", description: "Re-establishing link with intelligence core." });
     } finally {
       setIsProcessing(false);
     }
   };
 
-  if (!mounted || isUserLoading) return <div className="min-h-screen bg-stealth-ebon flex items-center justify-center"><Loader2 className="w-10 h-10 text-primary animate-spin" /></div>;
+  if (!mounted || isUserLoading) return <div className="min-h-screen bg-background flex items-center justify-center"><Loader2 className="w-10 h-10 text-primary animate-spin" /></div>;
 
   return (
-    <div className="flex h-screen bg-stealth-ebon overflow-hidden">
+    <div className="flex h-screen bg-background overflow-hidden">
       <Navbar />
       
       <main className="flex-1 flex flex-col relative">
-        <div ref={scrollRef} className="flex-1 overflow-y-auto pt-24 pb-48 px-6 md:px-12 lg:px-24 space-y-12 stealth-scrollbar">
+        <div ref={scrollRef} className="flex-1 overflow-y-auto pt-24 pb-48 px-6 md:px-12 lg:px-24 space-y-12">
           <AnimatePresence initial={false}>
             {localMessages.length > 0 ? (
               localMessages.map((msg) => (
                 <motion.div 
                   key={msg.id} 
-                  initial={{ opacity: 0, x: -10 }} 
-                  animate={{ opacity: 1, x: 0 }}
-                  transition={{ duration: 0.2, ease: "linear" }}
+                  initial={{ opacity: 0, y: 10 }} 
+                  animate={{ opacity: 1, y: 0 }}
                   className={cn("flex w-full", msg.role === 'user' ? "justify-end" : "justify-start")}
                 >
-                  <div className={cn("max-w-[90%] md:max-w-[85%] space-y-2", msg.role === 'user' ? "items-end text-right" : "items-start text-left")}>
+                  <div className={cn("max-w-[90%] md:max-w-[80%] space-y-2.5", msg.role === 'user' ? "items-end text-right" : "items-start text-left")}>
                     
                     {msg.role === 'assistant' && (
-                      <div className="flex items-center gap-2 mb-1 px-4">
-                        <Terminal className="w-3 h-3 text-primary animate-glow-pulse" />
-                        <span className="text-[9px] font-bold uppercase tracking-widest text-primary glow-text">
-                          SYS_EXEC::{msg.intent || 'OPERATOR'}
+                      <div className="flex items-center gap-2 mb-1 px-1">
+                        <Cpu className="w-3.5 h-3.5 text-primary" />
+                        <span className="text-[10px] font-bold uppercase tracking-widest text-slate-400">
+                          Execution::{msg.intent || 'Operator'}
                         </span>
                       </div>
                     )}
 
                     <div className={cn(
-                      "p-6 text-sm font-medium transition-all leading-relaxed border-l-4",
+                      "p-6 rounded-[2rem] text-sm font-medium leading-relaxed transition-all",
                       msg.role === 'user' 
-                        ? "bg-stealth-onyx border-muted-foreground text-white" 
-                        : "bg-stealth-onyx/50 border-primary text-foreground",
+                        ? "bg-slate-900 text-white shadow-lg shadow-slate-200" 
+                        : "glass-panel text-slate-700",
                       msg.isStreaming ? "animate-pulse" : ""
                     )}>
                       {msg.content}
@@ -185,13 +179,13 @@ function ChatContent() {
                 </motion.div>
               ))
             ) : (
-              <div className="flex flex-col items-center justify-center h-full text-center space-y-10 opacity-40 pt-24">
-                <div className="w-16 h-16 border-2 border-primary/20 flex items-center justify-center animate-pulse">
-                  <Terminal className="w-8 h-8 text-primary" />
+              <div className="flex flex-col items-center justify-center h-full text-center space-y-8 opacity-60 pt-24">
+                <div className="w-20 h-20 rounded-[2.5rem] bg-slate-50 border border-slate-100 flex items-center justify-center">
+                  <Terminal className="w-10 h-10 text-slate-200" />
                 </div>
                 <div className="space-y-2">
-                  <h2 className="text-3xl font-bold tracking-[0.2em] text-primary glow-text uppercase">Initial_Protocol</h2>
-                  <p className="text-[9px] font-bold uppercase tracking-[0.5em] text-muted-foreground">Tactical_Intelligence_Input_Required</p>
+                  <h2 className="text-4xl font-bold tracking-tight text-slate-900">Intelligence Briefing</h2>
+                  <p className="text-sm font-semibold text-slate-400 uppercase tracking-widest">Input telemetry to begin autonomous reasoning</p>
                 </div>
               </div>
             )}
@@ -199,22 +193,21 @@ function ChatContent() {
         </div>
 
         {/* Input Bar */}
-        <div className="absolute bottom-0 left-0 right-0 p-6 md:p-8 pointer-events-none">
-          <div className="max-w-5xl mx-auto w-full pointer-events-auto">
-            <Card className="bg-stealth-onyx/90 backdrop-blur-xl border border-stealth-slate p-1 flex items-end gap-2 shadow-[0_0_30px_rgba(0,0,0,0.5)]">
-              <Button size="icon" variant="ghost" onClick={() => fileInputRef.current?.click()} className="w-12 h-12 hover:bg-primary/10 text-muted-foreground hover:text-primary">
-                <ImageIcon className="w-4 h-4" />
+        <div className="absolute bottom-0 left-0 right-0 p-8 pointer-events-none">
+          <div className="max-w-4xl mx-auto w-full pointer-events-auto">
+            <Card className="glass-panel p-2 flex items-end gap-3 rounded-3xl shadow-2xl">
+              <Button size="icon" variant="ghost" onClick={() => fileInputRef.current?.click()} className="w-12 h-12 rounded-2xl hover:bg-slate-50 text-slate-400">
+                <ImageIcon className="w-5 h-5" />
               </Button>
               <input type="file" className="hidden" ref={fileInputRef} accept="image/*" />
-              <div className="flex-1 flex items-center gap-2 px-4 py-3 bg-stealth-ebon border border-stealth-slate focus-within:border-primary transition-all">
-                <span className="text-primary font-bold">{'>'}</span>
+              <div className="flex-1 flex items-center gap-3 px-5 py-3.5 bg-slate-50/50 rounded-2xl border border-slate-100/60 focus-within:border-primary/20 transition-all">
                 <Textarea 
                   ref={textareaRef}
                   value={input} 
                   onChange={(e) => setInput(e.target.value)} 
                   onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMessage(); } }} 
-                  placeholder="EXECUTE_COMMAND..." 
-                  className="flex-1 border-0 focus-visible:ring-0 bg-transparent min-h-[24px] p-0 text-[11px] font-bold uppercase tracking-widest resize-none text-foreground placeholder:text-muted-foreground/30" 
+                  placeholder="Ask for an audit or strategic advice..." 
+                  className="flex-1 border-0 focus-visible:ring-0 bg-transparent min-h-[24px] p-0 text-sm font-semibold text-slate-700 placeholder:text-slate-300 resize-none" 
                   rows={1} 
                 />
               </div>
@@ -222,9 +215,9 @@ function ChatContent() {
                 size="icon" 
                 disabled={!input.trim() || isProcessing} 
                 onClick={() => sendMessage()} 
-                className="w-12 h-12 bg-primary text-white hover:bg-primary/80 transition-all border border-transparent hover:border-primary shadow-[0_0_10px_rgba(225,29,72,0.3)]"
+                className="w-12 h-12 rounded-2xl bg-primary text-white hover:bg-primary/90 transition-all shadow-lg shadow-primary/20"
               >
-                {isProcessing ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
+                {isProcessing ? <Loader2 className="w-5 h-5 animate-spin" /> : <ArrowRight className="w-5 h-5" />}
               </Button>
             </Card>
           </div>
@@ -236,7 +229,7 @@ function ChatContent() {
 
 export default function ChatPage() {
   return (
-    <Suspense fallback={<div className="min-h-screen bg-stealth-ebon flex items-center justify-center"><Loader2 className="w-10 h-10 text-primary animate-spin" /></div>}>
+    <Suspense fallback={<div className="min-h-screen bg-background flex items-center justify-center"><Loader2 className="w-10 h-10 text-primary animate-spin" /></div>}>
       <ChatContent />
     </Suspense>
   );

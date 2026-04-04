@@ -2,17 +2,17 @@ import type { SystemStatus } from "./types";
 import { cn } from "@/lib/utils";
 
 const statusStyles: Record<SystemStatus, string> = {
-  active: "bg-primary/10 text-primary border border-primary/30 shadow-[0_0_10px_rgba(225,29,72,0.2)]",
-  connected: "bg-success/10 text-success border border-success/30",
-  idle: "bg-stealth-slate text-muted-foreground border border-muted-foreground/30",
-  syncing: "bg-primary/10 text-primary border border-primary/30",
-  error: "bg-primary/20 text-primary border border-primary shadow-[0_0_15px_rgba(225,29,72,0.4)]",
-  disconnected: "bg-stealth-slate text-muted-foreground border border-muted-foreground/20",
+  active: "bg-success/10 text-success border-success/20",
+  connected: "bg-success/5 text-success border-success/10",
+  idle: "bg-slate-100 text-slate-400 border-slate-200",
+  syncing: "bg-primary/10 text-primary border-primary/20",
+  error: "bg-danger/10 text-danger border-danger/20",
+  disconnected: "bg-slate-100 text-slate-400 border-slate-200",
 };
 
 const labels: Record<SystemStatus, string> = {
   active: "Operational",
-  connected: "Online",
+  connected: "Connected",
   idle: "Standby",
   syncing: "Syncing",
   error: "Critical",
@@ -23,13 +23,13 @@ export function SystemStatusBadge({ status }: { status: SystemStatus }) {
   return (
     <span
       className={cn(
-        "inline-flex items-center px-2 py-0.5 text-[8px] font-bold uppercase tracking-widest",
+        "inline-flex items-center px-2 py-0.5 rounded-full border text-[10px] font-bold uppercase tracking-wider",
         statusStyles[status]
       )}
     >
       <span className={cn(
-        "mr-1.5 h-1 w-1 bg-current",
-        status === 'active' || status === 'error' ? "animate-glow-pulse" : ""
+        "mr-1.5 h-1.5 w-1.5 rounded-full bg-current",
+        status === 'active' || status === 'syncing' ? "animate-pulse" : ""
       )} />
       {labels[status]}
     </span>

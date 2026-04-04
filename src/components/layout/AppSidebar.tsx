@@ -11,15 +11,11 @@ import {
   Zap, 
   Plus,
   Loader2,
-  Search,
-  MoreVertical,
-  Trash2,
-  Archive,
-  Edit2,
-  X,
-  Pin,
   Terminal,
-  Activity
+  Activity,
+  Cpu,
+  Database,
+  CloudLightning
 } from 'lucide-react';
 import { 
   Sidebar, 
@@ -32,12 +28,10 @@ import {
   SidebarGroup,
   SidebarGroupLabel
 } from '@/components/ui/sidebar';
-import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { useUser, useFirestore, useCollection, useMemoFirebase } from '@/firebase';
-import { collection, query, orderBy, limit, doc, deleteDoc } from 'firebase/firestore';
+import { collection, query, orderBy, limit } from 'firebase/firestore';
 import { cn } from '@/lib/utils';
-import { useToast } from '@/hooks/use-toast';
 
 export function AppSidebar() {
   const [mounted, setMounted] = useState(false);
@@ -48,7 +42,6 @@ export function AppSidebar() {
   const { user } = useUser();
   const db = useFirestore();
   const router = useRouter();
-  const { toast } = useToast();
 
   useEffect(() => {
     setMounted(true);
@@ -79,22 +72,22 @@ export function AppSidebar() {
   }, [conversations, searchTerm]);
 
   const coreItems = [
-    { icon: Terminal, href: '/dashboard', label: 'Console' },
-    { icon: History, href: '/history', label: 'Memory' },
-    { icon: Zap, href: '/money-saver', label: 'Optimization' },
-    { icon: Settings, href: '/settings', label: 'Systems' },
+    { icon: LayoutDashboard, href: '/dashboard', label: 'Command Center' },
+    { icon: History, href: '/history', label: 'Neural Memory' },
+    { icon: CloudLightning, href: '/money-saver', label: 'Optimization' },
+    { icon: Settings, href: '/settings', label: 'System Setup' },
   ];
 
   const isSyncing = !mounted || isLoading;
 
   return (
-    <Sidebar className="border-r border-stealth-slate bg-stealth-ebon">
+    <Sidebar className="border-r border-slate-200/60 bg-slate-50/50 backdrop-blur-xl">
       <SidebarHeader className="p-6">
         <Link href="/" className="flex items-center gap-3 group">
-          <div className="flex items-center justify-center w-8 h-8 bg-primary text-white transition-all group-hover:scale-110 shadow-[0_0_10px_rgba(225,29,72,0.4)]">
-            <span className="font-bold text-lg">O</span>
+          <div className="flex items-center justify-center w-9 h-9 bg-primary rounded-2xl text-white transition-all group-hover:scale-105 shadow-lg shadow-primary/20">
+            <Cpu className="w-5 h-5" />
           </div>
-          <span className="font-bold text-sm tracking-widest text-primary uppercase glow-text">Operator</span>
+          <span className="font-bold text-sm tracking-tight text-slate-900">Operator</span>
         </Link>
       </SidebarHeader>
 
@@ -104,30 +97,30 @@ export function AppSidebar() {
             <SidebarMenuItem>
               <SidebarMenuButton 
                 onClick={() => router.push('/')}
-                className="h-10 bg-primary text-white hover:bg-primary/90 transition-all px-4 group flex justify-between"
+                className="h-11 bg-primary text-white hover:bg-primary/90 rounded-2xl transition-all px-4 group flex justify-between shadow-md shadow-primary/10"
               >
-                <span className="font-bold text-[10px] uppercase tracking-widest">Initial_Protocol</span>
-                <Plus className="w-3.5 h-3.5 text-white/80 group-hover:rotate-90 transition-transform" />
+                <span className="font-bold text-xs">New Analysis</span>
+                <Plus className="w-4 h-4 text-white/80 group-hover:rotate-90 transition-transform" />
               </SidebarMenuButton>
             </SidebarMenuItem>
           </SidebarMenu>
         </SidebarGroup>
 
         <div className="px-4 mt-4 relative">
-          <span className="absolute left-7 top-1/2 -translate-y-1/2 text-[10px] text-primary/50">{'>'}</span>
           <Input 
-            placeholder="Filter_Session..." 
+            placeholder="Search activity..." 
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
-            className="h-9 pl-10 bg-stealth-onyx border-stealth-slate text-[10px] font-bold uppercase tracking-widest focus:border-primary transition-all text-muted-foreground"
+            className="h-10 pl-10 bg-white/50 border-slate-200/60 rounded-2xl text-xs font-medium focus:ring-primary/20 transition-all"
           />
+          <Terminal className="absolute left-7 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400" />
         </div>
 
         <SidebarGroup className="mt-4">
-          <SidebarGroupLabel className="px-4 text-[9px] font-bold uppercase tracking-[0.3em] text-muted-foreground/50">Intelligence_Log</SidebarGroupLabel>
-          <SidebarMenu className="px-2 space-y-1">
+          <SidebarGroupLabel className="px-4 text-[10px] font-bold uppercase tracking-widest text-slate-400">Intelligence Log</SidebarGroupLabel>
+          <SidebarMenu className="px-2 mt-2 space-y-1">
             {isSyncing ? (
-              <div className="flex justify-center py-8"><Loader2 className="w-4 h-4 text-primary animate-spin" /></div>
+              <div className="flex justify-center py-8"><Loader2 className="w-5 h-5 text-primary/40 animate-spin" /></div>
             ) : filteredConversations.length > 0 ? (
               filteredConversations.map((conv) => (
                 <SidebarMenuItem key={conv.id}>
@@ -135,26 +128,26 @@ export function AppSidebar() {
                     asChild 
                     isActive={activeId === conv.id}
                     className={cn(
-                      "h-9 transition-all px-4 border-l-2",
-                      activeId === conv.id ? "bg-primary/10 border-primary text-primary" : "border-transparent text-muted-foreground hover:text-primary hover:bg-stealth-onyx"
+                      "h-10 transition-all px-4 rounded-xl",
+                      activeId === conv.id ? "bg-white text-primary shadow-sm border border-slate-100" : "text-slate-500 hover:text-slate-900 hover:bg-white/50"
                     )}
                   >
                     <Link href={`/?c=${conv.id}`}>
                       <div className="flex items-center gap-3 truncate">
-                        <MessageSquare className="w-3.5 h-3.5 shrink-0 opacity-40" />
-                        <span className="truncate text-[10px] font-bold uppercase tracking-wider">{conv.title || 'Unknown_Session'}</span>
+                        <MessageSquare className="w-4 h-4 shrink-0 opacity-40" />
+                        <span className="truncate text-xs font-semibold">{conv.title || 'Untitled Session'}</span>
                       </div>
                     </Link>
                   </SidebarMenuButton>
                 </SidebarMenuItem>
               ))
             ) : (
-              <div className="px-4 py-8 text-center opacity-20 italic text-[9px] uppercase">No_Records_Found</div>
+              <div className="px-4 py-8 text-center text-[11px] text-slate-400 font-medium italic">Empty log</div>
             )}
           </SidebarMenu>
         </SidebarGroup>
 
-        <SidebarGroup className="mt-auto pb-4 border-t border-stealth-slate">
+        <SidebarGroup className="mt-auto pb-4 border-t border-slate-100/60 pt-4">
           <SidebarMenu className="px-2 space-y-1">
             {coreItems.map((item) => (
               <SidebarMenuItem key={item.href}>
@@ -162,13 +155,13 @@ export function AppSidebar() {
                   asChild 
                   isActive={pathname === item.href}
                   className={cn(
-                    "h-9 transition-all px-4 border-l-2",
-                    pathname === item.href ? "bg-primary/10 border-primary text-primary" : "border-transparent text-muted-foreground hover:text-primary hover:bg-stealth-onyx"
+                    "h-10 transition-all px-4 rounded-xl",
+                    pathname === item.href ? "bg-white text-primary shadow-sm border border-slate-100" : "text-slate-500 hover:text-slate-900 hover:bg-white/50"
                   )}
                 >
                   <Link href={item.href}>
-                    <item.icon className="w-3.5 h-3.5 mr-3 opacity-60" />
-                    <span className="text-[10px] font-bold uppercase tracking-widest">{item.label}</span>
+                    <item.icon className="w-4 h-4 mr-3 opacity-60" />
+                    <span className="text-xs font-semibold">{item.label}</span>
                   </Link>
                 </SidebarMenuButton>
               </SidebarMenuItem>
@@ -177,18 +170,18 @@ export function AppSidebar() {
         </SidebarGroup>
       </SidebarContent>
 
-      <SidebarFooter className="p-4 border-t border-stealth-slate bg-stealth-ebon">
-        <div className="flex items-center gap-3 px-3 py-2 border border-stealth-slate bg-stealth-ebon hover:border-primary transition-colors cursor-pointer group">
-          <div className="w-8 h-8 overflow-hidden bg-stealth-onyx border border-stealth-slate">
+      <SidebarFooter className="p-4 border-t border-slate-100/60 bg-white/20">
+        <div className="flex items-center gap-3 px-3 py-2.5 rounded-2xl hover:bg-white/50 transition-all cursor-pointer group border border-transparent hover:border-slate-100">
+          <div className="w-9 h-9 overflow-hidden rounded-xl border border-slate-200 bg-white">
             {user?.uid && mounted ? (
-              <img src={`https://picsum.photos/seed/${user.uid}/64/64`} alt="ID" className="w-full h-full object-cover grayscale brightness-50 contrast-125" />
+              <img src={`https://picsum.photos/seed/${user.uid}/64/64`} alt="Avatar" className="w-full h-full object-cover" />
             ) : (
-              <div className="w-full h-full bg-stealth-onyx" />
+              <div className="w-full h-full bg-slate-50" />
             )}
           </div>
           <div className="flex-1 min-w-0">
-            <p className="text-[10px] font-bold text-primary truncate uppercase">{user?.displayName || 'Unknown_Agent'}</p>
-            <p className="text-[8px] font-bold text-muted-foreground uppercase tracking-widest truncate">Verified_Clearance</p>
+            <p className="text-xs font-bold text-slate-900 truncate">{user?.displayName || 'User'}</p>
+            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-tight">Standard Clearance</p>
           </div>
         </div>
       </SidebarFooter>

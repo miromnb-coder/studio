@@ -10,75 +10,58 @@ export default {
   theme: {
     extend: {
       fontFamily: {
-        body: ['JetBrains Mono', 'monospace'],
-        headline: ['JetBrains Mono', 'monospace'],
+        sans: ['Inter', 'system-ui', 'sans-serif'],
         mono: ['JetBrains Mono', 'monospace'],
       },
       colors: {
-        background: '#020202',
-        foreground: '#F5F5F5',
+        background: 'hsl(var(--background))',
+        foreground: 'hsl(var(--foreground))',
         card: {
-          DEFAULT: '#0A0A0A',
-          foreground: '#F5F5F5',
+          DEFAULT: 'hsl(var(--card))',
+          foreground: 'hsl(var(--card-foreground))',
         },
         popover: {
-          DEFAULT: '#0A0A0A',
-          foreground: '#F5F5F5',
+          DEFAULT: 'hsl(var(--popover))',
+          foreground: 'hsl(var(--popover-foreground))',
         },
         primary: {
-          DEFAULT: '#E11D48',
-          foreground: '#FFFFFF',
+          DEFAULT: 'hsl(var(--primary))',
+          foreground: 'hsl(var(--primary-foreground))',
         },
         secondary: {
-          DEFAULT: '#1A1A1A',
-          foreground: '#E11D48',
+          DEFAULT: 'hsl(var(--secondary))',
+          foreground: 'hsl(var(--secondary-foreground))',
         },
         muted: {
-          DEFAULT: '#111111',
-          foreground: '#666666',
+          DEFAULT: 'hsl(var(--muted))',
+          foreground: 'hsl(var(--muted-foreground))',
         },
         accent: {
-          DEFAULT: '#E11D48',
-          foreground: '#FFFFFF',
+          DEFAULT: 'hsl(var(--accent))',
+          foreground: 'hsl(var(--accent-foreground))',
         },
         destructive: {
-          DEFAULT: '#991B1B',
-          foreground: '#FFFFFF',
+          DEFAULT: 'hsl(var(--destructive))',
+          foreground: 'hsl(var(--destructive-foreground))',
         },
-        border: '#1F1F1F',
-        input: '#0A0A0A',
-        ring: '#E11D48',
-        success: '#10B981',
-        warning: '#F59E0B',
-        danger: '#E11D48',
-        stealth: {
-          ebon: '#020202',
-          onyx: '#0A0A0A',
-          crimson: '#E11D48',
-          slate: '#1F1F1F'
-        }
+        border: 'hsl(var(--border))',
+        input: 'hsl(var(--input))',
+        ring: 'hsl(var(--ring))',
+        success: 'hsl(var(--success))',
+        warning: 'hsl(var(--warning))',
+        danger: 'hsl(var(--danger))',
       },
       borderRadius: {
-        lg: '0px',
-        md: '0px',
-        sm: '0px',
+        lg: 'var(--radius)',
+        md: 'calc(var(--radius) - 2px)',
+        sm: 'calc(var(--radius) - 4px)',
+        xl: '1.5rem',
+        '2xl': '2rem',
+        '3xl': '2.5rem',
       },
-      keyframes: {
-        'glow-pulse': {
-          '0%, 100%': { opacity: '1', filter: 'drop-shadow(0 0 2px #E11D48)' },
-          '50%': { opacity: '0.5', filter: 'drop-shadow(0 0 10px #E11D48)' },
-        },
-        'scanline': {
-          '0%': { transform: 'translateY(-100%)' },
-          '100%': { transform: 'translateY(100%)' },
-        }
-      },
-      animation: {
-        'glow-pulse': 'glow-pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite',
-        'scanline': 'scanline 8s linear infinite',
-      },
-      transitionTimingFunction: {
-        'mechanical': 'cubic-bezier(0.4, 0, 0.2, 1)',
+      boxShadow: {
+        premium: '0 8px 32px rgba(0, 0, 0, 0.04)',
+        glass: '0 4px 16px rgba(0, 0, 0, 0.02)',
       }
     },
   },
