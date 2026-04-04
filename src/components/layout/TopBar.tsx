@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from 'react';
+import { useState, useCallback, useMemo } from 'react';
 import { StatusDot } from '@/components/ui/StatusDot';
 import { Bell, LayoutGrid, User, X, Zap, Clock } from 'lucide-react';
 import { useUser, useFirestore, useCollection, useMemoFirebase } from '@/firebase';
@@ -13,23 +13,35 @@ export function TopBar() {
   const db = useFirestore();
   const [isMenuOpen, setIsMenuOpen] = useState(false);
 
+  const toggleMenu = useCallback(() => {
+    setIsMenuOpen(prev => !prev);
+  }, []);
+
+  const closeMenu = useCallback(() => {
+    setIsMenuOpen(false);
+  }, []);
+
   const analysesQuery = useMemoFirebase(() => {
     if (!db || !user) return null;
     return query(collection(db, 'users', user.uid, 'analyses'), limit(20));
   }, [db, user]);
 
   const { data: analyses } = useCollection(analysesQuery);
-  const totalSaved = (analyses || []).reduce((acc, a) => acc + (a.estimatedMonthlySavings || 0), 0);
+  
+  const totalSaved = useMemo(() => {
+    return (analyses || []).reduce((acc, a) => acc + (a.estimatedMonthlySavings || 0), 0);
+  }, [analyses]);
 
   return (
     <>
-      <header className="fixed top-6 left-1/2 -translate-x-1/2 z-[60] w-[calc(100%-3rem)] max-w-5xl">
-        <div className="glass-panel h-16 px-4 md:px-6 flex items-center justify-between rounded-full border-white/60 shadow-[0_16px_32px_-8px_rgba(0,0,0,0.1)]">
+      <header className="fixed top-6 left-1/2 -translate-x-1/2 z-[100] w-[calc(100%-3rem)] max-w-5xl pointer-events-none">
+        <div className="glass-panel h-16 px-4 md:px-6 flex items-center justify-between rounded-full border-white/60 shadow-[0_16px_32px_-8px_rgba(0,0,0,0.1)] pointer-events-auto">
           {/* Left: Navigation Trigger */}
           <div className="flex items-center gap-3 md:gap-4">
             <button 
-              onClick={() => setIsMenuOpen(!isMenuOpen)}
-              className="w-10 h-10 rounded-full flex items-center justify-center text-slate-500 hover:bg-white/60 hover:text-primary transition-all active:scale-95"
+              onClick={toggleMenu}
+              aria-label={isMenuOpen ? "Close menu" : "Open menu"}
+              className="w-10 h-10 rounded-full flex items-center justify-center text-slate-500 hover:bg-white/60 hover:text-primary transition-all active:scale-95 z-[110]"
             >
               {isMenuOpen ? <X className="w-5 h-5" /> : <LayoutGrid className="w-5 h-5" />}
             </button>
@@ -74,7 +86,7 @@ export function TopBar() {
 
       <AnimatePresence>
         {isMenuOpen && (
-          <FloatingNavMenu onClose={() => setIsMenuOpen(false)} />
+          <FloatingNavMenu onClose={closeMenu} />
         )}
       </AnimatePresence>
     </>

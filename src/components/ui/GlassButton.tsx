@@ -1,7 +1,7 @@
 "use client";
 
 import { cn } from '@/lib/utils';
-import { ButtonHTMLAttributes } from 'react';
+import { ButtonHTMLAttributes, memo } from 'react';
 import { Loader2 } from 'lucide-react';
 import { motion } from 'framer-motion';
 
@@ -11,14 +11,14 @@ interface GlassButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
   size?: 'sm' | 'md' | 'lg';
 }
 
-export function GlassButton({ 
+export const GlassButton = memo(({ 
   children, 
   className, 
   variant = 'primary', 
   loading, 
   size = 'md',
   ...props 
-}: GlassButtonProps) {
+}: GlassButtonProps) => {
   const variants = {
     primary: "bg-primary text-white shadow-glow hover:bg-primary/90",
     secondary: "bg-white/60 text-slate-900 border border-white/80 hover:bg-white/80",
@@ -36,7 +36,7 @@ export function GlassButton({
       whileHover={{ scale: 1.02 }}
       whileTap={{ scale: 0.96 }}
       className={cn(
-        "inline-flex items-center justify-center font-bold uppercase tracking-[0.2em] transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed",
+        "inline-flex items-center justify-center font-bold uppercase tracking-[0.2em] transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed will-change-transform",
         variants[variant],
         sizes[size],
         className
@@ -48,4 +48,6 @@ export function GlassButton({
       {children}
     </motion.button>
   );
-}
+});
+
+GlassButton.displayName = 'GlassButton';
