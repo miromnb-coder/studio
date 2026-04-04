@@ -1,11 +1,25 @@
 "use client";
 
-import { useState } from 'react';
 import { SystemCard } from '@/components/systems/SystemCard';
 import { useUser, useFirestore, useCollection, useMemoFirebase } from '@/firebase';
 import { collection, query, orderBy, limit } from 'firebase/firestore';
 import { motion } from 'framer-motion';
-import { Activity, Terminal, ShieldCheck, Zap } from 'lucide-react';
+import { Terminal, ShieldCheck, Zap, ChevronRight } from 'lucide-react';
+
+const container = {
+  hidden: { opacity: 0 },
+  show: {
+    opacity: 1,
+    transition: {
+      staggerChildren: 0.1
+    }
+  }
+};
+
+const item = {
+  hidden: { opacity: 0, y: 20 },
+  show: { opacity: 1, y: 0 }
+};
 
 export default function DashboardPage() {
   const { user } = useUser();
@@ -20,12 +34,17 @@ export default function DashboardPage() {
     );
   }, [db, user]);
 
-  const { data: analyses, isLoading } = useCollection(analysesQuery);
+  const { data: analyses } = useCollection(analysesQuery);
   const totalReclaimed = (analyses || []).reduce((acc, a) => acc + (a.estimatedMonthlySavings || 0), 0);
 
   return (
-    <div className="space-y-16">
-      <header className="space-y-6">
+    <motion.div 
+      variants={container}
+      initial="hidden"
+      animate="show"
+      className="space-y-16"
+    >
+      <motion.header variants={item} className="space-y-6">
         <div className="flex items-center gap-3 px-4 py-1.5 bg-primary/5 border border-primary/10 rounded-full w-fit">
           <ShieldCheck className="w-3.5 h-3.5 text-primary" />
           <span className="text-[10px] font-bold text-primary uppercase tracking-[0.3em]">Operational Readiness High</span>
@@ -39,9 +58,9 @@ export default function DashboardPage() {
             Consolidated telemetry from your autonomous reasoning cycles and optimization protocols.
           </p>
         </div>
-      </header>
+      </motion.header>
 
-      <div className="grid gap-8 lg:grid-cols-2">
+      <motion.div variants={item} className="grid gap-8 lg:grid-cols-2">
         <SystemCard 
           title="Action Engine"
           description="Autonomous reasoning loop for immediate tactical execution."
@@ -75,9 +94,9 @@ export default function DashboardPage() {
             { label: 'View Insights', variant: 'primary' }
           ]}
         />
-      </div>
+      </motion.div>
 
-      <section className="space-y-8">
+      <motion.section variants={item} className="space-y-8">
         <div className="flex items-center gap-4">
           <Terminal className="w-5 h-5 text-slate-400" />
           <h3 className="text-xs font-bold text-slate-400 uppercase tracking-[0.4em]">Operational Telemetry</h3>
@@ -90,7 +109,7 @@ export default function DashboardPage() {
               initial={{ opacity: 0, x: -20 }}
               animate={{ opacity: 1, x: 0 }}
               transition={{ delay: idx * 0.05 }}
-              className="p-6 rounded-4xl bg-white/40 border border-white/60 flex items-center justify-between group hover:bg-white/80 transition-all"
+              className="p-6 rounded-4xl bg-white/40 border border-white/60 flex items-center justify-between group hover:bg-white/80 transition-all cursor-pointer"
             >
               <div className="flex items-center gap-6">
                 <div className="w-12 h-12 rounded-2xl bg-white flex items-center justify-center text-primary shadow-sm group-hover:shadow-md transition-all">
@@ -107,7 +126,7 @@ export default function DashboardPage() {
             </motion.div>
           ))}
         </div>
-      </section>
-    </div>
+      </motion.section>
+    </motion.div>
   );
 }

@@ -5,7 +5,7 @@ import { GlassButton } from '@/components/ui/GlassButton';
 import { StatusDot } from '@/components/ui/StatusDot';
 import { motion } from 'framer-motion';
 import { ReactNode } from 'react';
-import { ChevronRight, Activity } from 'lucide-react';
+import { ChevronRight, Sparkles } from 'lucide-react';
 
 interface SystemCardProps {
   title: string;
@@ -19,8 +19,11 @@ interface SystemCardProps {
 
 export function SystemCard({ title, description, status, value, metrics, actions, children }: SystemCardProps) {
   return (
-    <GlassCard className="flex flex-col h-full">
-      <div className="flex items-start justify-between mb-8">
+    <GlassCard className="flex flex-col h-full group relative overflow-hidden">
+      {/* Neural Shimmer Effect */}
+      <div className="absolute inset-0 bg-gradient-to-br from-primary/0 via-primary/[0.02] to-primary/0 opacity-0 group-hover:opacity-100 transition-opacity duration-700 pointer-events-none" />
+      
+      <div className="flex items-start justify-between mb-8 relative z-10">
         <div className="space-y-1">
           <div className="flex items-center gap-3">
             <h3 className="text-xl font-bold tracking-tighter text-slate-900">{title}</h3>
@@ -32,16 +35,18 @@ export function SystemCard({ title, description, status, value, metrics, actions
         </div>
         {value && (
           <div className="text-right">
-            <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest mb-1">Impact</p>
+            <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest mb-1 flex items-center justify-end gap-1">
+              <Sparkles className="w-2.5 h-2.5 text-primary" /> Impact
+            </p>
             <p className="text-3xl font-bold tracking-tighter text-primary">{value}</p>
           </div>
         )}
       </div>
 
       {metrics && (
-        <div className="grid grid-cols-2 gap-4 mb-8">
+        <div className="grid grid-cols-2 gap-4 mb-8 relative z-10">
           {metrics.map((m) => (
-            <div key={m.label} className="p-4 rounded-3xl bg-white/40 border border-white/60">
+            <div key={m.label} className="p-4 rounded-3xl bg-white/40 border border-white/60 shadow-sm hover:bg-white/60 transition-colors">
               <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest mb-1">{m.label}</p>
               <p className="text-sm font-bold text-slate-900 tracking-tight">{m.value}</p>
             </div>
@@ -49,7 +54,7 @@ export function SystemCard({ title, description, status, value, metrics, actions
         </div>
       )}
 
-      <div className="flex-1">
+      <div className="flex-1 relative z-10">
         {children && (
           <div className="mb-8 pt-6 border-t border-slate-100">
             {children}
@@ -57,7 +62,7 @@ export function SystemCard({ title, description, status, value, metrics, actions
         )}
       </div>
 
-      <div className="flex gap-3 mt-auto">
+      <div className="flex gap-3 mt-auto relative z-10">
         {actions.map((action) => (
           <GlassButton 
             key={action.label} 

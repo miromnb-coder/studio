@@ -36,9 +36,6 @@ export default {
         success: 'hsl(142, 71%, 45%)',
         warning: 'hsl(38, 92%, 50%)',
         danger: 'hsl(0, 84%, 60%)',
-        // Semantic border tokens
-        'border-soft': 'rgba(0, 0, 0, 0.04)',
-        'border-strong': 'rgba(0, 0, 0, 0.08)',
         border: 'hsl(var(--border))',
       },
       borderRadius: {

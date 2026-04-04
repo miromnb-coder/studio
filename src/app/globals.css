@@ -27,6 +27,7 @@
 .glass-surface {
   @apply bg-surface backdrop-blur-xl border border-white/40 shadow-float;
   transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+  transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 .glass-surface-hover:hover {

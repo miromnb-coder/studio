@@ -3,6 +3,7 @@
 import { cn } from '@/lib/utils';
 import { ButtonHTMLAttributes } from 'react';
 import { Loader2 } from 'lucide-react';
+import { motion } from 'framer-motion';
 
 interface GlassButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
   variant?: 'primary' | 'secondary' | 'ghost';
@@ -31,9 +32,11 @@ export function GlassButton({
   };
 
   return (
-    <button
+    <motion.button
+      whileHover={{ scale: 1.02 }}
+      whileTap={{ scale: 0.96 }}
       className={cn(
-        "inline-flex items-center justify-center font-bold uppercase tracking-[0.2em] transition-all duration-300 active:scale-[0.97] disabled:opacity-50 disabled:cursor-not-allowed",
+        "inline-flex items-center justify-center font-bold uppercase tracking-[0.2em] transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed",
         variants[variant],
         sizes[size],
         className
@@ -43,6 +46,6 @@ export function GlassButton({
     >
       {loading && <Loader2 className="w-3.5 h-3.5 mr-2 animate-spin" />}
       {children}
-    </button>
+    </motion.button>
   );
 }
