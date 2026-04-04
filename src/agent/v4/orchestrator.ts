@@ -3,7 +3,8 @@ import { createPlan } from './planner';
 import { executeTools } from './tools';
 import { evaluateReasoning } from './critic';
 import { generateStreamResponse } from './generator';
-import { fetchMemory } from './memory';
+import { fetchMemory, updateMemory } from './memory';
+import { reflectOnInteraction } from './reflection';
 import { AgentContext } from './types';
 
 /**
@@ -18,6 +19,34 @@ async function checkFastPath(input: string): Promise<string | null> {
     return "Operator v4.2 online. Systems nominal.";
   }
   return null;
+}
+
+function extractMemoryDeltas(context: AgentContext): Record<string, unknown> | null {
+  const toolSummary = context.toolResults.map((result) => ({
+    action: result.action,
+    succeeded: !result.error,
+    error: result.error ?? null
+  }));
+
+  const hasToolFailures = toolSummary.some((tool) => !tool.succeeded);
+  const score = context.criticFeedback?.score ?? null;
+  const hasSignal =
+    !!context.intent ||
+    typeof score === 'number' ||
+    hasToolFailures ||
+    context.toolResults.length > 0;
+
+  if (!hasSignal) {
+    return null;
+  }
+
+  return {
+    lastIntent: context.intent,
+    lastLanguage: context.language,
+    lastCriticScore: score,
+    lastToolSummary: toolSummary,
+    lastInteractionAt: new Date().toISOString()
+  };
 }
 
 export async function runAgentV4Stream(input: string, userId: string, history: any[] = [], imageUri?: string) {
@@ -47,6 +76,7 @@ export async function runAgentV4Stream(input: string, userId: string, history: a
 
   // 5. Context Building
   const context: AgentContext = {
+    userId,
     input,
     history,
     memory,
@@ -70,6 +100,19 @@ export async function runAgentV4Stream(input: string, userId: string, history: a
 
   // 7. Streaming Response Generation
   const stream = await generateStreamResponse(context);
+  context.memoryUpdates = extractMemoryDeltas(context) ?? undefined;
+
+  void (async () => {
+    try {
+      await updateMemory(userId, context);
+    } catch (error) {
+      console.error("[ORCHESTRATOR] Memory update post-process failed:", error);
+    }
+
+    reflectOnInteraction(context).catch((error) => {
+      console.error("[ORCHESTRATOR] Reflection post-process failed:", error);
+    });
+  })();
 
   return {
     stream,

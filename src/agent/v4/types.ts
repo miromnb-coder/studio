@@ -23,6 +23,7 @@ export interface CriticFeedback {
 }
 
 export interface AgentContext {
+  userId: string;
   input: string;
   history: any[];
   memory: any;
@@ -33,5 +34,6 @@ export interface AgentContext {
   toolResults: ToolResult[];
   criticFeedback?: CriticFeedback;
   finalResponse?: any;
+  memoryUpdates?: Record<string, unknown>;
   fastPathUsed: boolean;
 }
