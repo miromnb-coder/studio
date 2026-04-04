@@ -15,10 +15,13 @@ import {
   ShieldCheck,
   Activity,
   ArrowRight,
-  Sparkles
+  Sparkles,
+  Star
 } from 'lucide-react';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { cn } from '@/lib/utils';
+import { useUser, useFirestore } from '@/firebase';
+import { SubscriptionService } from '@/services/subscription-service';
 
 interface RichAnalysisCardProps {
   data: {
@@ -37,6 +40,15 @@ interface RichAnalysisCardProps {
 
 export function RichAnalysisCard({ data }: RichAnalysisCardProps) {
   const [copiedId, setCopiedId] = useState<string | null>(null);
+  const [isPremium, setIsPremium] = useState(true);
+  const { user } = useUser();
+  const db = useFirestore();
+
+  useEffect(() => {
+    if (db && user) {
+      SubscriptionService.getUserStatus(db, user.uid).then(s => setIsPremium(s.plan === 'PREMIUM'));
+    }
+  }, [db, user]);
 
   if (!data) return null;
 
@@ -100,6 +112,21 @@ export function RichAnalysisCard({ data }: RichAnalysisCardProps) {
             </div>
           </div>
         </div>
+
+        {/* Soft Upsell for Free Users */}
+        {!isPremium && savingsEstimate > 0 && (
+          <div className="mt-8 p-6 rounded-2xl bg-warning/5 border border-warning/20 flex flex-col md:flex-row items-center justify-between gap-4">
+            <div className="flex items-center gap-3">
+              <Star className="w-5 h-5 text-warning fill-warning" />
+              <p className="text-xs font-bold text-slate-700 uppercase tracking-tight">
+                Unlock "Forensic Mode" to automate this reclamation.
+              </p>
+            </div>
+            <Button size="sm" className="bg-warning text-white hover:bg-warning/90 rounded-xl text-[10px] font-bold uppercase tracking-widest px-6 h-10">
+              Upgrade to Ultra
+            </Button>
+          </div>
+        )}
       </Card>
 
       {/* Observation Ledger */}

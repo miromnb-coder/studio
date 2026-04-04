@@ -12,7 +12,7 @@ import {
   Firestore 
 } from 'firebase/firestore';
 
-export type UserPlan = 'FREE' | 'PREMIUM';
+export type UserPlan = 'FREE' | 'STARTER' | 'PREMIUM';
 
 export interface UsageStats {
   agentRuns: number;
@@ -24,12 +24,20 @@ export const PLAN_LIMITS = {
   FREE: {
     dailyAgentRuns: 5,
     hasAdvancedTools: false,
-    memoryRetentionDays: 7
+    memoryRetentionDays: 7,
+    price: 0
+  },
+  STARTER: {
+    dailyAgentRuns: 20,
+    hasAdvancedTools: true,
+    memoryRetentionDays: 30,
+    price: 9
   },
   PREMIUM: {
     dailyAgentRuns: 9999,
     hasAdvancedTools: true,
-    memoryRetentionDays: 365
+    memoryRetentionDays: 365,
+    price: 19
   }
 };
 
@@ -39,7 +47,7 @@ export class SubscriptionService {
    */
   static async getUserStatus(db: Firestore, userId: string) {
     if (!userId || userId === 'system_anonymous') {
-      return { plan: 'FREE' as UserPlan, usage: { agentRuns: 0 } };
+      return { plan: 'FREE' as UserPlan, usage: { agentRuns: 0, limit: 5 } };
     }
 
     try {
@@ -57,9 +65,9 @@ export class SubscriptionService {
         plan,
         usage: {
           agentRuns: usageData?.agentRuns || 0,
-          limit: PLAN_LIMITS[plan].dailyAgentRuns
+          limit: PLAN_LIMITS[plan as keyof typeof PLAN_LIMITS]?.dailyAgentRuns || 5
         },
-        isPremium: plan === 'PREMIUM'
+        isPremium: plan === 'PREMIUM' || plan === 'STARTER'
       };
     } catch (e) {
       console.error("[SUBSCRIPTION] Status fetch failed", e);
@@ -92,8 +100,6 @@ export class SubscriptionService {
   static async upgradeToPremium(db: Firestore, userId: string) {
     if (!userId) return false;
     
-    // In a real app, this would redirect to Stripe
-    // For the prototype, we update the plan directly
     try {
       const userRef = doc(db, 'users', userId);
       await updateDoc(userRef, {
