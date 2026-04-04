@@ -15,7 +15,7 @@ import { SubscriptionService } from '@/services/subscription-service';
 import { cn } from '@/lib/utils';
 import { Progress } from '@/components/ui/progress';
 import { GlassButton } from '@/components/ui/GlassButton';
-import { PaywallOverlay } from '@/components/monetization/PaywallOverlay';
+import { UpgradeButton } from '@/components/upgrade/UpgradeButton';
 
 export function TopBar() {
   const { user } = useUser();
@@ -23,7 +23,6 @@ export function TopBar() {
   const router = useRouter();
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [status, setStatus] = useState<any>(null);
-  const [isPaywallOpen, setIsPaywallOpen] = useState(false);
 
   useEffect(() => {
     if (db && user) {
@@ -77,7 +76,7 @@ export function TopBar() {
                   : "bg-white/80 hover:bg-white text-slate-900 shadow-sm border border-slate-200/50"
               )}
             >
-              {isMenuOpen ? <X className="w-4 h-4" /> : <Menu className="w-4 h-4" />}
+              {isMenuOpen ? <X className="w-4" /> : <Menu className="w-4 h-4" />}
               <span className="text-[10px] font-black uppercase tracking-[0.2em] hidden sm:block">Menu</span>
             </motion.button>
             <div className="h-6 w-px bg-slate-200/60 hidden md:block" />
@@ -89,7 +88,7 @@ export function TopBar() {
 
           {/* Center: System Status & Upgrade CTA */}
           <div className="flex items-center gap-4 md:gap-6">
-            {isFree && (
+            {isFree && status && (
               <div className="flex items-center gap-4 bg-slate-50/50 border border-slate-100 rounded-full pl-4 pr-1 py-1 h-11">
                 <div className="flex flex-col w-16 gap-1">
                   <Progress value={usagePercent} className="h-1 bg-slate-200" />
@@ -97,13 +96,7 @@ export function TopBar() {
                     {status.usage.agentRuns}/{status.usage.limit} RUNS
                   </span>
                 </div>
-                <GlassButton 
-                  size="sm" 
-                  className="!h-9 !px-4 !rounded-full !text-[9px] bg-primary shadow-lg shadow-primary/20 group/up"
-                  onClick={() => setIsPaywallOpen(true)}
-                >
-                  Upgrade <ArrowRight className="w-2.5 h-2.5 ml-1.5 group-hover/up:translate-x-0.5 transition-transform" />
-                </GlassButton>
+                <UpgradeButton />
               </div>
             )}
 
@@ -167,7 +160,6 @@ export function TopBar() {
                 </div>
                 {isFree && (
                   <button 
-                    onClick={() => setIsPaywallOpen(true)}
                     className="w-full flex items-center gap-3 p-3 text-primary hover:bg-primary/5 rounded-2xl transition-all text-xs font-bold"
                   >
                     <Star className="w-4 h-4 fill-primary" />
@@ -192,11 +184,6 @@ export function TopBar() {
           <FloatingNavMenu onClose={closeMenu} />
         )}
       </AnimatePresence>
-
-      <PaywallOverlay 
-        isOpen={isPaywallOpen} 
-        onClose={() => setIsPaywallOpen(false)} 
-      />
     </>
   );
 }
