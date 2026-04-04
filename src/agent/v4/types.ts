@@ -1,37 +1,29 @@
-/**
- * @fileOverview Core types for Agent v4.2 Multi-Agent Architecture.
- */
-
-export type Intent = 'finance' | 'time_optimizer' | 'monetization' | 'technical' | 'analysis' | 'general';
-
-export interface AgentStep {
+export type AgentDecision = {
+  thought: string;
   action: string;
-  priority: 'high' | 'medium' | 'low';
-  description?: string;
-}
+  input?: any;
+  final?: string;
+};
 
-export interface ToolResult {
-  action: string;
-  output: any;
-  error?: string;
-}
+export type AgentStep = {
+  type: "think" | "action" | "observation" | "final";
+  content?: string;
+  tool?: string;
+  input?: any;
+  result?: any;
+};
 
-export interface CriticFeedback {
-  score: number;
-  issues: string[];
-  needs_revision: boolean;
-}
-
-export interface AgentContext {
+export type AgentState = {
   input: string;
-  history: any[];
-  memory: any;
-  imageUri?: string;
-  language: string;
-  intent: Intent;
-  plan: AgentStep[];
-  toolResults: ToolResult[];
-  criticFeedback?: CriticFeedback;
-  finalResponse?: any;
-  fastPathUsed: boolean;
-}
+  steps: AgentStep[];
+  memory: any[];
+  plan: string[];
+  toolsUsed: string[];
+  done: boolean;
+};
+
+export type Tool = {
+  name: string;
+  description: string;
+  execute: (input: any) => Promise<any>;
+};
