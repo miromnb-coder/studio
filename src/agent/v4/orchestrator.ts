@@ -7,31 +7,27 @@ import { fetchMemory } from './memory';
 import { AgentContext } from './types';
 
 /**
- * @fileOverview Orchestrator Agent v4.2: Streaming multi-agent pipeline.
- * Follows strict reasoning, planning, and tool-usage protocols.
+ * @fileOverview Orchestrator Agent v4.2: The single source of truth for AI reasoning.
+ * Handles streaming responses, tool execution, and memory synchronization.
  */
 
 async function checkFastPath(input: string): Promise<string | null> {
   const lower = input.toLowerCase().trim();
-  // Only trivial inputs skip the pipeline
-  if (lower.length < 10 && (lower === 'hi' || lower === 'hello' || lower === 'hei' || lower === 'status')) {
-    return "Operator v4.2 online. Systems nominal.";
+  if (lower.length < 10 && (lower === 'hi' || lower === 'hello' || lower === 'status' || lower === 'help')) {
+    return "Operator v4.2 online. Neural pathways active. All systems nominal.";
   }
   return null;
 }
 
 /**
- * Standard blocking entry point for Agent v4.2 logic.
- * Used by legacy routes and non-streaming contexts.
+ * Blocking entry point for background tasks (Webhooks, Cron).
  */
 export async function runAgentV4(input: string, userId: string, history: any[] = [], imageUri?: string) {
+  console.log(`[AGENT_V4.2] Blocking Request: ${input.slice(0, 50)}...`);
   const { stream, fastPathResponse, metadata } = await runAgentV4Stream(input, userId, history, imageUri);
 
   if (fastPathResponse) {
-    return { 
-      content: fastPathResponse, 
-      ...metadata 
-    };
+    return { content: fastPathResponse, ...metadata };
   }
 
   let fullContent = "";
@@ -39,17 +35,14 @@ export async function runAgentV4(input: string, userId: string, history: any[] =
     fullContent += chunk.choices[0]?.delta?.content || "";
   }
 
-  return {
-    content: fullContent,
-    ...metadata
-  };
+  return { content: fullContent, ...metadata };
 }
 
 /**
- * Streaming entry point for real-time chat interactions.
+ * Streaming entry point for UI chat.
  */
 export async function runAgentV4Stream(input: string, userId: string, history: any[] = [], imageUri?: string) {
-  console.log(`[AGENT_V4.2] Processing: "${input.slice(0, 50)}..."`);
+  console.log(`[AGENT_V4.2] Streaming Request for User: ${userId}`);
 
   // 1. Fast Path
   const fastPathResponse = await checkFastPath(input);
@@ -62,15 +55,17 @@ export async function runAgentV4Stream(input: string, userId: string, history: a
   }
 
   // 2. Intent Routing & Memory Retrieval
-  const [memory, { intent, language }] = await Promise.all([
+  const [memory, routeResult] = await Promise.all([
     fetchMemory(userId),
     routeIntent(input, history)
   ]);
 
+  const { intent, language } = routeResult;
+
   // 3. Structured Planning
   const plan = await createPlan(input, intent, history);
 
-  // 4. Tool Execution (Ground Truth)
+  // 4. Tool Execution
   const toolResults = await executeTools(plan, input, imageUri);
 
   // 5. Context Building
@@ -86,17 +81,20 @@ export async function runAgentV4Stream(input: string, userId: string, history: a
     fastPathUsed: false
   };
 
-  // 6. Critic / Self-Evaluation Loop
+  // 6. Critic Evaluation
   let feedback = await evaluateReasoning(input, context);
-  if (feedback.needs_revision && feedback.score < 7) {
-    console.log("[ORCHESTRATOR] Low confidence, re-planning logic chain...");
-    context.plan = await createPlan(input, intent, history);
-    context.toolResults = await executeTools(context.plan, input, imageUri);
-    feedback = await evaluateReasoning(input, context);
+  if (feedback.needs_revision && feedback.score < 6) {
+    console.log("[ORCHESTRATOR] Low confidence, re-evaluating strategy...");
+    // Attempt one quick re-plan for high-stakes intents
+    if (intent !== 'general') {
+       context.plan = await createPlan(input, intent, history);
+       context.toolResults = await executeTools(context.plan, input, imageUri);
+       feedback = await evaluateReasoning(input, context);
+    }
   }
   context.criticFeedback = feedback;
 
-  // 7. Streaming Response Generation
+  // 7. Response Generation
   const stream = await generateStreamResponse(context);
 
   return {
@@ -108,7 +106,7 @@ export async function runAgentV4Stream(input: string, userId: string, history: a
       toolResults,
       critic: feedback,
       memoryUsed: !!memory,
-      fastPathUsed: false
+      language
     }
   };
 }

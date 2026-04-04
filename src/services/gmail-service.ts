@@ -1,8 +1,3 @@
-/**
- * @fileOverview Production-ready Gmail API Service.
- * Handles OAuth, email fetching (filtered for financial signals), sending, and Firestore sync.
- */
-
 import { GoogleAuthProvider, signInWithPopup, getAuth } from 'firebase/auth';
 import { 
   collection, 
@@ -16,13 +11,17 @@ import {
   orderBy
 } from 'firebase/firestore';
 
+/**
+ * @fileOverview Hardened Gmail API Service.
+ * Filters for financial signals and manages secure ingestion into Firestore.
+ */
+
 export interface GmailMessage {
   id: string;
   snippet: string;
   subject: string;
   from: string;
   date: string;
-  body?: string;
 }
 
 export class GmailService {
@@ -31,10 +30,6 @@ export class GmailService {
     'https://www.googleapis.com/auth/gmail.send'
   ];
 
-  /**
-   * Connects user via Google OAuth with required Gmail scopes.
-   * Returns the access token.
-   */
   static async connect(): Promise<string | null> {
     const auth = getAuth();
     const provider = new GoogleAuthProvider();
@@ -53,17 +48,14 @@ export class GmailService {
       
       return token;
     } catch (error) {
-      console.error('[GMAIL] Connection failed:', error);
+      console.error('[GMAIL] OAuth failed:', error);
       return null;
     }
   }
 
-  /**
-   * Fetches latest financial/billing emails.
-   */
-  static async fetchEmails(accessToken: string, maxResults = 20): Promise<GmailMessage[]> {
-    // Targeted query for financial signals
-    const queryStr = 'subject:(receipt OR invoice OR subscription OR renewal OR billing OR payment OR statement OR uudistuu OR lasku)';
+  static async fetchFinancialEmails(accessToken: string, maxResults = 15): Promise<GmailMessage[]> {
+    // Highly targeted query for billing signals to minimize token waste
+    const queryStr = 'subject:(receipt OR invoice OR "renewal notice" OR statement OR subscription OR payment OR lasku OR kuitti)';
     const url = `https://gmail.googleapis.com/gmail/v1/users/me/messages?q=${encodeURIComponent(queryStr)}&maxResults=${maxResults}`;
 
     try {
@@ -71,7 +63,7 @@ export class GmailService {
         headers: { Authorization: `Bearer ${accessToken}` },
       });
 
-      if (!response.ok) throw new Error(`Gmail API error: ${response.status}`);
+      if (!response.ok) return [];
       
       const data = await response.json();
       if (!data.messages) return [];
@@ -84,11 +76,11 @@ export class GmailService {
           });
 
           if (detailRes.ok) {
-            const detailData = await detailRes.json();
-            const headers = detailData.payload.headers;
+            const d = await detailRes.json();
+            const headers = d.payload.headers;
             return {
               id: msg.id,
-              snippet: detailData.snippet,
+              snippet: d.snippet,
               subject: headers.find((h: any) => h.name === 'Subject')?.value || 'No Subject',
               from: headers.find((h: any) => h.name === 'From')?.value || 'Unknown',
               date: headers.find((h: any) => h.name === 'Date')?.value || '',
@@ -99,65 +91,23 @@ export class GmailService {
       );
 
       return details.filter((m): m is GmailMessage => m !== null);
-    } catch (error) {
-      console.error('[GMAIL] Fetch error:', error);
+    } catch (e) {
+      console.error('[GMAIL] Sync error:', e);
       return [];
     }
   }
 
-  /**
-   * Sends an email via Gmail API.
-   */
-  static async sendEmail(accessToken: string, to: string, subject: string, body: string): Promise<boolean> {
-    const utf8Subject = `=?utf-8?B?${Buffer.from(subject).toString('base64')}?=`;
-    const messageParts = [
-      `To: ${to}`,
-      'Content-Type: text/plain; charset=utf-8',
-      'MIME-Version: 1.0',
-      `Subject: ${utf8Subject}`,
-      '',
-      body,
-    ];
-    const message = messageParts.join('\n');
-
-    // The Gmail API requires a specific base64url encoding
-    const encodedMessage = Buffer.from(message)
-      .toString('base64')
-      .replace(/\+/g, '-')
-      .replace(/\//g, '_')
-      .replace(/=+$/, '');
-
-    try {
-      const response = await fetch('https://gmail.googleapis.com/gmail/v1/users/me/messages/send', {
-        method: 'POST',
-        headers: {
-          Authorization: `Bearer ${accessToken}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ raw: encodedMessage }),
-      });
-
-      return response.ok;
-    } catch (error) {
-      console.error('[GMAIL] Send error:', error);
-      return false;
-    }
-  }
-
-  /**
-   * Syncs latest emails to Firestore for AI analysis.
-   */
   static async syncToFirestore(db: Firestore, userId: string): Promise<number> {
     const token = localStorage.getItem('operator_gmail_token');
     if (!token) return 0;
 
-    const emails = await this.fetchEmails(token);
+    const emails = await this.fetchFinancialEmails(token);
     let syncedCount = 0;
 
     const inboxRef = collection(db, 'users', userId, 'inbox');
     
     for (const email of emails) {
-      // Check if already exists to avoid duplicates
+      // Deduplication check based on external ID
       const q = query(inboxRef, where('id', '==', email.id), limit(1));
       const existing = await getDocs(q);
       
@@ -165,9 +115,9 @@ export class GmailService {
         await addDoc(inboxRef, {
           ...email,
           userId,
-          receivedAt: new Date(email.date).toISOString() || new Date().toISOString(),
+          receivedAt: new Date(email.date).toISOString(),
           createdAt: serverTimestamp(),
-          syncedFrom: 'gmail_api'
+          source: 'gmail_api'
         });
         syncedCount++;
       }
