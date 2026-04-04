@@ -1,11 +1,11 @@
 import { NextResponse } from 'next/server';
-import { runAgentV4Stream } from '@/agent/v4/orchestrator';
+import { runAgentV5 } from '@/agent/v5/orchestrator';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
 
 /**
- * @fileOverview Streaming API Entry Point for Agent v4.2.
+ * @fileOverview Streaming API Entry Point for Agent Engine v5.
  */
 
 export async function POST(req: Request) {
@@ -16,14 +16,7 @@ export async function POST(req: Request) {
       throw new Error('GROQ_API_KEY is not configured.');
     }
 
-    const { stream, fastPathResponse, metadata } = await runAgentV4Stream(input, userId, history, imageUri);
-
-    if (fastPathResponse) {
-      return NextResponse.json({ 
-        content: fastPathResponse, 
-        ...metadata 
-      });
-    }
+    const { stream, metadata } = await runAgentV5(input, userId || 'system_anonymous', history, imageUri);
 
     const encoder = new TextEncoder();
     const readableStream = new ReadableStream({
@@ -31,7 +24,7 @@ export async function POST(req: Request) {
         // First, send the metadata as a separate chunk
         controller.enqueue(encoder.encode(`__METADATA__:${JSON.stringify(metadata)}\n`));
 
-        for await (const chunk of stream!) {
+        for await (const chunk of stream) {
           const content = chunk.choices[0]?.delta?.content || "";
           if (content) {
             controller.enqueue(encoder.encode(content));
@@ -48,10 +41,10 @@ export async function POST(req: Request) {
       },
     });
   } catch (error: any) {
-    console.error('AGENT_V4_CRITICAL_ERROR:', error.message);
+    console.error('ENGINE_V5_CRITICAL_ERROR:', error.message);
     return NextResponse.json(
       { 
-        content: "I've encountered a slight sync delay in my reasoning core. Neural pathways are recalibrating.",
+        content: "Operational sync delayed. Recalibrating logic core.",
         error: error.message 
       }, 
       { status: 500 }
