@@ -1,13 +1,11 @@
+
 "use client";
 
 import { motion, AnimatePresence } from 'framer-motion';
 import { GlassCard } from '@/components/ui/GlassCard';
 import { GlassButton } from '@/components/ui/GlassButton';
 import { Zap, ShieldCheck, Star, ArrowRight, Lock, CheckCircle2, TrendingUp } from 'lucide-react';
-import { useState } from 'react';
-import { SubscriptionService } from '@/services/subscription-service';
-import { useFirestore, useUser } from '@/firebase';
-import { useToast } from '@/hooks/use-toast';
+import Link from 'next/link';
 
 interface PaywallOverlayProps {
   isOpen: boolean;
@@ -16,23 +14,6 @@ interface PaywallOverlayProps {
 }
 
 export function PaywallOverlay({ isOpen, onClose, reason = 'limit_reached' }: PaywallOverlayProps) {
-  const [loading, setLoading] = useState(false);
-  const { user } = useUser();
-  const db = useFirestore();
-  const { toast } = useToast();
-
-  const handleUpgrade = async () => {
-    if (!user || !db) return;
-    setLoading(true);
-    const success = await SubscriptionService.upgradeToPremium(db, user.uid);
-    if (success) {
-      toast({ title: "Welcome to Premium", description: "Your intelligence limits have been removed." });
-      onClose();
-      window.location.reload(); // Refresh to update all state
-    }
-    setLoading(false);
-  };
-
   if (!isOpen) return null;
 
   return (
@@ -48,7 +29,7 @@ export function PaywallOverlay({ isOpen, onClose, reason = 'limit_reached' }: Pa
         animate={{ opacity: 1, scale: 1, y: 0 }}
         className="relative w-full max-w-2xl overflow-hidden"
       >
-        <GlassCard className="!p-0 border-white/80 shadow-[0_32px_64px_-12px_rgba(0,0,0,0.2)]">
+        <GlassCard className="!p-0 border-white/80 shadow-[0_32px_64px_-16px_rgba(0,0,0,0.2)]">
           <div className="relative h-56 bg-slate-900 overflow-hidden flex items-center justify-center">
             <div className="absolute inset-0 bg-gradient-to-br from-primary/20 via-accent/20 to-primary/20 animate-shimmer opacity-50" />
             
@@ -105,15 +86,15 @@ export function PaywallOverlay({ isOpen, onClose, reason = 'limit_reached' }: Pa
             </div>
 
             <div className="space-y-6">
-              <GlassButton 
-                onClick={handleUpgrade}
-                loading={loading}
-                className="w-full !h-16 !text-lg !rounded-[2rem] shadow-2xl shadow-primary/20 group relative overflow-hidden"
-              >
-                <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/10 to-transparent translate-x-[-100%] group-hover:translate-x-[100%] transition-transform duration-1000" />
-                Upgrade to Ultra • €19/mo
-                <ArrowRight className="ml-3 w-5 h-5 group-hover:translate-x-1 transition-transform" />
-              </GlassButton>
+              <Link href="/upgrade">
+                <GlassButton 
+                  className="w-full !h-16 !text-lg !rounded-[2rem] shadow-2xl shadow-primary/20 group relative overflow-hidden"
+                >
+                  <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/10 to-transparent translate-x-[-100%] group-hover:translate-x-[100%] transition-transform duration-1000" />
+                  Upgrade to Ultra • €19/mo
+                  <ArrowRight className="ml-3 w-5 h-5 group-hover:translate-x-1 transition-transform" />
+                </GlassButton>
+              </Link>
               
               <div className="flex items-center justify-center gap-8">
                 <button 
@@ -123,11 +104,9 @@ export function PaywallOverlay({ isOpen, onClose, reason = 'limit_reached' }: Pa
                   Return to Dashboard
                 </button>
                 <div className="w-px h-4 bg-slate-100" />
-                <button 
-                  className="text-[10px] font-bold uppercase tracking-widest text-slate-400 hover:text-slate-600 transition-colors"
-                >
+                <Link href="/upgrade#plans" className="text-[10px] font-bold uppercase tracking-widest text-slate-400 hover:text-slate-600 transition-colors">
                   View All Plans
-                </button>
+                </Link>
               </div>
             </div>
           </div>
