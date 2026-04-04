@@ -28,6 +28,7 @@ export default function ChatPage() {
   const [isProcessing, setIsProcessing] = useState(false);
   const [agentMetadata, setAgentMetadata] = useState<any>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
   
   const { user, isUserLoading } = useUser();
   const db = useFirestore();
@@ -51,6 +52,14 @@ export default function ChatPage() {
       scrollRef.current.scrollTo({ top: scrollRef.current.scrollHeight, behavior: 'smooth' });
     }
   }, [messages, isProcessing]);
+
+  // Handle textarea height adjustment
+  useEffect(() => {
+    if (textareaRef.current) {
+      textareaRef.current.style.height = 'auto';
+      textareaRef.current.style.height = `${Math.min(textareaRef.current.scrollHeight, 200)}px`;
+    }
+  }, [input]);
 
   const sendMessage = async () => {
     if (!input.trim() || !user || !db) return;
@@ -103,6 +112,13 @@ export default function ChatPage() {
       toast({ variant: 'destructive', title: "Sync Interrupted", description: "Re-establishing link with intelligence core." });
     } finally {
       setIsProcessing(false);
+    }
+  };
+
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      sendMessage();
     }
   };
 
@@ -180,20 +196,22 @@ export default function ChatPage() {
       </div>
 
       <div className="fixed bottom-10 left-1/2 -translate-x-1/2 w-full max-w-2xl px-6">
-        <GlassCard className="!p-2 rounded-full flex items-center gap-2 shadow-[0_32px_64px_-16px_rgba(0,0,0,0.12)] border-white/80">
-          <button className="w-12 h-12 rounded-full flex items-center justify-center text-slate-400 hover:bg-slate-50 transition-all active:scale-95">
+        <GlassCard className="!p-2 rounded-[2.5rem] flex items-end gap-2 shadow-[0_32px_64px_-16px_rgba(0,0,0,0.12)] border-white/80 transition-all duration-300">
+          <button className="w-12 h-12 rounded-full flex items-center justify-center text-slate-400 hover:bg-slate-50 transition-all active:scale-95 mb-0.5">
             <ImageIcon className="w-5 h-5" />
           </button>
-          <input 
+          <textarea 
+            ref={textareaRef}
+            rows={1}
             value={input}
             onChange={(e) => setInput(e.target.value)}
-            onKeyDown={(e) => e.key === 'Enter' && sendMessage()}
+            onKeyDown={handleKeyDown}
             placeholder="Initialize intent..."
-            className="flex-1 bg-transparent border-0 focus:ring-0 text-sm font-medium text-slate-700 placeholder:text-slate-300"
+            className="flex-1 bg-transparent border-0 focus:ring-0 text-sm font-medium text-slate-700 placeholder:text-slate-300 resize-none py-3 min-h-[48px] max-h-[200px] stealth-scrollbar"
           />
           <GlassButton 
             size="sm" 
-            className="!rounded-full !w-12 !h-12 !p-0 shadow-lg shadow-primary/20"
+            className="!rounded-full !w-12 !h-12 !p-0 shadow-lg shadow-primary/20 mb-0.5 shrink-0"
             onClick={sendMessage}
             loading={isProcessing}
           >

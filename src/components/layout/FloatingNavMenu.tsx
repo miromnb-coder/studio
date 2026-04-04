@@ -46,7 +46,7 @@ export const FloatingNavMenu = memo(({ onClose }: { onClose: () => void }) => {
         transition={{ duration: 0.2, ease: [0.4, 0, 0.2, 1] }}
         className="fixed top-24 left-1/2 -translate-x-1/2 z-[150] w-[calc(100%-3rem)] max-w-2xl pointer-events-none"
       >
-        <div className="glass-panel p-4 rounded-[2.5rem] border-white/80 shadow-[0_32px_64px_-16px_rgba(0,0,0,0.1)] overflow-hidden pointer-events-auto">
+        <div className="glass-panel p-4 rounded-[2.5rem] border-white/80 shadow-[0_32px_64px_-16px_rgba(0,0,0,0.1)] overflow-y-auto max-h-[75vh] pointer-events-auto stealth-scrollbar">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
             {NAV_ITEMS.map((item) => {
               const isActive = pathname === item.href;
