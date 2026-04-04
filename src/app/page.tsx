@@ -76,40 +76,40 @@ export default function ChatPage() {
   };
 
   const sendMessage = async () => {
-    if ((!input.trim() && !selectedImage) || !user || !db) return;
+    if ((!input.trim() && !selectedImage) || !user || !db || isProcessing) return;
 
-    let activeId = conversationId;
-    if (!activeId) {
-      const newRef = doc(collection(db, 'users', user.uid, 'conversations'));
-      activeId = newRef.id;
-      await setDoc(newRef, { 
-        id: activeId, 
-        userId: user.uid, 
-        title: input.slice(0, 30) || "Visual Analysis", 
-        createdAt: serverTimestamp(), 
-        updatedAt: serverTimestamp() 
-      });
-      router.push(`/?c=${activeId}`);
-    }
-
-    const userMsg = { 
-      role: 'user', 
-      content: input, 
-      imageUri: selectedImage,
-      timestamp: serverTimestamp() 
-    };
-    
-    addDocumentNonBlocking(collection(db, 'users', user.uid, 'conversations', activeId, 'messages'), userMsg);
-    
     const currentInput = input;
     const currentImage = selectedImage;
     
+    setIsProcessing(true);
     setInput('');
     setSelectedToolImage(null);
-    setIsProcessing(true);
     setAgentMetadata(null);
 
     try {
+      let activeId = conversationId;
+      if (!activeId) {
+        const newRef = doc(collection(db, 'users', user.uid, 'conversations'));
+        activeId = newRef.id;
+        await setDoc(newRef, { 
+          id: activeId, 
+          userId: user.uid, 
+          title: currentInput.slice(0, 30) || "Visual Analysis", 
+          createdAt: serverTimestamp(), 
+          updatedAt: serverTimestamp() 
+        });
+        router.push(`/?c=${activeId}`);
+      }
+
+      const userMsg = { 
+        role: 'user', 
+        content: currentInput, 
+        imageUri: currentImage,
+        timestamp: serverTimestamp() 
+      };
+      
+      await addDocumentNonBlocking(collection(db, 'users', user.uid, 'conversations', activeId, 'messages'), userMsg);
+      
       const response = await fetch('/api/agent', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -121,38 +121,58 @@ export default function ChatPage() {
         }),
       });
 
+      if (!response.ok) throw new Error("Operational link failed");
+
       const reader = response.body?.getReader();
       const decoder = new TextDecoder();
       let fullContent = "";
       let currentMetadata: any = null;
+      let buffer = "";
 
-      while (true) {
-        const { done, value } = await reader!.read();
-        if (done) break;
-        const chunk = decoder.decode(value);
-        
-        if (chunk.includes("__METADATA__:")) {
-          const lines = chunk.split('\n');
+      if (reader) {
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          
+          const chunk = decoder.decode(value, { stream: true });
+          buffer += chunk;
+
+          const lines = buffer.split('\n');
+          // Keep the last line in the buffer if it's incomplete
+          buffer = lines.pop() || "";
+
           for (const line of lines) {
             if (line.startsWith("__METADATA__:")) {
-              currentMetadata = JSON.parse(line.replace("__METADATA__:", ""));
-              setAgentMetadata(currentMetadata);
+              try {
+                currentMetadata = JSON.parse(line.replace("__METADATA__:", ""));
+                setAgentMetadata(currentMetadata);
+              } catch (e) {
+                console.error("Metadata parsing failed", e);
+              }
             } else {
               fullContent += line;
             }
           }
-          continue;
         }
-        fullContent += chunk;
+        
+        // Handle remaining buffer
+        if (buffer) {
+          if (buffer.startsWith("__METADATA__:")) {
+             // Metadata usually comes first, but just in case
+          } else {
+            fullContent += buffer;
+          }
+        }
       }
 
-      addDocumentNonBlocking(collection(db, 'users', user.uid, 'conversations', activeId, 'messages'), {
+      await addDocumentNonBlocking(collection(db, 'users', user.uid, 'conversations', activeId, 'messages'), {
         role: 'assistant',
         content: fullContent,
         timestamp: serverTimestamp(),
         metadata: currentMetadata
       });
     } catch (err) {
+      console.error(err);
       toast({ variant: 'destructive', title: "Sync Interrupted", description: "Re-establishing link with intelligence core." });
     } finally {
       setIsProcessing(false);
@@ -244,11 +264,9 @@ export default function ChatPage() {
 
       <div className="fixed bottom-10 left-1/2 -translate-x-1/2 w-full max-w-2xl px-6 z-50">
         <div className="relative group">
-          {/* Active Focus Glow */}
           <div className="absolute -inset-1 bg-gradient-to-r from-primary/20 via-accent/20 to-primary/20 rounded-[3rem] blur-xl opacity-0 group-focus-within:opacity-100 transition-opacity duration-500 pointer-events-none" />
           
           <GlassCard className="!p-2 rounded-[2.5rem] flex flex-col gap-2 shadow-[0_32px_64px_-16px_rgba(0,0,0,0.12)] border-white/80 transition-all duration-300 bg-white/40 backdrop-blur-3xl relative z-10">
-            {/* Image Preview Area */}
             <AnimatePresence>
               {selectedImage && (
                 <motion.div 
@@ -281,6 +299,7 @@ export default function ChatPage() {
               
               <button 
                 onClick={() => fileInputRef.current?.click()}
+                disabled={isProcessing}
                 className={cn(
                   "w-12 h-12 rounded-full flex items-center justify-center transition-all active:scale-90 mb-0.5",
                   selectedImage ? "text-primary bg-primary/10" : "text-slate-400 hover:bg-white/60 hover:text-slate-600"
@@ -295,13 +314,14 @@ export default function ChatPage() {
                 value={input}
                 onChange={(e) => setInput(e.target.value)}
                 onKeyDown={handleKeyDown}
+                disabled={isProcessing}
                 placeholder={selectedImage ? "Describe this image..." : "Describe intent or ask for a new capability..."}
                 className="flex-1 bg-transparent border-0 focus:ring-0 text-sm font-medium text-slate-700 placeholder:text-slate-300 resize-none py-3 min-h-[48px] max-h-[200px] stealth-scrollbar"
               />
 
               <div className="flex items-center gap-2 mb-0.5 mr-0.5">
                 <AnimatePresence mode="wait">
-                  {(input.trim() || selectedImage) && (
+                  {(input.trim() || selectedImage || isProcessing) && (
                     <motion.div
                       initial={{ scale: 0, opacity: 0 }}
                       animate={{ scale: 1, opacity: 1 }}
@@ -314,7 +334,7 @@ export default function ChatPage() {
                         loading={isProcessing}
                       >
                         <div className="absolute inset-0 bg-gradient-to-tr from-white/0 via-white/20 to-white/0 translate-x-[-100%] group-hover/send:translate-x-[100%] transition-transform duration-700" />
-                        <ArrowRight className="w-5 h-5" />
+                        {!isProcessing && <ArrowRight className="w-5 h-5" />}
                       </GlassButton>
                     </motion.div>
                   )}

@@ -1,3 +1,4 @@
+
 import { NextResponse } from 'next/server';
 import { runAgentV5 } from '@/agent/v5/orchestrator';
 
@@ -21,16 +22,21 @@ export async function POST(req: Request) {
     const encoder = new TextEncoder();
     const readableStream = new ReadableStream({
       async start(controller) {
-        // First, send the metadata as a separate chunk
+        // Send metadata first, clearly separated by a newline
         controller.enqueue(encoder.encode(`__METADATA__:${JSON.stringify(metadata)}\n`));
 
-        for await (const chunk of stream) {
-          const content = chunk.choices[0]?.delta?.content || "";
-          if (content) {
-            controller.enqueue(encoder.encode(content));
+        try {
+          for await (const chunk of stream) {
+            const content = chunk.choices[0]?.delta?.content || "";
+            if (content) {
+              controller.enqueue(encoder.encode(content));
+            }
           }
+        } catch (e) {
+          console.error("Stream iteration error", e);
+        } finally {
+          controller.close();
         }
-        controller.close();
       },
     });
 
@@ -38,6 +44,7 @@ export async function POST(req: Request) {
       headers: {
         'Content-Type': 'text/plain; charset=utf-8',
         'Cache-Control': 'no-cache',
+        'Connection': 'keep-alive',
       },
     });
   } catch (error: any) {
