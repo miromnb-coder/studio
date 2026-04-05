@@ -169,7 +169,12 @@ export function useMemoFirebase<T>(factory: () => T, deps: DependencyList): T | 
   const memoized = useMemo(factory, deps);
   
   if(typeof memoized !== 'object' || memoized === null) return memoized;
-  (memoized as MemoFirebase<T>).__memo = true;
+  
+  try {
+    (memoized as MemoFirebase<T>).__memo = true;
+  } catch (e) {
+    // Object might be sealed/frozen, skip memo flag
+  }
   
   return memoized;
 }

@@ -45,7 +45,7 @@ function ChatContent() {
   const searchParams = useSearchParams();
   const conversationId = searchParams?.get('c');
   const { toast } = useToast();
-  const { setStatus, updateState, reset: resetAICore } = useAICore();
+  const { setStatus, updateState } = useAICore();
 
   // Onboarding detection: Check for existing conversations
   const convsQuery = useMemoFirebase(() => {
@@ -177,25 +177,30 @@ function ChatContent() {
           buffer = lines.pop() || "";
 
           for (const line of lines) {
-            if (line.startsWith("__METADATA__:")) {
+            if (line.trim().startsWith("__METADATA__:")) {
               try {
-                currentMetadata = JSON.parse(line.replace("__METADATA__:", ""));
-                updateState({ 
-                  intent: currentMetadata.intent,
-                  currentTool: currentMetadata.steps?.[0]?.action || 'Analysis',
-                  steps: (currentMetadata.steps || []).map((s: any) => ({
-                    label: s.thought || s.action,
-                    status: 'complete',
-                    timestamp: new Date()
-                  }))
-                });
-              } catch (e) {}
+                const metadataStr = line.trim().substring(13).trim();
+                currentMetadata = JSON.parse(metadataStr);
+                if (currentMetadata) {
+                  updateState({ 
+                    intent: currentMetadata.intent,
+                    currentTool: currentMetadata.steps?.[0]?.action || 'Analysis',
+                    steps: (currentMetadata.steps || []).map((s: any) => ({
+                      label: s.thought || s.action,
+                      status: 'complete',
+                      timestamp: new Date()
+                    }))
+                  });
+                }
+              } catch (e) {
+                console.error("Metadata parsing failed", e);
+              }
             } else {
               fullContent += line + "\n";
             }
           }
         }
-        if (buffer && !buffer.startsWith("__METADATA__:")) fullContent += buffer;
+        if (buffer && !buffer.trim().startsWith("__METADATA__:")) fullContent += buffer;
       }
 
       await addDocumentNonBlocking(collection(db, 'users', user.uid, 'conversations', activeId, 'messages'), {
@@ -296,19 +301,22 @@ function ChatContent() {
           buffer = lines.pop() || "";
 
           for (const line of lines) {
-            if (line.startsWith("__METADATA__:")) {
+            if (line.trim().startsWith("__METADATA__:")) {
               try {
-                currentMetadata = JSON.parse(line.replace("__METADATA__:", ""));
-                setStatus('executing');
-                updateState({ 
-                  intent: currentMetadata.intent,
-                  currentTool: currentMetadata.steps?.[0]?.action || 'Signal Scan',
-                  steps: (currentMetadata.steps || []).map((s: any) => ({
-                    label: s.thought || s.action,
-                    status: 'complete',
-                    timestamp: new Date()
-                  }))
-                });
+                const metadataStr = line.trim().substring(13).trim();
+                currentMetadata = JSON.parse(metadataStr);
+                if (currentMetadata) {
+                  setStatus('executing');
+                  updateState({ 
+                    intent: currentMetadata.intent,
+                    currentTool: currentMetadata.steps?.[0]?.action || 'Signal Scan',
+                    steps: (currentMetadata.steps || []).map((s: any) => ({
+                      label: s.thought || s.action,
+                      status: 'complete',
+                      timestamp: new Date()
+                    }))
+                  });
+                }
               } catch (e) {
                 console.error("Metadata parsing failed", e);
               }
@@ -317,7 +325,7 @@ function ChatContent() {
             }
           }
         }
-        if (buffer && !buffer.startsWith("__METADATA__:")) fullContent += buffer;
+        if (buffer && !buffer.trim().startsWith("__METADATA__:")) fullContent += buffer;
       }
 
       await addDocumentNonBlocking(collection(db, 'users', user.uid, 'conversations', activeId, 'messages'), {

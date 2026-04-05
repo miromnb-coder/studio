@@ -79,15 +79,20 @@ export function TopBar() {
   const { data: analyses } = useCollection(analysesQuery);
   
   const totalSaved = useMemo(() => {
-    return (analyses || []).reduce((acc, a) => acc + (a.estimatedMonthlySavings || 0), 0);
+    const data = analyses || [];
+    return data.reduce((acc, a) => acc + (Number(a.estimatedMonthlySavings) || 0), 0);
   }, [analyses]);
 
   const reclaimedHours = useMemo(() => (totalSaved / 50).toFixed(1), [totalSaved]);
 
   const isPremium = status?.isPremium === true;
-  const usagePercent = status && status.usage?.limit > 0 
-    ? (status.usage.agentRuns / status.usage.limit) * 100 
-    : 0;
+  
+  const usagePercent = useMemo(() => {
+    if (!status || !status.usage) return 0;
+    const runs = Number(status.usage.agentRuns) || 0;
+    const limit = Number(status.usage.limit) || 1;
+    return Math.min(100, Math.max(0, (runs / limit) * 100)) || 0;
+  }, [status]);
 
   return (
     <>

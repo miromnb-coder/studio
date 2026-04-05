@@ -107,8 +107,11 @@ export function useCollection<T = any>(
 
     return () => unsubscribe();
   }, [memoizedTargetRefOrQuery]); // Re-run if the target query/reference changes.
+  
   if(memoizedTargetRefOrQuery && !memoizedTargetRefOrQuery.__memo) {
-    throw new Error(memoizedTargetRefOrQuery + ' was not properly memoized using useMemoFirebase');
+    // Safer debug message to avoid object-to-string crash
+    throw new Error('Firestore target was not properly memoized using useMemoFirebase');
   }
+  
   return { data, isLoading, error };
 }
