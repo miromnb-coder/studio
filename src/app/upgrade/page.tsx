@@ -276,18 +276,18 @@ export default function UpgradePage() {
         <motion.div 
           initial={{ y: 100 }}
           animate={{ y: 0 }}
-          className="fixed bottom-8 left-1/2 -translate-x-1/2 w-full max-w-lg px-6 z-[150]"
+          className="fixed bottom-8 left-1/2 -translate-x-1/2 w-[90%] max-w-lg z-[150]"
         >
           <GlassButton 
             onClick={() => {
               const el = document.getElementById('plans');
               el?.scrollIntoView({ behavior: 'smooth' });
             }}
-            className="w-full !h-16 !text-lg !rounded-[2.5rem] shadow-[0_32px_64px_-12px_rgba(59,130,246,0.3)] group relative overflow-hidden bg-primary border-0 text-white"
+            className="w-full !h-14 md:!h-16 !text-sm md:!text-lg !rounded-[2rem] md:!rounded-[2.5rem] shadow-[0_32px_64px_-12px_rgba(59,130,246,0.3)] group relative overflow-hidden bg-primary/80 backdrop-blur-xl border border-white/20 text-white"
           >
             <div className="absolute inset-0 bg-gradient-to-tr from-white/0 via-white/20 to-white/0 translate-x-[-100%] group-hover:translate-x-[100%] transition-transform duration-1000" />
             Elevate Clearance Now
-            <ArrowRight className="ml-3 w-5 h-5 group-hover:translate-x-1 transition-transform" />
+            <ArrowRight className="ml-3 w-4 h-4 md:w-5 md:h-5 group-hover:translate-x-1 transition-transform" />
           </GlassButton>
         </motion.div>
       )}
