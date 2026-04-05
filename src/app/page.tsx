@@ -1,7 +1,7 @@
 
 "use client";
 
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect, Suspense } from 'react';
 import { GlassCard } from '@/components/ui/GlassCard';
 import { GlassButton } from '@/components/ui/GlassButton';
 import { StatusDot } from '@/components/ui/StatusDot';
@@ -34,11 +34,12 @@ import { RichAnalysisCard } from '@/components/chat/RichAnalysisCard';
 import { PaywallOverlay } from '@/components/monetization/PaywallOverlay';
 import { OnboardingOverlay } from '@/components/onboarding/OnboardingOverlay';
 
-export default function ChatPage() {
+function ChatContent() {
   const [input, setInput] = useState('');
   const [isProcessing, setIsProcessing] = useState(false);
   const [selectedImage, setSelectedToolImage] = useState<string | null>(null);
   const [showPaywall, setShowPaywall] = useState(false);
+  const [paywallReason, setPaywallReason] = useState<'limit_reached' | 'premium_tool'>('limit_reached');
   const [showOnboarding, setShowOnboarding] = useState(false);
   
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -114,7 +115,6 @@ export default function ChatPage() {
       const newRef = doc(collection(db, 'users', user.uid, 'conversations'));
       const activeId = newRef.id;
       
-      // 1. Initialize Memory
       await setDoc(doc(db, 'users', user.uid, 'memory', 'main'), {
         userId: user.uid,
         goals: [goalId],
@@ -122,7 +122,6 @@ export default function ChatPage() {
         lastUpdated: serverTimestamp()
       }, { merge: true });
 
-      // 2. Create Conversation
       await setDoc(newRef, { 
         id: activeId, 
         userId: user.uid, 
@@ -133,14 +132,12 @@ export default function ChatPage() {
 
       router.push(`/?c=${activeId}`);
 
-      // 3. Send Initial Message
       await addDocumentNonBlocking(collection(db, 'users', user.uid, 'conversations', activeId, 'messages'), {
         role: 'user',
         content: initialIntent,
         timestamp: serverTimestamp()
       });
 
-      // 4. Trigger Agent
       const response = await fetch('/api/agent', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -150,6 +147,13 @@ export default function ChatPage() {
           userId: user.uid 
         }),
       });
+
+      if (response.status === 403) {
+        setPaywallReason('limit_reached');
+        setShowPaywall(true);
+        setIsProcessing(false);
+        return;
+      }
 
       if (!response.ok) throw new Error("Operational link failed");
 
@@ -246,7 +250,10 @@ export default function ChatPage() {
         }),
       });
 
+      // CONTEXTUAL PAYWALL TRIGGER:
+      // Catch usage limits and block the interaction with a clear path to upgrade
       if (response.status === 403) {
+        setPaywallReason('limit_reached');
         setShowPaywall(true);
         setIsProcessing(false);
         return;
@@ -486,8 +493,16 @@ export default function ChatPage() {
       <PaywallOverlay 
         isOpen={showPaywall} 
         onClose={() => setShowPaywall(false)} 
-        reason="limit_reached" 
+        reason={paywallReason} 
       />
     </div>
+  );
+}
+
+export default function ChatPage() {
+  return (
+    <Suspense fallback={<div className="flex items-center justify-center min-h-screen"><Loader2 className="w-8 h-8 animate-spin text-primary" /></div>}>
+      <ChatContent />
+    </Suspense>
   );
 }

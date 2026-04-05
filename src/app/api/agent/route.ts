@@ -1,3 +1,4 @@
+
 import { NextResponse } from 'next/server';
 import { runAgentV5 } from '@/agent/v5/orchestrator';
 import { initializeFirebase } from '@/firebase';
@@ -25,7 +26,6 @@ export async function POST(req: Request) {
     if (userId && userId !== 'system_anonymous' && firestore) {
       const { plan, usage } = await SubscriptionService.getUserStatus(firestore, userId);
       
-      // Ensure plan exists in limits, fallback to FREE
       const planKey = (plan || 'FREE').toUpperCase() as keyof typeof PLAN_LIMITS;
       const limits = PLAN_LIMITS[planKey] || PLAN_LIMITS.FREE;
       const limit = limits.dailyAgentRuns;
@@ -36,7 +36,7 @@ export async function POST(req: Request) {
           error: 'LIMIT_REACHED',
           message: "Daily intelligence quota exceeded. Please elevate clearance.",
           usage: { ...usage, limit }
-        }, { status: 403 });
+        }, { status: 403 }); // 403 Forbidden is the standard for paywalls
       }
       
       // Increment usage immediately (optimistic update)

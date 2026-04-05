@@ -59,7 +59,9 @@ export function RichAnalysisCard({ data }: RichAnalysisCardProps) {
 
   useEffect(() => {
     if (db && user) {
-      SubscriptionService.getUserStatus(db, user.uid).then(s => setIsPremium(s.plan === 'PREMIUM' || s.plan === 'STARTER'));
+      SubscriptionService.getUserStatus(db, user.uid).then(s => {
+        setIsPremium(s.plan === 'PREMIUM' || s.plan === 'STARTER');
+      });
     }
   }, [db, user]);
 
@@ -72,6 +74,8 @@ export function RichAnalysisCard({ data }: RichAnalysisCardProps) {
   };
 
   const handleExecute = async (item: any, id: string) => {
+    // CONTEXTUAL PAYWALL TRIGGER:
+    // If user is FREE and there's real money at stake, trigger the paywall
     if (!isPremium && item.estimatedSavings > 0) {
       setIsPaywallOpen(true);
       return;
@@ -90,9 +94,8 @@ export function RichAnalysisCard({ data }: RichAnalysisCardProps) {
     setExecutingId(id);
     
     try {
-      // Logic: If it's a cancellation or negotiation, send email
       if (item.copyableMessage) {
-        const recipient = item.title.split(' ')[0].toLowerCase() + "@support.com"; // Mock recipient fallback
+        const recipient = item.title.split(' ')[0].toLowerCase() + "@support.com"; 
         const success = await GmailService.sendEmail(
           token, 
           recipient, 
@@ -107,7 +110,6 @@ export function RichAnalysisCard({ data }: RichAnalysisCardProps) {
           throw new Error("Transmission failed");
         }
       } else {
-        // Fallback for non-email actions
         await new Promise(r => setTimeout(r, 1500));
         setSuccessId(id);
         toast({ title: "Fix Applied", description: "The identified inefficiency has been mitigated." });
@@ -127,10 +129,8 @@ export function RichAnalysisCard({ data }: RichAnalysisCardProps) {
     <motion.div 
       initial={{ opacity: 0, y: 30, scale: 0.98 }}
       animate={{ opacity: 1, y: 0, scale: 1 }}
-      transition={{ duration: 0.8, ease: [0.4, 0, 0.2, 1] }}
       className="grid gap-8 mt-10 w-full text-left"
     >
-      {/* Intelligence Briefing Card */}
       <Card className="glass-panel p-12 rounded-[3rem] border-white/80 shadow-2xl relative overflow-hidden group">
         <div className="absolute top-0 right-0 w-64 h-64 bg-primary/5 rounded-full blur-3xl -mr-32 -mt-32" />
         
@@ -175,29 +175,33 @@ export function RichAnalysisCard({ data }: RichAnalysisCardProps) {
           </div>
         </div>
 
-        {/* Soft Upsell for Free Users */}
+        {/* PSYCHOLOGICAL TRIGGER: Show value then block the action */}
         {!isPremium && savingsEstimate > 0 && (
-          <div className="mt-8 p-6 rounded-[2rem] bg-primary/5 border border-primary/20 flex flex-col md:flex-row items-center justify-between gap-4">
-            <div className="flex items-center gap-3">
-              <div className="w-8 h-8 rounded-full bg-primary/20 flex items-center justify-center text-primary shrink-0">
-                <Star className="w-4 h-4 fill-primary" />
+          <motion.div 
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="mt-8 p-6 rounded-[2rem] bg-primary/5 border border-primary/20 flex flex-col md:flex-row items-center justify-between gap-4"
+          >
+            <div className="flex items-center gap-3 text-left">
+              <div className="w-10 h-10 rounded-full bg-primary/20 flex items-center justify-center text-primary shrink-0">
+                <Star className="w-5 h-5 fill-primary" />
               </div>
               <p className="text-xs font-bold text-slate-700 leading-tight">
-                Unlock "Forensic Mode" to automate this reclamation.
+                We've identified <span className="text-primary">${savingsEstimate.toFixed(0)}/mo</span> in waste. <br/>
+                <span className="text-slate-400 font-medium">Upgrade to Ultra to execute the reclamation protocol.</span>
               </p>
             </div>
             <Button 
               size="sm" 
-              className="bg-primary text-white hover:bg-primary/90 rounded-xl text-[9px] font-bold uppercase tracking-widest px-6 h-10 shadow-lg shadow-primary/20"
+              className="bg-primary text-white hover:bg-primary/90 rounded-xl text-[9px] font-bold uppercase tracking-widest px-6 h-10 shadow-lg shadow-primary/20 whitespace-nowrap"
               onClick={() => setIsPaywallOpen(true)}
             >
-              Upgrade to Ultra
+              Claim Savings
             </Button>
-          </div>
+          </motion.div>
         )}
       </Card>
 
-      {/* Observation Ledger */}
       {detectedItems.length > 0 && (
         <div className="space-y-6">
           <div className="flex items-center justify-between px-4">
@@ -247,12 +251,13 @@ export function RichAnalysisCard({ data }: RichAnalysisCardProps) {
                         disabled={isExecuting || isSuccess}
                         className={cn(
                           "rounded-xl h-10 px-6 font-bold uppercase tracking-widest text-[9px] transition-all",
-                          isSuccess ? "bg-success text-white" : "bg-slate-900 text-white shadow-lg shadow-slate-900/20"
+                          isSuccess ? "bg-success text-white" : "bg-slate-900 text-white shadow-lg shadow-slate-900/20",
+                          !isPremium && "opacity-80"
                         )}
                         onClick={() => handleExecute(item, itemId)}
                       >
                         {isExecuting ? <Loader2 className="w-3.5 h-3.5 animate-spin mr-2" /> : isSuccess ? <Check className="w-3.5 h-3.5 mr-2" /> : <Mail className="w-3.5 h-3.5 mr-2" />}
-                        {isExecuting ? 'Deploying...' : isSuccess ? 'Deployed' : 'Execute Fix'}
+                        {isExecuting ? 'Deploying...' : isSuccess ? 'Deployed' : isPremium ? 'Execute Fix' : 'Claim with Ultra'}
                       </Button>
                     </div>
                   </div>
@@ -290,6 +295,7 @@ export function RichAnalysisCard({ data }: RichAnalysisCardProps) {
       <PaywallOverlay 
         isOpen={isPaywallOpen} 
         onClose={() => setIsPaywallOpen(false)} 
+        reason="premium_tool"
       />
     </motion.div>
   );
