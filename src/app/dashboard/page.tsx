@@ -4,7 +4,8 @@ import { SystemCard } from '@/components/systems/SystemCard';
 import { useUser, useFirestore, useCollection, useMemoFirebase } from '@/firebase';
 import { collection, query, orderBy, limit } from 'firebase/firestore';
 import { motion } from 'framer-motion';
-import { Terminal, ShieldCheck, Zap, ChevronRight } from 'lucide-react';
+import { Terminal, ShieldCheck, Zap, ChevronRight, Activity, Clock } from 'lucide-react';
+import { useRouter } from 'next/navigation';
 
 const container = {
   hidden: { opacity: 0 },
@@ -24,18 +25,21 @@ const item = {
 export default function DashboardPage() {
   const { user } = useUser();
   const db = useFirestore();
+  const router = useRouter();
 
   const analysesQuery = useMemoFirebase(() => {
     if (!db || !user) return null;
     return query(
       collection(db, 'users', user.uid, 'analyses'),
       orderBy('createdAt', 'desc'),
-      limit(5)
+      limit(10)
     );
   }, [db, user]);
 
-  const { data: analyses } = useCollection(analysesQuery);
+  const { data: analyses, isLoading } = useCollection(analysesQuery);
+  
   const totalReclaimed = (analyses || []).reduce((acc, a) => acc + (a.estimatedMonthlySavings || 0), 0);
+  const activePatterns = (analyses || []).filter(a => a.status === 'completed').length;
 
   return (
     <motion.div 
@@ -68,11 +72,11 @@ export default function DashboardPage() {
           value={`$${totalReclaimed.toFixed(0)}`}
           metrics={[
             { label: 'Latency', value: '0.04ms' },
-            { label: 'Directives', value: '84 Active' }
+            { label: 'Directives', value: `${activePatterns} Active` }
           ]}
           actions={[
-            { label: 'Global Audit', variant: 'primary' },
-            { label: 'Neural Sync', variant: 'secondary' }
+            { label: 'Global Audit', variant: 'primary', onClick: () => router.push('/money-saver') },
+            { label: 'Neural Sync', variant: 'secondary', onClick: () => router.push('/history') }
           ]}
         >
           <div className="flex items-center gap-4 p-4 rounded-3xl bg-slate-50/50 border border-slate-100">
@@ -84,16 +88,27 @@ export default function DashboardPage() {
         <SystemCard 
           title="Optimization Hub"
           description="Deep pattern recognition results and mitigation vectors."
-          status="syncing"
-          value="+4.2h"
+          status={isLoading ? "syncing" : "active"}
+          value={`+${(totalReclaimed / 100).toFixed(1)}h`}
           metrics={[
             { label: 'Efficiency', value: '84%' },
             { label: 'Confidence', value: 'High' }
           ]}
           actions={[
-            { label: 'View Insights', variant: 'primary' }
+            { label: 'View Insights', variant: 'primary', onClick: () => router.push('/money-saver') }
           ]}
-        />
+        >
+           <div className="grid grid-cols-2 gap-2">
+              <div className="p-3 rounded-2xl bg-white/40 border border-white/60 flex items-center gap-2">
+                <Activity className="w-3.5 h-3.5 text-primary" />
+                <span className="text-[10px] font-bold text-slate-500">Load: 12%</span>
+              </div>
+              <div className="p-3 rounded-2xl bg-white/40 border border-white/60 flex items-center gap-2">
+                <Clock className="w-3.5 h-3.5 text-success" />
+                <span className="text-[10px] font-bold text-slate-500">Sync: Real-time</span>
+              </div>
+           </div>
+        </SystemCard>
       </motion.div>
 
       <motion.section variants={item} className="space-y-8">
@@ -103,28 +118,45 @@ export default function DashboardPage() {
         </div>
 
         <div className="space-y-4">
-          {(analyses || []).map((a, idx) => (
-            <motion.div 
-              key={a.id}
-              initial={{ opacity: 0, x: -20 }}
-              animate={{ opacity: 1, x: 0 }}
-              transition={{ delay: idx * 0.05 }}
-              className="p-6 rounded-4xl bg-white/40 border border-white/60 flex items-center justify-between group hover:bg-white/80 transition-all cursor-pointer"
-            >
-              <div className="flex items-center gap-6">
-                <div className="w-12 h-12 rounded-2xl bg-white flex items-center justify-center text-primary shadow-sm group-hover:shadow-md transition-all">
-                  <Zap className="w-5 h-5" />
+          {isLoading ? (
+            [...Array(3)].map((_, i) => (
+              <div key={i} className="h-24 w-full rounded-4xl bg-white/20 animate-pulse" />
+            ))
+          ) : (analyses || []).length > 0 ? (
+            analyses!.map((a, idx) => (
+              <motion.div 
+                key={a.id}
+                initial={{ opacity: 0, x: -20 }}
+                animate={{ opacity: 1, x: 0 }}
+                transition={{ delay: idx * 0.05 }}
+                onClick={() => router.push(`/results/${a.id}`)}
+                className="p-6 rounded-4xl bg-white/40 border border-white/60 flex items-center justify-between group hover:bg-white/80 transition-all cursor-pointer shadow-sm hover:shadow-md"
+              >
+                <div className="flex items-center gap-6">
+                  <div className="w-12 h-12 rounded-2xl bg-white flex items-center justify-center text-primary shadow-sm group-hover:shadow-md transition-all">
+                    <Zap className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <p className="text-sm font-bold text-slate-900">{a.title}</p>
+                    <div className="flex items-center gap-2 mt-1">
+                      <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">
+                        {new Date(a.createdAt?.toDate?.() || Date.now()).toLocaleTimeString()}
+                      </p>
+                      <span className="text-slate-200 text-xs">•</span>
+                      <p className="text-[10px] font-bold text-success uppercase tracking-widest">
+                        RECLAIMED ${a.estimatedMonthlySavings}
+                      </p>
+                    </div>
+                  </div>
                 </div>
-                <div>
-                  <p className="text-sm font-bold text-slate-900">{a.title}</p>
-                  <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-1">
-                    {new Date(a.createdAt?.toDate?.() || Date.now()).toLocaleTimeString()} // RECLAIMED ${a.estimatedMonthlySavings}
-                  </p>
-                </div>
-              </div>
-              <ChevronRight className="w-5 h-5 text-slate-300 group-hover:text-primary transition-colors" />
-            </motion.div>
-          ))}
+                <ChevronRight className="w-5 h-5 text-slate-300 group-hover:text-primary transition-colors" />
+              </motion.div>
+            ))
+          ) : (
+            <div className="p-12 text-center border-2 border-dashed border-slate-200 rounded-4xl opacity-40">
+              <p className="text-sm font-bold uppercase tracking-widest text-slate-400">Telemetry feed silent</p>
+            </div>
+          )}
         </div>
       </motion.section>
     </motion.div>

@@ -17,7 +17,11 @@ import {
   Sparkles,
   Hammer,
   X,
-  Plus
+  Plus,
+  MessageSquare,
+  Search,
+  Clock,
+  Layout
 } from 'lucide-react';
 import { useFirestore, useUser, addDocumentNonBlocking, useCollection, useMemoFirebase } from '@/firebase';
 import { collection, serverTimestamp, doc, query, orderBy, setDoc } from 'firebase/firestore';
@@ -31,7 +35,6 @@ import { PaywallOverlay } from '@/components/monetization/PaywallOverlay';
 export default function ChatPage() {
   const [input, setInput] = useState('');
   const [isProcessing, setIsProcessing] = useState(false);
-  const [agentMetadata, setAgentMetadata] = useState<any>(null);
   const [selectedImage, setSelectedToolImage] = useState<string | null>(null);
   const [showPaywall, setShowPaywall] = useState(false);
   
@@ -87,7 +90,6 @@ export default function ChatPage() {
     setIsProcessing(true);
     setInput('');
     setSelectedToolImage(null);
-    setAgentMetadata(null);
 
     try {
       let activeId = conversationId;
@@ -153,12 +155,11 @@ export default function ChatPage() {
             if (line.startsWith("__METADATA__:")) {
               try {
                 currentMetadata = JSON.parse(line.replace("__METADATA__:", ""));
-                setAgentMetadata(currentMetadata);
               } catch (e) {
                 console.error("Metadata parsing failed", e);
               }
             } else {
-              fullContent += line;
+              fullContent += line + "\n";
             }
           }
         }
@@ -169,7 +170,7 @@ export default function ChatPage() {
 
       await addDocumentNonBlocking(collection(db, 'users', user.uid, 'conversations', activeId, 'messages'), {
         role: 'assistant',
-        content: fullContent,
+        content: fullContent.trim(),
         timestamp: serverTimestamp(),
         metadata: currentMetadata
       });
@@ -188,6 +189,16 @@ export default function ChatPage() {
     }
   };
 
+  const getModeIcon = (intent?: string) => {
+    switch(intent) {
+      case 'finance': return <Zap className="w-3.5 h-3.5 text-primary" />;
+      case 'time_optimizer': return <Clock className="w-3.5 h-3.5 text-success" />;
+      case 'technical': return <Terminal className="w-3.5 h-3.5 text-primary" />;
+      case 'analysis': return <Search className="w-3.5 h-3.5 text-accent" />;
+      default: return <Activity className="w-3.5 h-3.5 text-slate-400" />;
+    }
+  };
+
   return (
     <div className="flex flex-col h-full max-w-4xl mx-auto">
       <div ref={scrollRef} className="flex-1 overflow-y-auto space-y-12 pb-48 pt-10 stealth-scrollbar">
@@ -203,8 +214,12 @@ export default function ChatPage() {
                 <div className={cn("max-w-[90%] space-y-4", msg.role === 'user' ? "items-end text-right" : "items-start text-left")}>
                   {msg.role === 'assistant' && (
                     <div className="flex items-center gap-3 mb-2 px-2">
-                      <StatusDot status="active" />
-                      <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Operator Engine V5.6</span>
+                      <div className="flex items-center justify-center w-6 h-6 rounded-full bg-white/40 border border-white/60 shadow-sm">
+                        {getModeIcon(msg.metadata?.intent)}
+                      </div>
+                      <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">
+                        Engine V5.6 • {msg.metadata?.intent || 'General'}
+                      </span>
                     </div>
                   )}
                   
@@ -217,16 +232,16 @@ export default function ChatPage() {
                     {msg.imageUri && (
                       <img src={msg.imageUri} alt="Uploaded source" className="max-w-full rounded-2xl mb-4 border border-white/10" />
                     )}
-                    {msg.content}
+                    <div className="whitespace-pre-wrap">{msg.content}</div>
 
                     {/* Rich Data Display */}
                     {msg.role === 'assistant' && msg.metadata?.structuredData && (
                       <RichAnalysisCard 
                         data={{
-                          title: msg.metadata.intent.toUpperCase() + " Report",
+                          title: (msg.metadata.intent || 'Analysis').toUpperCase() + " Report",
                           strategy: msg.metadata.plan,
                           savingsEstimate: msg.metadata.structuredData.estimatedMonthlySavings || 0,
-                          detectedItems: msg.metadata.structuredData.leaks || [],
+                          detectedItems: msg.metadata.structuredData.leaks || msg.metadata.structuredData.findings || [],
                           intent: msg.metadata.intent
                         }} 
                       />

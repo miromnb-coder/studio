@@ -36,7 +36,7 @@ export default function EfficiencyAutopilotPage() {
     return query(
       collection(db, 'users', user.uid, 'analyses'),
       orderBy('createdAt', 'desc'),
-      limit(10)
+      limit(20)
     );
   }, [db, user]);
 
@@ -44,6 +44,7 @@ export default function EfficiencyAutopilotPage() {
 
   const totalMonthlySavings = (analyses || []).reduce((acc, a) => acc + (a.estimatedMonthlySavings || 0), 0);
   const projectedYearlySavings = totalMonthlySavings * 12;
+  const efficiencyIndex = analyses && analyses.length > 0 ? Math.min(95, 60 + analyses.length * 5) : 0;
 
   if (!mounted) return null;
 
@@ -64,9 +65,11 @@ export default function EfficiencyAutopilotPage() {
               <p className="text-[8px] font-bold uppercase tracking-widest text-success mb-1">Projected Annual Reclaim</p>
               <h2 className="text-4xl font-bold font-headline text-slate-900 tracking-tighter">${projectedYearlySavings.toFixed(0)}</h2>
            </div>
-           <Button className="w-full h-12 rounded-xl text-[10px] font-bold uppercase tracking-widest bg-white text-slate-900 shadow-sm border border-slate-100 hover:bg-slate-50">
-             <RefreshCcw className="w-3.5 h-3.5 mr-2" />
-             Run Global Audit
+           <Button asChild className="w-full h-12 rounded-xl text-[10px] font-bold uppercase tracking-widest bg-white text-slate-900 shadow-sm border border-slate-100 hover:bg-slate-50">
+             <Link href="/">
+               <RefreshCcw className="w-3.5 h-3.5 mr-2" />
+               Run Global Audit
+             </Link>
            </Button>
         </div>
       </header>
@@ -78,7 +81,7 @@ export default function EfficiencyAutopilotPage() {
             </div>
             <div className="space-y-1">
                <p className="text-[8px] font-bold uppercase tracking-widest text-muted-foreground">Efficiency Index</p>
-               <p className="text-2xl font-bold text-slate-900 tracking-tight">84%</p>
+               <p className="text-2xl font-bold text-slate-900 tracking-tight">{efficiencyIndex}%</p>
             </div>
          </Card>
          <Card className="premium-card bg-white/[0.01] border-white/5 p-6 flex items-center gap-6">
@@ -87,7 +90,7 @@ export default function EfficiencyAutopilotPage() {
             </div>
             <div className="space-y-1">
                <p className="text-[8px] font-bold uppercase tracking-widest text-muted-foreground">Time Reclaimed</p>
-               <p className="text-2xl font-bold text-slate-900 tracking-tight">~4.2h/mo</p>
+               <p className="text-2xl font-bold text-slate-900 tracking-tight">~{(totalMonthlySavings / 50).toFixed(1)}h/mo</p>
             </div>
          </Card>
          <Card className="premium-card bg-white/[0.01] border-white/5 p-6 flex items-center gap-6">
@@ -114,7 +117,7 @@ export default function EfficiencyAutopilotPage() {
             {isLoading ? (
               [...Array(3)].map((_, i) => <Skeleton key={i} className="h-32 w-full bg-slate-50 rounded-2xl" />)
             ) : (analyses || []).length > 0 ? (
-              analyses.map((analysis, i) => (
+              analyses!.map((analysis, i) => (
                 <motion.div
                   key={analysis.id}
                   initial={{ opacity: 0, y: 10 }}
@@ -131,12 +134,12 @@ export default function EfficiencyAutopilotPage() {
                            <span className="text-[8px] font-bold text-muted-foreground uppercase tracking-widest">Detected {new Date(analysis.createdAt?.toDate?.() || Date.now()).toLocaleDateString()}</span>
                         </div>
                         <h4 className="text-xl font-bold text-slate-900 tracking-tight">{analysis.title}</h4>
-                        <p className="text-sm text-muted-foreground leading-relaxed max-w-2xl">{analysis.summary}</p>
+                        <p className="text-sm text-muted-foreground leading-relaxed max-w-2xl line-clamp-2">{analysis.summary}</p>
                      </div>
                      <div className="flex flex-col items-center md:items-end gap-3 min-w-[150px]">
                         <div className="text-center md:text-right">
                            <p className="text-[8px] font-bold uppercase tracking-widest text-muted-foreground">Potential Save</p>
-                           <p className="text-2xl font-bold text-success tracking-tighter">+${analysis.estimatedMonthlySavings.toFixed(0)}/mo</p>
+                           <p className="text-2xl font-bold text-success tracking-tighter">+${analysis.estimatedMonthlySavings?.toFixed(0)}/mo</p>
                         </div>
                         <Button asChild size="sm" className="rounded-xl h-10 px-6 font-bold uppercase tracking-widest text-[10px] bg-primary text-white shadow-lg shadow-primary/20">
                            <Link href={`/results/${analysis.id}`}>Apply Fix <ArrowRight className="w-3 h-3 ml-2" /></Link>
