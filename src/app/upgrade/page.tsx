@@ -3,15 +3,11 @@
 
 import { motion } from 'framer-motion';
 import { 
-  X, 
   ShieldCheck, 
   ArrowRight, 
   Zap, 
   Star, 
   ChevronLeft,
-  CheckCircle2,
-  TrendingUp,
-  Clock,
   Activity,
   BrainCircuit,
   Search,
@@ -23,7 +19,7 @@ import { UpgradeComparison } from '@/components/upgrade/UpgradeComparison';
 import { UpgradePlanCard } from '@/components/upgrade/UpgradePlanCard';
 import { UpgradeValueMetrics } from '@/components/upgrade/UpgradeValueMetrics';
 import { GlassButton } from '@/components/ui/GlassButton';
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { SubscriptionService } from '@/services/subscription-service';
 import { useFirestore, useUser } from '@/firebase';
 import { useToast } from '@/hooks/use-toast';
@@ -51,6 +47,8 @@ export default function UpgradePage() {
     if (success) {
       toast({ title: "Welcome to Ultra", description: "Clearance level elevated successfully." });
       router.push('/dashboard');
+    } else {
+      toast({ variant: 'destructive', title: "Sync Failed", description: "Could not update plan. Please retry." });
     }
     setLoading(false);
   };
@@ -72,7 +70,6 @@ export default function UpgradePage() {
       </header>
 
       <main className="max-w-5xl mx-auto pt-40 px-6 space-y-32">
-        {/* Hero Section */}
         <section className="text-center space-y-8">
           <motion.div
             initial={{ opacity: 0, y: 20 }}
@@ -98,11 +95,10 @@ export default function UpgradePage() {
             transition={{ delay: 0.2 }}
             className="text-xl text-slate-500 font-medium max-w-2xl mx-auto leading-relaxed"
           >
-            You've already started optimizing your life. Ultra access removes the daily cognitive friction and automates your entire financial forensics.
+            Ultra access removes the daily cognitive friction and automates your entire financial forensics.
           </motion.p>
         </section>
 
-        {/* Value Metrics */}
         <section className="space-y-12">
           <div className="flex items-center justify-center gap-4 text-slate-400">
             <Activity className="w-5 h-5" />
@@ -111,7 +107,6 @@ export default function UpgradePage() {
           <UpgradeValueMetrics />
         </section>
 
-        {/* Features Grid */}
         <section className="space-y-16">
           <div className="text-center space-y-2">
             <h3 className="text-3xl font-bold tracking-tighter text-slate-900">Elite Protocol Access</h3>
@@ -124,12 +119,10 @@ export default function UpgradePage() {
           </div>
         </section>
 
-        {/* Comparison */}
         <section className="py-20 bg-primary/5 rounded-[4rem] px-8 md:px-12 border border-primary/10">
           <UpgradeComparison />
         </section>
 
-        {/* Plans */}
         <section id="plans" className="space-y-16">
           <div className="text-center space-y-2">
             <h2 className="text-5xl font-black tracking-tighter text-slate-900">Choose your level.</h2>
@@ -156,19 +149,17 @@ export default function UpgradePage() {
           </div>
         </section>
 
-        {/* Secure Guarantee */}
         <footer className="text-center space-y-6 pt-20 border-t border-slate-100">
           <div className="flex items-center justify-center gap-3">
             <ShieldCheck className="w-6 h-6 text-success" />
-            <p className="text-sm font-bold text-slate-900">Secure Checkout via Stripe Protocol</p>
+            <p className="text-sm font-bold text-slate-900">Secure Protocol via Firebase Encryption</p>
           </div>
           <p className="text-xs text-slate-400 max-w-sm mx-auto">
-            Cancel anytime. Your neural memory will be preserved for 30 days even if you downgrade.
+            Cancel anytime. Access is updated instantly in your Neural Link.
           </p>
         </footer>
       </main>
 
-      {/* Sticky Bottom Bar */}
       <motion.div 
         initial={{ y: 100 }}
         animate={{ y: 0 }}
@@ -177,7 +168,7 @@ export default function UpgradePage() {
         <GlassButton 
           onClick={handleUpgrade}
           loading={loading}
-          className="w-full !h-16 !text-lg !rounded-[2rem] shadow-2xl shadow-primary/20 group relative overflow-hidden"
+          className="w-full !h-16 !text-lg !rounded-[2.5rem] shadow-2xl shadow-primary/20 group relative overflow-hidden"
         >
           <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/10 to-transparent translate-x-[-100%] group-hover:translate-x-[100%] transition-transform duration-1000" />
           Upgrade to Ultra Now

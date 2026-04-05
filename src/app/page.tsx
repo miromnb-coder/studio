@@ -1,3 +1,4 @@
+
 "use client";
 
 import { useState, useRef, useEffect } from 'react';
@@ -82,7 +83,11 @@ export default function ChatPage() {
   };
 
   const sendMessage = async () => {
-    if ((!input.trim() && !selectedImage) || !user || !db || isProcessing) return;
+    if (!user) {
+      router.push('/login');
+      return;
+    }
+    if ((!input.trim() && !selectedImage) || !db || isProcessing) return;
 
     const currentInput = input;
     const currentImage = selectedImage;
@@ -234,7 +239,6 @@ export default function ChatPage() {
                     )}
                     <div className="whitespace-pre-wrap">{msg.content}</div>
 
-                    {/* Rich Data Display */}
                     {msg.role === 'assistant' && msg.metadata?.structuredData && (
                       <RichAnalysisCard 
                         data={{

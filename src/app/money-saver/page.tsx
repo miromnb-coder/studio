@@ -1,6 +1,7 @@
+
 "use client";
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { 
   Zap, 
   ArrowRight, 
@@ -42,9 +43,13 @@ export default function EfficiencyAutopilotPage() {
 
   const { data: analyses, isLoading } = useCollection(analysesQuery);
 
-  const totalMonthlySavings = (analyses || []).reduce((acc, a) => acc + (a.estimatedMonthlySavings || 0), 0);
+  const totalMonthlySavings = useMemo(() => {
+    return (analyses || []).reduce((acc, a) => acc + (a.estimatedMonthlySavings || 0), 0);
+  }, [analyses]);
+
   const projectedYearlySavings = totalMonthlySavings * 12;
   const efficiencyIndex = analyses && analyses.length > 0 ? Math.min(95, 60 + analyses.length * 5) : 0;
+  const reclaimedHours = (totalMonthlySavings / 50).toFixed(1);
 
   if (!mounted) return null;
 
@@ -90,7 +95,7 @@ export default function EfficiencyAutopilotPage() {
             </div>
             <div className="space-y-1">
                <p className="text-[8px] font-bold uppercase tracking-widest text-muted-foreground">Time Reclaimed</p>
-               <p className="text-2xl font-bold text-slate-900 tracking-tight">~{(totalMonthlySavings / 50).toFixed(1)}h/mo</p>
+               <p className="text-2xl font-bold text-slate-900 tracking-tight">~{reclaimedHours}h/mo</p>
             </div>
          </Card>
          <Card className="premium-card bg-white/[0.01] border-white/5 p-6 flex items-center gap-6">

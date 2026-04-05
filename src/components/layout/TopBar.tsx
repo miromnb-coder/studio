@@ -5,7 +5,7 @@ import { useState, useCallback, useMemo, useEffect } from 'react';
 import { StatusDot } from '@/components/ui/StatusDot';
 import { Bell, User, X, Zap, LogOut, ShieldCheck, TrendingUp, Menu, Star, ArrowRight, Plus, Search, Clock, Activity, History, MessageSquare, Trash2, Loader2 } from 'lucide-react';
 import { useUser, useFirestore, useCollection, useMemoFirebase } from '@/firebase';
-import { collection, query, limit, orderBy, deleteDoc, doc } from 'firebase/firestore';
+import { collection, query, limit, orderBy, deleteDoc, doc, onSnapshot } from 'firebase/firestore';
 import { FloatingNavMenu } from './FloatingNavMenu';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
@@ -28,9 +28,14 @@ export function TopBar() {
   const [status, setStatus] = useState<any>(null);
   const [isDeleting, setIsDeleting] = useState<string | null>(null);
 
+  // Real-time status sync
   useEffect(() => {
     if (db && user) {
-      SubscriptionService.getUserStatus(db, user.uid).then(setStatus);
+      const userRef = doc(db, 'users', user.uid);
+      const unsub = onSnapshot(userRef, () => {
+        SubscriptionService.getUserStatus(db, user.uid).then(setStatus);
+      });
+      return () => unsub();
     }
   }, [db, user]);
 
@@ -76,7 +81,7 @@ export function TopBar() {
 
   const analysesQuery = useMemoFirebase(() => {
     if (!db || !user) return null;
-    return query(collection(db, 'users', user.uid, 'analyses'), limit(20));
+    return query(collection(db, 'users', user.uid, 'analyses'), limit(50));
   }, [db, user]);
 
   const { data: analyses } = useCollection(analysesQuery);
@@ -84,6 +89,10 @@ export function TopBar() {
   const totalSaved = useMemo(() => {
     return (analyses || []).reduce((acc, a) => acc + (a.estimatedMonthlySavings || 0), 0);
   }, [analyses]);
+
+  const reclaimedHours = useMemo(() => {
+    return (totalSaved / 50).toFixed(1);
+  }, [totalSaved]);
 
   const isPremium = status?.plan === 'PREMIUM';
   const usagePercent = status ? (status.usage.agentRuns / status.usage.limit) * 100 : 0;
@@ -110,7 +119,6 @@ export function TopBar() {
               <span className="text-[10px] font-black uppercase tracking-[0.1em] hidden sm:block">Menu</span>
             </motion.button>
             
-            {/* History Popover */}
             <Popover>
               <PopoverTrigger asChild>
                 <button className="w-10 h-10 md:w-11 md:h-11 rounded-full bg-white/60 hover:bg-white flex items-center justify-center text-slate-400 hover:text-primary transition-all border border-slate-200/50 active:scale-90 relative">
@@ -180,7 +188,7 @@ export function TopBar() {
             </button>
           </div>
 
-          {/* Center Section: Value Metrics */}
+          {/* Center Section: Real-time Value Metrics */}
           <div className="flex items-center gap-2 md:gap-4 flex-1 justify-center px-2 overflow-hidden">
             <div className="hidden md:flex items-center gap-2">
               <motion.div 
@@ -201,7 +209,7 @@ export function TopBar() {
                 <Clock className="w-3.5 h-3.5 text-success" />
                 <div className="flex flex-col">
                   <span className="text-[8px] font-black text-slate-400 uppercase tracking-widest leading-none mb-0.5">Reclaimed</span>
-                  <span className="text-xs font-bold text-slate-900 leading-none">14.2h</span>
+                  <span className="text-xs font-bold text-slate-900 leading-none">{reclaimedHours}h</span>
                 </div>
               </motion.div>
             </div>
@@ -223,7 +231,10 @@ export function TopBar() {
 
           {/* Right Section: Alerts & Profile */}
           <div className="flex items-center gap-1 md:gap-2 shrink-0">
-            <button className="hidden sm:flex w-10 h-10 rounded-full items-center justify-center text-slate-400 hover:bg-white/60 transition-all active:scale-90">
+            <button 
+              onClick={() => router.push('/dashboard')}
+              className="hidden sm:flex w-10 h-10 rounded-full items-center justify-center text-slate-400 hover:bg-white/60 transition-all active:scale-90"
+            >
               <Search className="w-4 h-4" />
             </button>
 
@@ -231,23 +242,30 @@ export function TopBar() {
               <PopoverTrigger asChild>
                 <button className="w-10 h-10 rounded-full flex items-center justify-center text-slate-400 hover:bg-white/60 transition-all relative active:scale-90">
                   <Bell className="w-4 h-4" />
-                  <span className="absolute top-3 right-3 w-1.5 h-1.5 bg-primary rounded-full border-2 border-white" />
+                  {analyses && analyses.some(a => a.estimatedMonthlySavings > 100) && (
+                    <span className="absolute top-3 right-3 w-1.5 h-1.5 bg-primary rounded-full border-2 border-white" />
+                  )}
                 </button>
               </PopoverTrigger>
               <PopoverContent className="w-72 md:w-80 glass-panel p-4 shadow-xl mt-4 rounded-[2rem] border-white/60" align="end">
                 <div className="space-y-4">
                   <div className="flex items-center justify-between border-b border-slate-100/60 pb-3">
                     <p className="text-[10px] font-bold uppercase tracking-widest text-slate-400">Intelligence Alerts</p>
-                    <Badge className="bg-primary/10 text-primary border-0 rounded-full text-[9px] px-2.5 py-0.5">2 New</Badge>
+                    <Badge className="bg-primary/10 text-primary border-0 rounded-full text-[9px] px-2.5 py-0.5">Active</Badge>
                   </div>
                   <div className="space-y-2">
-                    <div className="flex gap-3 p-3 hover:bg-white/60 rounded-2xl transition-all cursor-pointer group border border-transparent hover:border-white/40">
-                      <ShieldCheck className="w-5 h-5 text-primary shrink-0" />
-                      <div className="space-y-0.5">
-                        <p className="text-xs font-bold text-slate-900">Optimization Ready</p>
-                        <p className="text-[11px] text-slate-500 leading-relaxed">Agent identified a lower rate for your Netflix subscription.</p>
+                    {analyses && analyses.filter(a => a.estimatedMonthlySavings > 100).slice(0, 2).map(a => (
+                      <div key={a.id} className="flex gap-3 p-3 hover:bg-white/60 rounded-2xl transition-all cursor-pointer group border border-transparent hover:border-white/40" onClick={() => router.push(`/results/${a.id}`)}>
+                        <ShieldCheck className="w-5 h-5 text-primary shrink-0" />
+                        <div className="space-y-0.5">
+                          <p className="text-xs font-bold text-slate-900">Optimization Ready</p>
+                          <p className="text-[11px] text-slate-500 leading-relaxed line-clamp-2">High burn detected in {a.title}.</p>
+                        </div>
                       </div>
-                    </div>
+                    ))}
+                    {(!analyses || !analyses.some(a => a.estimatedMonthlySavings > 100)) && (
+                      <p className="text-[10px] text-center py-4 text-slate-400 font-bold uppercase">All logic cores synced.</p>
+                    )}
                   </div>
                 </div>
               </PopoverContent>

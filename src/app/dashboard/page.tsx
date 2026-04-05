@@ -1,11 +1,13 @@
+
 "use client";
 
 import { SystemCard } from '@/components/systems/SystemCard';
 import { useUser, useFirestore, useCollection, useMemoFirebase } from '@/firebase';
 import { collection, query, orderBy, limit } from 'firebase/firestore';
 import { motion } from 'framer-motion';
-import { Terminal, ShieldCheck, Zap, ChevronRight, Activity, Clock } from 'lucide-react';
+import { Terminal, ShieldCheck, Zap, ChevronRight, Activity, Clock, Cpu } from 'lucide-react';
 import { useRouter } from 'next/navigation';
+import { useMemo } from 'react';
 
 const container = {
   hidden: { opacity: 0 },
@@ -32,13 +34,20 @@ export default function DashboardPage() {
     return query(
       collection(db, 'users', user.uid, 'analyses'),
       orderBy('createdAt', 'desc'),
-      limit(10)
+      limit(20)
     );
   }, [db, user]);
 
   const { data: analyses, isLoading } = useCollection(analysesQuery);
   
-  const totalReclaimed = (analyses || []).reduce((acc, a) => acc + (a.estimatedMonthlySavings || 0), 0);
+  const totalReclaimed = useMemo(() => {
+    return (analyses || []).reduce((acc, a) => acc + (a.estimatedMonthlySavings || 0), 0);
+  }, [analyses]);
+
+  const reclaimedHours = useMemo(() => {
+    return (totalReclaimed / 50).toFixed(1);
+  }, [totalReclaimed]);
+
   const activePatterns = (analyses || []).filter(a => a.status === 'completed').length;
 
   return (
@@ -89,9 +98,9 @@ export default function DashboardPage() {
           title="Optimization Hub"
           description="Deep pattern recognition results and mitigation vectors."
           status={isLoading ? "syncing" : "active"}
-          value={`+${(totalReclaimed / 100).toFixed(1)}h`}
+          value={`+${reclaimedHours}h`}
           metrics={[
-            { label: 'Efficiency', value: '84%' },
+            { label: 'Efficiency', value: analyses?.length ? '84%' : '0%' },
             { label: 'Confidence', value: 'High' }
           ]}
           actions={[
@@ -101,11 +110,11 @@ export default function DashboardPage() {
            <div className="grid grid-cols-2 gap-2">
               <div className="p-3 rounded-2xl bg-white/40 border border-white/60 flex items-center gap-2">
                 <Activity className="w-3.5 h-3.5 text-primary" />
-                <span className="text-[10px] font-bold text-slate-500">Load: 12%</span>
+                <span className="text-[10px] font-bold text-slate-500">Status: Stable</span>
               </div>
               <div className="p-3 rounded-2xl bg-white/40 border border-white/60 flex items-center gap-2">
                 <Clock className="w-3.5 h-3.5 text-success" />
-                <span className="text-[10px] font-bold text-slate-500">Sync: Real-time</span>
+                <span className="text-[10px] font-bold text-slate-500">Sync: Live</span>
               </div>
            </div>
         </SystemCard>
@@ -122,7 +131,7 @@ export default function DashboardPage() {
             [...Array(3)].map((_, i) => (
               <div key={i} className="h-24 w-full rounded-4xl bg-white/20 animate-pulse" />
             ))
-          ) : (analyses || []).length > 0 ? (
+          ) : analyses && analyses.length > 0 ? (
             analyses!.map((a, idx) => (
               <motion.div 
                 key={a.id}
@@ -153,8 +162,12 @@ export default function DashboardPage() {
               </motion.div>
             ))
           ) : (
-            <div className="p-12 text-center border-2 border-dashed border-slate-200 rounded-4xl opacity-40">
-              <p className="text-sm font-bold uppercase tracking-widest text-slate-400">Telemetry feed silent</p>
+            <div className="p-16 text-center border-2 border-dashed border-slate-200 rounded-[3rem] opacity-40 space-y-4">
+              <Cpu className="w-12 h-12 text-slate-300 mx-auto" />
+              <div className="space-y-1">
+                <p className="text-sm font-bold uppercase tracking-widest text-slate-400">Telemetry feed silent</p>
+                <p className="text-[10px] font-bold text-slate-400 uppercase">Run an audit to generate signals</p>
+              </div>
             </div>
           )}
         </div>

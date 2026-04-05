@@ -95,7 +95,7 @@ export class SubscriptionService {
   }
 
   /**
-   * Simulates a Stripe checkout session.
+   * Updates user plan in database.
    */
   static async upgradeToPremium(db: Firestore, userId: string) {
     if (!userId) return false;
@@ -104,10 +104,12 @@ export class SubscriptionService {
       const userRef = doc(db, 'users', userId);
       await updateDoc(userRef, {
         plan: 'PREMIUM',
-        upgradedAt: serverTimestamp()
+        upgradedAt: serverTimestamp(),
+        updatedAt: serverTimestamp()
       });
       return true;
     } catch (e) {
+      console.error("[SUBSCRIPTION] Upgrade failed", e);
       return false;
     }
   }
