@@ -1,27 +1,18 @@
 "use client";
 
 import { useState, useRef, useEffect, Suspense } from 'react';
-import { GlassCard } from '@/components/ui/GlassCard';
-import { GlassButton } from '@/components/ui/GlassButton';
-import { StatusDot } from '@/components/ui/StatusDot';
 import { 
-  Send, 
-  ImageIcon, 
   Cpu,
   ArrowRight,
   Terminal,
   Loader2,
   Zap,
   Activity,
-  CheckCircle2,
-  Sparkles,
-  Hammer,
   X,
-  Plus,
+  ImageIcon,
   MessageSquare,
   Search,
-  Clock,
-  Layout
+  Clock
 } from 'lucide-react';
 import { useFirestore, useUser, addDocumentNonBlocking, useCollection, useMemoFirebase } from '@/firebase';
 import { collection, serverTimestamp, doc, query, orderBy, setDoc, limit } from 'firebase/firestore';
@@ -32,6 +23,8 @@ import { useToast } from '@/hooks/use-toast';
 import { RichAnalysisCard } from '@/components/chat/RichAnalysisCard';
 import { PaywallOverlay } from '@/components/monetization/PaywallOverlay';
 import { OnboardingOverlay } from '@/components/onboarding/OnboardingOverlay';
+import { GlassCard } from '@/components/ui/GlassCard';
+import { GlassButton } from '@/components/ui/GlassButton';
 
 function ChatContent() {
   const [input, setInput] = useState('');
@@ -52,7 +45,7 @@ function ChatContent() {
   const conversationId = searchParams?.get('c');
   const { toast } = useToast();
 
-  // Check if onboarding is needed - rely on collection check
+  // Onboarding detection: Check for existing conversations
   const convsQuery = useMemoFirebase(() => {
     if (!db || !user) return null;
     return query(collection(db, 'users', user.uid, 'conversations'), limit(1));
@@ -60,6 +53,7 @@ function ChatContent() {
   const { data: convs, isLoading: isConvsLoading } = useCollection(convsQuery);
 
   useEffect(() => {
+    // Show onboarding only for authenticated new users with no history
     if (!isConvsLoading && !isUserLoading && user && convs && convs.length === 0 && !conversationId) {
       setShowOnboarding(true);
     } else {
@@ -104,44 +98,54 @@ function ChatContent() {
       router.push('/login');
       return;
     }
-    setShowOnboarding(false);
+    
+    // We don't hide onboarding immediately - OnboardingOverlay handles the 'Calibration' state
+    // Once calibration is finished, it calls this with the goal
     setIsProcessing(true);
 
     const goalMap: Record<string, string> = {
-      'save_money': 'Optimize my expenses and find hidden savings.',
-      'save_time': 'Audit my schedule and automate repetitive tasks.',
-      'analyze_visual': 'Analyze my latest financial statements for anomalies.'
+      'save_money': 'Analyze my digital ecosystem for hidden waste and optimization opportunities. Start a forensic audit.',
+      'save_time': 'Audit my current schedule and identify low-value tasks for removal or automation.',
+      'analyze_visual': 'Prepare to analyze financial statements and receipts for structural anomalies.'
     };
 
-    const initialIntent = goalMap[goalId] || 'Initialize general audit.';
+    const initialIntent = goalMap[goalId] || 'Initialize general intelligence audit.';
     
     try {
-      const newRef = doc(collection(db, 'users', user.uid, 'conversations'));
-      const activeId = newRef.id;
-      
+      // 1. Create the persistent memory entry for this goal
       await setDoc(doc(db, 'users', user.uid, 'memory', 'main'), {
         userId: user.uid,
         goals: [goalId],
-        behaviorSummary: `User initialized with primary focus: ${goalId}.`,
+        behaviorSummary: `User initialized with primary focus: ${goalId}. Strategy: Direct optimization.`,
         lastUpdated: serverTimestamp()
       }, { merge: true });
 
+      // 2. Create the first conversation
+      const newRef = doc(collection(db, 'users', user.uid, 'conversations'));
+      const activeId = newRef.id;
+      
       await setDoc(newRef, { 
         id: activeId, 
         userId: user.uid, 
-        title: goalId.replace('_', ' ').toUpperCase(), 
+        title: goalId.split('_').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' '), 
         createdAt: serverTimestamp(), 
         updatedAt: serverTimestamp() 
       });
 
+      // 3. Update route
       router.push(`/?c=${activeId}`);
 
+      // 4. Send the user message
       await addDocumentNonBlocking(collection(db, 'users', user.uid, 'conversations', activeId, 'messages'), {
         role: 'user',
         content: initialIntent,
         timestamp: serverTimestamp()
       });
 
+      // 5. Hide onboarding overlay (should happen after some calibration time in UI)
+      setShowOnboarding(false);
+
+      // 6. Trigger AI
       const response = await fetch('/api/agent', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -151,13 +155,6 @@ function ChatContent() {
           userId: user.uid 
         }),
       });
-
-      if (response.status === 403) {
-        setPaywallReason('limit_reached');
-        setShowPaywall(true);
-        setIsProcessing(false);
-        return;
-      }
 
       if (!response.ok) throw new Error("Operational link failed");
 
@@ -199,7 +196,7 @@ function ChatContent() {
 
     } catch (err) {
       console.error(err);
-      toast({ variant: 'destructive', title: "Onboarding Failed", description: "Could not initialize protocol." });
+      toast({ variant: 'destructive', title: "Onboarding Failed", description: "Protocol initialization interrupted." });
     } finally {
       setIsProcessing(false);
     }
@@ -276,7 +273,6 @@ function ChatContent() {
           
           const chunk = decoder.decode(value, { stream: true });
           buffer += chunk;
-
           const lines = buffer.split('\n');
           buffer = lines.pop() || "";
 
@@ -292,9 +288,7 @@ function ChatContent() {
             }
           }
         }
-        if (buffer) {
-          if (!buffer.startsWith("__METADATA__:")) fullContent += buffer;
-        }
+        if (buffer && !buffer.startsWith("__METADATA__:")) fullContent += buffer;
       }
 
       await addDocumentNonBlocking(collection(db, 'users', user.uid, 'conversations', activeId, 'messages'), {

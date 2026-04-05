@@ -1,9 +1,8 @@
-
 /**
  * @fileOverview Service for managing user long-term memory and behavioral intelligence.
  */
 
-import { doc, getDoc, setDoc, updateDoc, Firestore } from 'firebase/firestore';
+import { doc, getDoc, setDoc, Firestore } from 'firebase/firestore';
 import { serverTimestamp } from 'firebase/firestore';
 
 export interface UserMemory {
@@ -36,17 +35,17 @@ export class MemoryService {
   /**
    * Initializes or updates memory with new intelligence findings.
    */
-  static async updateMemory(db: Firestore, userId: string, updates: any) {
+  static async updateMemory(db: Firestore, userId: string, updates: Partial<UserMemory>) {
     try {
       const memoryRef = doc(db, 'users', userId, 'memory', 'main');
       const currentMemory = await this.getMemory(db, userId);
 
       const dataToSave = {
         userId,
-        goals: Array.from(new Set([...(currentMemory?.goals || []), ...(updates.newGoals || [])])),
-        preferences: Array.from(new Set([...(currentMemory?.preferences || []), ...(updates.newPreferences || [])])),
-        subscriptions: Array.from(new Set([...(currentMemory?.subscriptions || []), ...(updates.newSubscriptions || [])])),
-        behaviorSummary: updates.behaviorSummaryUpdate || currentMemory?.behaviorSummary || 'Passive intelligence gathering in progress.',
+        goals: Array.from(new Set([...(currentMemory?.goals || []), ...(updates.goals || [])])),
+        preferences: Array.from(new Set([...(currentMemory?.preferences || []), ...(updates.preferences || [])])),
+        subscriptions: Array.from(new Set([...(currentMemory?.subscriptions || []), ...(updates.subscriptions || [])])),
+        behaviorSummary: updates.behaviorSummary || currentMemory?.behaviorSummary || 'Passive intelligence gathering in progress.',
         lastUpdated: serverTimestamp(),
       };
 
