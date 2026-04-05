@@ -10,7 +10,10 @@ import {
   Camera, 
   ArrowRight,
   ShieldCheck,
-  Cpu
+  Cpu,
+  Sparkles,
+  Target,
+  ChevronRight
 } from 'lucide-react';
 
 interface OnboardingOverlayProps {
@@ -20,88 +23,126 @@ interface OnboardingOverlayProps {
 const GOALS = [
   {
     id: 'save_money',
-    title: 'Save me money',
-    description: 'Find subscriptions, fees, and market better alternatives.',
+    title: 'Maximize Liquidity',
+    description: 'Scan signals for recurring waste, trial traps, and hidden fees.',
     icon: Zap,
     color: 'text-primary',
     bg: 'bg-primary/10',
     border: 'border-primary/20',
+    stat: 'Avg. €420 saved/yr'
   },
   {
     id: 'save_time',
-    title: 'Save me time',
-    description: 'Automate negotiations and protocol research.',
+    title: 'Temporal Optimization',
+    description: 'Identify low-value tasks and automate complex research protocols.',
     icon: Clock,
-    color: 'text-accent',
-    bg: 'bg-accent/10',
-    border: 'border-accent/20',
-  },
-  {
-    id: 'analyze_visual',
-    title: 'Analyze Document',
-    description: 'Scan bank statements or receipts for anomalies.',
-    icon: Camera,
     color: 'text-success',
     bg: 'bg-success/10',
     border: 'border-success/20',
+    stat: 'Avg. 14h saved/mo'
+  },
+  {
+    id: 'analyze_visual',
+    title: 'Deep Forensic Audit',
+    description: 'Analyze documents, bank statements, or technical specs for anomalies.',
+    icon: Camera,
+    color: 'text-accent',
+    bg: 'bg-accent/10',
+    border: 'border-accent/20',
+    stat: '0.04ms logic latency'
   }
 ];
 
 export function OnboardingOverlay({ onSelectGoal }: OnboardingOverlayProps) {
   return (
-    <div className="fixed inset-0 z-[100] bg-background/95 backdrop-blur-xl flex items-center justify-center p-6">
-      <motion.div 
-        initial={{ opacity: 0, scale: 0.95 }}
-        animate={{ opacity: 1, scale: 1 }}
-        className="max-w-4xl w-full space-y-12"
-      >
-        <header className="text-center space-y-6">
+    <motion.div 
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0 }}
+      className="fixed inset-0 z-[200] bg-[#FBFBFE]/95 backdrop-blur-3xl flex items-center justify-center p-6 overflow-y-auto"
+    >
+      <div className="max-w-5xl w-full py-12 space-y-16">
+        <header className="text-center space-y-8">
           <motion.div
-            initial={{ y: -20, opacity: 0 }}
-            animate={{ y: 0, opacity: 1 }}
-            className="w-16 h-16 rounded-3xl bg-primary mx-auto flex items-center justify-center text-background shadow-2xl shadow-primary/20"
+            initial={{ scale: 0.8, opacity: 0 }}
+            animate={{ scale: 1, opacity: 1 }}
+            transition={{ duration: 0.5, ease: [0.22, 1, 0.36, 1] }}
+            className="w-20 h-20 rounded-[2.5rem] bg-white border border-slate-100 shadow-xl mx-auto flex items-center justify-center text-primary"
           >
-            <Cpu className="w-8 h-8" />
+            <Cpu className="w-10 h-10" />
           </motion.div>
           
-          <div className="space-y-2">
-            <h1 className="text-5xl md:text-7xl font-bold font-headline tracking-tighter text-white">Select Protocol.</h1>
-            <p className="text-xl text-muted-foreground font-medium uppercase tracking-widest text-[10px] font-bold">Initialize your AI Life Operator intent.</p>
+          <div className="space-y-3">
+            <motion.h1 
+              initial={{ y: 20, opacity: 0 }}
+              animate={{ y: 0, opacity: 1 }}
+              transition={{ delay: 0.2 }}
+              className="text-6xl md:text-8xl font-bold tracking-tighter text-slate-900 leading-[0.85]"
+            >
+              Initialize.<br/>Protocol
+            </motion.h1>
+            <motion.p 
+              initial={{ y: 20, opacity: 0 }}
+              animate={{ y: 0, opacity: 1 }}
+              transition={{ delay: 0.3 }}
+              className="text-lg text-slate-500 font-medium max-w-lg mx-auto"
+            >
+              Select your primary objective to calibrate the Agent Engine for your first autonomous audit.
+            </motion.p>
           </div>
         </header>
 
-        <div className="grid md:grid-cols-3 gap-6">
+        <div className="grid md:grid-cols-3 gap-8">
           {GOALS.map((goal, idx) => (
             <motion.div
               key={goal.id}
-              initial={{ opacity: 0, y: 20 }}
+              initial={{ opacity: 0, y: 30 }}
               animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: idx * 0.1 }}
+              transition={{ delay: 0.4 + (idx * 0.1), ease: [0.22, 1, 0.36, 1] }}
             >
               <Card 
-                className={`premium-card h-full flex flex-col items-center text-center p-8 cursor-pointer transition-all hover:scale-[1.02] active:scale-[0.98] group ${goal.bg} ${goal.border}`}
+                className={`glass-card h-full flex flex-col p-8 cursor-pointer transition-all hover:scale-[1.03] active:scale-[0.98] group relative overflow-hidden border-white/80 shadow-lg hover:shadow-2xl hover:border-primary/20`}
                 onClick={() => onSelectGoal(goal.id)}
               >
-                <div className={`w-14 h-14 rounded-2xl bg-black/20 flex items-center justify-center mb-6 ${goal.color} group-hover:scale-110 transition-transform`}>
-                  <goal.icon className="w-7 h-7" />
+                {/* Background Shimmer */}
+                <div className={`absolute inset-0 ${goal.bg} opacity-0 group-hover:opacity-100 transition-opacity duration-700`} />
+                
+                <div className="relative z-10 space-y-8 flex-1 flex flex-col">
+                  <div className="flex justify-between items-start">
+                    <div className={`w-14 h-14 rounded-2xl bg-white border border-slate-100 flex items-center justify-center ${goal.color} shadow-sm group-hover:scale-110 transition-transform duration-500`}>
+                      <goal.icon className="w-7 h-7" />
+                    </div>
+                    <div className="text-[10px] font-black text-slate-400 uppercase tracking-widest bg-slate-50 px-3 py-1 rounded-full border border-slate-100">
+                      {goal.stat}
+                    </div>
+                  </div>
+
+                  <div className="space-y-2">
+                    <h3 className="text-2xl font-bold tracking-tight text-slate-900 leading-none">{goal.title}</h3>
+                    <p className="text-sm text-slate-500 leading-relaxed font-medium">{goal.description}</p>
+                  </div>
+
+                  <div className="mt-auto pt-8">
+                    <div className={`flex items-center gap-2 text-[10px] font-black uppercase tracking-[0.2em] ${goal.color}`}>
+                      Initialize Node <ChevronRight className="w-3.5 h-3.5 group-hover:translate-x-1 transition-transform" />
+                    </div>
+                  </div>
                 </div>
-                <div className="space-y-2 mb-8">
-                  <h3 className="text-xl font-bold font-headline text-white">{goal.title}</h3>
-                  <p className="text-xs text-muted-foreground leading-relaxed font-medium">{goal.description}</p>
-                </div>
-                <Button variant="ghost" className={`mt-auto w-full rounded-xl uppercase tracking-widest text-[10px] font-bold gap-2 ${goal.color}`}>
-                  Initialize <ArrowRight className="w-3 h-3" />
-                </Button>
               </Card>
             </motion.div>
           ))}
         </div>
 
-        <footer className="flex justify-center items-center gap-3">
-          <ShieldCheck className="w-4 h-4 text-muted-foreground/30" />
-          <p className="text-[9px] font-bold uppercase tracking-[0.4em] text-muted-foreground/30">Secure Logic Sandbox Active</p>
+        <footer className="flex flex-col items-center gap-6 pt-12">
+          <div className="flex items-center gap-3 px-6 py-2 bg-white/40 border border-white/80 rounded-full shadow-sm backdrop-blur-md">
+            <ShieldCheck className="w-4 h-4 text-success" />
+            <p className="text-[10px] font-black uppercase tracking-[0.3em] text-slate-400">Secure Logic Sandbox Active</p>
+          </div>
+          <p className="text-[9px] text-slate-300 font-bold uppercase tracking-widest max-w-xs text-center leading-relaxed">
+            Calibration takes ~4s. Your data is encrypted and used only for extraction logic.
+          </p>
         </footer>
-      </motion.div>
-    </div>
+      </div>
+    </motion.div>
   );
 }

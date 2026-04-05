@@ -25,19 +25,21 @@ import {
   Layout
 } from 'lucide-react';
 import { useFirestore, useUser, addDocumentNonBlocking, useCollection, useMemoFirebase } from '@/firebase';
-import { collection, serverTimestamp, doc, query, orderBy, setDoc } from 'firebase/firestore';
+import { collection, serverTimestamp, doc, query, orderBy, setDoc, limit } from 'firebase/firestore';
 import { motion, AnimatePresence } from 'framer-motion';
 import { cn } from '@/lib/utils';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useToast } from '@/hooks/use-toast';
 import { RichAnalysisCard } from '@/components/chat/RichAnalysisCard';
 import { PaywallOverlay } from '@/components/monetization/PaywallOverlay';
+import { OnboardingOverlay } from '@/components/onboarding/OnboardingOverlay';
 
 export default function ChatPage() {
   const [input, setInput] = useState('');
   const [isProcessing, setIsProcessing] = useState(false);
   const [selectedImage, setSelectedToolImage] = useState<string | null>(null);
   const [showPaywall, setShowPaywall] = useState(false);
+  const [showOnboarding, setShowOnboarding] = useState(false);
   
   const scrollRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -49,6 +51,19 @@ export default function ChatPage() {
   const searchParams = useSearchParams();
   const conversationId = searchParams?.get('c');
   const { toast } = useToast();
+
+  // Check if onboarding is needed
+  const convsQuery = useMemoFirebase(() => {
+    if (!db || !user) return null;
+    return query(collection(db, 'users', user.uid, 'conversations'), limit(1));
+  }, [db, user]);
+  const { data: convs, isLoading: isConvsLoading } = useCollection(convsQuery);
+
+  useEffect(() => {
+    if (!isConvsLoading && convs && convs.length === 0 && !conversationId) {
+      setShowOnboarding(true);
+    }
+  }, [convs, isConvsLoading, conversationId]);
 
   const messagesQuery = useMemoFirebase(() => {
     if (!db || !user || !conversationId) return null;
@@ -79,6 +94,106 @@ export default function ChatPage() {
       const reader = new FileReader();
       reader.onloadend = () => setSelectedToolImage(reader.result as string);
       reader.readAsDataURL(file);
+    }
+  };
+
+  const handleSelectGoal = async (goalId: string) => {
+    if (!user || !db) return;
+    setShowOnboarding(false);
+    setIsProcessing(true);
+
+    const goalMap: Record<string, string> = {
+      'save_money': 'Optimize my expenses and find hidden savings.',
+      'save_time': 'Audit my schedule and automate repetitive tasks.',
+      'analyze_visual': 'Analyze my latest financial statements for anomalies.'
+    };
+
+    const initialIntent = goalMap[goalId] || 'Initialize general audit.';
+    
+    try {
+      const newRef = doc(collection(db, 'users', user.uid, 'conversations'));
+      const activeId = newRef.id;
+      
+      // 1. Initialize Memory
+      await setDoc(doc(db, 'users', user.uid, 'memory', 'main'), {
+        userId: user.uid,
+        goals: [goalId],
+        behaviorSummary: `User initialized with primary focus: ${goalId}.`,
+        lastUpdated: serverTimestamp()
+      }, { merge: true });
+
+      // 2. Create Conversation
+      await setDoc(newRef, { 
+        id: activeId, 
+        userId: user.uid, 
+        title: goalId.replace('_', ' ').toUpperCase(), 
+        createdAt: serverTimestamp(), 
+        updatedAt: serverTimestamp() 
+      });
+
+      router.push(`/?c=${activeId}`);
+
+      // 3. Send Initial Message
+      await addDocumentNonBlocking(collection(db, 'users', user.uid, 'conversations', activeId, 'messages'), {
+        role: 'user',
+        content: initialIntent,
+        timestamp: serverTimestamp()
+      });
+
+      // 4. Trigger Agent
+      const response = await fetch('/api/agent', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ 
+          input: initialIntent, 
+          history: [], 
+          userId: user.uid 
+        }),
+      });
+
+      if (!response.ok) throw new Error("Operational link failed");
+
+      const reader = response.body?.getReader();
+      const decoder = new TextDecoder();
+      let fullContent = "";
+      let currentMetadata: any = null;
+      let buffer = "";
+
+      if (reader) {
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          
+          const chunk = decoder.decode(value, { stream: true });
+          buffer += chunk;
+          const lines = buffer.split('\n');
+          buffer = lines.pop() || "";
+
+          for (const line of lines) {
+            if (line.startsWith("__METADATA__:")) {
+              try {
+                currentMetadata = JSON.parse(line.replace("__METADATA__:", ""));
+              } catch (e) {}
+            } else {
+              fullContent += line + "\n";
+            }
+          }
+        }
+        if (buffer && !buffer.startsWith("__METADATA__:")) fullContent += buffer;
+      }
+
+      await addDocumentNonBlocking(collection(db, 'users', user.uid, 'conversations', activeId, 'messages'), {
+        role: 'assistant',
+        content: fullContent.trim(),
+        timestamp: serverTimestamp(),
+        metadata: currentMetadata
+      });
+
+    } catch (err) {
+      console.error(err);
+      toast({ variant: 'destructive', title: "Onboarding Failed", description: "Could not initialize protocol." });
+    } finally {
+      setIsProcessing(false);
     }
   };
 
@@ -206,6 +321,10 @@ export default function ChatPage() {
 
   return (
     <div className="flex flex-col h-full max-w-4xl mx-auto">
+      <AnimatePresence>
+        {showOnboarding && <OnboardingOverlay onSelectGoal={handleSelectGoal} />}
+      </AnimatePresence>
+
       <div ref={scrollRef} className="flex-1 overflow-y-auto space-y-12 pb-48 pt-10 stealth-scrollbar">
         <AnimatePresence initial={false}>
           {(messages || []).length > 0 ? (
@@ -254,7 +373,7 @@ export default function ChatPage() {
                 </div>
               </motion.div>
             ))
-          ) : (
+          ) : !showOnboarding && (
             <div className="flex flex-col items-center justify-center py-20 text-center space-y-8">
               <div className="w-24 h-24 rounded-[3rem] bg-white border border-slate-100 flex items-center justify-center shadow-xl">
                 <Terminal className="w-10 h-10 text-slate-200" />
