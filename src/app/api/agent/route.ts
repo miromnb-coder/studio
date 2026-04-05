@@ -27,18 +27,19 @@ export async function POST(req: Request) {
       
       // Ensure plan exists in limits, fallback to FREE
       const planKey = (plan || 'FREE').toUpperCase() as keyof typeof PLAN_LIMITS;
-      const limit = PLAN_LIMITS[planKey]?.dailyAgentRuns || 5;
+      const limits = PLAN_LIMITS[planKey] || PLAN_LIMITS.FREE;
+      const limit = limits.dailyAgentRuns;
       
       if (usage.agentRuns >= limit) {
         console.warn(`[ENFORCEMENT] Limit reached for User ${userId} (${usage.agentRuns}/${limit})`);
         return NextResponse.json({ 
           error: 'LIMIT_REACHED',
-          message: "Daily intelligence quota exceeded.",
+          message: "Daily intelligence quota exceeded. Please elevate clearance.",
           usage: { ...usage, limit }
         }, { status: 403 });
       }
       
-      // Increment usage immediately (optimistic but safe for prototype)
+      // Increment usage immediately (optimistic update)
       await SubscriptionService.incrementUsage(firestore, userId);
     }
 

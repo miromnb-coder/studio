@@ -37,7 +37,7 @@ export const PLAN_LIMITS = {
     label: 'Starter'
   },
   PREMIUM: {
-    dailyAgentRuns: 9999,
+    dailyAgentRuns: 9999, // Practically unlimited
     hasAdvancedTools: true,
     memoryRetentionDays: 365,
     price: 19,
@@ -65,21 +65,23 @@ export class SubscriptionService {
       const userData = userSnap.data();
       const plan: UserPlan = (userData?.plan || 'FREE').toUpperCase() as UserPlan;
 
+      // Plan limits from config
+      const limits = PLAN_LIMITS[plan] || PLAN_LIMITS.FREE;
+
       const today = new Date().toISOString().split('T')[0];
       const usageRef = doc(db, 'users', userId, 'usage', today);
       const usageSnap = await getDoc(usageRef);
       const usageData = usageSnap.data();
 
-      const limit = PLAN_LIMITS[plan]?.dailyAgentRuns || 5;
-
       return {
         plan,
         usage: {
           agentRuns: usageData?.agentRuns || 0,
-          limit: limit
+          limit: limits.dailyAgentRuns
         },
         isPremium: plan === 'PREMIUM' || plan === 'STARTER',
-        label: PLAN_LIMITS[plan]?.label || 'Free'
+        label: limits.label,
+        limits
       };
     } catch (e) {
       console.error("[SUBSCRIPTION] Status fetch failed", e);
@@ -112,7 +114,7 @@ export class SubscriptionService {
   }
 
   /**
-   * Updates user plan in database. (Internal/Webhook use)
+   * Updates user plan in database. (Internal/Webhook/Simulated use)
    */
   static async updatePlan(db: Firestore, userId: string, plan: UserPlan) {
     if (!userId) return false;
@@ -122,7 +124,8 @@ export class SubscriptionService {
       await updateDoc(userRef, {
         plan: plan,
         upgradedAt: serverTimestamp(),
-        updatedAt: serverTimestamp()
+        updatedAt: serverTimestamp(),
+        totalSavedOverall: increment(0), // Ensure field exists
       });
       return true;
     } catch (e) {
@@ -132,7 +135,7 @@ export class SubscriptionService {
   }
 
   /**
-   * Legacy simulation method. Use updatePlan for real logic.
+   * Quick upgrade method for testing or legacy calls.
    */
   static async upgradeToPremium(db: Firestore, userId: string) {
     return this.updatePlan(db, userId, 'PREMIUM');
