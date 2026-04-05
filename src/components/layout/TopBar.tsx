@@ -73,7 +73,7 @@ export function TopBar() {
 
   const analysesQuery = useMemoFirebase(() => {
     if (!db || !user) return null;
-    return query(collection(db, 'users', user.uid, 'analyses'), limit(50));
+    return query(collection(db, 'users', user.uid, 'analyses'), limit(100));
   }, [db, user]);
 
   const { data: analyses } = useCollection(analysesQuery);

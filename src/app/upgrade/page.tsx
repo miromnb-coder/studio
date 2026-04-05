@@ -25,10 +25,10 @@ import { UpgradeComparison } from '@/components/upgrade/UpgradeComparison';
 import { UpgradePlanCard } from '@/components/upgrade/UpgradePlanCard';
 import { UpgradeValueMetrics } from '@/components/upgrade/UpgradeValueMetrics';
 import { GlassButton } from '@/components/ui/GlassButton';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { SubscriptionService } from '@/services/subscription-service';
-import { useFirestore, useUser, useDoc, useMemoFirebase } from '@/firebase';
-import { doc, onSnapshot } from 'firebase/firestore';
+import { useFirestore, useUser, useCollection, useMemoFirebase } from '@/firebase';
+import { doc, onSnapshot, collection, query, limit } from 'firebase/firestore';
 import { useToast } from '@/hooks/use-toast';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
@@ -84,6 +84,22 @@ export default function UpgradePage() {
       return () => unsub();
     }
   }, [db, user]);
+
+  const analysesQuery = useMemoFirebase(() => {
+    if (!db || !user) return null;
+    return query(collection(db, 'users', user.uid, 'analyses'), limit(100));
+  }, [db, user]);
+
+  const { data: analyses } = useCollection(analysesQuery);
+
+  const stats = useMemo(() => {
+    const totalSaved = (analyses || []).reduce((acc, a) => acc + (a.estimatedMonthlySavings || 0), 0);
+    return {
+      totalSaved: totalSaved,
+      projectedAnnual: totalSaved * 12,
+      signals: (analyses || []).length * 12 // estimated
+    };
+  }, [analyses]);
 
   const handleSelectPlan = async (planId: string) => {
     if (!user || !db) return;
@@ -183,7 +199,7 @@ export default function UpgradePage() {
             <h3 className="text-[11px] font-black uppercase tracking-[0.4em]">Real-Time Value Signal</h3>
             <div className="h-px w-12 bg-slate-100" />
           </div>
-          <UpgradeValueMetrics />
+          <UpgradeValueMetrics customStats={stats} />
         </section>
 
         {/* Advanced Capabilities Grid */}

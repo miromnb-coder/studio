@@ -1,4 +1,3 @@
-
 "use client";
 
 import { motion, AnimatePresence } from 'framer-motion';
@@ -76,7 +75,7 @@ export function RichAnalysisCard({ data }: RichAnalysisCardProps) {
   const handleExecute = async (item: any, id: string) => {
     // CONTEXTUAL PAYWALL TRIGGER:
     // If user is FREE and there's real money at stake, trigger the paywall
-    if (!isPremium && item.estimatedSavings > 0) {
+    if (!isPremium && (item.estimatedSavings > 0 || item.estimatedMonthlySavings > 0)) {
       setIsPaywallOpen(true);
       return;
     }
@@ -95,7 +94,7 @@ export function RichAnalysisCard({ data }: RichAnalysisCardProps) {
     
     try {
       if (item.copyableMessage) {
-        const recipient = item.title.split(' ')[0].toLowerCase() + "@support.com"; 
+        const recipient = item.title?.split(' ')[0].toLowerCase() + "@support.com"; 
         const success = await GmailService.sendEmail(
           token, 
           recipient, 
@@ -110,6 +109,7 @@ export function RichAnalysisCard({ data }: RichAnalysisCardProps) {
           throw new Error("Transmission failed");
         }
       } else {
+        // Fallback simulated execution for generic tasks
         await new Promise(r => setTimeout(r, 1500));
         setSuccessId(id);
         toast({ title: "Fix Applied", description: "The identified inefficiency has been mitigated." });
@@ -175,7 +175,6 @@ export function RichAnalysisCard({ data }: RichAnalysisCardProps) {
           </div>
         </div>
 
-        {/* PSYCHOLOGICAL TRIGGER: Show value then block the action */}
         {!isPremium && savingsEstimate > 0 && (
           <motion.div 
             initial={{ opacity: 0, y: 10 }}
@@ -239,7 +238,7 @@ export function RichAnalysisCard({ data }: RichAnalysisCardProps) {
                             {item.urgencyLevel || 'Standard'}
                           </Badge>
                           <span className="text-[11px] font-bold text-success uppercase tracking-[0.2em] flex items-center gap-1.5">
-                            <Sparkles className="w-3 h-3" /> Save ${item.estimatedSavings || 0}
+                            <Sparkles className="w-3 h-3" /> Save ${item.estimatedSavings || item.estimatedMonthlySavings || 0}
                           </span>
                         </div>
                       </div>

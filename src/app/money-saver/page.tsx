@@ -1,4 +1,3 @@
-
 "use client";
 
 import { useState, useEffect, useMemo } from 'react';
@@ -16,7 +15,8 @@ import {
   Search,
   FileText,
   Mail,
-  MessageSquare
+  MessageSquare,
+  Terminal
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
@@ -53,7 +53,12 @@ export default function AuditLedgerPage() {
   }, [analyses]);
 
   const projectedYearlySavings = totalMonthlySavings * 12;
-  const efficiencyIndex = analyses && analyses.length > 0 ? Math.min(95, 60 + analyses.length * 5) : 0;
+  const efficiencyIndex = useMemo(() => {
+    if (!analyses || analyses.length === 0) return 0;
+    const completed = analyses.filter(a => a.status === 'completed').length;
+    return Math.round((completed / analyses.length) * 100);
+  }, [analyses]);
+
   const reclaimedHours = (totalMonthlySavings / 50).toFixed(1);
 
   if (!mounted) return null;
@@ -118,7 +123,7 @@ export default function AuditLedgerPage() {
             </div>
             <div className="space-y-1">
                <p className="text-[8px] font-bold uppercase tracking-widest text-muted-foreground">Audit Confidence</p>
-               <p className="text-2xl font-bold text-success tracking-tight">High</p>
+               <p className="text-2xl font-bold text-success tracking-tight">{efficiencyIndex > 50 ? 'High' : 'Medium'}</p>
             </div>
          </Card>
       </section>

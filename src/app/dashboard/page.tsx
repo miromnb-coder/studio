@@ -1,4 +1,3 @@
-
 "use client";
 
 import { SystemCard } from '@/components/systems/SystemCard';

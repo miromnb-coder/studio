@@ -1,4 +1,3 @@
-
 "use client";
 
 import { useState, useRef, useEffect, Suspense } from 'react';
@@ -46,14 +45,14 @@ function ChatContent() {
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   
-  const { user } = useUser();
+  const { user, isUserLoading } = useUser();
   const db = useFirestore();
   const router = useRouter();
   const searchParams = useSearchParams();
   const conversationId = searchParams?.get('c');
   const { toast } = useToast();
 
-  // Check if onboarding is needed
+  // Check if onboarding is needed - rely on collection check
   const convsQuery = useMemoFirebase(() => {
     if (!db || !user) return null;
     return query(collection(db, 'users', user.uid, 'conversations'), limit(1));
@@ -61,10 +60,12 @@ function ChatContent() {
   const { data: convs, isLoading: isConvsLoading } = useCollection(convsQuery);
 
   useEffect(() => {
-    if (!isConvsLoading && convs && convs.length === 0 && !conversationId) {
+    if (!isConvsLoading && !isUserLoading && user && convs && convs.length === 0 && !conversationId) {
       setShowOnboarding(true);
+    } else {
+      setShowOnboarding(false);
     }
-  }, [convs, isConvsLoading, conversationId]);
+  }, [convs, isConvsLoading, isUserLoading, user, conversationId]);
 
   const messagesQuery = useMemoFirebase(() => {
     if (!db || !user || !conversationId) return null;
@@ -99,7 +100,10 @@ function ChatContent() {
   };
 
   const handleSelectGoal = async (goalId: string) => {
-    if (!user || !db) return;
+    if (!user || !db) {
+      router.push('/login');
+      return;
+    }
     setShowOnboarding(false);
     setIsProcessing(true);
 
@@ -250,8 +254,6 @@ function ChatContent() {
         }),
       });
 
-      // CONTEXTUAL PAYWALL TRIGGER:
-      // Catch usage limits and block the interaction with a clear path to upgrade
       if (response.status === 403) {
         setPaywallReason('limit_reached');
         setShowPaywall(true);

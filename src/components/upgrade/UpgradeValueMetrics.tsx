@@ -4,11 +4,19 @@ import { motion } from 'framer-motion';
 import { TrendingUp, Clock, Zap, Target, Sparkles } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
-export function UpgradeValueMetrics() {
+interface MetricsProps {
+  customStats?: {
+    totalSaved: number;
+    projectedAnnual: number;
+    signals: number;
+  }
+}
+
+export function UpgradeValueMetrics({ customStats }: MetricsProps) {
   const metrics = [
-    { label: 'Time Reclaimed', val: '14.2h', sub: 'Projected monthly', icon: Clock, color: 'text-primary', bg: 'bg-primary/5' },
-    { label: 'Liquidity Optimized', val: '€420', sub: 'Potential annual', icon: TrendingUp, color: 'text-success', bg: 'bg-success/5' },
-    { label: 'Signals Scanned', val: '1,280', sub: 'Total logic inputs', icon: Target, color: 'text-accent', bg: 'bg-accent/5' }
+    { label: 'Time Reclaimed', val: customStats ? `${(customStats.totalSaved / 50).toFixed(1)}h` : '0h', sub: 'Projected monthly', icon: Clock, color: 'text-primary', bg: 'bg-primary/5' },
+    { label: 'Liquidity Optimized', val: customStats ? `€${customStats.projectedAnnual}` : '€0', sub: 'Potential annual', icon: TrendingUp, color: 'text-success', bg: 'bg-success/5' },
+    { label: 'Signals Scanned', val: customStats ? customStats.signals.toLocaleString() : '0', sub: 'Total logic inputs', icon: Target, color: 'text-accent', bg: 'bg-accent/5' }
   ];
 
   return (
