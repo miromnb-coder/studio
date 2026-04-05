@@ -11,6 +11,7 @@ export function FloatingAICore() {
   const { state } = useAICore();
   const [isOpen, setIsOpen] = useState(false);
 
+  // Status-based color mapping for the core orb
   const statusColors = useMemo(() => {
     switch (state.status) {
       case 'thinking': return 'from-primary/40 to-blue-400/40 border-primary/40 shadow-primary/20';
@@ -29,74 +30,124 @@ export function FloatingAICore() {
           whileHover={{ scale: 1.05, y: -4 }}
           whileTap={{ scale: 0.95 }}
           onClick={() => setIsOpen(!isOpen)}
+          // 1. BASE CONTINUOUS MOTION: Micro-float and Breathing
+          animate={{
+            scale: [1, 1.04, 1],
+            y: [0, -1.5, 0.5, 0],
+            x: [0, 0.5, -0.5, 0],
+          }}
+          transition={{
+            duration: 6,
+            repeat: Infinity,
+            ease: "easeInOut"
+          }}
           className={cn(
-            "relative w-14 h-14 rounded-[1.75rem] flex items-center justify-center transition-all duration-500",
+            "relative w-14 h-14 rounded-[1.75rem] flex items-center justify-center transition-all duration-700",
             "bg-white/40 backdrop-blur-2xl border shadow-xl ring-1 ring-white/20",
             statusColors
           )}
         >
-          {/* Breathing Glow */}
+          {/* 2. OUTER BREATHING GLOW: Always active, intensity shifts based on state */}
           <motion.div
-            animate={state.status === 'idle' ? {
-              scale: [1, 1.15, 1],
-              opacity: [0.3, 0.6, 0.3],
-            } : {
-              scale: 1,
-              opacity: 0
+            animate={{
+              scale: state.status === 'thinking' ? [1, 1.2, 1] : [1, 1.1, 1],
+              opacity: state.status === 'idle' ? [0.2, 0.4, 0.2] : [0.4, 0.7, 0.4],
             }}
-            transition={{ duration: 4, repeat: Infinity, ease: "easeInOut" }}
+            transition={{ 
+              duration: state.status === 'thinking' ? 2 : 4, 
+              repeat: Infinity, 
+              ease: "easeInOut" 
+            }}
             className={cn(
-              "absolute inset-[-8px] rounded-full blur-xl pointer-events-none",
-              state.status === 'idle' ? 'bg-primary/10' : 'hidden'
+              "absolute inset-[-12px] rounded-full blur-2xl pointer-events-none transition-colors duration-700",
+              state.status === 'error' ? 'bg-danger/20' : 
+              state.status === 'success' ? 'bg-success/20' : 
+              'bg-primary/15'
             )}
           />
 
-          {/* Activity Pulse */}
+          {/* 3. INNER SHIMMER / FLOW LAYER: Sophisticated moving light */}
+          <motion.div 
+            animate={{
+              rotate: [0, 360],
+              opacity: [0.3, 0.6, 0.3],
+            }}
+            transition={{
+              duration: 10,
+              repeat: Infinity,
+              ease: "linear"
+            }}
+            className="absolute inset-1 rounded-[1.5rem] bg-gradient-to-tr from-transparent via-white/30 to-transparent pointer-events-none overflow-hidden"
+          />
+
+          {/* 4. ACTIVITY PULSE: Visible when active */}
           <AnimatePresence>
             {(state.status === 'thinking' || state.status === 'executing') && (
               <motion.div
                 initial={{ scale: 0.8, opacity: 0 }}
-                animate={{ scale: 1.4, opacity: [0, 0.4, 0] }}
+                animate={{ scale: 1.6, opacity: [0, 0.3, 0] }}
                 exit={{ opacity: 0 }}
                 transition={{ duration: 2, repeat: Infinity, ease: "easeOut" }}
                 className={cn(
                   "absolute inset-0 rounded-full blur-md pointer-events-none",
-                  state.status === 'thinking' ? 'bg-primary/20' : 'bg-accent/20'
+                  state.status === 'thinking' ? 'bg-primary/30' : 'bg-accent/30'
                 )}
               />
             )}
           </AnimatePresence>
 
-          {/* Inner Content */}
+          {/* 5. CENTER CORE ELEMENT: State-aware iconography */}
           <div className="relative z-10">
             {state.status === 'thinking' ? (
               <motion.div
-                animate={{ rotate: 360 }}
-                transition={{ duration: 8, repeat: Infinity, ease: "linear" }}
+                animate={{ 
+                  rotate: 360,
+                  scale: [1, 1.1, 1] 
+                }}
+                transition={{ 
+                  rotate: { duration: 8, repeat: Infinity, ease: "linear" },
+                  scale: { duration: 2, repeat: Infinity, ease: "easeInOut" }
+                }}
               >
                 <Cpu className="w-6 h-6 text-primary" />
               </motion.div>
             ) : state.status === 'executing' ? (
               <motion.div
-                animate={{ scale: [1, 1.2, 1], opacity: [0.6, 1, 0.6] }}
-                transition={{ duration: 1.5, repeat: Infinity }}
+                animate={{ 
+                  scale: [1, 1.25, 1], 
+                  opacity: [0.7, 1, 0.7],
+                  filter: ["brightness(1)", "brightness(1.3)", "brightness(1)"]
+                }}
+                transition={{ duration: 1.2, repeat: Infinity, ease: "easeInOut" }}
               >
                 <Sparkles className="w-6 h-6 text-accent" />
               </motion.div>
             ) : state.status === 'success' ? (
-              <motion.div initial={{ scale: 0.5 }} animate={{ scale: 1 }}>
-                <div className="w-2.5 h-2.5 rounded-full bg-success shadow-[0_0_12px_rgba(34,197,94,0.6)]" />
-              </motion.div>
+              <motion.div 
+                initial={{ scale: 0.5, filter: "brightness(2)" }} 
+                animate={{ scale: 1, filter: "brightness(1)" }}
+                className="w-2.5 h-2.5 rounded-full bg-success shadow-[0_0_15px_rgba(34,197,94,0.8)]" 
+              />
             ) : state.status === 'error' ? (
-              <motion.div animate={{ x: [-2, 2, -2, 2, 0] }} transition={{ duration: 0.2 }}>
-                <div className="w-2.5 h-2.5 rounded-full bg-danger shadow-[0_0_12px_rgba(239,68,68,0.6)]" />
-              </motion.div>
+              <motion.div 
+                animate={{ x: [-2, 2, -2, 2, 0], scale: [1, 1.2, 1] }} 
+                transition={{ duration: 0.3 }}
+                className="w-2.5 h-2.5 rounded-full bg-danger shadow-[0_0_15px_rgba(239,68,68,0.8)]" 
+              />
             ) : (
-              <div className="w-2.5 h-2.5 rounded-full bg-slate-300" />
+              // Idle state: subtle internal energy shimmer
+              <div className="relative">
+                <div className="w-2.5 h-2.5 rounded-full bg-slate-300 relative z-10" />
+                <motion.div 
+                  animate={{ scale: [1, 2, 1], opacity: [0.5, 0, 0.5] }}
+                  transition={{ duration: 4, repeat: Infinity }}
+                  className="absolute inset-0 rounded-full bg-slate-200 blur-sm"
+                />
+              </div>
             )}
           </div>
 
-          {/* Floating Badge */}
+          {/* 6. LIVE INDICATOR: Minimalist badge */}
           {state.status !== 'idle' && (
             <motion.div
               initial={{ scale: 0, opacity: 0 }}
