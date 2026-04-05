@@ -13,7 +13,11 @@ import {
   Database,
   Hammer,
   Loader2,
-  CheckCircle2
+  CheckCircle2,
+  Lock,
+  Sparkles,
+  TrendingUp,
+  Clock
 } from 'lucide-react';
 import { UpgradeFeatureCard } from '@/components/upgrade/UpgradeFeatureCard';
 import { UpgradeComparison } from '@/components/upgrade/UpgradeComparison';
@@ -27,12 +31,13 @@ import { doc } from 'firebase/firestore';
 import { useToast } from '@/hooks/use-toast';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
+import { cn } from '@/lib/utils';
 
 const FEATURES = [
   { title: "Unlimited Reasoning", desc: "No daily caps on agent intelligence cycles.", benefit: "Infinite Logic", icon: "BrainCircuit" },
-  { title: "Leak Detector Pro", desc: "Advanced forensic scan for all signals.", benefit: "Max Savings", icon: "Search" },
-  { title: "Neural Memory", desc: "Agent remembers every detail of your setup.", benefit: "Deep Context", icon: "Database" },
-  { title: "Custom Forging", desc: "Create specialized autonomous tools.", benefit: "New Skills", icon: "Hammer" },
+  { title: "Forensic Leak Detector", desc: "Advanced forensic scan for all financial signals.", benefit: "Max Savings", icon: "Search" },
+  { title: "Permanent Neural Memory", desc: "Agent remembers every detail of your setup.", benefit: "Deep Context", icon: "Database" },
+  { title: "Custom Protocol Forging", desc: "Create specialized autonomous tools.", benefit: "New Skills", icon: "Hammer" },
 ];
 
 export default function UpgradePage() {
@@ -92,8 +97,9 @@ export default function UpgradePage() {
   const currentPlan = profile?.plan || 'FREE';
 
   return (
-    <div className="min-h-screen bg-background pb-32">
-      <header className="fixed top-0 inset-x-0 z-50 h-20 bg-white/40 backdrop-blur-3xl border-b border-white/60 flex items-center px-8 justify-between">
+    <div className="min-h-screen bg-[#FBFBFE] pb-48 selection:bg-primary/10">
+      {/* Header Overlay */}
+      <header className="fixed top-0 inset-x-0 z-[100] h-20 bg-white/40 backdrop-blur-3xl border-b border-white/60 flex items-center px-8 justify-between">
         <Link href="/dashboard" className="flex items-center gap-2 text-[10px] font-bold uppercase tracking-widest text-slate-400 hover:text-slate-900 transition-colors group">
           <ChevronLeft className="w-4 h-4 group-hover:-translate-x-1 transition-transform" />
           Back to Operator
@@ -105,13 +111,14 @@ export default function UpgradePage() {
           <span className="text-sm font-black tracking-tighter text-slate-900 uppercase">Operator Ultra</span>
         </div>
         <div className="hidden sm:flex items-center gap-2 px-3 py-1 bg-slate-50 border border-slate-100 rounded-full">
-          <span className="text-[8px] font-bold text-slate-400 uppercase tracking-widest">Clearance:</span>
+          <span className="text-[8px] font-bold text-slate-400 uppercase tracking-widest">Active Clearance:</span>
           <span className="text-[8px] font-bold text-primary uppercase tracking-widest">{currentPlan}</span>
         </div>
       </header>
 
-      <main className="max-w-5xl mx-auto pt-40 px-6 space-y-32">
-        <section className="text-center space-y-8">
+      <main className="max-w-6xl mx-auto pt-40 px-6 space-y-32">
+        {/* Hero Section */}
+        <section className="text-center space-y-10">
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
@@ -125,7 +132,7 @@ export default function UpgradePage() {
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.1 }}
-            className="text-6xl md:text-8xl font-black tracking-tighter text-slate-900 leading-[0.85]"
+            className="text-7xl md:text-9xl font-black tracking-tighter text-slate-900 leading-[0.8] mb-4"
           >
             Maximize your<br/>Intelligence.
           </motion.h1>
@@ -136,22 +143,45 @@ export default function UpgradePage() {
             transition={{ delay: 0.2 }}
             className="text-xl text-slate-500 font-medium max-w-2xl mx-auto leading-relaxed"
           >
-            Ultra clearance removes daily cognitive limits and enables forensic-grade automation for your entire digital life.
+            Ultra access removes daily cognitive limits and enables forensic-grade automation for your entire digital life.
           </motion.p>
         </section>
 
+        {/* Value Telemetry Section */}
         <section className="space-y-12">
           <div className="flex items-center justify-center gap-4 text-slate-400">
+            <div className="h-px w-12 bg-slate-100" />
             <Activity className="w-5 h-5" />
-            <h3 className="text-[11px] font-black uppercase tracking-[0.4em]">Historical Yield</h3>
+            <h3 className="text-[11px] font-black uppercase tracking-[0.4em]">Intelligence Telemetry</h3>
+            <div className="h-px w-12 bg-slate-100" />
           </div>
           <UpgradeValueMetrics />
         </section>
 
-        <section id="plans" className="space-y-16 scroll-mt-32">
+        {/* Advanced Capabilities Grid */}
+        <section className="space-y-16">
           <div className="text-center space-y-2">
-            <h2 className="text-5xl font-black tracking-tighter text-slate-900">Select your level.</h2>
-            <p className="text-sm font-bold text-slate-400 uppercase tracking-widest">Flexible monthly cognitive protocols</p>
+            <h3 className="text-4xl font-bold tracking-tighter text-slate-900">Advanced Protocols</h3>
+            <p className="text-sm text-slate-400 font-bold uppercase tracking-widest">Exclusive to Ultra Clearance Users</p>
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+            {FEATURES.map((f, i) => (
+              <UpgradeFeatureCard key={i} {...f} idx={i} />
+            ))}
+          </div>
+        </section>
+
+        {/* Comparison Table */}
+        <section className="py-20 bg-primary/5 rounded-[4rem] px-8 md:px-16 border border-primary/10 relative overflow-hidden">
+          <div className="absolute top-0 right-0 w-64 h-64 bg-primary/5 rounded-full blur-3xl -mr-32 -mt-32" />
+          <UpgradeComparison />
+        </section>
+
+        {/* Pricing Cards */}
+        <section id="plans" className="space-y-20 scroll-mt-32">
+          <div className="text-center space-y-4">
+            <h2 className="text-6xl font-black tracking-tighter text-slate-900">Select your level.</h2>
+            <p className="text-sm font-bold text-slate-400 uppercase tracking-widest">Flexible monthly cognitive protocols. Cancel anytime.</p>
           </div>
           
           <div className="grid grid-cols-1 md:grid-cols-2 gap-8 max-w-4xl mx-auto">
@@ -159,7 +189,12 @@ export default function UpgradePage() {
               name="Starter" 
               price="€9" period="/mo" 
               description="Boost your efficiency core."
-              features={["20 Runs / Day", "Advanced Tool Access", "30 Day Neural Memory", "Priority Support"]}
+              features={[
+                "20 Reasoning Runs / Day",
+                "Advanced Tool Access",
+                "30 Day Neural Memory",
+                "Priority Support Access"
+              ]}
               onSelect={() => handleSelectPlan('starter')}
               loading={loadingPlan === 'starter'}
               isPopular={false}
@@ -169,52 +204,55 @@ export default function UpgradePage() {
               price="€19" period="/mo" 
               description="Full cognitive automation."
               isPopular
-              features={["Unlimited Reasoning", "Full Marketplace Access", "Permanent Neural Memory", "Priority Tool Forge", "Early Feature Access"]}
+              features={[
+                "Unlimited Reasoning Cycles",
+                "Full Marketplace Access",
+                "Permanent Neural Memory",
+                "Priority Protocol Forge",
+                "Early Beta Feature Access"
+              ]}
               onSelect={() => handleSelectPlan('premium')}
               loading={loadingPlan === 'premium'}
             />
           </div>
         </section>
 
-        <section className="space-y-16">
-          <div className="text-center space-y-2">
-            <h3 className="text-3xl font-bold tracking-tighter text-slate-900">Advanced Capabilities</h3>
-            <p className="text-sm text-slate-400 font-bold uppercase tracking-widest">Forensic logic for Ultra users</p>
+        {/* Trust & Security */}
+        <footer className="text-center space-y-8 pt-20 border-t border-slate-100">
+          <div className="flex flex-wrap items-center justify-center gap-12 opacity-40">
+            <div className="flex items-center gap-3">
+              <ShieldCheck className="w-6 h-6" />
+              <span className="text-[10px] font-bold uppercase tracking-widest">Military-Grade Security</span>
+            </div>
+            <div className="flex items-center gap-3">
+              <Lock className="w-6 h-6" />
+              <span className="text-[10px] font-bold uppercase tracking-widest">Encrypted Billing</span>
+            </div>
+            <div className="flex items-center gap-3">
+              <Sparkles className="w-6 h-6" />
+              <span className="text-[10px] font-bold uppercase tracking-widest">AI Verified</span>
+            </div>
           </div>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-            {FEATURES.map((f, i) => (
-              <UpgradeFeatureCard key={i} {...f} idx={i} />
-            ))}
-          </div>
-        </section>
-
-        <section className="py-20 bg-primary/5 rounded-[4rem] px-8 md:px-12 border border-primary/10">
-          <UpgradeComparison />
-        </section>
-
-        <footer className="text-center space-y-6 pt-20 border-t border-slate-100">
-          <div className="flex items-center justify-center gap-3">
-            <ShieldCheck className="w-6 h-6 text-success" />
-            <p className="text-sm font-bold text-slate-900">Secure Protocol via Stripe Encryption</p>
-          </div>
-          <p className="text-xs text-slate-400 max-w-sm mx-auto font-medium">
-            Subscriptions renew automatically. Manage or cancel anytime via your billing dashboard.
+          <p className="text-xs text-slate-400 max-w-md mx-auto font-medium leading-relaxed">
+            Subscriptions are billed monthly. You can manage or terminate your session anytime via the integration panel.
           </p>
         </footer>
       </main>
 
+      {/* Fixed Sticky CTA */}
       <motion.div 
         initial={{ y: 100 }}
         animate={{ y: 0 }}
-        className="fixed bottom-8 left-1/2 -translate-x-1/2 w-full max-w-lg px-6 z-50"
+        className="fixed bottom-8 left-1/2 -translate-x-1/2 w-full max-w-lg px-6 z-[150]"
       >
         <GlassButton 
           onClick={() => {
             const el = document.getElementById('plans');
             el?.scrollIntoView({ behavior: 'smooth' });
           }}
-          className="w-full !h-16 !text-lg !rounded-[2.5rem] shadow-2xl shadow-primary/20 group relative overflow-hidden"
+          className="w-full !h-16 !text-lg !rounded-[2.5rem] shadow-[0_32px_64px_-12px_rgba(59,130,246,0.3)] group relative overflow-hidden bg-primary border-0 text-white"
         >
+          <div className="absolute inset-0 bg-gradient-to-tr from-white/0 via-white/20 to-white/0 translate-x-[-100%] group-hover:translate-x-[100%] transition-transform duration-1000" />
           Elevate Clearance Now
           <ArrowRight className="ml-3 w-5 h-5 group-hover:translate-x-1 transition-transform" />
         </GlassButton>
