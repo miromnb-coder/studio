@@ -153,19 +153,19 @@ function ChatContent() {
               <motion.div 
                 initial={{ scale: 0.8, opacity: 0 }}
                 animate={{ scale: 1, opacity: 1 }}
-                className="w-32 h-32 rounded-full bg-white shadow-[0_20px_50px_rgba(0,0,0,0.05)] border border-slate-100 flex items-center justify-center text-slate-300"
+                className="w-24 h-24 sm:w-32 sm:h-32 rounded-full bg-white shadow-[0_20px_50px_rgba(0,0,0,0.05)] border border-slate-100 flex items-center justify-center text-slate-300"
               >
                 <div className="flex items-center gap-1">
-                  <span className="text-3xl font-light tracking-tighter">&gt;_</span>
+                  <span className="text-2xl sm:text-3xl font-light tracking-tighter">&gt;_</span>
                 </div>
               </motion.div>
               
               {/* Header Text */}
-              <div className="space-y-6">
-                <h2 className="text-5xl md:text-8xl font-black tracking-tighter text-slate-900 leading-[0.9] text-center">
+              <div className="space-y-6 w-full max-w-md mx-auto">
+                <h2 className="text-4xl sm:text-6xl md:text-8xl font-black tracking-tighter text-slate-900 leading-[0.9] text-center break-words">
                   Intelligence<br/>Hub
                 </h2>
-                <p className="text-[9px] md:text-[11px] font-black uppercase tracking-[0.6em] text-slate-400">
+                <p className="text-[8px] sm:text-[10px] md:text-[11px] font-black uppercase tracking-[0.4em] sm:tracking-[0.6em] text-slate-400 whitespace-nowrap">
                   AUTONOMOUS FORGE ACTIVE
                 </p>
               </div>
@@ -181,9 +181,9 @@ function ChatContent() {
       </div>
 
       {/* Input Section */}
-      <div className="fixed bottom-10 left-1/2 -translate-x-1/2 w-full max-w-2xl px-6 z-50">
+      <div className="fixed bottom-6 sm:bottom-10 left-1/2 -translate-x-1/2 w-full max-w-2xl px-4 sm:px-6 z-50">
         <div className="relative">
-          <div className="flex items-center gap-4 bg-white/80 backdrop-blur-3xl border border-white/80 shadow-[0_32px_64px_-16px_rgba(0,0,0,0.1)] rounded-[2.5rem] px-6 py-4">
+          <div className="flex items-center gap-2 sm:gap-4 bg-white/80 backdrop-blur-3xl border border-white/80 shadow-[0_32px_64px_-16px_rgba(0,0,0,0.1)] rounded-[2rem] sm:rounded-[2.5rem] px-4 sm:px-6 py-3 sm:py-4">
             <input 
               type="file" 
               ref={fileInputRef} 
@@ -193,7 +193,7 @@ function ChatContent() {
             />
             <button 
               onClick={() => fileInputRef.current?.click()}
-              className="text-slate-300 hover:text-slate-500 transition-colors"
+              className="text-slate-300 hover:text-slate-500 transition-colors shrink-0"
             >
               <ImageIcon className="w-5 h-5" />
             </button>
@@ -204,14 +204,14 @@ function ChatContent() {
               value={input}
               onChange={(e) => setInput(e.target.value)}
               onKeyDown={handleKeyDown}
-              placeholder="Describe intent or ask for analysis..."
+              placeholder="Describe intent..."
               className="flex-1 bg-transparent border-0 focus:ring-0 text-sm font-medium text-slate-700 placeholder:text-slate-300 resize-none py-1 max-h-[200px] stealth-scrollbar"
             />
 
             {(input.trim() || selectedImage) && (
               <button 
                 onClick={sendMessage}
-                className="w-10 h-10 rounded-full bg-primary flex items-center justify-center text-white shadow-lg active:scale-95 transition-all"
+                className="w-10 h-10 rounded-full bg-primary flex items-center justify-center text-white shadow-lg active:scale-95 transition-all shrink-0"
               >
                 <ArrowRight className="w-5 h-5" />
               </button>

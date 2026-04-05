@@ -1,29 +1,24 @@
 
 "use client";
 
-import { useState, useCallback, useMemo, useEffect } from 'react';
-import { Bell, User, X, Zap, LogOut, ShieldCheck, TrendingUp, Menu, Star, ArrowRight, Plus, Search, Clock, Activity, History, MessageSquare, Trash2, Loader2 } from 'lucide-react';
-import { useUser, useFirestore, useCollection, useMemoFirebase } from '@/firebase';
-import { collection, query, limit, orderBy, deleteDoc, doc, onSnapshot } from 'firebase/firestore';
+import { useState, useCallback, useEffect } from 'react';
+import { Bell, User, X, LogOut, Star, ArrowRight, Plus, History, Menu } from 'lucide-react';
+import { useUser, useFirestore } from '@/firebase';
+import { doc, onSnapshot } from 'firebase/firestore';
 import { FloatingNavMenu } from './FloatingNavMenu';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
-import { Badge } from '@/components/ui/badge';
 import { getAuth, signOut } from 'firebase/auth';
-import { useRouter, useSearchParams } from 'next/navigation';
+import { useRouter } from 'next/navigation';
 import { SubscriptionService } from '@/services/subscription-service';
 import { cn } from '@/lib/utils';
-import { ScrollArea } from '@/components/ui/scroll-area';
 
 export function TopBar() {
   const { user } = useUser();
   const db = useFirestore();
   const router = useRouter();
-  const searchParams = useSearchParams();
-  const activeId = searchParams?.get('c');
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [status, setStatus] = useState<any>(null);
-  const [isDeleting, setIsDeleting] = useState<string | null>(null);
 
   useEffect(() => {
     if (db && user) {
@@ -48,7 +43,7 @@ export function TopBar() {
     <button 
       onClick={onClick}
       className={cn(
-        "w-10 h-10 rounded-full bg-white flex items-center justify-center text-slate-400 border border-slate-100 shadow-sm hover:bg-slate-50 transition-all active:scale-95",
+        "w-9 h-9 sm:w-10 sm:h-10 rounded-full bg-white flex items-center justify-center text-slate-400 border border-slate-100 shadow-sm hover:bg-slate-50 transition-all active:scale-95 shrink-0",
         className
       )}
     >
@@ -58,11 +53,11 @@ export function TopBar() {
 
   return (
     <>
-      <header className="fixed top-4 md:top-6 left-1/2 -translate-x-1/2 z-[150] w-full max-w-6xl px-4 pointer-events-none">
-        <div className="flex items-center justify-between w-full pointer-events-auto">
+      <header className="fixed top-4 sm:top-6 left-0 right-0 z-[150] px-4 pointer-events-none flex justify-center">
+        <div className="w-full max-w-6xl flex items-center justify-between pointer-events-auto">
           
           {/* Left Buttons */}
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-1.5 sm:gap-2">
             <NavButton icon={isMenuOpen ? X : Menu} onClick={toggleMenu} />
             <Popover>
               <PopoverTrigger asChild>
@@ -85,14 +80,14 @@ export function TopBar() {
             whileHover={{ scale: 1.05 }}
             whileTap={{ scale: 0.95 }}
             onClick={() => router.push('/upgrade')}
-            className="h-10 px-5 rounded-full bg-[#4F95FF] flex items-center gap-2 text-white shadow-[0_8px_30px_rgb(79,149,255,0.3)] active:scale-95 transition-all"
+            className="h-9 sm:h-10 px-4 sm:px-5 rounded-full bg-[#4F95FF] flex items-center gap-2 text-white shadow-[0_8px_30px_rgb(79,149,255,0.3)] active:scale-95 transition-all"
           >
             <Star className="w-3.5 h-3.5 fill-white" />
             <ArrowRight className="w-3.5 h-3.5" />
           </motion.button>
 
           {/* Right Buttons */}
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-1.5 sm:gap-2">
             <Popover>
               <PopoverTrigger asChild>
                 <NavButton icon={Bell} />
@@ -104,7 +99,7 @@ export function TopBar() {
 
             <Popover>
               <PopoverTrigger asChild>
-                <button className="w-10 h-10 rounded-full overflow-hidden border-2 border-white shadow-md ring-1 ring-slate-100 active:scale-95 transition-transform">
+                <button className="w-9 h-9 sm:w-10 sm:h-10 rounded-full overflow-hidden border-2 border-white shadow-md ring-1 ring-slate-100 active:scale-95 transition-transform shrink-0">
                   {user?.uid ? (
                     <img src={`https://picsum.photos/seed/${user.uid}/40/40`} alt="User" className="w-full h-full object-cover" />
                   ) : (
