@@ -26,6 +26,7 @@ import { OnboardingOverlay } from '@/components/onboarding/OnboardingOverlay';
 import { GlassCard } from '@/components/ui/GlassCard';
 import { GlassButton } from '@/components/ui/GlassButton';
 import { useAICore } from '@/components/ai-core/AICoreContext';
+import { AdaptiveAICore } from '@/components/ai-core/AdaptiveAICore';
 
 function ChatContent() {
   const [input, setInput] = useState('');
@@ -362,6 +363,8 @@ function ChatContent() {
     }
   };
 
+  const hasMessages = (messages || []).length > 0;
+
   return (
     <div className="flex flex-col h-full max-w-4xl mx-auto">
       <AnimatePresence>
@@ -370,7 +373,7 @@ function ChatContent() {
 
       <div ref={scrollRef} className="flex-1 overflow-y-auto space-y-12 pb-48 pt-10 stealth-scrollbar">
         <AnimatePresence initial={false}>
-          {(messages || []).length > 0 ? (
+          {hasMessages ? (
             messages!.map((msg, idx) => (
               <motion.div 
                 key={msg.id || idx} 
@@ -418,9 +421,7 @@ function ChatContent() {
             ))
           ) : !showOnboarding && (
             <div className="flex flex-col items-center justify-center py-20 text-center space-y-8">
-              <div className="w-24 h-24 rounded-[3rem] bg-white border border-slate-100 flex items-center justify-center shadow-xl">
-                <Terminal className="w-10 h-10 text-slate-200" />
-              </div>
+              <AdaptiveAICore variant="hero" />
               <div className="space-y-2">
                 <h2 className="text-5xl font-bold tracking-tighter text-slate-900 leading-none">Intelligence Hub</h2>
                 <p className="text-xs font-bold text-slate-400 uppercase tracking-[0.4em]">Autonomous Forge Active</p>

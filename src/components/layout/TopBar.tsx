@@ -16,6 +16,7 @@ import { cn } from '@/lib/utils';
 import { Progress } from '@/components/ui/progress';
 import { UpgradeButton } from '@/components/upgrade/UpgradeButton';
 import { ScrollArea } from '@/components/ui/scroll-area';
+import { AdaptiveAICore } from '@/components/ai-core/AdaptiveAICore';
 
 export function TopBar() {
   const { user } = useUser();
@@ -94,6 +95,8 @@ export function TopBar() {
     return Math.min(100, Math.max(0, (runs / limit) * 100)) || 0;
   }, [status]);
 
+  const showCompactCore = !!activeId;
+
   return (
     <>
       <header className="fixed top-4 md:top-6 left-1/2 -translate-x-1/2 z-[150] w-[calc(100%-1rem)] md:w-[calc(100%-2rem)] max-w-6xl pointer-events-none">
@@ -113,50 +116,18 @@ export function TopBar() {
               <span className="text-[10px] font-black uppercase tracking-[0.1em] hidden sm:block">Menu</span>
             </motion.button>
             
-            <Popover>
-              <PopoverTrigger asChild>
-                <button className="w-10 h-10 md:w-11 md:h-11 rounded-full bg-white/60 hover:bg-white flex items-center justify-center text-slate-400 hover:text-primary transition-all border border-slate-200/50 relative">
-                  <History className="w-4 h-4" />
-                  {historyItems && historyItems.length > 0 && <span className="absolute top-2.5 right-2.5 w-1.5 h-1.5 bg-primary rounded-full border border-white" />}
-                </button>
-              </PopoverTrigger>
-              <PopoverContent className="w-72 glass-panel p-0 shadow-2xl mt-4 rounded-[2.5rem] border-white/60 overflow-hidden" align="start">
-                <div className="p-5 border-b border-slate-100/60 bg-white/40">
-                  <p className="text-[10px] font-black uppercase tracking-[0.3em] text-slate-400">Intelligence History</p>
-                </div>
-                <ScrollArea className="h-[350px]">
-                  <div className="p-2 space-y-1">
-                    {isHistoryLoading ? (
-                      <div className="flex justify-center py-12"><Loader2 className="w-6 h-6 text-primary/30 animate-spin" /></div>
-                    ) : historyItems && historyItems.length > 0 ? (
-                      historyItems.map((conv) => (
-                        <div key={conv.id} onClick={() => router.push(`/?c=${conv.id}`)} className={cn("group flex items-center justify-between p-3.5 rounded-2xl transition-all cursor-pointer border border-transparent", activeId === conv.id ? "bg-primary/5 border-primary/10 text-primary" : "hover:bg-slate-50 text-slate-600")}>
-                          <div className="flex items-center gap-3 overflow-hidden">
-                            <MessageSquare className={cn("w-3.5 h-3.5 shrink-0", activeId === conv.id ? "text-primary" : "text-slate-300")} />
-                            <span className="text-[11px] font-bold truncate pr-2 tracking-tight">{conv.title || 'Untitled Session'}</span>
-                          </div>
-                          <button onClick={(e) => handleDeleteConversation(e, conv.id)} disabled={isDeleting === conv.id} className="opacity-0 group-hover:opacity-100 p-1.5 hover:bg-danger/10 hover:text-danger rounded-xl transition-all">
-                            {isDeleting === conv.id ? <Loader2 className="w-3 h-3 animate-spin" /> : <Trash2 className="w-3 h-3" />}
-                          </button>
-                        </div>
-                      ))
-                    ) : (
-                      <div className="py-16 text-center space-y-3 opacity-40">
-                        <History className="w-10 h-10 mx-auto text-slate-200" />
-                        <p className="text-[9px] font-black uppercase tracking-widest text-slate-400">Zero session signals</p>
-                      </div>
-                    )}
-                  </div>
-                </ScrollArea>
-                <div className="p-4 bg-slate-50/50 border-t border-slate-100/60">
-                  <button onClick={() => router.push('/')} className="w-full py-3 rounded-xl bg-white border border-slate-200 shadow-sm text-[9px] font-black uppercase tracking-[0.2em] text-slate-600 hover:text-primary transition-all">New Node</button>
-                </div>
-              </PopoverContent>
-            </Popover>
-
-            <button onClick={() => router.push('/')} className="w-10 h-10 md:w-11 md:h-11 rounded-full bg-white/60 hover:bg-white flex items-center justify-center text-slate-400 hover:text-primary transition-all border border-slate-200/50">
-              <Plus className="w-4 h-4" />
-            </button>
+            <AnimatePresence>
+              {showCompactCore && (
+                <motion.div
+                  initial={{ scale: 0, opacity: 0, x: -20 }}
+                  animate={{ scale: 1, opacity: 1, x: 0 }}
+                  exit={{ scale: 0, opacity: 0, x: -20 }}
+                  className="ml-1"
+                >
+                  <AdaptiveAICore variant="compact" />
+                </motion.div>
+              )}
+            </AnimatePresence>
           </div>
 
           <div className="flex items-center gap-2 md:gap-4 flex-1 justify-center px-2">
@@ -199,9 +170,46 @@ export function TopBar() {
           </div>
 
           <div className="flex items-center gap-1 md:gap-2 shrink-0">
-            <button onClick={() => router.push('/dashboard')} className="hidden sm:flex w-10 h-10 rounded-full items-center justify-center text-slate-400 hover:bg-white/60 transition-all">
-              <Search className="w-4 h-4" />
-            </button>
+            <Popover>
+              <PopoverTrigger asChild>
+                <button className="w-10 h-10 md:w-11 md:h-11 rounded-full bg-white/60 hover:bg-white flex items-center justify-center text-slate-400 hover:text-primary transition-all border border-slate-200/50 relative">
+                  <History className="w-4 h-4" />
+                  {historyItems && historyItems.length > 0 && <span className="absolute top-2.5 right-2.5 w-1.5 h-1.5 bg-primary rounded-full border border-white" />}
+                </button>
+              </PopoverTrigger>
+              <PopoverContent className="w-72 glass-panel p-0 shadow-2xl mt-4 rounded-[2.5rem] border-white/60 overflow-hidden" align="end">
+                <div className="p-5 border-b border-slate-100/60 bg-white/40">
+                  <p className="text-[10px] font-black uppercase tracking-[0.3em] text-slate-400">Intelligence History</p>
+                </div>
+                <ScrollArea className="h-[350px]">
+                  <div className="p-2 space-y-1">
+                    {isHistoryLoading ? (
+                      <div className="flex justify-center py-12"><Loader2 className="w-6 h-6 text-primary/30 animate-spin" /></div>
+                    ) : historyItems && historyItems.length > 0 ? (
+                      historyItems.map((conv) => (
+                        <div key={conv.id} onClick={() => router.push(`/?c=${conv.id}`)} className={cn("group flex items-center justify-between p-3.5 rounded-2xl transition-all cursor-pointer border border-transparent", activeId === conv.id ? "bg-primary/5 border-primary/10 text-primary" : "hover:bg-slate-50 text-slate-600")}>
+                          <div className="flex items-center gap-3 overflow-hidden">
+                            <MessageSquare className={cn("w-3.5 h-3.5 shrink-0", activeId === conv.id ? "text-primary" : "text-slate-300")} />
+                            <span className="text-[11px] font-bold truncate pr-2 tracking-tight">{conv.title || 'Untitled Session'}</span>
+                          </div>
+                          <button onClick={(e) => handleDeleteConversation(e, conv.id)} disabled={isDeleting === conv.id} className="opacity-0 group-hover:opacity-100 p-1.5 hover:bg-danger/10 hover:text-danger rounded-xl transition-all">
+                            {isDeleting === conv.id ? <Loader2 className="w-3 h-3 animate-spin" /> : <Trash2 className="w-3 h-3" />}
+                          </button>
+                        </div>
+                      ))
+                    ) : (
+                      <div className="py-16 text-center space-y-3 opacity-40">
+                        <History className="w-10 h-10 mx-auto text-slate-200" />
+                        <p className="text-[9px] font-black uppercase tracking-widest text-slate-400">Zero session signals</p>
+                      </div>
+                    )}
+                  </div>
+                </ScrollArea>
+                <div className="p-4 bg-slate-50/50 border-t border-slate-100/60">
+                  <button onClick={() => router.push('/')} className="w-full py-3 rounded-xl bg-white border border-slate-200 shadow-sm text-[9px] font-black uppercase tracking-[0.2em] text-slate-600 hover:text-primary transition-all">New Node</button>
+                </div>
+              </PopoverContent>
+            </Popover>
 
             <Popover>
               <PopoverTrigger asChild>

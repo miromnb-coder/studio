@@ -2,7 +2,6 @@
 
 import { ReactNode, memo, Suspense } from 'react';
 import { TopBar } from './TopBar';
-import { FloatingAICore } from '@/components/ai-core/FloatingAICore';
 import { motion, AnimatePresence } from 'framer-motion';
 
 const BackgroundElements = memo(() => (
@@ -51,9 +50,6 @@ export function AppShell({ children }: { children: ReactNode }) {
           </AnimatePresence>
         </div>
       </main>
-
-      {/* Persistent Live AI Core */}
-      <FloatingAICore />
     </div>
   );
 }
