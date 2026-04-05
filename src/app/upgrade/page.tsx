@@ -1,4 +1,3 @@
-
 "use client";
 
 import { motion } from 'framer-motion';
@@ -12,16 +11,19 @@ import {
   BrainCircuit,
   Search,
   Database,
-  Hammer
+  Hammer,
+  Loader2,
+  CheckCircle2
 } from 'lucide-react';
 import { UpgradeFeatureCard } from '@/components/upgrade/UpgradeFeatureCard';
 import { UpgradeComparison } from '@/components/upgrade/UpgradeComparison';
 import { UpgradePlanCard } from '@/components/upgrade/UpgradePlanCard';
 import { UpgradeValueMetrics } from '@/components/upgrade/UpgradeValueMetrics';
 import { GlassButton } from '@/components/ui/GlassButton';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { SubscriptionService } from '@/services/subscription-service';
-import { useFirestore, useUser } from '@/firebase';
+import { useFirestore, useUser, useDoc, useMemoFirebase } from '@/firebase';
+import { doc } from 'firebase/firestore';
 import { useToast } from '@/hooks/use-toast';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
@@ -34,24 +36,60 @@ const FEATURES = [
 ];
 
 export default function UpgradePage() {
-  const [loading, setLoading] = useState(false);
-  const { user } = useUser();
+  const [loadingPlan, setLoadingPlan] = useState<string | null>(null);
+  const { user, isUserLoading } = useUser();
   const db = useFirestore();
   const { toast } = useToast();
   const router = useRouter();
 
-  const handleUpgrade = async () => {
-    if (!user || !db) return;
-    setLoading(true);
-    const success = await SubscriptionService.upgradeToPremium(db, user.uid);
-    if (success) {
-      toast({ title: "Welcome to Ultra", description: "Clearance level elevated successfully." });
-      router.push('/dashboard');
-    } else {
-      toast({ variant: 'destructive', title: "Sync Failed", description: "Could not update plan. Please retry." });
+  const userRef = useMemoFirebase(() => {
+    if (!db || !user) return null;
+    return doc(db, 'users', user.uid);
+  }, [db, user]);
+
+  const { data: profile } = useDoc(userRef);
+
+  useEffect(() => {
+    if (!isUserLoading && !user) {
+      router.push('/login?redirect=/upgrade');
     }
-    setLoading(false);
+  }, [user, isUserLoading, router]);
+
+  const handleSelectPlan = async (planId: string) => {
+    if (!user || !db) return;
+    setLoadingPlan(planId);
+    
+    try {
+      const response = await fetch('/api/checkout', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId: user.uid, planId }),
+      });
+
+      const result = await response.json();
+
+      if (result.success) {
+        toast({ title: "Protocol Elevated", description: `Welcome to ${planId.toUpperCase()}. Your clearance is updated.` });
+        router.push(result.redirectUrl || '/dashboard');
+      } else {
+        throw new Error(result.error || "Checkout failed");
+      }
+    } catch (err: any) {
+      toast({ variant: 'destructive', title: "Sync Failed", description: err.message });
+    } finally {
+      setLoadingPlan(null);
+    }
   };
+
+  if (isUserLoading || !user) {
+    return (
+      <div className="min-h-screen bg-background flex flex-col items-center justify-center">
+        <Loader2 className="w-8 h-8 text-primary animate-spin" />
+      </div>
+    );
+  }
+
+  const currentPlan = profile?.plan || 'FREE';
 
   return (
     <div className="min-h-screen bg-background pb-32">
@@ -64,9 +102,12 @@ export default function UpgradePage() {
           <div className="w-8 h-8 rounded-xl bg-primary flex items-center justify-center text-white shadow-lg shadow-primary/20">
             <Star className="w-4 h-4 fill-white" />
           </div>
-          <span className="text-sm font-black tracking-tighter text-slate-900">Operator Ultra</span>
+          <span className="text-sm font-black tracking-tighter text-slate-900 uppercase">Operator Ultra</span>
         </div>
-        <div className="w-24" /> {/* Spacer */}
+        <div className="hidden sm:flex items-center gap-2 px-3 py-1 bg-slate-50 border border-slate-100 rounded-full">
+          <span className="text-[8px] font-bold text-slate-400 uppercase tracking-widest">Clearance:</span>
+          <span className="text-[8px] font-bold text-primary uppercase tracking-widest">{currentPlan}</span>
+        </div>
       </header>
 
       <main className="max-w-5xl mx-auto pt-40 px-6 space-y-32">
@@ -77,7 +118,7 @@ export default function UpgradePage() {
             className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-primary/5 border border-primary/10 text-primary text-[10px] font-black uppercase tracking-[0.3em]"
           >
             <Zap className="w-3 h-3 fill-primary" />
-            Clearance Elevation Available
+            Strategic Elevation Available
           </motion.div>
           
           <motion.h1 
@@ -86,7 +127,7 @@ export default function UpgradePage() {
             transition={{ delay: 0.1 }}
             className="text-6xl md:text-8xl font-black tracking-tighter text-slate-900 leading-[0.85]"
           >
-            Scale your<br/>Intelligence.
+            Maximize your<br/>Intelligence.
           </motion.h1>
           
           <motion.p 
@@ -95,22 +136,50 @@ export default function UpgradePage() {
             transition={{ delay: 0.2 }}
             className="text-xl text-slate-500 font-medium max-w-2xl mx-auto leading-relaxed"
           >
-            Ultra access removes the daily cognitive friction and automates your entire financial forensics.
+            Ultra clearance removes daily cognitive limits and enables forensic-grade automation for your entire digital life.
           </motion.p>
         </section>
 
         <section className="space-y-12">
           <div className="flex items-center justify-center gap-4 text-slate-400">
             <Activity className="w-5 h-5" />
-            <h3 className="text-[11px] font-black uppercase tracking-[0.4em]">Current Telemetry</h3>
+            <h3 className="text-[11px] font-black uppercase tracking-[0.4em]">Historical Yield</h3>
           </div>
           <UpgradeValueMetrics />
         </section>
 
+        <section id="plans" className="space-y-16 scroll-mt-32">
+          <div className="text-center space-y-2">
+            <h2 className="text-5xl font-black tracking-tighter text-slate-900">Select your level.</h2>
+            <p className="text-sm font-bold text-slate-400 uppercase tracking-widest">Flexible monthly cognitive protocols</p>
+          </div>
+          
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-8 max-w-4xl mx-auto">
+            <UpgradePlanCard 
+              name="Starter" 
+              price="€9" period="/mo" 
+              description="Boost your efficiency core."
+              features={["20 Runs / Day", "Advanced Tool Access", "30 Day Neural Memory", "Priority Support"]}
+              onSelect={() => handleSelectPlan('starter')}
+              loading={loadingPlan === 'starter'}
+              isPopular={false}
+            />
+            <UpgradePlanCard 
+              name="Ultra" 
+              price="€19" period="/mo" 
+              description="Full cognitive automation."
+              isPopular
+              features={["Unlimited Reasoning", "Full Marketplace Access", "Permanent Neural Memory", "Priority Tool Forge", "Early Feature Access"]}
+              onSelect={() => handleSelectPlan('premium')}
+              loading={loadingPlan === 'premium'}
+            />
+          </div>
+        </section>
+
         <section className="space-y-16">
           <div className="text-center space-y-2">
-            <h3 className="text-3xl font-bold tracking-tighter text-slate-900">Elite Protocol Access</h3>
-            <p className="text-sm text-slate-400 font-bold uppercase tracking-widest">Advanced Autonomous Capabilities</p>
+            <h3 className="text-3xl font-bold tracking-tighter text-slate-900">Advanced Capabilities</h3>
+            <p className="text-sm text-slate-400 font-bold uppercase tracking-widest">Forensic logic for Ultra users</p>
           </div>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
             {FEATURES.map((f, i) => (
@@ -123,39 +192,13 @@ export default function UpgradePage() {
           <UpgradeComparison />
         </section>
 
-        <section id="plans" className="space-y-16">
-          <div className="text-center space-y-2">
-            <h2 className="text-5xl font-black tracking-tighter text-slate-900">Choose your level.</h2>
-            <p className="text-sm font-bold text-slate-400 uppercase tracking-widest">Flexible monthly protocols</p>
-          </div>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-8 max-w-4xl mx-auto">
-            <UpgradePlanCard 
-              name="Starter" 
-              price="€9" period="/mo" 
-              description="Boost your efficiency core."
-              features={["20 Runs / Day", "Advanced Tool Access", "30 Day Memory"]}
-              onSelect={handleUpgrade}
-              loading={loading}
-            />
-            <UpgradePlanCard 
-              name="Ultra" 
-              price="€19" period="/mo" 
-              description="Full cognitive automation."
-              isPopular
-              features={["Unlimited Reasoning", "Full Marketplace Access", "Permanent Neural Memory", "Priority Forge"]}
-              onSelect={handleUpgrade}
-              loading={loading}
-            />
-          </div>
-        </section>
-
         <footer className="text-center space-y-6 pt-20 border-t border-slate-100">
           <div className="flex items-center justify-center gap-3">
             <ShieldCheck className="w-6 h-6 text-success" />
-            <p className="text-sm font-bold text-slate-900">Secure Protocol via Firebase Encryption</p>
+            <p className="text-sm font-bold text-slate-900">Secure Protocol via Stripe Encryption</p>
           </div>
-          <p className="text-xs text-slate-400 max-w-sm mx-auto">
-            Cancel anytime. Access is updated instantly in your Neural Link.
+          <p className="text-xs text-slate-400 max-w-sm mx-auto font-medium">
+            Subscriptions renew automatically. Manage or cancel anytime via your billing dashboard.
           </p>
         </footer>
       </main>
@@ -166,12 +209,13 @@ export default function UpgradePage() {
         className="fixed bottom-8 left-1/2 -translate-x-1/2 w-full max-w-lg px-6 z-50"
       >
         <GlassButton 
-          onClick={handleUpgrade}
-          loading={loading}
+          onClick={() => {
+            const el = document.getElementById('plans');
+            el?.scrollIntoView({ behavior: 'smooth' });
+          }}
           className="w-full !h-16 !text-lg !rounded-[2.5rem] shadow-2xl shadow-primary/20 group relative overflow-hidden"
         >
-          <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/10 to-transparent translate-x-[-100%] group-hover:translate-x-[100%] transition-transform duration-1000" />
-          Upgrade to Ultra Now
+          Elevate Clearance Now
           <ArrowRight className="ml-3 w-5 h-5 group-hover:translate-x-1 transition-transform" />
         </GlassButton>
       </motion.div>

@@ -8,7 +8,7 @@ export const runtime = 'nodejs';
 
 /**
  * @fileOverview Streaming API Entry Point for Agent Engine v5.
- * Includes Monetization Enforcement.
+ * Includes Rigorous Monetization Enforcement.
  */
 
 export async function POST(req: Request) {
@@ -21,20 +21,24 @@ export async function POST(req: Request) {
 
     const { firestore } = initializeFirebase();
     
-    // 1. Monetization Check
+    // 1. Rigorous Monetization Check
     if (userId && userId !== 'system_anonymous' && firestore) {
       const { plan, usage } = await SubscriptionService.getUserStatus(firestore, userId);
-      const limit = PLAN_LIMITS[plan].dailyAgentRuns;
+      
+      // Ensure plan exists in limits, fallback to FREE
+      const planKey = (plan || 'FREE').toUpperCase() as keyof typeof PLAN_LIMITS;
+      const limit = PLAN_LIMITS[planKey]?.dailyAgentRuns || 5;
       
       if (usage.agentRuns >= limit) {
+        console.warn(`[ENFORCEMENT] Limit reached for User ${userId} (${usage.agentRuns}/${limit})`);
         return NextResponse.json({ 
           error: 'LIMIT_REACHED',
           message: "Daily intelligence quota exceeded.",
-          usage
+          usage: { ...usage, limit }
         }, { status: 403 });
       }
       
-      // Increment usage immediately
+      // Increment usage immediately (optimistic but safe for prototype)
       await SubscriptionService.incrementUsage(firestore, userId);
     }
 
@@ -43,6 +47,7 @@ export async function POST(req: Request) {
     const encoder = new TextEncoder();
     const readableStream = new ReadableStream({
       async start(controller) {
+        // First chunk is always metadata for UI routing
         controller.enqueue(encoder.encode(`__METADATA__:${JSON.stringify(metadata)}\n`));
 
         try {

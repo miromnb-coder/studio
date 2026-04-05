@@ -1,5 +1,6 @@
 /**
  * @fileOverview Service for managing user plans, usage limits, and subscriptions.
+ * Centered source of truth for all monetization logic.
  */
 
 import { 
@@ -25,19 +26,22 @@ export const PLAN_LIMITS = {
     dailyAgentRuns: 5,
     hasAdvancedTools: false,
     memoryRetentionDays: 7,
-    price: 0
+    price: 0,
+    label: 'Free'
   },
   STARTER: {
     dailyAgentRuns: 20,
     hasAdvancedTools: true,
     memoryRetentionDays: 30,
-    price: 9
+    price: 9,
+    label: 'Starter'
   },
   PREMIUM: {
     dailyAgentRuns: 9999,
     hasAdvancedTools: true,
     memoryRetentionDays: 365,
-    price: 19
+    price: 19,
+    label: 'Ultra'
   }
 };
 
@@ -47,31 +51,44 @@ export class SubscriptionService {
    */
   static async getUserStatus(db: Firestore, userId: string) {
     if (!userId || userId === 'system_anonymous') {
-      return { plan: 'FREE' as UserPlan, usage: { agentRuns: 0, limit: 5 } };
+      return { 
+        plan: 'FREE' as UserPlan, 
+        usage: { agentRuns: 0, limit: 5 },
+        isPremium: false,
+        label: 'Guest'
+      };
     }
 
     try {
       const userRef = doc(db, 'users', userId);
       const userSnap = await getDoc(userRef);
       const userData = userSnap.data();
-      const plan: UserPlan = userData?.plan || 'FREE';
+      const plan: UserPlan = (userData?.plan || 'FREE').toUpperCase() as UserPlan;
 
       const today = new Date().toISOString().split('T')[0];
       const usageRef = doc(db, 'users', userId, 'usage', today);
       const usageSnap = await getDoc(usageRef);
       const usageData = usageSnap.data();
 
+      const limit = PLAN_LIMITS[plan]?.dailyAgentRuns || 5;
+
       return {
         plan,
         usage: {
           agentRuns: usageData?.agentRuns || 0,
-          limit: PLAN_LIMITS[plan as keyof typeof PLAN_LIMITS]?.dailyAgentRuns || 5
+          limit: limit
         },
-        isPremium: plan === 'PREMIUM' || plan === 'STARTER'
+        isPremium: plan === 'PREMIUM' || plan === 'STARTER',
+        label: PLAN_LIMITS[plan]?.label || 'Free'
       };
     } catch (e) {
       console.error("[SUBSCRIPTION] Status fetch failed", e);
-      return { plan: 'FREE' as UserPlan, usage: { agentRuns: 0, limit: 5 } };
+      return { 
+        plan: 'FREE' as UserPlan, 
+        usage: { agentRuns: 0, limit: 5 },
+        isPremium: false,
+        label: 'Error'
+      };
     }
   }
 
@@ -95,22 +112,29 @@ export class SubscriptionService {
   }
 
   /**
-   * Updates user plan in database.
+   * Updates user plan in database. (Internal/Webhook use)
    */
-  static async upgradeToPremium(db: Firestore, userId: string) {
+  static async updatePlan(db: Firestore, userId: string, plan: UserPlan) {
     if (!userId) return false;
     
     try {
       const userRef = doc(db, 'users', userId);
       await updateDoc(userRef, {
-        plan: 'PREMIUM',
+        plan: plan,
         upgradedAt: serverTimestamp(),
         updatedAt: serverTimestamp()
       });
       return true;
     } catch (e) {
-      console.error("[SUBSCRIPTION] Upgrade failed", e);
+      console.error("[SUBSCRIPTION] Plan update failed", e);
       return false;
     }
+  }
+
+  /**
+   * Legacy simulation method. Use updatePlan for real logic.
+   */
+  static async upgradeToPremium(db: Firestore, userId: string) {
+    return this.updatePlan(db, userId, 'PREMIUM');
   }
 }

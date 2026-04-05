@@ -1,4 +1,3 @@
-
 "use client";
 
 import { useState, useCallback, useMemo, useEffect } from 'react';
@@ -94,7 +93,7 @@ export function TopBar() {
     return (totalSaved / 50).toFixed(1);
   }, [totalSaved]);
 
-  const isPremium = status?.plan === 'PREMIUM';
+  const isPremium = status?.isPremium === true;
   const usagePercent = status ? (status.usage.agentRuns / status.usage.limit) * 100 : 0;
 
   return (
@@ -102,7 +101,6 @@ export function TopBar() {
       <header className="fixed top-4 md:top-6 left-1/2 -translate-x-1/2 z-[150] w-[calc(100%-1rem)] md:w-[calc(100%-2rem)] max-w-6xl pointer-events-none">
         <div className="glass-panel h-14 md:h-16 px-2 md:px-4 flex items-center justify-between rounded-full border-white/80 shadow-[0_20px_40px_-12px_rgba(0,0,0,0.15)] pointer-events-auto ring-1 ring-white/20 bg-white/40 backdrop-blur-3xl">
           
-          {/* Left Section: Menu & History */}
           <div className="flex items-center gap-1 md:gap-2 shrink-0">
             <motion.button 
               whileHover={{ scale: 1.05 }}
@@ -188,7 +186,6 @@ export function TopBar() {
             </button>
           </div>
 
-          {/* Center Section: Real-time Value Metrics */}
           <div className="flex items-center gap-2 md:gap-4 flex-1 justify-center px-2 overflow-hidden">
             <div className="hidden md:flex items-center gap-2">
               <motion.div 
@@ -227,9 +224,15 @@ export function TopBar() {
                 <UpgradeButton />
               </div>
             )}
+
+            {isPremium && status && (
+              <div className="hidden sm:flex items-center gap-2 px-4 py-1.5 bg-primary/5 border border-primary/10 rounded-full">
+                <Star className="w-3 h-3 text-primary fill-primary" />
+                <span className="text-[9px] font-bold text-primary uppercase tracking-[0.2em]">{status.label} Clearance</span>
+              </div>
+            )}
           </div>
 
-          {/* Right Section: Alerts & Profile */}
           <div className="flex items-center gap-1 md:gap-2 shrink-0">
             <button 
               onClick={() => router.push('/dashboard')}
@@ -285,7 +288,7 @@ export function TopBar() {
                 <div className="p-3 border-b border-slate-100/60 mb-1">
                   <p className="text-xs font-bold text-slate-900 truncate">{user?.displayName || 'Active Operator'}</p>
                   <p className="text-[9px] font-bold text-primary uppercase tracking-widest mt-0.5">
-                    {isPremium ? 'Ultra Clearance' : 'Free Access'}
+                    {status?.label || 'Free'} Access
                   </p>
                 </div>
                 {!isPremium && (
