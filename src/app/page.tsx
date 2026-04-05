@@ -26,8 +26,6 @@ import { PaywallOverlay } from '@/components/monetization/PaywallOverlay';
 import { OnboardingOverlay } from '@/components/onboarding/OnboardingOverlay';
 import { GlassCard } from '@/components/ui/GlassCard';
 import { GlassButton } from '@/components/ui/GlassButton';
-import { useAICore } from '@/components/ai-core/AICoreContext';
-import { AdaptiveAICore } from '@/components/ai-core/AdaptiveAICore';
 
 function ChatContent() {
   const [input, setInput] = useState('');
@@ -47,7 +45,6 @@ function ChatContent() {
   const searchParams = useSearchParams();
   const conversationId = searchParams?.get('c');
   const { toast } = useToast();
-  const { setStatus, updateState } = useAICore();
 
   // Onboarding detection: Check for existing conversations
   const convsQuery = useMemoFirebase(() => {
@@ -57,7 +54,6 @@ function ChatContent() {
   const { data: convs, isLoading: isConvsLoading } = useCollection(convsQuery);
 
   useEffect(() => {
-    // Show onboarding only for authenticated new users with no history
     if (!isConvsLoading && !isUserLoading && user && convs && convs.length === 0 && !conversationId) {
       setShowOnboarding(true);
     } else {
@@ -104,11 +100,6 @@ function ChatContent() {
     }
     
     setIsProcessing(true);
-    setStatus('thinking');
-    updateState({ 
-      intent: `Initializing focus: ${goalId}`,
-      steps: [{ label: 'Calibrating neural core', status: 'active', timestamp: new Date() }] 
-    });
 
     const goalMap: Record<string, string> = {
       'save_money': 'Analyze my digital ecosystem for hidden waste and optimization opportunities. Start a forensic audit.',
@@ -165,9 +156,6 @@ function ChatContent() {
       let currentMetadata: any = null;
       let buffer = "";
 
-      setStatus('executing');
-      updateState({ steps: [{ label: 'Ingesting knowledge graph', status: 'active', timestamp: new Date() }] });
-
       if (reader) {
         while (true) {
           const { done, value } = await reader.read();
@@ -183,17 +171,6 @@ function ChatContent() {
               try {
                 const metadataStr = line.trim().substring(13).trim();
                 currentMetadata = JSON.parse(metadataStr);
-                if (currentMetadata) {
-                  updateState({ 
-                    intent: currentMetadata.intent,
-                    currentTool: currentMetadata.steps?.[0]?.action || 'Analysis',
-                    steps: (currentMetadata.steps || []).map((s: any) => ({
-                      label: s.thought || s.action,
-                      status: 'complete',
-                      timestamp: new Date()
-                    }))
-                  });
-                }
               } catch (e) {
                 console.error("Metadata parsing failed", e);
               }
@@ -212,10 +189,8 @@ function ChatContent() {
         metadata: currentMetadata
       });
 
-      setStatus('success');
     } catch (err) {
       console.error(err);
-      setStatus('error');
       toast({ variant: 'destructive', title: "Onboarding Failed", description: "Protocol initialization interrupted." });
     } finally {
       setIsProcessing(false);
@@ -235,11 +210,6 @@ function ChatContent() {
     setIsProcessing(true);
     setInput('');
     setSelectedToolImage(null);
-    setStatus('thinking');
-    updateState({ 
-      intent: currentInput.slice(0, 50),
-      steps: [{ label: 'Initializing reasoner', status: 'active', timestamp: new Date() }] 
-    });
 
     try {
       let activeId = conversationId;
@@ -280,7 +250,6 @@ function ChatContent() {
         setPaywallReason('limit_reached');
         setShowPaywall(true);
         setIsProcessing(false);
-        setStatus('idle');
         return;
       }
 
@@ -307,18 +276,6 @@ function ChatContent() {
               try {
                 const metadataStr = line.trim().substring(13).trim();
                 currentMetadata = JSON.parse(metadataStr);
-                if (currentMetadata) {
-                  setStatus('executing');
-                  updateState({ 
-                    intent: currentMetadata.intent,
-                    currentTool: currentMetadata.steps?.[0]?.action || 'Signal Scan',
-                    steps: (currentMetadata.steps || []).map((s: any) => ({
-                      label: s.thought || s.action,
-                      status: 'complete',
-                      timestamp: new Date()
-                    }))
-                  });
-                }
               } catch (e) {
                 console.error("Metadata parsing failed", e);
               }
@@ -337,10 +294,8 @@ function ChatContent() {
         metadata: currentMetadata
       });
 
-      setStatus('success');
     } catch (err) {
       console.error(err);
-      setStatus('error');
       toast({ variant: 'destructive', title: "Sync Interrupted", description: "Re-establishing link with intelligence core." });
     } finally {
       setIsProcessing(false);
@@ -421,14 +376,16 @@ function ChatContent() {
               </motion.div>
             ))
           ) : !showOnboarding && (
-            <div className="flex flex-col items-center justify-center py-12 md:py-20 text-center space-y-8 md:space-y-12">
-              <AdaptiveAICore variant="hero" />
+            <div className="flex flex-col items-center justify-center py-20 text-center space-y-12">
+              <div className="w-20 h-20 rounded-[2.5rem] bg-white border border-slate-100 shadow-xl flex items-center justify-center text-primary">
+                <Cpu className="w-10 h-10" />
+              </div>
               <div className="space-y-4 px-4">
-                <h2 className="text-3xl sm:text-4xl md:text-6xl font-bold tracking-tighter text-slate-900 leading-tight">Intelligence Hub</h2>
+                <h2 className="text-4xl md:text-6xl font-bold tracking-tighter text-slate-900 leading-tight">Intelligence Hub</h2>
                 <div className="flex items-center justify-center gap-3 text-slate-400">
-                  <div className="h-px w-6 md:w-8 bg-slate-100" />
+                  <div className="h-px w-8 bg-slate-100" />
                   <p className="text-[10px] md:text-xs font-black uppercase tracking-[0.5em]">System Core Active</p>
-                  <div className="h-px w-6 md:w-8 bg-slate-100" />
+                  <div className="h-px w-8 bg-slate-100" />
                 </div>
               </div>
             </div>

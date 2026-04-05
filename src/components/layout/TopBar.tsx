@@ -1,3 +1,4 @@
+
 "use client";
 
 import { useState, useCallback, useMemo, useEffect } from 'react';
@@ -16,7 +17,6 @@ import { cn } from '@/lib/utils';
 import { Progress } from '@/components/ui/progress';
 import { UpgradeButton } from '@/components/upgrade/UpgradeButton';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { AdaptiveAICore } from '@/components/ai-core/AdaptiveAICore';
 
 export function TopBar() {
   const { user } = useUser();
@@ -95,8 +95,6 @@ export function TopBar() {
     return Math.min(100, Math.max(0, (runs / limit) * 100)) || 0;
   }, [status]);
 
-  const showCompactCore = !!activeId;
-
   return (
     <>
       <header className="fixed top-4 md:top-6 left-1/2 -translate-x-1/2 z-[150] w-[calc(100%-1rem)] md:w-[calc(100%-2rem)] max-w-6xl pointer-events-none">
@@ -115,19 +113,6 @@ export function TopBar() {
               {isMenuOpen ? <X className="w-4 h-4" /> : <Menu className="w-4 h-4" />}
               <span className="text-[10px] font-black uppercase tracking-[0.1em] hidden sm:block">Menu</span>
             </motion.button>
-            
-            <AnimatePresence>
-              {showCompactCore && (
-                <motion.div
-                  initial={{ scale: 0, opacity: 0, x: -20 }}
-                  animate={{ scale: 1, opacity: 1, x: 0 }}
-                  exit={{ scale: 0, opacity: 0, x: -20 }}
-                  className="ml-1"
-                >
-                  <AdaptiveAICore variant="compact" />
-                </motion.div>
-              )}
-            </AnimatePresence>
           </div>
 
           <div className="flex items-center gap-2 md:gap-4 flex-1 justify-center px-2">
