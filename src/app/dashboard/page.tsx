@@ -1,13 +1,16 @@
+
 "use client";
 
 import { SystemCard } from '@/components/systems/SystemCard';
 import { useUser, useFirestore, useCollection, useMemoFirebase } from '@/firebase';
 import { collection, query, orderBy, limit } from 'firebase/firestore';
-import { motion } from 'framer-motion';
-import { Terminal, ShieldCheck, Zap, ChevronRight, Activity, Clock, Cpu, BarChart3, Bell } from 'lucide-react';
+import { motion, AnimatePresence } from 'framer-motion';
+import { Terminal, ShieldCheck, Zap, ChevronRight, Activity, Clock, Cpu, BarChart3, Bell, ArrowRight, Sparkles } from 'lucide-react';
 import { useRouter } from 'next/navigation';
-import { useMemo } from 'react';
+import { useMemo, useEffect, useState } from 'react';
 import { ProactiveAlerts } from '@/components/dashboard/ProactiveAlerts';
+import { DigestService, DailyDigest } from '@/services/digest-service';
+import { DailyDigestCard } from '@/components/chat/DailyDigestCard';
 
 const container = {
   hidden: { opacity: 0 },
@@ -28,6 +31,8 @@ export default function DashboardPage() {
   const { user } = useUser();
   const db = useFirestore();
   const router = useRouter();
+  const [latestDigest, setLatestDigest] = useState<DailyDigest | null>(null);
+  const [isDigestLoading, setIsDigestLoading] = useState(true);
 
   const analysesQuery = useMemoFirebase(() => {
     if (!db || !user) return null;
@@ -40,6 +45,15 @@ export default function DashboardPage() {
 
   const { data: analyses, isLoading } = useCollection(analysesQuery);
   
+  useEffect(() => {
+    if (db && user) {
+      DigestService.getLatestDigest(db, user.uid).then(digest => {
+        setLatestDigest(digest);
+        setIsDigestLoading(false);
+      });
+    }
+  }, [db, user, analyses]);
+
   const totalReclaimed = useMemo(() => {
     return (analyses || []).reduce((acc, a) => acc + (a.estimatedMonthlySavings || 0), 0);
   }, [analyses]);
@@ -72,6 +86,24 @@ export default function DashboardPage() {
           </p>
         </div>
       </motion.header>
+
+      {/* Habit-Forming Daily Briefing Section */}
+      <AnimatePresence>
+        {latestDigest && (
+          <motion.section 
+            variants={item}
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="space-y-6"
+          >
+            <div className="flex items-center gap-3">
+              <Sparkles className="w-5 h-5 text-primary" />
+              <h3 className="text-xs font-bold text-slate-900 uppercase tracking-[0.3em]">Neural Synthesis Complete</h3>
+            </div>
+            <DailyDigestCard digest={latestDigest} />
+          </motion.section>
+        )}
+      </AnimatePresence>
 
       <div className="grid gap-12 lg:grid-cols-3 items-start">
         <motion.div variants={item} className="lg:col-span-2 space-y-8">

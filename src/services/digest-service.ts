@@ -54,8 +54,6 @@ export class DigestService {
 
   /**
    * Generates a new digest based on recent findings.
-   * In a real app, this would be a server-side scheduled task.
-   * For the prototype, we trigger it based on new activity or periodic checks.
    */
   static async generateDigest(db: Firestore, userId: string): Promise<DailyDigest | null> {
     try {
@@ -75,7 +73,7 @@ export class DigestService {
       const analyses = snap.docs.map(d => d.data());
       const totalSavings = analyses.reduce((acc, a) => acc + (a.estimatedMonthlySavings || 0), 0);
       
-      // 2. Synthesize findings (simplified for prototype logic)
+      // 2. Synthesize findings
       const digestData = {
         userId,
         date: new Date().toISOString().split('T')[0],
@@ -83,7 +81,7 @@ export class DigestService {
         estimatedMonthlySavings: totalSavings,
         findingsCount: snap.size,
         topActions: analyses.slice(0, 3).map(a => ({
-          title: `Action for ${a.title}`,
+          title: a.title,
           description: a.summary.substring(0, 100) + '...',
           urgency: a.estimatedMonthlySavings > 50 ? 'high' : 'medium'
         })),
