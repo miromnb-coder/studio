@@ -44,19 +44,6 @@ export function TopBar() {
     router.push('/login');
   };
 
-  const handleDeleteConversation = async (e: React.MouseEvent, id: string) => {
-    e.stopPropagation();
-    if (!db || !user) return;
-    setIsDeleting(id);
-    try {
-      await deleteDoc(doc(db, 'users', user.uid, 'conversations', id));
-      if (activeId === id) router.push('/');
-    } finally {
-      setIsDeleting(null);
-    }
-  };
-
-  // Buttons for the left side as per screenshot
   const NavButton = ({ icon: Icon, onClick, className }: { icon: any, onClick?: () => void, className?: string }) => (
     <button 
       onClick={onClick}
@@ -85,19 +72,20 @@ export function TopBar() {
                 <div className="p-5 border-b border-slate-100/60 bg-white/40">
                   <p className="text-[10px] font-black uppercase tracking-[0.3em] text-slate-400">History</p>
                 </div>
-                {/* Simplified for now */}
-                <div className="p-4 text-center text-[10px] text-slate-400 uppercase">Recent Sessions</div>
+                <div className="p-8 text-center text-[10px] text-slate-400 uppercase font-bold tracking-widest opacity-40 italic">
+                  Neural memory empty
+                </div>
               </PopoverContent>
             </Popover>
             <NavButton icon={Plus} onClick={() => router.push('/')} />
           </div>
 
-          {/* Center Blue Pill */}
+          {/* Center Star Pill */}
           <motion.button 
             whileHover={{ scale: 1.05 }}
             whileTap={{ scale: 0.95 }}
             onClick={() => router.push('/upgrade')}
-            className="h-10 px-5 rounded-full bg-primary flex items-center gap-2 text-white shadow-lg shadow-primary/30 active:scale-95 transition-all"
+            className="h-10 px-5 rounded-full bg-[#4F95FF] flex items-center gap-2 text-white shadow-[0_8px_30px_rgb(79,149,255,0.3)] active:scale-95 transition-all"
           >
             <Star className="w-3.5 h-3.5 fill-white" />
             <ArrowRight className="w-3.5 h-3.5" />
@@ -110,7 +98,7 @@ export function TopBar() {
                 <NavButton icon={Bell} />
               </PopoverTrigger>
               <PopoverContent className="w-72 glass-panel p-4 shadow-xl mt-4 rounded-[2rem] border-white/60" align="end">
-                <p className="text-[10px] text-center py-4 text-slate-400 font-bold uppercase">No Alerts</p>
+                <p className="text-[10px] text-center py-4 text-slate-400 font-bold uppercase tracking-widest">No Alerts</p>
               </PopoverContent>
             </Popover>
 

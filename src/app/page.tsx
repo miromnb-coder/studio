@@ -99,7 +99,6 @@ function ChatContent() {
       return;
     }
     setIsProcessing(true);
-    // Goal logic...
     setShowOnboarding(false);
     setIsProcessing(false);
   };
@@ -107,7 +106,6 @@ function ChatContent() {
   const sendMessage = async () => {
     if (!user || (!input.trim() && !selectedImage) || !db || isProcessing) return;
     setIsProcessing(true);
-    // Send logic...
     setInput('');
     setSelectedToolImage(null);
     setIsProcessing(false);
@@ -150,22 +148,24 @@ function ChatContent() {
               </motion.div>
             ))
           ) : !showOnboarding && (
-            <div className="flex flex-col items-center justify-center py-20 text-center space-y-8">
-              {/* Central Circle with Icon */}
+            <div className="flex flex-col items-center justify-center py-20 text-center space-y-8 px-4">
+              {/* Central Terminal Icon */}
               <motion.div 
                 initial={{ scale: 0.8, opacity: 0 }}
                 animate={{ scale: 1, opacity: 1 }}
-                className="w-32 h-32 rounded-full bg-white shadow-[0_20px_50px_rgba(0,0,0,0.05)] border border-slate-100 flex items-center justify-center text-slate-200"
+                className="w-32 h-32 rounded-full bg-white shadow-[0_20px_50px_rgba(0,0,0,0.05)] border border-slate-100 flex items-center justify-center text-slate-300"
               >
-                <Terminal className="w-8 h-8" />
+                <div className="flex items-center gap-1">
+                  <span className="text-3xl font-light tracking-tighter">&gt;_</span>
+                </div>
               </motion.div>
               
               {/* Header Text */}
-              <div className="space-y-4 px-4">
-                <h2 className="text-6xl md:text-8xl font-black tracking-tighter text-slate-900 leading-tight">
+              <div className="space-y-6">
+                <h2 className="text-5xl md:text-8xl font-black tracking-tighter text-slate-900 leading-[0.9] text-center">
                   Intelligence<br/>Hub
                 </h2>
-                <p className="text-[10px] md:text-[11px] font-black uppercase tracking-[0.6em] text-slate-400">
+                <p className="text-[9px] md:text-[11px] font-black uppercase tracking-[0.6em] text-slate-400">
                   AUTONOMOUS FORGE ACTIVE
                 </p>
               </div>
