@@ -8,10 +8,9 @@ import {
   addDoc, 
   serverTimestamp, 
   Firestore,
-  limit,
-  orderBy
+  limit
 } from 'firebase/firestore';
-import { ProactiveService } from './proactive-service';
+import { scanForSignals } from './proactive-service';
 
 /**
  * @fileOverview Hardened Gmail API Service.
@@ -158,8 +157,8 @@ export class GmailService {
           source: 'gmail_api'
         });
         
-        // TRIGGER PROACTIVE SCAN ON NEW SYNCED EMAIL
-        ProactiveService.scanForSignals(db, userId, `Subject: ${email.subject}\n\n${email.snippet}`);
+        // TRIGGER PROACTIVE SCAN (Safe Server Action call)
+        scanForSignals(userId, `Subject: ${email.subject}\n\n${email.snippet}`);
         
         syncedCount++;
       }

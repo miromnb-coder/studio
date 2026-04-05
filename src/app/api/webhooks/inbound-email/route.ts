@@ -6,7 +6,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { initializeFirebase } from '@/firebase';
 import { collection, query, where, getDocs, addDoc, serverTimestamp } from 'firebase/firestore';
 import { runAgentV4 } from '@/agent/v4/orchestrator';
-import { ProactiveService } from '@/services/proactive-service';
+import { scanForSignals } from '@/services/proactive-service';
 
 /**
  * @fileOverview Inbound Email Webhook.
@@ -71,9 +71,8 @@ export async function POST(req: NextRequest) {
       createdAt: serverTimestamp(),
     });
 
-    // TRIGGER PROACTIVE INTELLIGENCE SCAN
-    // We don't await this to keep the webhook response fast
-    ProactiveService.scanForSignals(firestore, userId, `Subject: ${subject}\n\n${body}`, analysisDoc.id);
+    // TRIGGER PROACTIVE INTELLIGENCE SCAN (Server-side call)
+    scanForSignals(userId, `Subject: ${subject}\n\n${body}`, analysisDoc.id);
 
     return NextResponse.json({ 
       success: true, 
