@@ -1,3 +1,4 @@
+
 "use client";
 
 import { useState, useRef, useEffect, Suspense } from 'react';
@@ -423,7 +424,7 @@ function ChatContent() {
             <div className="flex flex-col items-center justify-center py-12 md:py-20 text-center space-y-8 md:space-y-12">
               <AdaptiveAICore variant="hero" />
               <div className="space-y-4 px-4">
-                <h2 className="text-4xl md:text-6xl font-bold tracking-tighter text-slate-900 leading-tight">Intelligence Hub</h2>
+                <h2 className="text-3xl sm:text-4xl md:text-6xl font-bold tracking-tighter text-slate-900 leading-tight">Intelligence Hub</h2>
                 <div className="flex items-center justify-center gap-3 text-slate-400">
                   <div className="h-px w-6 md:w-8 bg-slate-100" />
                   <p className="text-[10px] md:text-xs font-black uppercase tracking-[0.5em]">System Core Active</p>
