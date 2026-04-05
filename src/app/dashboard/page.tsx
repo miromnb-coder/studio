@@ -5,7 +5,7 @@ import { SystemCard } from '@/components/systems/SystemCard';
 import { useUser, useFirestore, useCollection, useMemoFirebase } from '@/firebase';
 import { collection, query, orderBy, limit } from 'firebase/firestore';
 import { motion } from 'framer-motion';
-import { Terminal, ShieldCheck, Zap, ChevronRight, Activity, Clock, Cpu } from 'lucide-react';
+import { Terminal, ShieldCheck, Zap, ChevronRight, Activity, Clock, Cpu, BarChart3 } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { useMemo } from 'react';
 
@@ -84,13 +84,13 @@ export default function DashboardPage() {
             { label: 'Directives', value: `${activePatterns} Active` }
           ]}
           actions={[
-            { label: 'Global Audit', variant: 'primary', onClick: () => router.push('/money-saver') },
+            { label: 'Open Ledger', variant: 'primary', onClick: () => router.push('/money-saver') },
             { label: 'Neural Sync', variant: 'secondary', onClick: () => router.push('/history') }
           ]}
         >
-          <div className="flex items-center gap-4 p-4 rounded-3xl bg-slate-50/50 border border-slate-100">
-            <div className="w-2 h-2 rounded-full bg-success animate-pulse" />
-            <span className="text-xs font-bold text-slate-600">All logic cores synchronized.</span>
+          <div className="flex items-center gap-4 p-4 rounded-3xl bg-slate-50/50 border border-slate-100 cursor-pointer hover:bg-slate-100 transition-all" onClick={() => router.push('/money-saver')}>
+            <BarChart3 className="w-4 h-4 text-primary" />
+            <span className="text-xs font-bold text-slate-600">Audit Ledger: {analyses?.length || 0} Entries found.</span>
           </div>
         </SystemCard>
 
