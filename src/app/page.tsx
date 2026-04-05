@@ -378,7 +378,7 @@ function ChatContent() {
           ) : !showOnboarding && (
             <div className="flex flex-col items-center justify-center py-20 text-center space-y-12">
               <div className="w-20 h-20 rounded-[2.5rem] bg-white border border-slate-100 shadow-xl flex items-center justify-center text-primary">
-                <Cpu className="w-10 h-10" />
+                <Terminal className="w-10 h-10" />
               </div>
               <div className="space-y-4 px-4">
                 <h2 className="text-4xl md:text-6xl font-bold tracking-tighter text-slate-900 leading-tight">Intelligence Hub</h2>
