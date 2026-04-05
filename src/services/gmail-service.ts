@@ -1,3 +1,4 @@
+
 import { GoogleAuthProvider, signInWithPopup, getAuth } from 'firebase/auth';
 import { 
   collection, 
@@ -50,6 +51,48 @@ export class GmailService {
     } catch (error) {
       console.error('[GMAIL] OAuth failed:', error);
       return null;
+    }
+  }
+
+  /**
+   * Sends a professional email via Gmail API.
+   */
+  static async sendEmail(accessToken: string, to: string, subject: string, body: string): Promise<boolean> {
+    const utf8Subject = `=?utf-8?B?${Buffer.from(subject).toString('base64')}?=`;
+    const messageParts = [
+      `To: ${to}`,
+      'Content-Type: text/plain; charset=utf-8',
+      'MIME-Version: 1.0',
+      `Subject: ${utf8Subject}`,
+      '',
+      body,
+    ];
+    const message = messageParts.join('\n');
+
+    // The message needs to be base64url encoded.
+    const encodedMessage = Buffer.from(message)
+      .toString('base64')
+      .replace(/\+/g, '-')
+      .replace(/\//g, '_')
+      .replace(/=+$/, '');
+
+    try {
+      const response = await fetch(
+        'https://gmail.googleapis.com/gmail/v1/users/me/messages/send',
+        {
+          method: 'POST',
+          headers: {
+            Authorization: `Bearer ${accessToken}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ raw: encodedMessage }),
+        }
+      );
+
+      return response.ok;
+    } catch (e) {
+      console.error('[GMAIL] Send error:', e);
+      return false;
     }
   }
 
