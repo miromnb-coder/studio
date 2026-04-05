@@ -1,8 +1,9 @@
+
 "use client";
 
 import { SystemCard } from '@/components/systems/SystemCard';
 import { useUser, useFirestore, useCollection, useMemoFirebase } from '@/firebase';
-import { collection, query, orderBy, limit } from 'firebase/firestore';
+import { collection, query, orderBy, limit, where } from 'firebase/firestore';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Terminal, ShieldCheck, Zap, ChevronRight, Activity, Clock, Cpu, BarChart3, Bell, ArrowRight, Sparkles } from 'lucide-react';
 import { useRouter } from 'next/navigation';
@@ -43,6 +44,19 @@ export default function DashboardPage() {
   }, [db, user]);
 
   const { data: analyses, isLoading } = useCollection(analysesQuery);
+
+  // FETCH REAL PROACTIVE ALERTS
+  const alertsQuery = useMemoFirebase(() => {
+    if (!db || !user) return null;
+    return query(
+      collection(db, 'users', user.uid, 'alerts'),
+      where('isDismissed', '==', false),
+      orderBy('createdAt', 'desc'),
+      limit(5)
+    );
+  }, [db, user]);
+
+  const { data: alerts, isLoading: isAlertsLoading } = useCollection(alertsQuery);
   
   useEffect(() => {
     if (db && user) {
@@ -86,7 +100,6 @@ export default function DashboardPage() {
         </div>
       </motion.header>
 
-      {/* Habit-Forming Daily Briefing Section */}
       <AnimatePresence>
         {latestDigest && (
           <motion.section 
@@ -213,7 +226,7 @@ export default function DashboardPage() {
             <h3 className="text-xs font-bold text-slate-900 uppercase tracking-[0.3em]">Proactive Intelligence</h3>
           </div>
           
-          <ProactiveAlerts analyses={analyses || []} isLoading={isLoading} />
+          <ProactiveAlerts alerts={alerts || []} isLoading={isAlertsLoading} />
 
           <div className="p-8 rounded-[2.5rem] bg-slate-900 text-white space-y-6 shadow-2xl relative overflow-hidden group">
             <div className="absolute top-0 right-0 w-32 h-32 bg-primary/20 rounded-full blur-3xl -mr-16 -mt-16 group-hover:bg-primary/30 transition-all" />
@@ -222,7 +235,7 @@ export default function DashboardPage() {
               <h4 className="text-2xl font-bold tracking-tight">Logic Coverage: 94%</h4>
             </div>
             <p className="text-xs text-slate-400 leading-relaxed relative z-10">
-              Your agent is currently monitoring 12 separate financial signal points for potential leaks.
+              Your agent is currently monitoring for price hikes, trial expirations, and duplicate billing signals.
             </p>
             <button className="text-[10px] font-bold uppercase tracking-widest text-white flex items-center gap-2 group/btn" onClick={() => router.push('/settings')}>
               Manage Signals <ArrowRight className="w-3 h-3 group-hover/btn:translate-x-1 transition-transform" />

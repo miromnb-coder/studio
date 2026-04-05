@@ -1,3 +1,4 @@
+
 import { groq } from '@/ai/groq';
 import { Intent, AgentStep, Decision, AgentMetadata, ToolDefinition } from './types';
 import { activeRegistry, STATIC_TOOLS } from './registry';
@@ -7,10 +8,10 @@ import { initializeFirebase } from '@/firebase';
 
 /**
  * @fileOverview Orchestrator Engine v5.6: Autonomous Reasoning with Deep Synthesis.
- * Optimized for real-world tool execution and structured result reporting.
+ * Optimized for real-world tool execution and proactive signal detection.
  */
 
-const MAX_ITERATIONS = 4; // Optimized for performance while allowing complexity
+const MAX_ITERATIONS = 4;
 
 async function classifyIntent(input: string, history: any[]): Promise<{ intent: Intent; language: string }> {
   const res = await groq.chat.completions.create({
@@ -69,7 +70,7 @@ async function forgeNewTool(purpose: string, userId: string): Promise<ToolDefini
         ],
         temperature: 0
       });
-      return { result: runRes.choices[0]?.message?.content || '', forged: true };
+      return { result: runRes.choices[0]?.message?.content || '', findings: [], forged: true };
     }
   };
 
@@ -140,9 +141,14 @@ export async function runAgentV5(input: string, userId: string, history: any[] =
       try {
         const observation = await tool.execute(decision.input || {}, { userId, imageUri });
         steps.push({ thought: decision.thought, action: decision.action, input: decision.input, observation });
-        // Capture structured data for UI enrichment
-        if (observation.leaks || observation.insights) {
-          toolData = observation;
+        
+        // ENHANCED: Capture structured data for UI and Proactive Alerts
+        if (observation.leaks || observation.insights || observation.findings) {
+          toolData = {
+            ...toolData,
+            ...observation,
+            estimatedMonthlySavings: observation.estimatedMonthlySavings || observation.impact || toolData?.estimatedMonthlySavings || 0
+          };
         }
       } catch (err) {
         steps.push({ thought: decision.thought, action: decision.action, input: decision.input, observation: { error: "Failed" } });
@@ -159,7 +165,7 @@ export async function runAgentV5(input: string, userId: string, history: any[] =
           Synthesis in ${language}.
           Tool Results: ${JSON.stringify(steps)}
           Memory: ${JSON.stringify(memory)}
-          Respond directly. If a tool found savings or data, confirm it.
+          Respond directly. If a tool found savings or data, confirm it clearly.
         ` 
       },
       ...history.slice(-3),

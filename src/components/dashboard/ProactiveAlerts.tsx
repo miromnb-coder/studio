@@ -1,3 +1,4 @@
+
 "use client";
 
 import { motion } from 'framer-motion';
@@ -10,10 +11,12 @@ import {
   Calendar, 
   ArrowRight,
   TrendingUp,
-  Loader2
+  Loader2,
+  Trash2
 } from 'lucide-react';
 import Link from 'next/link';
-import { useMemo } from 'react';
+import { useFirestore, useUser } from '@/firebase';
+import { doc, updateDoc } from 'firebase/firestore';
 import { cn } from '@/lib/utils';
 
 interface Alert {
@@ -21,55 +24,27 @@ interface Alert {
   title: string;
   explanation: string;
   urgency: 'low' | 'medium' | 'high' | 'urgent';
-  action: string;
-  date?: string;
+  actionLabel?: string;
+  date?: any;
   type: 'trial' | 'price_increase' | 'duplicate' | 'optimization';
   analysisId?: string;
+  impact?: number;
 }
 
 interface ProactiveAlertsProps {
-  analyses: any[];
+  alerts: Alert[];
   isLoading?: boolean;
 }
 
-export function ProactiveAlerts({ analyses, isLoading }: ProactiveAlertsProps) {
-  const alerts = useMemo(() => {
-    if (!analyses || !Array.isArray(analyses)) return [];
-    
-    const findings: Alert[] = [];
-    
-    // Scan recent analyses for urgency markers
-    analyses.forEach(analysis => {
-      // High Burn Trigger
-      if (analysis.estimatedMonthlySavings > 50) {
-        findings.push({
-          id: `alert-${analysis.id}`,
-          title: 'High Burn Detected',
-          explanation: `Potential waste of $${analysis.estimatedMonthlySavings}/mo identified in your "${analysis.title}" audit.`,
-          urgency: 'high',
-          action: 'Mitigate Now',
-          type: 'optimization',
-          date: analysis.analysisDate,
-          analysisId: analysis.id
-        });
-      }
-    });
+export function ProactiveAlerts({ alerts, isLoading }: ProactiveAlertsProps) {
+  const db = useFirestore();
+  const { user } = useUser();
 
-    // Add strategic mock alert for "Trial Expiration" to demonstrate the system
-    if (analyses.length > 0) {
-      findings.unshift({
-        id: 'mock-trial-exp',
-        title: 'Trial Ending in 48h',
-        explanation: 'Your YouTube Premium trial expires soon. Operator suggests downgrading to avoid automatic $15.99 charge.',
-        urgency: 'urgent',
-        action: 'Review Protocol',
-        type: 'trial',
-        date: new Date(Date.now() + 172800000).toISOString()
-      });
-    }
-
-    return findings.slice(0, 3);
-  }, [analyses]);
+  const handleDismiss = async (alertId: string) => {
+    if (!db || !user) return;
+    const alertRef = doc(db, 'users', user.uid, 'alerts', alertId);
+    await updateDoc(alertRef, { isDismissed: true });
+  };
 
   if (isLoading) {
     return (
@@ -81,13 +56,13 @@ export function ProactiveAlerts({ analyses, isLoading }: ProactiveAlertsProps) {
     );
   }
 
-  if (alerts.length === 0) {
+  if (!alerts || alerts.length === 0) {
     return (
       <div className="p-12 text-center rounded-[2.5rem] border-2 border-dashed border-slate-100 opacity-40 space-y-3">
         <TrendingUp className="w-8 h-8 text-slate-300 mx-auto" />
         <div className="space-y-1">
           <p className="text-[10px] font-bold uppercase tracking-widest text-slate-400">Signals Optimal</p>
-          <p className="text-[8px] font-bold uppercase text-slate-300">No immediate liquidity leaks detected</p>
+          <p className="text-[8px] font-bold uppercase text-slate-300">No immediate intelligence triggers</p>
         </div>
       </div>
     );
@@ -117,9 +92,17 @@ export function ProactiveAlerts({ analyses, isLoading }: ProactiveAlertsProps) {
               <div className="flex-1 space-y-2">
                 <div className="flex items-center justify-between">
                   <h4 className="text-sm font-bold text-slate-900 tracking-tight">{alert.title}</h4>
-                  <Badge variant={alert.urgency === 'urgent' ? 'destructive' : 'secondary'} className="text-[8px] font-bold uppercase tracking-widest px-2 h-5 rounded-full border-0">
-                    {alert.urgency}
-                  </Badge>
+                  <div className="flex items-center gap-2">
+                    <Badge variant={alert.urgency === 'urgent' ? 'destructive' : 'secondary'} className="text-[8px] font-bold uppercase tracking-widest px-2 h-5 rounded-full border-0">
+                      {alert.urgency}
+                    </Badge>
+                    <button 
+                      onClick={() => handleDismiss(alert.id)}
+                      className="opacity-0 group-hover:opacity-100 p-1 hover:text-danger transition-all"
+                    >
+                      <Trash2 className="w-3 h-3" />
+                    </button>
+                  </div>
                 </div>
                 
                 <p className="text-xs text-slate-500 font-medium leading-relaxed">
@@ -129,20 +112,19 @@ export function ProactiveAlerts({ analyses, isLoading }: ProactiveAlertsProps) {
                 <div className="flex items-center justify-between pt-2">
                   <div className="flex items-center gap-2 text-[9px] font-bold uppercase tracking-widest text-slate-400">
                     <Calendar className="w-3.5 h-3.5 opacity-40" />
-                    {alert.date ? new Date(alert.date).toLocaleDateString() : 'Immediate'}
+                    {alert.impact ? `Impact: $${alert.impact}/mo` : 'Immediate'}
                   </div>
                   <Button asChild variant="link" className={cn(
                     "p-0 h-auto text-[10px] font-bold uppercase tracking-widest hover:no-underline group-hover:translate-x-1 transition-transform",
                     alert.urgency === 'urgent' ? "text-danger" : "text-primary"
                   )}>
                     <Link href={alert.analysisId ? `/results/${alert.analysisId}` : '/money-saver'}>
-                      {alert.action} <ArrowRight className="w-3 h-3 ml-1.5" />
+                      {alert.actionLabel || 'Inspect'} <ArrowRight className="w-3 h-3 ml-1.5" />
                     </Link>
                   </Button>
                 </div>
               </div>
             </div>
-            {/* Urgency Glow */}
             {alert.urgency === 'urgent' && (
               <div className="absolute top-0 right-0 w-24 h-24 bg-danger/5 rounded-full blur-2xl -mr-12 -mt-12" />
             )}

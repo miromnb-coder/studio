@@ -11,6 +11,7 @@ import {
   limit,
   orderBy
 } from 'firebase/firestore';
+import { ProactiveService } from './proactive-service';
 
 /**
  * @fileOverview Hardened Gmail API Service.
@@ -54,9 +55,6 @@ export class GmailService {
     }
   }
 
-  /**
-   * Sends a professional email via Gmail API.
-   */
   static async sendEmail(accessToken: string, to: string, subject: string, body: string): Promise<boolean> {
     const utf8Subject = `=?utf-8?B?${Buffer.from(subject).toString('base64')}?=`;
     const messageParts = [
@@ -69,7 +67,6 @@ export class GmailService {
     ];
     const message = messageParts.join('\n');
 
-    // The message needs to be base64url encoded.
     const encodedMessage = Buffer.from(message)
       .toString('base64')
       .replace(/\+/g, '-')
@@ -97,7 +94,6 @@ export class GmailService {
   }
 
   static async fetchFinancialEmails(accessToken: string, maxResults = 15): Promise<GmailMessage[]> {
-    // Highly targeted query for billing signals to minimize token waste
     const queryStr = 'subject:(receipt OR invoice OR "renewal notice" OR statement OR subscription OR payment OR lasku OR kuitti)';
     const url = `https://gmail.googleapis.com/gmail/v1/users/me/messages?q=${encodeURIComponent(queryStr)}&maxResults=${maxResults}`;
 
@@ -150,7 +146,6 @@ export class GmailService {
     const inboxRef = collection(db, 'users', userId, 'inbox');
     
     for (const email of emails) {
-      // Deduplication check based on external ID
       const q = query(inboxRef, where('id', '==', email.id), limit(1));
       const existing = await getDocs(q);
       
@@ -162,6 +157,10 @@ export class GmailService {
           createdAt: serverTimestamp(),
           source: 'gmail_api'
         });
+        
+        // TRIGGER PROACTIVE SCAN ON NEW SYNCED EMAIL
+        ProactiveService.scanForSignals(db, userId, `Subject: ${email.subject}\n\n${email.snippet}`);
+        
         syncedCount++;
       }
     }
