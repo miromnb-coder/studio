@@ -420,11 +420,15 @@ function ChatContent() {
               </motion.div>
             ))
           ) : !showOnboarding && (
-            <div className="flex flex-col items-center justify-center py-20 text-center space-y-8">
+            <div className="flex flex-col items-center justify-center py-20 text-center space-y-12">
               <AdaptiveAICore variant="hero" />
-              <div className="space-y-2">
-                <h2 className="text-5xl font-bold tracking-tighter text-slate-900 leading-none">Intelligence Hub</h2>
-                <p className="text-xs font-bold text-slate-400 uppercase tracking-[0.4em]">Autonomous Forge Active</p>
+              <div className="space-y-4">
+                <h2 className="text-6xl font-bold tracking-tighter text-slate-900 leading-none">Intelligence Hub</h2>
+                <div className="flex items-center justify-center gap-3 text-slate-400">
+                  <div className="h-px w-8 bg-slate-100" />
+                  <p className="text-xs font-black uppercase tracking-[0.5em]">System Core Active</p>
+                  <div className="h-px w-8 bg-slate-100" />
+                </div>
               </div>
             </div>
           )}
