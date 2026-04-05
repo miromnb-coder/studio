@@ -25,6 +25,7 @@ import { PaywallOverlay } from '@/components/monetization/PaywallOverlay';
 import { OnboardingOverlay } from '@/components/onboarding/OnboardingOverlay';
 import { GlassCard } from '@/components/ui/GlassCard';
 import { GlassButton } from '@/components/ui/GlassButton';
+import { useAICore } from '@/components/ai-core/AICoreContext';
 
 function ChatContent() {
   const [input, setInput] = useState('');
@@ -44,6 +45,7 @@ function ChatContent() {
   const searchParams = useSearchParams();
   const conversationId = searchParams?.get('c');
   const { toast } = useToast();
+  const { setStatus, updateState, reset: resetAICore } = useAICore();
 
   // Onboarding detection: Check for existing conversations
   const convsQuery = useMemoFirebase(() => {
@@ -100,6 +102,11 @@ function ChatContent() {
     }
     
     setIsProcessing(true);
+    setStatus('thinking');
+    updateState({ 
+      intent: `Initializing focus: ${goalId}`,
+      steps: [{ label: 'Calibrating neural core', status: 'active', timestamp: new Date() }] 
+    });
 
     const goalMap: Record<string, string> = {
       'save_money': 'Analyze my digital ecosystem for hidden waste and optimization opportunities. Start a forensic audit.',
@@ -156,6 +163,9 @@ function ChatContent() {
       let currentMetadata: any = null;
       let buffer = "";
 
+      setStatus('executing');
+      updateState({ steps: [{ label: 'Ingesting knowledge graph', status: 'active', timestamp: new Date() }] });
+
       if (reader) {
         while (true) {
           const { done, value } = await reader.read();
@@ -170,6 +180,15 @@ function ChatContent() {
             if (line.startsWith("__METADATA__:")) {
               try {
                 currentMetadata = JSON.parse(line.replace("__METADATA__:", ""));
+                updateState({ 
+                  intent: currentMetadata.intent,
+                  currentTool: currentMetadata.steps?.[0]?.action || 'Analysis',
+                  steps: (currentMetadata.steps || []).map((s: any) => ({
+                    label: s.thought || s.action,
+                    status: 'complete',
+                    timestamp: new Date()
+                  }))
+                });
               } catch (e) {}
             } else {
               fullContent += line + "\n";
@@ -186,8 +205,10 @@ function ChatContent() {
         metadata: currentMetadata
       });
 
+      setStatus('success');
     } catch (err) {
       console.error(err);
+      setStatus('error');
       toast({ variant: 'destructive', title: "Onboarding Failed", description: "Protocol initialization interrupted." });
     } finally {
       setIsProcessing(false);
@@ -207,6 +228,11 @@ function ChatContent() {
     setIsProcessing(true);
     setInput('');
     setSelectedToolImage(null);
+    setStatus('thinking');
+    updateState({ 
+      intent: currentInput.slice(0, 50),
+      steps: [{ label: 'Initializing reasoner', status: 'active', timestamp: new Date() }] 
+    });
 
     try {
       let activeId = conversationId;
@@ -247,6 +273,7 @@ function ChatContent() {
         setPaywallReason('limit_reached');
         setShowPaywall(true);
         setIsProcessing(false);
+        setStatus('idle');
         return;
       }
 
@@ -272,6 +299,16 @@ function ChatContent() {
             if (line.startsWith("__METADATA__:")) {
               try {
                 currentMetadata = JSON.parse(line.replace("__METADATA__:", ""));
+                setStatus('executing');
+                updateState({ 
+                  intent: currentMetadata.intent,
+                  currentTool: currentMetadata.steps?.[0]?.action || 'Signal Scan',
+                  steps: (currentMetadata.steps || []).map((s: any) => ({
+                    label: s.thought || s.action,
+                    status: 'complete',
+                    timestamp: new Date()
+                  }))
+                });
               } catch (e) {
                 console.error("Metadata parsing failed", e);
               }
@@ -289,8 +326,11 @@ function ChatContent() {
         timestamp: serverTimestamp(),
         metadata: currentMetadata
       });
+
+      setStatus('success');
     } catch (err) {
       console.error(err);
+      setStatus('error');
       toast({ variant: 'destructive', title: "Sync Interrupted", description: "Re-establishing link with intelligence core." });
     } finally {
       setIsProcessing(false);

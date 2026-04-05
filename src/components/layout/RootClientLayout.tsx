@@ -3,6 +3,7 @@
 import { ReactNode, useState, useEffect } from 'react';
 import { AppShell } from './AppShell';
 import { Loader2 } from 'lucide-react';
+import { AICoreProvider } from '@/components/ai-core/AICoreContext';
 
 export function RootClientLayout({ children }: { children: ReactNode }) {
   const [mounted, setMounted] = useState(false);
@@ -20,8 +21,10 @@ export function RootClientLayout({ children }: { children: ReactNode }) {
   }
 
   return (
-    <AppShell>
-      {children}
-    </AppShell>
+    <AICoreProvider>
+      <AppShell>
+        {children}
+      </AppShell>
+    </AICoreProvider>
   );
 }
