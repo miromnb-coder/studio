@@ -366,12 +366,12 @@ function ChatContent() {
   const hasMessages = (messages || []).length > 0;
 
   return (
-    <div className="flex flex-col h-full max-w-4xl mx-auto">
+    <div className="flex flex-col h-full max-w-4xl mx-auto w-full">
       <AnimatePresence>
         {showOnboarding && <OnboardingOverlay onSelectGoal={handleSelectGoal} />}
       </AnimatePresence>
 
-      <div ref={scrollRef} className="flex-1 overflow-y-auto space-y-12 pb-48 pt-10 stealth-scrollbar">
+      <div ref={scrollRef} className="flex-1 overflow-y-auto space-y-12 pb-48 pt-10 px-4 md:px-0 stealth-scrollbar">
         <AnimatePresence initial={false}>
           {hasMessages ? (
             messages!.map((msg, idx) => (
@@ -381,7 +381,7 @@ function ChatContent() {
                 animate={{ opacity: 1, y: 0 }}
                 className={cn("flex w-full flex-col", msg.role === 'user' ? "items-end" : "items-start")}
               >
-                <div className={cn("max-w-[90%] space-y-4", msg.role === 'user' ? "items-end text-right" : "items-start text-left")}>
+                <div className={cn("max-w-[95%] md:max-w-[90%] space-y-4", msg.role === 'user' ? "items-end text-right" : "items-start text-left")}>
                   {msg.role === 'assistant' && (
                     <div className="flex items-center gap-3 mb-2 px-2">
                       <div className="flex items-center justify-center w-6 h-6 rounded-full bg-white/40 border border-white/60 shadow-sm">
@@ -394,7 +394,7 @@ function ChatContent() {
                   )}
                   
                   <div className={cn(
-                    "p-8 rounded-[2.5rem] text-sm font-medium leading-relaxed shadow-sm overflow-hidden",
+                    "p-6 md:p-8 rounded-[2rem] md:rounded-[2.5rem] text-sm font-medium leading-relaxed shadow-sm overflow-hidden",
                     msg.role === 'user' 
                       ? "bg-slate-900 text-white" 
                       : "glass-surface text-slate-700 border-white/60"
@@ -420,26 +420,26 @@ function ChatContent() {
               </motion.div>
             ))
           ) : !showOnboarding && (
-            <div className="flex flex-col items-center justify-center py-20 text-center space-y-12">
+            <div className="flex flex-col items-center justify-center py-12 md:py-20 text-center space-y-8 md:space-y-12">
               <AdaptiveAICore variant="hero" />
-              <div className="space-y-4">
-                <h2 className="text-6xl font-bold tracking-tighter text-slate-900 leading-none">Intelligence Hub</h2>
+              <div className="space-y-4 px-4">
+                <h2 className="text-4xl md:text-6xl font-bold tracking-tighter text-slate-900 leading-tight">Intelligence Hub</h2>
                 <div className="flex items-center justify-center gap-3 text-slate-400">
-                  <div className="h-px w-8 bg-slate-100" />
-                  <p className="text-xs font-black uppercase tracking-[0.5em]">System Core Active</p>
-                  <div className="h-px w-8 bg-slate-100" />
+                  <div className="h-px w-6 md:w-8 bg-slate-100" />
+                  <p className="text-[10px] md:text-xs font-black uppercase tracking-[0.5em]">System Core Active</p>
+                  <div className="h-px w-6 md:w-8 bg-slate-100" />
                 </div>
               </div>
             </div>
           )}
           
           {isProcessing && (
-            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="flex flex-col items-start gap-4">
+            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="flex flex-col items-start gap-4 px-4">
               <div className="flex items-center gap-3 px-2">
                 <Loader2 className="w-4 h-4 text-primary animate-spin" />
                 <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Reasoning & Executing...</span>
               </div>
-              <div className="p-8 rounded-[2.5rem] glass-surface border-white/60 animate-shimmer min-w-[300px]">
+              <div className="p-8 rounded-[2.5rem] glass-surface border-white/60 animate-shimmer min-w-[280px] md:min-w-[300px]">
                 <div className="h-4 bg-slate-100 rounded-full w-24 mb-4" />
                 <div className="h-4 bg-slate-100 rounded-full w-64" />
               </div>
@@ -448,11 +448,11 @@ function ChatContent() {
         </AnimatePresence>
       </div>
 
-      <div className="fixed bottom-10 left-1/2 -translate-x-1/2 w-full max-w-2xl px-6 z-50">
+      <div className="fixed bottom-6 md:bottom-10 left-1/2 -translate-x-1/2 w-full max-w-2xl px-4 md:px-6 z-50">
         <div className="relative group">
-          <div className="absolute -inset-1 bg-gradient-to-r from-primary/20 via-accent/20 to-primary/20 rounded-[3rem] blur-xl opacity-0 group-focus-within:opacity-100 transition-opacity duration-500 pointer-events-none" />
+          <div className="absolute -inset-1 bg-gradient-to-r from-primary/20 via-accent/20 to-primary/20 rounded-[2.5rem] md:rounded-[3rem] blur-xl opacity-0 group-focus-within:opacity-100 transition-opacity duration-500 pointer-events-none" />
           
-          <GlassCard className="!p-2 rounded-[2.5rem] flex flex-col gap-2 shadow-[0_32px_64px_-16px_rgba(0,0,0,0.12)] border-white/80 transition-all duration-300 bg-white/40 backdrop-blur-3xl relative z-10">
+          <GlassCard className="!p-2 rounded-[2rem] md:rounded-[2.5rem] flex flex-col gap-2 shadow-[0_32px_64px_-16px_rgba(0,0,0,0.12)] border-white/80 transition-all duration-300 bg-white/40 backdrop-blur-3xl relative z-10">
             <AnimatePresence>
               {selectedImage && (
                 <motion.div 
@@ -461,7 +461,7 @@ function ChatContent() {
                   exit={{ height: 0, opacity: 0 }}
                   className="px-4 pt-4 flex gap-4 overflow-hidden"
                 >
-                  <div className="relative w-20 h-20 rounded-2xl overflow-hidden border border-white/60 shadow-inner group/preview">
+                  <div className="relative w-16 h-16 md:w-20 md:h-20 rounded-2xl overflow-hidden border border-white/60 shadow-inner group/preview">
                     <img src={selectedImage} alt="Selection" className="w-full h-full object-cover" />
                     <button 
                       onClick={() => setSelectedToolImage(null)}
@@ -487,7 +487,7 @@ function ChatContent() {
                 onClick={() => fileInputRef.current?.click()}
                 disabled={isProcessing}
                 className={cn(
-                  "w-12 h-12 rounded-full flex items-center justify-center transition-all active:scale-90 mb-0.5",
+                  "w-10 h-10 md:w-12 md:h-12 rounded-full flex items-center justify-center transition-all active:scale-90 mb-0.5",
                   selectedImage ? "text-primary bg-primary/10" : "text-slate-400 hover:bg-white/60 hover:text-slate-600"
                 )}
               >
@@ -502,7 +502,7 @@ function ChatContent() {
                 onKeyDown={handleKeyDown}
                 disabled={isProcessing}
                 placeholder={selectedImage ? "Describe this image..." : "Describe intent or ask for analysis..."}
-                className="flex-1 bg-transparent border-0 focus:ring-0 text-sm font-medium text-slate-700 placeholder:text-slate-300 resize-none py-3 min-h-[48px] max-h-[200px] stealth-scrollbar"
+                className="flex-1 bg-transparent border-0 focus:ring-0 text-sm font-medium text-slate-700 placeholder:text-slate-300 resize-none py-3 min-h-[44px] md:min-h-[48px] max-h-[200px] stealth-scrollbar"
               />
 
               <div className="flex items-center gap-2 mb-0.5 mr-0.5">
@@ -515,7 +515,7 @@ function ChatContent() {
                     >
                       <GlassButton 
                         size="sm" 
-                        className="!rounded-full !w-12 !h-12 !p-0 shadow-lg shadow-primary/20 relative overflow-hidden group/send"
+                        className="!rounded-full !w-10 !h-10 md:!w-12 md:!h-12 !p-0 shadow-lg shadow-primary/20 relative overflow-hidden group/send"
                         onClick={sendMessage}
                         loading={isProcessing}
                       >
