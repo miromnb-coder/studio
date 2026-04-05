@@ -1,6 +1,6 @@
 "use client";
 
-import { ReactNode, memo } from 'react';
+import { ReactNode, memo, Suspense } from 'react';
 import { TopBar } from './TopBar';
 import { motion, AnimatePresence } from 'framer-motion';
 
@@ -31,7 +31,9 @@ export function AppShell({ children }: { children: ReactNode }) {
     <div className="min-h-screen w-full relative bg-[#FBFBFE] selection:bg-primary/10 selection:text-primary overflow-x-hidden">
       <BackgroundElements />
 
-      <TopBar />
+      <Suspense fallback={<div className="fixed top-4 md:top-6 inset-x-0 h-16" />}>
+        <TopBar />
+      </Suspense>
       
       <main className="relative z-10 flex flex-col items-center w-full min-h-screen pt-32 pb-32">
         <div className="w-full max-w-5xl px-6">

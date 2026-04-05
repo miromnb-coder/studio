@@ -85,7 +85,9 @@ export function TopBar() {
   const reclaimedHours = useMemo(() => (totalSaved / 50).toFixed(1), [totalSaved]);
 
   const isPremium = status?.isPremium === true;
-  const usagePercent = status ? (status.usage.agentRuns / status.usage.limit) * 100 : 0;
+  const usagePercent = status && status.usage?.limit > 0 
+    ? (status.usage.agentRuns / status.usage.limit) * 100 
+    : 0;
 
   return (
     <>
@@ -176,7 +178,7 @@ export function TopBar() {
                 <div className="hidden xs:flex flex-col w-12 md:w-16 gap-1 mr-1">
                   <Progress value={usagePercent} className="h-1 bg-slate-200" />
                   <span className="text-[7px] font-black text-slate-400 uppercase tracking-widest leading-none truncate">
-                    {status.usage.agentRuns}/{status.usage.limit}
+                    {status.usage?.agentRuns || 0}/{status.usage?.limit || 5}
                   </span>
                 </div>
                 <UpgradeButton />
@@ -246,7 +248,11 @@ export function TopBar() {
         </div>
       </header>
 
-      <AnimatePresence>{isMenuOpen && <FloatingNavMenu onClose={closeMenu} />}</AnimatePresence>
+      <AnimatePresence>
+        {isMenuOpen && (
+          <FloatingNavMenu key="nav-menu" onClose={closeMenu} />
+        )}
+      </AnimatePresence>
     </>
   );
 }

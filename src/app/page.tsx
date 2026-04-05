@@ -99,8 +99,6 @@ function ChatContent() {
       return;
     }
     
-    // We don't hide onboarding immediately - OnboardingOverlay handles the 'Calibration' state
-    // Once calibration is finished, it calls this with the goal
     setIsProcessing(true);
 
     const goalMap: Record<string, string> = {
@@ -112,7 +110,6 @@ function ChatContent() {
     const initialIntent = goalMap[goalId] || 'Initialize general intelligence audit.';
     
     try {
-      // 1. Create the persistent memory entry for this goal
       await setDoc(doc(db, 'users', user.uid, 'memory', 'main'), {
         userId: user.uid,
         goals: [goalId],
@@ -120,7 +117,6 @@ function ChatContent() {
         lastUpdated: serverTimestamp()
       }, { merge: true });
 
-      // 2. Create the first conversation
       const newRef = doc(collection(db, 'users', user.uid, 'conversations'));
       const activeId = newRef.id;
       
@@ -132,20 +128,16 @@ function ChatContent() {
         updatedAt: serverTimestamp() 
       });
 
-      // 3. Update route
       router.push(`/?c=${activeId}`);
 
-      // 4. Send the user message
       await addDocumentNonBlocking(collection(db, 'users', user.uid, 'conversations', activeId, 'messages'), {
         role: 'user',
         content: initialIntent,
         timestamp: serverTimestamp()
       });
 
-      // 5. Hide onboarding overlay (should happen after some calibration time in UI)
       setShowOnboarding(false);
 
-      // 6. Trigger AI
       const response = await fetch('/api/agent', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
