@@ -1,3 +1,4 @@
+
 'use client';
 
 import { useState, useEffect } from 'react';
@@ -50,7 +51,7 @@ export default function LoginPage() {
         createdAt: serverTimestamp(),
         updatedAt: serverTimestamp(),
         totalSavedOverall: 0,
-        inboundEmailAddress: null,
+        inboundEmailAddress: `${uid.slice(0, 8)}@operator.ai`, // Magic address generation
       });
     }
   };
