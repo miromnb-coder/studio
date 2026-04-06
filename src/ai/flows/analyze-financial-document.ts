@@ -88,14 +88,6 @@ Classify the dominant intent:
 - ANALYSIS: Comparisons, reasoning, step-by-step logic. (Mode: 'analyst')
 - GENERAL: Everyday questions, casual conversation. (Mode: 'general')
 
-MODE BEHAVIORS:
-- FINANCE: Structured, practical. Focus on reclaimed liquidity.
-- TIME_OPTIMIZER: Focus on removals and simplifications. Identify low-value tasks to delete.
-- MONETIZATION: Focus on pricing, packaging, and realistic revenue opportunities.
-- TECHNICAL: Exact, concise, implementation-ready solutions.
-- PLANNING: Shortest path to completion. Phase-based roadmaps.
-- GENERAL: Natural, clear, helpful. Do not force financial framing.
-
 OUTPUT FORMAT:
 Return ONLY a valid JSON object. All user-facing strings MUST be in the user's detected language.
 {
