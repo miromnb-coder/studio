@@ -69,6 +69,11 @@ export function useCollection<T = any>(
       return;
     }
 
+    // Safety check for memoization without throwing to prevent client-side crash
+    if (!memoizedTargetRefOrQuery.__memo) {
+      console.warn('Firestore target was not properly memoized using useMemoFirebase. Performance may be degraded.');
+    }
+
     setIsLoading(true);
     setError(null);
 
@@ -107,11 +112,6 @@ export function useCollection<T = any>(
 
     return () => unsubscribe();
   }, [memoizedTargetRefOrQuery]); // Re-run if the target query/reference changes.
-  
-  if(memoizedTargetRefOrQuery && !memoizedTargetRefOrQuery.__memo) {
-    // Safer debug message to avoid object-to-string crash
-    throw new Error('Firestore target was not properly memoized using useMemoFirebase');
-  }
   
   return { data, isLoading, error };
 }

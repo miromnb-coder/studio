@@ -1,11 +1,10 @@
-
 "use client";
 
 import { SystemCard } from '@/components/systems/SystemCard';
 import { useUser, useFirestore, useCollection, useMemoFirebase } from '@/firebase';
 import { collection, query, orderBy, limit, where } from 'firebase/firestore';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Terminal, ShieldCheck, Zap, ChevronRight, Activity, Clock, Cpu, BarChart3, Bell, ArrowRight, Sparkles } from 'lucide-react';
+import { Terminal, ShieldCheck, Zap, ChevronRight, Activity, Clock, Cpu, BarChart3, Bell, ArrowRight, Sparkles, Loader2 } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { useMemo, useEffect, useState } from 'react';
 import { ProactiveAlerts } from '@/components/dashboard/ProactiveAlerts';
@@ -45,7 +44,6 @@ export default function DashboardPage() {
 
   const { data: analyses, isLoading } = useCollection(analysesQuery);
 
-  // FETCH REAL PROACTIVE ALERTS with loading check
   const alertsQuery = useMemoFirebase(() => {
     if (!db || !user || isUserLoading) return null;
     return query(
@@ -68,14 +66,23 @@ export default function DashboardPage() {
   }, [db, user, isUserLoading, analyses]);
 
   const totalReclaimed = useMemo(() => {
-    return (analyses || []).reduce((acc, a) => acc + (a.estimatedMonthlySavings || 0), 0);
+    return (analyses ?? []).reduce((acc, a) => acc + (a.estimatedMonthlySavings || 0), 0);
   }, [analyses]);
 
   const reclaimedHours = useMemo(() => {
     return (totalReclaimed / 50).toFixed(1);
   }, [totalReclaimed]);
 
-  const activePatterns = (analyses || []).filter(a => a.status === 'completed').length;
+  const activePatterns = (analyses ?? []).filter(a => a.status === 'completed').length;
+
+  if (isUserLoading) {
+    return (
+      <div className="min-h-[60vh] flex flex-col items-center justify-center space-y-4">
+        <Loader2 className="w-8 h-8 animate-spin text-primary/40" />
+        <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Authenticating Session...</p>
+      </div>
+    );
+  }
 
   return (
     <motion.div 
@@ -136,7 +143,7 @@ export default function DashboardPage() {
             >
               <div className="flex items-center gap-4 p-4 rounded-3xl bg-slate-50/50 border border-slate-100 cursor-pointer hover:bg-slate-100 transition-all" onClick={() => router.push('/money-saver')}>
                 <BarChart3 className="w-4 h-4 text-primary" />
-                <span className="text-xs font-bold text-slate-600">Audit Ledger: {analyses?.length || 0} Entries.</span>
+                <span className="text-xs font-bold text-slate-600">Audit Ledger: {(analyses ?? []).length} Entries.</span>
               </div>
             </SystemCard>
 
@@ -146,7 +153,7 @@ export default function DashboardPage() {
               status={isLoading ? "syncing" : "active"}
               value={`+${reclaimedHours}h`}
               metrics={[
-                { label: 'Efficiency', value: analyses?.length ? '84%' : '0%' },
+                { label: 'Efficiency', value: (analyses ?? []).length ? '84%' : '0%' },
                 { label: 'Confidence', value: 'High' }
               ]}
               actions={[
@@ -178,7 +185,7 @@ export default function DashboardPage() {
                   <div key={i} className="h-24 w-full rounded-4xl bg-white/20 animate-pulse" />
                 ))
               ) : analyses && analyses.length > 0 ? (
-                analyses!.map((a, idx) => (
+                (analyses ?? []).map((a, idx) => (
                   <motion.div 
                     key={a.id}
                     initial={{ opacity: 0, x: -20 }}
@@ -226,7 +233,7 @@ export default function DashboardPage() {
             <h3 className="text-xs font-bold text-slate-900 uppercase tracking-[0.3em]">Proactive Intelligence</h3>
           </div>
           
-          <ProactiveAlerts alerts={alerts || []} isLoading={isAlertsLoading} />
+          <ProactiveAlerts alerts={alerts ?? []} isLoading={isAlertsLoading} />
 
           <div className="p-8 rounded-[2.5rem] bg-slate-900 text-white space-y-6 shadow-2xl relative overflow-hidden group">
             <div className="absolute top-0 right-0 w-32 h-32 bg-primary/20 rounded-full blur-3xl -mr-16 -mt-16 group-hover:bg-primary/30 transition-all" />

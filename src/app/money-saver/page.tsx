@@ -30,7 +30,7 @@ import { cn } from '@/lib/utils';
 
 export default function AuditLedgerPage() {
   const [mounted, setMounted] = useState(false);
-  const { user } = useUser();
+  const { user, isUserLoading } = useUser();
   const db = useFirestore();
 
   useEffect(() => {
@@ -38,30 +38,37 @@ export default function AuditLedgerPage() {
   }, []);
 
   const analysesQuery = useMemoFirebase(() => {
-    if (!db || !user) return null;
+    if (!db || !user || isUserLoading) return null;
     return query(
       collection(db, 'users', user.uid, 'analyses'),
       orderBy('createdAt', 'desc'),
       limit(50)
     );
-  }, [db, user]);
+  }, [db, user, isUserLoading]);
 
   const { data: analyses, isLoading } = useCollection(analysesQuery);
 
   const totalMonthlySavings = useMemo(() => {
-    return (analyses || []).reduce((acc, a) => acc + (a.estimatedMonthlySavings || 0), 0);
+    return (analyses ?? []).reduce((acc, a) => acc + (a.estimatedMonthlySavings || 0), 0);
   }, [analyses]);
 
   const projectedYearlySavings = totalMonthlySavings * 12;
   const efficiencyIndex = useMemo(() => {
     if (!analyses || analyses.length === 0) return 0;
-    const completed = analyses.filter(a => a.status === 'completed').length;
-    return Math.round((completed / analyses.length) * 100);
+    const completed = (analyses ?? []).filter(a => a.status === 'completed').length;
+    return Math.round((completed / (analyses?.length || 1)) * 100);
   }, [analyses]);
 
   const reclaimedHours = (totalMonthlySavings / 50).toFixed(1);
 
-  if (!mounted) return null;
+  if (!mounted || isUserLoading) {
+    return (
+      <div className="min-h-[60vh] flex flex-col items-center justify-center space-y-4">
+        <Loader2 className="w-8 h-8 animate-spin text-primary/40" />
+        <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Loading Audit History...</p>
+      </div>
+    );
+  }
 
   const getSourceIcon = (source?: string) => {
     switch(source) {
@@ -134,14 +141,14 @@ export default function AuditLedgerPage() {
                <Terminal className="w-4 h-4" />
                Audit Trail (Recent Briefings)
             </h3>
-            <Badge variant="outline" className="border-slate-100 text-[8px] text-slate-400 uppercase tracking-widest">{analyses?.length || 0} Patterns Found</Badge>
+            <Badge variant="outline" className="border-slate-100 text-[8px] text-slate-400 uppercase tracking-widest">{(analyses ?? []).length} Patterns Found</Badge>
          </div>
 
          <div className="grid grid-cols-1 gap-4">
             {isLoading ? (
               [...Array(3)].map((_, i) => <Skeleton key={i} className="h-32 w-full bg-slate-50 rounded-4xl" />)
-            ) : (analyses || []).length > 0 ? (
-              analyses!.map((analysis, i) => (
+            ) : analyses && analyses.length > 0 ? (
+              (analyses ?? []).map((analysis, i) => (
                 <motion.div
                   key={analysis.id}
                   initial={{ opacity: 0, y: 10 }}

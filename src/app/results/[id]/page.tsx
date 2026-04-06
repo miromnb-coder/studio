@@ -42,25 +42,25 @@ export default function ResultsPage() {
 
   const analysisRef = useMemoFirebase(() => {
     try {
-      if (!db || !user || !id) return null;
+      if (!db || !user || !id || isUserLoading) return null;
       return doc(db, 'users', user.uid, 'analyses', id as string);
     } catch (e) {
       console.error('Analysis Ref Error:', e);
       return null;
     }
-  }, [db, user, id]);
+  }, [db, user, id, isUserLoading]);
 
   const { data: analysis, isLoading: isAnalysisLoading } = useDoc(analysisRef);
 
   const itemsRef = useMemoFirebase(() => {
     try {
-      if (!db || !user || !id) return null;
+      if (!db || !user || !id || isUserLoading) return null;
       return collection(db, 'users', user.uid, 'analyses', id as string, 'detected_items');
     } catch (e) {
       console.error('Items Ref Error:', e);
       return null;
     }
-  }, [db, user, id]);
+  }, [db, user, id, isUserLoading]);
 
   const { data: items, isLoading: isItemsLoading } = useCollection(itemsRef);
 
@@ -115,11 +115,11 @@ export default function ResultsPage() {
       <section className="space-y-8">
         <div className="flex items-center gap-3 pb-4 border-b border-slate-100">
           <Zap className="w-5 h-5 text-primary" />
-          <h2 className="text-xl font-bold font-headline uppercase tracking-widest text-[12px] text-slate-900">Operator Intelligence ({(items || []).length})</h2>
+          <h2 className="text-xl font-bold font-headline uppercase tracking-widest text-[12px] text-slate-900">Operator Intelligence ({(items ?? []).length})</h2>
         </div>
         
         <div className="grid gap-8">
-          {(items || []).map((item, i) => (
+          {(items ?? []).map((item, i) => (
             <motion.div 
               key={item.id}
               initial={{ opacity: 0, y: 20 }}
