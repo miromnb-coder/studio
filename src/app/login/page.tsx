@@ -50,7 +50,7 @@ export default function LoginPage() {
         updatedAt: serverTimestamp(),
         totalSavedOverall: 0,
         inboundEmailAddress: `${uid.slice(0, 8)}@operator.ai`, // Magic address generation
-      });
+      }, { merge: true });
     }
   };
 
@@ -121,7 +121,7 @@ export default function LoginPage() {
               variant="outline" 
               className="w-full h-14 rounded-2xl border-white/10 bg-white/5 hover:bg-white/10 gap-3 text-lg font-medium transition-all"
               onClick={handleGoogleSignIn}
-              disabled={loading}
+              disabled={loading || !auth}
             >
               <Chrome className="w-5 h-5" />
               Continue with Google
@@ -130,7 +130,7 @@ export default function LoginPage() {
             <div className="relative">
               <div className="absolute inset-0 flex items-center"><span className="w-full border-t border-white/5"></span></div>
               <div className="relative flex justify-center text-[10px] uppercase font-bold tracking-[0.3em] text-muted-foreground/50">
-                <span className="bg-[#19191C] px-4">Or use email</span>
+                <span className="bg-background px-4">Or use email</span>
               </div>
             </div>
 
@@ -166,13 +166,13 @@ export default function LoginPage() {
               </div>
 
               {error && (
-                <p className="text-danger text-sm font-medium text-center">{error}</p>
+                <p className="text-destructive text-sm font-medium text-center">{error}</p>
               )}
 
               <Button 
                 type="submit" 
                 className="w-full h-16 rounded-2xl text-lg font-bold shadow-xl shadow-primary/20 group"
-                disabled={loading}
+                disabled={loading || !auth}
               >
                 {loading ? <Loader2 className="w-6 h-6 animate-spin" /> : (
                   <>
