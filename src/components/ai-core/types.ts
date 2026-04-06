@@ -2,7 +2,7 @@
  * @fileOverview Core types for the Floating AI Core system.
  */
 
-export type AICoreStatus = 'idle' | 'thinking' | 'executing' | 'success' | 'error';
+export type AICoreStatus = 'idle' | 'thinking' | 'reasoning' | 'executing' | 'success' | 'error';
 
 export interface AICoreStep {
   label: string;
