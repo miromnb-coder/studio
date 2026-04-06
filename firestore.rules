@@ -4,135 +4,99 @@ service cloud.firestore {
   match /databases/{database}/documents {
 
     /**
-     * SECURE FINANCIAL ANALYSIS RULES
-     *
-     * Core Philosophy: 
-     * This ruleset enforces a strict user-ownership model. Every piece of data is 
-     * functionally and logically tied to a specific UserProfile via hierarchical 
-     * nesting and denormalized identity fields.
+     * AI LIFE OPERATOR - TIETOTURVASÄÄNNÖT
+     * Sallii pääsyn omiin tietoihin auth.uid:n perusteella.
+     * Sähköpostin vahvistusta ei vaadita perustoimintoihin.
      */
 
-    // --- Global Helper Functions ---
+    // --- Globaalit apufunktiot ---
 
     function isSignedIn() {
       return request.auth != null;
     }
 
     function isOwner(userId) {
+      // Sallitaan pääsy, jos käyttäjä on kirjautunut ja UID täsmää
+      // Emme vaadi request.auth.token.email_verified == true tässä vaiheessa
       return isSignedIn() && request.auth.uid == userId;
     }
 
-    function isExistingOwner(userId) {
-      return isOwner(userId) && resource != null;
-    }
-
-    function matchesPath(field, pathValue) {
-      return request.resource.data[field] == pathValue;
-    }
-
-    function isUnchanged(field) {
-      return request.resource.data[field] == resource.data[field];
-    }
-
-    // --- Collection Rules ---
+    // --- Kokoelmien säännöt ---
 
     match /users/{userId} {
-      allow get: if isOwner(userId);
-      allow list: if false;
-      allow create: if isOwner(userId) && matchesPath('id', userId);
-      allow update: if isExistingOwner(userId) && isUnchanged('id');
-      allow delete: if isExistingOwner(userId);
+      // Käyttäjäprofiili
+      allow get, create, update: if isOwner(userId);
+      allow delete: if false; // Profiilin poisto vaatii manuaalisen tarkistuksen
       
       /**
-       * @description User usage quotas and plan status.
+       * @description Käyttömäärät ja kiintiöt.
        */
       match /usage/{date} {
-        allow get: if isOwner(userId);
-        allow create, update: if isOwner(userId);
+        allow get, list, create, update: if isOwner(userId);
       }
 
       /**
-       * @description User long-term memory.
+       * @description Agentin pitkäaikainen muisti.
        */
       match /memory/main {
-        allow get: if isOwner(userId);
-        allow create, update: if isOwner(userId) && matchesPath('userId', userId);
-        allow delete: if isOwner(userId);
+        allow get, create, update, delete: if isOwner(userId);
       }
 
       /**
-       * @description User chat threads and persistent memory.
+       * @description Keskusteluhistoria.
        */
       match /conversations/{conversationId} {
-        allow get, list: if isOwner(userId);
-        allow create: if isOwner(userId) && matchesPath('userId', userId);
-        allow update: if isExistingOwner(userId) && isUnchanged('userId');
-        allow delete: if isExistingOwner(userId);
-
-        /**
-         * @description Individual messages within a conversation.
-         */
+        allow read, write: if isOwner(userId);
+        
         match /messages/{messageId} {
-          allow get, list: if isOwner(userId);
-          allow create: if isOwner(userId);
-          allow update: if isExistingOwner(userId);
-          allow delete: if isExistingOwner(userId);
+          allow read, write: if isOwner(userId);
         }
       }
 
-      match /settings/{settingId} {
-        allow get, list: if isOwner(userId);
-        allow create: if isOwner(userId) && matchesPath('userId', userId);
-        allow update: if isExistingOwner(userId) && isUnchanged('userId');
-        allow delete: if isExistingOwner(userId);
-      }
-
-      match /uploaded_files/{fileId} {
-        allow get, list: if isOwner(userId);
-        allow create: if isOwner(userId) && matchesPath('userId', userId);
-        allow update: if isExistingOwner(userId) && isUnchanged('userId');
-        allow delete: if isExistingOwner(userId);
-      }
-
+      /**
+       * @description Analyysiraportit ja löydetyt kohteet.
+       */
       match /analyses/{analysisId} {
-        allow get, list: if isOwner(userId);
-        allow create: if isOwner(userId) && matchesPath('userId', userId);
-        allow update: if isExistingOwner(userId) && isUnchanged('userId');
-        allow delete: if isExistingOwner(userId);
+        allow read, write: if isOwner(userId);
 
-        match /detected_items/{detectedItemId} {
-          allow get, list: if isOwner(userId);
-          allow create: if isOwner(userId) && matchesPath('userId', userId) && matchesPath('analysisId', analysisId);
-          allow update: if isExistingOwner(userId) && isUnchanged('userId') && isUnchanged('analysisId');
-          allow delete: if isExistingOwner(userId);
+        match /detected_items/{itemId} {
+          allow read, write: if isOwner(userId);
         }
       }
 
-      match /digests/{digestId} {
-        allow get, list: if isOwner(userId);
-        allow create: if isOwner(userId) && matchesPath('userId', userId);
-        allow update, delete: if isExistingOwner(userId);
-      }
-
-      match /subscriptions/{subscriptionId} {
-        allow get, list: if isOwner(userId);
-        allow create: if isOwner(userId) && matchesPath('userId', userId);
-        allow update: if isExistingOwner(userId) && isUnchanged('userId');
-        allow delete: if isExistingOwner(userId);
-      }
-
+      /**
+       * @description Hälytykset ja ilmoitukset.
+       */
       match /alerts/{alertId} {
-        allow get, list: if isOwner(userId);
-        allow create: if isOwner(userId) && matchesPath('userId', userId);
-        allow update: if isExistingOwner(userId) && isUnchanged('userId');
-        allow delete: if isExistingOwner(userId);
+        allow read, write: if isOwner(userId);
       }
 
+      /**
+       * @description Inbound-sähköpostit ja tiedonkeruu.
+       */
       match /inbox/{emailId} {
-        allow get, list: if isOwner(userId);
-        allow create: if isOwner(userId) && matchesPath('userId', userId);
-        allow update: if isExistingOwner(userId) && isUnchanged('userId');
-        allow delete: if isExistingOwner(userId);
+        allow read, write: if isOwner(userId);
+      }
+
+      /**
+       * @description Päivittäiset yhteenvedot.
+       */
+      match /digests/{digestId} {
+        allow read, write: if isOwner(userId);
+      }
+
+      /**
+       * @description Agent V5/V6: Dynaamisesti luodut työkalut.
+       */
+      match /forged_tools/{toolId} {
+        allow read, write: if isOwner(userId);
+      }
+
+      /**
+       * @description Agent V6: Episodinen muisti (tapahtumaloki).
+       */
+      match /episodic_memory/{eventId} {
+        allow read, write: if isOwner(userId);
       }
     }
   }

@@ -2,210 +2,48 @@
 {
   "entities": {
     "UserProfile": {
-      "$schema": "http://json-schema.org/draft-07/schema#",
       "title": "UserProfile",
       "type": "object",
-      "description": "Stores core, non-authentication related information about a user.",
+      "description": "Käyttäjän perustiedot ja tilaustaso.",
       "properties": {
-        "id": {
-          "type": "string",
-          "description": "Unique identifier for the UserProfile entity."
-        },
-        "email": {
-          "type": "string",
-          "description": "The user's email address.",
-          "format": "email"
-        },
-        "inboundEmailAddress": {
-          "type": "string",
-          "description": "Unique magic forwarding address for receipt processing."
-        },
-        "displayName": {
-          "type": "string",
-          "description": "The user's preferred display name."
-        },
-        "plan": {
-          "type": "string",
-          "enum": ["FREE", "STARTER", "PREMIUM"],
-          "description": "The user's current subscription plan."
-        },
-        "totalSavedOverall": {
-          "type": "number"
-        },
-        "createdAt": {
-          "type": "string",
-          "format": "date-time"
-        },
-        "updatedAt": {
-          "type": "string",
-          "format": "date-time"
-        }
+        "id": { "type": "string" },
+        "email": { "type": "string", "format": "email" },
+        "displayName": { "type": "string" },
+        "plan": { "type": "string", "enum": ["FREE", "STARTER", "PREMIUM"] },
+        "inboundEmailAddress": { "type": "string" },
+        "totalSavedOverall": { "type": "number" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
       },
-      "required": [
-        "id",
-        "email",
-        "createdAt"
-      ]
-    },
-    "UserMemory": {
-      "$schema": "http://json-schema.org/draft-07/schema#",
-      "title": "UserMemory",
-      "type": "object",
-      "description": "Synthesized intelligence about a user's financial habits, goals, and preferences.",
-      "properties": {
-        "userId": { "type": "string" },
-        "goals": { "type": "array", "items": { "type": "string" } },
-        "subscriptions": { "type": "array", "items": { "type": "string" } },
-        "preferences": { "type": "array", "items": { "type": "string" } },
-        "behaviorSummary": { "type": "string" },
-        "lastUpdated": { "type": "string", "format": "date-time" }
-      },
-      "required": ["userId"]
+      "required": ["id", "email", "createdAt"]
     },
     "Usage": {
       "title": "Usage",
       "type": "object",
+      "description": "Päivittäiset käyttömäärät.",
       "properties": {
         "agentRuns": { "type": "number" },
         "lastUpdated": { "type": "string", "format": "date-time" }
       }
     },
-    "Conversation": {
-      "$schema": "http://json-schema.org/draft-07/schema#",
-      "title": "Conversation",
-      "type": "object",
-      "description": "Stores a persistent chat session between the user and the Operator.",
-      "properties": {
-        "id": { "type": "string" },
-        "userId": { "type": "string" },
-        "title": { "type": "string" },
-        "isArchived": { "type": "boolean" },
-        "isPinned": { "type": "boolean" },
-        "createdAt": { "type": "string", "format": "date-time" },
-        "updatedAt": { "type": "string", "format": "date-time" }
-      },
-      "required": ["userId", "title", "createdAt"]
-    },
-    "Message": {
-      "$schema": "http://json-schema.org/draft-07/schema#",
-      "title": "Message",
-      "type": "object",
-      "description": "An individual message within a conversation.",
-      "properties": {
-        "id": { "type": "string" },
-        "role": { "type": "string", "enum": ["user", "assistant"] },
-        "content": { "type": "string" },
-        "timestamp": { "type": "string", "format": "date-time" },
-        "type": { "type": "string" },
-        "data": { "type": "object" },
-        "metadata": { "type": "object" }
-      },
-      "required": ["role", "content", "timestamp"]
-    },
-    "Inbox": {
-      "$schema": "http://json-schema.org/draft-07/schema#",
-      "title": "Inbox",
-      "type": "object",
-      "description": "Stores raw incoming email data for audit and processing.",
-      "properties": {
-        "id": { "type": "string" },
-        "userId": { "type": "string" },
-        "subject": { "type": "string" },
-        "body": { "type": "string" },
-        "from": { "type": "string" },
-        "receivedAt": { "type": "string", "format": "date-time" }
-      },
-      "required": [
-        "userId",
-        "subject",
-        "body",
-        "receivedAt"
-      ]
-    },
     "Analysis": {
-      "$schema": "http://json-schema.org/draft-07/schema#",
       "title": "Analysis",
       "type": "object",
-      "description": "Represents a single instance of a financial analysis.",
+      "description": "Yksittäinen taloudellinen analyysi.",
       "properties": {
         "id": { "type": "string" },
         "userId": { "type": "string" },
-        "source": { "type": "string", "enum": ["screenshot", "pasted_text", "email", "chat"] },
         "title": { "type": "string" },
         "summary": { "type": "string" },
         "estimatedMonthlySavings": { "type": "number" },
-        "analysisDate": { "type": "string", "format": "date-time" },
         "status": { "type": "string" },
-        "inputMethod": { "type": "string" },
-        "inputContent": { "type": "string" },
-        "beforeComparison": { "type": "string" },
-        "afterComparison": { "type": "string" }
-      },
-      "required": [
-        "id",
-        "userId",
-        "title",
-        "summary",
-        "estimatedMonthlySavings",
-        "analysisDate",
-        "status",
-        "source"
-      ]
-    },
-    "DailyDigest": {
-      "$schema": "http://json-schema.org/draft-07/schema#",
-      "title": "DailyDigest",
-      "type": "object",
-      "description": "A synthesized daily summary of financial findings and actions.",
-      "properties": {
-        "id": { "type": "string" },
-        "userId": { "type": "string" },
-        "date": { "type": "string", "format": "date" },
-        "summary": { "type": "string" },
-        "estimatedMonthlySavings": { "type": "number" },
-        "findingsCount": { "type": "number" },
-        "topActions": {
-          "type": "array",
-          "items": {
-            "type": "object",
-            "properties": {
-              "title": { "type": "string" },
-              "description": { "type": "string" },
-              "urgency": { "type": "string" }
-            }
-          }
-        },
-        "createdAt": { "type": "string", "format": "date-time" }
-      },
-      "required": ["userId", "date", "summary"]
-    },
-    "Alert": {
-      "$schema": "http://json-schema.org/draft-07/schema#",
-      "title": "Alert",
-      "type": "object",
-      "description": "A proactive notification generated by the AI engine.",
-      "properties": {
-        "id": { "type": "string" },
-        "userId": { "type": "string" },
-        "title": { "type": "string" },
-        "explanation": { "type": "string" },
-        "urgency": { "type": "string", "enum": ["low", "medium", "high", "urgent"] },
-        "type": { "type": "string", "enum": ["trial", "price_increase", "duplicate", "optimization"] },
-        "actionLabel": { "type": "string" },
-        "analysisId": { "type": "string" },
-        "impact": { "type": "number" },
         "source": { "type": "string" },
-        "isDismissed": { "type": "boolean" },
         "createdAt": { "type": "string", "format": "date-time" }
-      },
-      "required": ["userId", "title", "explanation", "urgency", "type"]
+      }
     }
   },
   "auth": {
-    "providers": [
-      "password",
-      "google.com"
-    ]
+    "providers": ["password", "google.com"]
   },
   "firestore": {
     "structure": [
@@ -214,7 +52,7 @@
         "definition": {
           "entityName": "UserProfile",
           "schema": { "$ref": "#/backend/entities/UserProfile" },
-          "description": "Stores core profile information."
+          "description": "Käyttäjän profiili."
         }
       },
       {
@@ -222,63 +60,7 @@
         "definition": {
           "entityName": "Usage",
           "schema": { "$ref": "#/backend/entities/Usage" },
-          "description": "Daily usage limits."
-        }
-      },
-      {
-        "path": "/users/{userId}/memory/main",
-        "definition": {
-          "entityName": "UserMemory",
-          "schema": { "$ref": "#/backend/entities/UserMemory" },
-          "description": "User long-term memory."
-        }
-      },
-      {
-        "path": "/users/{userId}/conversations/{conversationId}",
-        "definition": {
-          "entityName": "Conversation",
-          "schema": { "$ref": "#/backend/entities/Conversation" },
-          "description": "User chat threads."
-        }
-      },
-      {
-        "path": "/users/{userId}/conversations/{conversationId}/messages/{messageId}",
-        "definition": {
-          "entityName": "Message",
-          "schema": { "$ref": "#/backend/entities/Message" },
-          "description": "Messages within a conversation."
-        }
-      },
-      {
-        "path": "/users/{userId}/inbox/{emailId}",
-        "definition": {
-          "entityName": "Inbox",
-          "schema": { "$ref": "#/backend/entities/Inbox" },
-          "description": "Stores raw incoming emails."
-        }
-      },
-      {
-        "path": "/users/{userId}/analyses/{analysisId}",
-        "definition": {
-          "entityName": "Analysis",
-          "schema": { "$ref": "#/backend/entities/Analysis" },
-          "description": "Stores individual financial analysis reports."
-        }
-      },
-      {
-        "path": "/users/{userId}/digests/{digestId}",
-        "definition": {
-          "entityName": "DailyDigest",
-          "schema": { "$ref": "#/backend/entities/DailyDigest" },
-          "description": "Stores daily financial briefings."
-        }
-      },
-      {
-        "path": "/users/{userId}/alerts/{alertId}",
-        "definition": {
-          "entityName": "Alert",
-          "schema": { "$ref": "#/backend/entities/Alert" },
-          "description": "Proactive intelligence alerts."
+          "description": "Käyttömäärät per päivä."
         }
       }
     ]
