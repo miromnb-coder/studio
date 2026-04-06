@@ -1,6 +1,6 @@
 
 import { NextResponse } from 'next/server';
-import { runAgentV5 } from '@/agent/v5/orchestrator';
+import { runAgentV6 } from '@/agent/v6/orchestrator';
 import { initializeFirebase } from '@/firebase';
 import { SubscriptionService, PLAN_LIMITS } from '@/services/subscription-service';
 
@@ -43,7 +43,7 @@ export async function POST(req: Request) {
       await SubscriptionService.incrementUsage(firestore, userId);
     }
 
-    const { stream, metadata } = await runAgentV5(input, userId || 'system_anonymous', history, imageUri);
+    const { stream, metadata } = await runAgentV6(input, userId || 'system_anonymous', history, imageUri);
 
     const encoder = new TextEncoder();
     const readableStream = new ReadableStream({

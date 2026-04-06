@@ -53,7 +53,7 @@ export function AICorePanel({ isOpen, onClose }: AICorePanelProps) {
                     <Sparkles className="w-6 h-6" />
                   </div>
                   <div>
-                    <h3 className="text-base font-black tracking-tighter text-slate-900 uppercase">Logic Engine v5.6</h3>
+                    <h3 className="text-base font-black tracking-tighter text-slate-900 uppercase">Logic Engine v6.0</h3>
                     <div className="flex items-center gap-2 mt-0.5">
                       <div className={cn(
                         "w-1.5 h-1.5 rounded-full",

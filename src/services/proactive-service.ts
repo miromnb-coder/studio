@@ -62,11 +62,12 @@ export async function scanForSignals(userId: string, sourceText: string, analysi
                 "explanation": "Brief context",
                 "urgency": "low|medium|high|urgent",
                 "type": "trial|price_increase|duplicate|optimization",
-                "impact": number (estimated monthly loss/gain)
+                "impact": number (estimated monthly loss/gain),
+                "suggestedAction": "A concise, actionable suggestion for the user, e.g., 'Cancel trial for X' or 'Negotiate bill with Y'."
               }
             ]
           }
-          Only set detected: true if the event is high-confidence and actionable.`
+          Only set detected: true if the event is high-confidence and actionable. Focus on providing clear, actionable steps.`
         },
         { role: 'user', content: sourceText }
       ],
@@ -91,7 +92,7 @@ export async function scanForSignals(userId: string, sourceText: string, analysi
             analysisId: analysisId || null,
             isDismissed: false,
             createdAt: serverTimestamp(),
-            actionLabel: event.type === 'trial' ? 'Cancel Trial' : 'Resolve Leak'
+            actionLabel: event.suggestedAction || (event.type === 'trial' ? 'Cancel Trial' : 'Resolve Leak')
           });
           console.log(`[PROACTIVE] Alert generated: ${event.title}`);
         }
