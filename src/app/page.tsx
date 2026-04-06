@@ -237,39 +237,6 @@ function ChatContent() {
                   </p>
                 </div>
               </div>
-
-              {/* Metrics Cards Grid */}
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 w-full max-w-3xl">
-                {[
-                  { label: "Neural Activity", val: "87%", icon: Activity, color: "text-blue-500" },
-                  { label: "Processing Speed", val: "1.8x", icon: Zap, color: "text-cyan-500" },
-                  { label: "Confidence", val: "94%", icon: ShieldCheck, color: "text-purple-500" }
-                ].map((metric, i) => (
-                  <motion.div
-                    key={metric.label}
-                    initial={{ opacity: 0, y: 20 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    transition={{ delay: 0.4 + i * 0.1 }}
-                    className="p-6 rounded-[2rem] bg-white/40 backdrop-blur-xl border border-white/60 shadow-sm flex flex-col items-start gap-4 text-left group hover:bg-white/60 transition-all"
-                  >
-                    <div className={cn("w-10 h-10 rounded-2xl bg-white flex items-center justify-center shadow-sm", metric.color)}>
-                      <metric.icon className="w-5 h-5" />
-                    </div>
-                    <div>
-                      <p className="text-[9px] font-bold uppercase tracking-widest text-slate-400 mb-1">{metric.label}</p>
-                      <p className="text-2xl font-black text-slate-900 tracking-tight">{metric.val}</p>
-                    </div>
-                    <div className="w-full h-1 bg-slate-100 rounded-full overflow-hidden">
-                      <motion.div 
-                        className={cn("h-full", metric.color.replace('text-', 'bg-'))}
-                        initial={{ width: 0 }}
-                        animate={{ width: metric.val.includes('%') ? metric.val : '70%' }}
-                        transition={{ duration: 1.5, delay: 0.8 }}
-                      />
-                    </div>
-                  </motion.div>
-                ))}
-              </div>
             </div>
           )}
           
