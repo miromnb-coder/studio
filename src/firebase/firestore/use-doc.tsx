@@ -26,12 +26,6 @@ export interface UseDocResult<T> {
 
 /**
  * React hook to subscribe to a single Firestore document in real-time.
- * Handles nullable references.
- * 
- * @template T Optional type for document data. Defaults to any.
- * @param {DocumentReference<DocumentData> | null | undefined} docRef -
- * The Firestore DocumentReference. Waits if null/undefined.
- * @returns {UseDocResult<T>} Object with data, isLoading, error.
  */
 export function useDoc<T = any>(
   memoizedDocRef: DocumentReference<DocumentData> | null | undefined,
@@ -68,11 +62,12 @@ export function useDoc<T = any>(
           path: memoizedDocRef.path,
         });
 
+        // Update local state
         setError(contextualError);
         setData(null);
         setIsLoading(false);
 
-        // Emit for debugging
+        // Emit for debugging/toasts
         errorEmitter.emit('permission-error', contextualError);
       }
     );

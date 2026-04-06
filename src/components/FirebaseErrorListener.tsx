@@ -24,6 +24,10 @@ export function FirebaseErrorListener() {
         title: 'Access Restricted',
         description: 'You do not have permission to view or modify some data in this section.',
       });
+      
+      // CRITICAL: We DO NOT throw the error here anymore. 
+      // Throwing in a listener inside the React tree will trigger the error boundary
+      // and crash the app if not handled. We want the app to stay alive.
     };
 
     errorEmitter.on('permission-error', handleError);
@@ -33,6 +37,5 @@ export function FirebaseErrorListener() {
     };
   }, [toast]);
 
-  // This component no longer throws errors, preventing the app from crashing.
   return null;
 }

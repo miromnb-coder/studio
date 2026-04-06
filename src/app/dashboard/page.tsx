@@ -34,6 +34,7 @@ export default function DashboardPage() {
   const [latestDigest, setLatestDigest] = useState<DailyDigest | null>(null);
   const [isDigestLoading, setIsDigestLoading] = useState(true);
 
+  // ARVOKAS: Varmistetaan että kyselyt eivät lähde ennen kuin käyttäjä on valmis.
   const analysesQuery = useMemoFirebase(() => {
     if (!db || !user || isUserLoading) return null;
     return query(
@@ -64,6 +65,9 @@ export default function DashboardPage() {
           setLatestDigest(digest);
         })
         .finally(() => {
+          setIsDigestLoading(false);
+        })
+        .catch(() => {
           setIsDigestLoading(false);
         });
     }
@@ -111,12 +115,13 @@ export default function DashboardPage() {
         </div>
       </motion.header>
 
+      {/* Inline virheilmoitus koko sovelluksen kaatumisen sijaan */}
       {(analysesError || alertsError) && (
         <Alert variant="destructive" className="rounded-3xl border-danger/20 bg-danger/5">
           <AlertCircle className="h-4 w-4" />
           <AlertTitle>Telemetry Sync Error</AlertTitle>
           <AlertDescription>
-            Some operational data could not be retrieved due to permission restrictions. Please ensure your session is active.
+            Some operational data could not be retrieved. This usually happens if you are not authorized to view this data or the network is unstable.
           </AlertDescription>
         </Alert>
       )}

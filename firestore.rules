@@ -21,77 +21,20 @@ service cloud.firestore {
 
     match /users/{userId} {
       // Käyttäjäprofiili
-      allow get, create, update: if isOwner(userId);
-      allow delete: if false; 
+      allow read, write: if isOwner(userId);
       
       /**
-       * @description Käyttömäärät ja kiintiöt.
+       * @description Kaikki käyttäjän subkokoelmat.
+       * Käytetään yleistä sääntöä helpottamaan ylläpitoa ja varmistamaan hakuoikeudet.
        */
-      match /usage/{date} {
-        allow get, list, create, update: if isOwner(userId);
-      }
-
-      /**
-       * @description Agentin pitkäaikainen muisti.
-       */
-      match /memory/{document=**} {
+      match /{collectionName}/{docId} {
         allow read, write: if isOwner(userId);
       }
 
       /**
-       * @description Keskusteluhistoria.
+       * @description Rekursiivinen sääntö syville polulle (esim. messages).
        */
-      match /conversations/{conversationId} {
-        allow read, write: if isOwner(userId);
-        
-        match /messages/{messageId} {
-          allow read, write: if isOwner(userId);
-        }
-      }
-
-      /**
-       * @description Analyysiraportit ja löydetyt kohteet.
-       */
-      match /analyses/{analysisId} {
-        allow read, write: if isOwner(userId);
-
-        match /detected_items/{itemId} {
-          allow read, write: if isOwner(userId);
-        }
-      }
-
-      /**
-       * @description Hälytykset ja ilmoitukset.
-       */
-      match /alerts/{alertId} {
-        allow read, write: if isOwner(userId);
-      }
-
-      /**
-       * @description Inbound-sähköpostit ja tiedonkeruu.
-       */
-      match /inbox/{emailId} {
-        allow read, write: if isOwner(userId);
-      }
-
-      /**
-       * @description Päivittäiset yhteenvedot.
-       */
-      match /digests/{digestId} {
-        allow read, write: if isOwner(userId);
-      }
-
-      /**
-       * @description Agent V5/V6: Dynaamisesti luodut työkalut.
-       */
-      match /forged_tools/{toolId} {
-        allow read, write: if isOwner(userId);
-      }
-
-      /**
-       * @description Agent V6: Episodinen muisti (tapahtumaloki).
-       */
-      match /episodic_memory/{eventId} {
+      match /{document=**} {
         allow read, write: if isOwner(userId);
       }
     }
