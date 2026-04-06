@@ -1,3 +1,4 @@
+
 "use client";
 
 import { useState, useRef, useEffect, Suspense, memo, useCallback } from 'react';
@@ -11,8 +12,8 @@ import {
   Sparkles,
   Cpu
 } from 'lucide-react';
-import { useFirestore, useUser, useCollection, useMemoFirebase } from '@/firebase';
-import { collection, query, orderBy, limit, addDoc, serverTimestamp } from 'firebase/firestore';
+import { useFirestore, useUser, useCollection, useMemoFirebase, addDocumentNonBlocking } from '@/firebase';
+import { collection, query, orderBy, limit, serverTimestamp } from 'firebase/firestore';
 import { motion, AnimatePresence, useScroll, useTransform } from 'framer-motion';
 import { cn } from '@/lib/utils';
 import { useRouter, useSearchParams } from 'next/navigation';
@@ -137,19 +138,21 @@ function ChatContent() {
     let activeConversationId = conversationId;
 
     if (!activeConversationId) {
-      const convRef = await addDoc(collection(db, 'users', user.uid, 'conversations'), {
+      const convRef = await addDocumentNonBlocking(collection(db, 'users', user.uid, 'conversations'), {
         userId: user.uid,
         title: input.slice(0, 30) + '...',
         createdAt: serverTimestamp(),
         updatedAt: serverTimestamp(),
       });
+      
+      if (!convRef) return;
       activeConversationId = convRef.id;
       router.push(`/?c=${activeConversationId}`);
     }
 
     const messagesRef = collection(db, 'users', user.uid, 'conversations', activeConversationId, 'messages');
     
-    await addDoc(messagesRef, {
+    addDocumentNonBlocking(messagesRef, {
       role: 'user',
       content: input,
       imageUri: selectedImage,
@@ -214,7 +217,7 @@ function ChatContent() {
         }
       }
 
-      await addDoc(messagesRef, {
+      addDocumentNonBlocking(messagesRef, {
         role: 'assistant',
         content: assistantContent,
         timestamp: serverTimestamp(),

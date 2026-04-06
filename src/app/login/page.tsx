@@ -1,3 +1,4 @@
+
 'use client';
 
 import { useState, useEffect } from 'react';
@@ -8,8 +9,8 @@ import {
   GoogleAuthProvider, 
   signInWithPopup 
 } from 'firebase/auth';
-import { doc, getDoc, setDoc, serverTimestamp } from 'firebase/firestore';
-import { useFirestore, useUser, useAuth } from '@/firebase';
+import { doc, getDoc, serverTimestamp } from 'firebase/firestore';
+import { useFirestore, useUser, useAuth, setDocumentNonBlocking, errorEmitter, FirestorePermissionError } from '@/firebase';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
@@ -29,7 +30,6 @@ export default function LoginPage() {
   const { user } = useUser();
   const auth = useAuth();
 
-  // Ohjaus jos käyttäjä on jo kirjautunut
   useEffect(() => {
     if (user) {
       router.push('/dashboard');
@@ -38,24 +38,29 @@ export default function LoginPage() {
 
   const syncUserProfile = async (uid: string, email: string | null, displayName: string | null) => {
     if (!db) return;
-    try {
-      const userRef = doc(db, 'users', uid);
-      const userDoc = await getDoc(userRef);
-      
-      if (!userDoc.exists()) {
-        await setDoc(userRef, {
-          id: uid,
-          email: email || '',
-          displayName: displayName || 'User',
-          createdAt: serverTimestamp(),
-          updatedAt: serverTimestamp(),
-          totalSavedOverall: 0,
-          inboundEmailAddress: `${uid.slice(0, 8)}@operator.ai`,
-        }, { merge: true });
-      }
-    } catch (e) {
-      console.error("Profile sync failed:", e);
-    }
+    const userRef = doc(db, 'users', uid);
+    
+    getDoc(userRef)
+      .then((userDoc) => {
+        if (!userDoc.exists()) {
+          setDocumentNonBlocking(userRef, {
+            id: uid,
+            email: email || '',
+            displayName: displayName || 'User',
+            createdAt: serverTimestamp(),
+            updatedAt: serverTimestamp(),
+            totalSavedOverall: 0,
+            inboundEmailAddress: `${uid.slice(0, 8)}@operator.ai`,
+          }, { merge: true });
+        }
+      })
+      .catch(async (err) => {
+        const permissionError = new FirestorePermissionError({
+          path: userRef.path,
+          operation: 'get',
+        });
+        errorEmitter.emit('permission-error', permissionError);
+      });
   };
 
   const handleEmailAuth = async (e: React.FormEvent) => {
