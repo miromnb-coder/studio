@@ -1,6 +1,13 @@
+import { genkit } from 'genkit';
+import { groq } from 'genkitx-groq';
 
 /**
- * @fileOverview Deprecated - Genkit has been removed from the project.
- * All AI logic is now powered directly by Groq.
+ * @fileOverview AI Configuration Engine.
+ * Powered by Firebase Genkit and Groq.
  */
-export const ai = null;
+
+export const ai = genkit({
+  plugins: [
+    groq({ apiKey: process.env.GROQ_API_KEY })
+  ],
+});

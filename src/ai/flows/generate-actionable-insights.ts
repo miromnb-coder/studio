@@ -1,11 +1,9 @@
-
 'use server';
 /**
- * @fileOverview Standard async function to generate actionable insights using Groq.
- * Replaces Genkit generateActionableInsightsFlow.
+ * @fileOverview Standard async function to generate actionable insights using Genkit and Groq.
  */
 
-import { groq } from '@/ai/groq';
+import { ai } from '@/ai/genkit';
 
 export interface GenerateActionableInsightsInput {
   detectedItems: any[];
@@ -34,23 +32,16 @@ export async function generateActionableInsights(input: GenerateActionableInsigh
   }
 
   try {
-    const completion = await groq.chat.completions.create({
-      model: 'llama-3.3-70b-versatile',
-      messages: [
-        {
-          role: 'system',
-          content: 'Olet AI Life Operator. Luo priorisoitu lista toimenpiteistä havaittujen taloudellisten löydösten perusteella suomeksi. Palauta vastaus tiukasti JSON-muodossa.'
-        },
-        {
-          role: 'user',
-          content: JSON.stringify(input)
-        }
-      ],
-      response_format: { type: 'json_object' },
-      temperature: 0.2,
+    const response = await ai.generate({
+      model: 'groq/llama-3.3-70b-versatile',
+      system: 'Olet AI Life Operator. Luo priorisoitu lista toimenpiteistä havaittujen taloudellisten löydösten perusteella suomeksi. Palauta vastaus tiukasti JSON-muodossa.',
+      prompt: JSON.stringify(input),
+      config: {
+        temperature: 0.2,
+      }
     });
 
-    const rawContent = completion.choices[0]?.message?.content || '{}';
+    const rawContent = response.text;
     let jsonString = rawContent.trim();
     if (jsonString.startsWith('```')) {
       jsonString = jsonString.replace(/^```json\s*|```$/g, '').trim();

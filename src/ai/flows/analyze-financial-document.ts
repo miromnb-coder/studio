@@ -1,12 +1,10 @@
-
 'use server';
 /**
  * @fileOverview AI Engine v3: Adaptive Agent.
- * Multi-intent reasoning engine with support for Finance, Time, Monetization, 
- * Technical, Planning, and Analysis.
+ * Multi-intent reasoning engine powered by Genkit and Groq.
  */
 
-import { groq } from '@/ai/groq';
+import { ai } from '@/ai/genkit';
 
 export interface AnalyzeFinancialDocumentInput {
   imageDataUri?: string;
@@ -64,7 +62,7 @@ function extractJSON(text: string): any {
  */
 export async function analyzeFinancialDocument(input: AnalyzeFinancialDocumentInput): Promise<AnalyzeFinancialDocumentOutput> {
   const hasImage = !!input.imageDataUri;
-  const modelId = hasImage ? 'llama-3.2-11b-vision-preview' : 'llama-3.3-70b-versatile';
+  const modelId = hasImage ? 'groq/llama-3.2-11b-vision-preview' : 'groq/llama-3.3-70b-versatile';
   
   if (!process.env.GROQ_API_KEY) {
     throw new Error("GROQ_API_KEY is missing from environment.");
@@ -118,27 +116,25 @@ FAILSAFE:
 
   const userContent: any[] = [];
   if (hasImage) {
-    userContent.push({ type: 'text', text: 'Analyze this visual source using Agent v3 protocols. Detect language automatically.' });
-    userContent.push({ type: 'image_url', image_url: { url: input.imageDataUri } });
+    userContent.push({ text: 'Analyze this visual source using Agent v3 protocols. Detect language automatically.' });
+    userContent.push({ media: { url: input.imageDataUri } });
   } else {
     userContent.push({ 
-      type: 'text', 
       text: `USER_MESSAGE: "${latestUserMessage}"\n\nCONTEXTUAL_HISTORY:\n${JSON.stringify(input.history || [])}\n\nUSER_MEMORY:\n${JSON.stringify(input.userMemory || {})}` 
     });
   }
 
   try {
-    const completion = await groq.chat.completions.create({
+    const response = await ai.generate({
       model: modelId,
-      messages: [
-        { role: 'system', content: systemPrompt },
-        { role: 'user', content: userContent }
-      ],
-      response_format: { type: 'json_object' },
-      temperature: 0.1,
+      system: systemPrompt,
+      prompt: userContent,
+      config: {
+        temperature: 0.1,
+      }
     });
 
-    const rawContent = completion.choices[0]?.message?.content || '{}';
+    const rawContent = response.text;
     const parsed = extractJSON(rawContent);
 
     if (!parsed) throw new Error("JSON Extraction failed");
