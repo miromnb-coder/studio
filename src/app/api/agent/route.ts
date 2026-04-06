@@ -26,7 +26,8 @@ export async function POST(req: Request) {
       throw new Error('GROQ_API_KEY is not configured.');
     }
 
-    // SANITIZE HISTORY: Ensure content is never null or empty to prevent 400 invalid_request_error
+    // MANDATORY SANITIZATION: Ensure every message has valid string content.
+    // This prevents 400 invalid_request_error: 'messages.1.content' is missing.
     const sanitizedHistory = (history || [])
       .filter((m: any) => m && typeof m.content === 'string' && m.content.trim().length > 0)
       .map((m: any) => ({
@@ -34,15 +35,12 @@ export async function POST(req: Request) {
         content: m.content.trim()
       }));
 
+    // Fallback if history becomes empty after filtering (usually not possible if user input exists)
     const sanitizedInput = (typeof input === 'string' && input.trim().length > 0) 
       ? input.trim() 
-      : "Analyze current state.";
+      : "[Analyze current state]";
 
-    console.log("SENDING TO AI PAYLOAD:", {
-      inputLength: sanitizedInput.length,
-      historyCount: sanitizedHistory.length,
-      sanitizedHistorySample: sanitizedHistory.slice(-1)
-    });
+    console.log("MESSAGES SENT TO AI (SANITIZED):", sanitizedHistory);
 
     const { firestore } = initializeFirebase();
     

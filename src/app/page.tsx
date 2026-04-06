@@ -137,7 +137,6 @@ function ChatContent() {
     
     const trimmedInput = input.trim();
     if (!trimmedInput && !selectedImage) {
-      console.warn("[CHAT] Empty submission ignored.");
       return;
     }
     
@@ -180,13 +179,15 @@ function ChatContent() {
     }, 600);
 
     try {
-      // Puhdistetaan historia kaikesta tyhjästä tai virheellisestä datasta ennen lähetyksiä
+      // MANDATORY: Sanitize messages to ensure every entry has valid content
       const sanitizedHistory = (messages || [])
-        .filter(m => m && typeof m.content === 'string' && m.content.trim().length > 0)
+        .filter(m => m && typeof m.content === 'string' && m.content.trim() !== '')
         .map(m => ({
           role: m.role || 'user',
-          content: m.content
+          content: m.content.trim()
         }));
+
+      console.log("MESSAGES SENT TO AI:", sanitizedHistory);
 
       const response = await fetch('/api/agent', {
         method: 'POST',

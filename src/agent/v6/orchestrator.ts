@@ -15,17 +15,18 @@ const MAX_ITERATIONS = 4;
 async function classifyIntent(input: string, history: any[]): Promise<{ intent: Intent; language: string }> {
   console.log("[ORCHESTRATOR] Classifying intent...");
   
-  // Defensive history slice
+  // Defensive history filtering: Ensure NO message has empty content
   const historyContext = (history || [])
     .slice(-2)
-    .filter(m => m && m.content && m.content.trim());
+    .filter(m => m && typeof m.content === 'string' && m.content.trim().length > 0)
+    .map(m => ({ role: m.role || 'user', content: m.content.trim() }));
 
   const res = await groq.chat.completions.create({
     model: 'llama-3.3-70b-versatile',
     messages: [
       { role: 'system', content: 'Identify intent: finance, time_optimizer, monetization, technical, analysis, general. Detect language. JSON: {"intent": "...", "language": "..."}' },
       ...historyContext,
-      { role: 'user', content: input || "No input" }
+      { role: 'user', content: input || "Initialize intent check." }
     ],
     response_format: { type: 'json_object' },
     temperature: 0,
@@ -109,14 +110,12 @@ export async function runAgentV6(input: string, userId: string, history: any[] =
   let alerts: any[] = [];
   try {
     if (firestore && userId !== 'system_anonymous') {
-      console.log("[ORCHESTRATOR] Fetching live Firestore context...");
       const [analysesSnap, alertsSnap] = await Promise.all([
         getDocs(query(collection(firestore, 'users', userId, 'analyses'), orderBy('createdAt', 'desc'), limit(5))),
         getDocs(query(collection(firestore, 'users', userId, 'alerts'), where('isDismissed', '==', false), limit(5)))
       ]);
       analyses = analysesSnap.docs.map(d => ({ id: d.id, ...d.data() }));
       alerts = alertsSnap.docs.map(d => ({ id: d.id, ...d.data() }));
-      console.log(`[CONTEXT] Fetched ${analyses.length} analyses and ${alerts.length} active alerts.`);
     }
   } catch (err: any) {
     console.error("[CONTEXT_FETCH_FAILED]", err.message);
@@ -156,7 +155,7 @@ export async function runAgentV6(input: string, userId: string, history: any[] =
             DECIDE. JSON ONLY: {"thought": "...", "action": "tool_id|forge_tool|final", "input": {}, "final": "..."}
           `
         },
-        { role: 'user', content: input || "Initialize reasoning." }
+        { role: 'user', content: input || "Analyze current signals." }
       ],
       response_format: { type: 'json_object' },
       temperature: 0.1
@@ -188,7 +187,6 @@ export async function runAgentV6(input: string, userId: string, history: any[] =
           };
         }
       } catch (err: any) {
-        console.error(`[EXECUTION_ERROR] Tool ${tool.id} failed:`, err.message);
         const errorObservation = { error: `Execution failed: ${err.message}` };
         steps.push({ thought: decision.thought, action: decision.action, input: decision.input, observation: errorObservation });
         await addEpisodicEvent(userId, { input: decision.input, action: decision.action, observation: errorObservation });
@@ -196,10 +194,11 @@ export async function runAgentV6(input: string, userId: string, history: any[] =
     }
   }
 
-  // Final Synthesis - Filter history once more defensively
+  // FINAL SYNTHESIS: Sanitize history once more to avoid empty content 400s
   const synthesisHistory = (history || [])
     .slice(-3)
-    .filter(m => m && m.content && m.content.trim());
+    .filter(m => m && typeof m.content === 'string' && m.content.trim().length > 0)
+    .map(m => ({ role: m.role || 'user', content: m.content.trim() }));
 
   const stream = await groq.chat.completions.create({
     model: 'llama-3.3-70b-versatile',
@@ -216,7 +215,7 @@ export async function runAgentV6(input: string, userId: string, history: any[] =
         ` 
       },
       ...synthesisHistory,
-      { role: 'user', content: input || "Generate synthesis." }
+      { role: 'user', content: input || "Complete synthesis." }
     ],
     temperature: 0.2,
     stream: true
