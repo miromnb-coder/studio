@@ -1,3 +1,4 @@
+
 /**
  * @fileOverview Service for managing user plans, usage limits, and subscriptions.
  * Centered source of truth for all monetization logic.
@@ -12,6 +13,7 @@ import {
   serverTimestamp, 
   Firestore 
 } from 'firebase/firestore';
+import { errorEmitter, FirestorePermissionError } from '@/firebase';
 
 export type UserPlan = 'FREE' | 'STARTER' | 'PREMIUM';
 
@@ -83,8 +85,11 @@ export class SubscriptionService {
         label: limits.label,
         limits
       };
-    } catch (e) {
-      console.error("[SUBSCRIPTION] Status fetch failed", e);
+    } catch (e: any) {
+      errorEmitter.emit('permission-error', new FirestorePermissionError({
+        path: `users/${userId}`,
+        operation: 'get',
+      }));
       return { 
         plan: 'FREE' as UserPlan, 
         usage: { agentRuns: 0, limit: 5 },
@@ -103,14 +108,16 @@ export class SubscriptionService {
     const today = new Date().toISOString().split('T')[0];
     const usageRef = doc(db, 'users', userId, 'usage', today);
 
-    try {
-      await setDoc(usageRef, {
-        agentRuns: increment(1),
-        lastUpdated: serverTimestamp()
-      }, { merge: true });
-    } catch (e) {
-      console.error("[SUBSCRIPTION] Usage increment failed", e);
-    }
+    setDoc(usageRef, {
+      agentRuns: increment(1),
+      lastUpdated: serverTimestamp()
+    }, { merge: true }).catch(async (err) => {
+      errorEmitter.emit('permission-error', new FirestorePermissionError({
+        path: usageRef.path,
+        operation: 'write',
+        requestResourceData: { agentRuns: 'increment' }
+      }));
+    });
   }
 
   /**
@@ -128,8 +135,12 @@ export class SubscriptionService {
         totalSavedOverall: increment(0), // Ensure field exists
       });
       return true;
-    } catch (e) {
-      console.error("[SUBSCRIPTION] Plan update failed", e);
+    } catch (e: any) {
+      errorEmitter.emit('permission-error', new FirestorePermissionError({
+        path: `users/${userId}`,
+        operation: 'update',
+        requestResourceData: { plan }
+      }));
       return false;
     }
   }

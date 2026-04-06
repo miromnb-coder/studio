@@ -14,6 +14,7 @@ import {
   serverTimestamp,
   Firestore 
 } from 'firebase/firestore';
+import { errorEmitter, FirestorePermissionError } from '@/firebase';
 
 export interface DailyDigest {
   id: string;
@@ -46,8 +47,11 @@ export class DigestService {
         return { id: snap.docs[0].id, ...snap.docs[0].data() } as DailyDigest;
       }
       return null;
-    } catch (error) {
-      console.error('Failed to fetch latest digest:', error);
+    } catch (error: any) {
+      errorEmitter.emit('permission-error', new FirestorePermissionError({
+        path: `users/${userId}/digests`,
+        operation: 'list',
+      }));
       return null;
     }
   }
@@ -88,10 +92,14 @@ export class DigestService {
         createdAt: serverTimestamp(),
       };
 
-      const docRef = await addDoc(collection(db, 'users', userId, 'digests'), digestData);
+      const digestsRef = collection(db, 'users', userId, 'digests');
+      const docRef = await addDoc(digestsRef, digestData);
       return { id: docRef.id, ...digestData } as DailyDigest;
-    } catch (error) {
-      console.error('Failed to generate daily digest:', error);
+    } catch (error: any) {
+      errorEmitter.emit('permission-error', new FirestorePermissionError({
+        path: `users/${userId}/digests`,
+        operation: 'create',
+      }));
       return null;
     }
   }

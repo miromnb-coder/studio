@@ -1,3 +1,4 @@
+
 "use client";
 
 import { useState, useEffect } from 'react';
@@ -17,8 +18,8 @@ import {
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Card } from '@/components/ui/card';
-import { useUser, useFirestore, useDoc, useMemoFirebase } from '@/firebase';
-import { doc, updateDoc, serverTimestamp } from 'firebase/firestore';
+import { useUser, useFirestore, useDoc, useMemoFirebase, updateDocumentNonBlocking } from '@/firebase';
+import { doc, serverTimestamp } from 'firebase/firestore';
 import { useToast } from '@/hooks/use-toast';
 
 export default function MemoryPage() {
@@ -40,34 +41,26 @@ export default function MemoryPage() {
 
   const removeMemoryItem = async (category: 'goals' | 'preferences' | 'subscriptions', item: string) => {
     if (!memoryRef || !memory) return;
-    const updatedList = memory[category].filter((i: string) => i !== item);
+    const updatedList = (memory[category] || []).filter((i: string) => i !== item);
     
-    try {
-      await updateDoc(memoryRef, {
-        [category]: updatedList,
-        lastUpdated: serverTimestamp()
-      });
-      toast({ title: "Memory Updated", description: "Context item purged from neural database." });
-    } catch (e) {
-      toast({ variant: 'destructive', title: "Update Failed", description: "Insufficient clearance to modify memory." });
-    }
+    updateDocumentNonBlocking(memoryRef, {
+      [category]: updatedList,
+      lastUpdated: serverTimestamp()
+    });
+    toast({ title: "Memory Updated", description: "Context item purged from neural database." });
   };
 
   const clearMemory = async () => {
     if (!memoryRef) return;
     if (confirm("CRITICAL: Wipe all neural context? This will reset agent personalization.")) {
-      try {
-        await updateDoc(memoryRef, {
-          goals: [],
-          preferences: [],
-          subscriptions: [],
-          behaviorSummary: "Passive intelligence gathering reset.",
-          lastUpdated: serverTimestamp()
-        });
-        toast({ title: "Memory Wiped", description: "Agent context reset to default." });
-      } catch (e) {
-        toast({ variant: 'destructive', title: "Wipe Failed", description: "Database lock active." });
-      }
+      updateDocumentNonBlocking(memoryRef, {
+        goals: [],
+        preferences: [],
+        subscriptions: [],
+        behaviorSummary: "Passive intelligence gathering reset.",
+        lastUpdated: serverTimestamp()
+      });
+      toast({ title: "Memory Wiped", description: "Agent context reset to default." });
     }
   };
 

@@ -1,9 +1,11 @@
+
 /**
  * @fileOverview Service for managing user long-term memory and behavioral intelligence.
  */
 
 import { doc, getDoc, setDoc, Firestore } from 'firebase/firestore';
 import { serverTimestamp } from 'firebase/firestore';
+import { errorEmitter, FirestorePermissionError } from '@/firebase';
 
 export interface UserMemory {
   userId: string;
@@ -26,8 +28,11 @@ export class MemoryService {
         return snap.data() as UserMemory;
       }
       return null;
-    } catch (error) {
-      console.error('Failed to fetch user memory:', error);
+    } catch (error: any) {
+      errorEmitter.emit('permission-error', new FirestorePermissionError({
+        path: `users/${userId}/memory/main`,
+        operation: 'get',
+      }));
       return null;
     }
   }
@@ -50,8 +55,12 @@ export class MemoryService {
       };
 
       await setDoc(memoryRef, dataToSave, { merge: true });
-    } catch (error) {
-      console.error('Failed to update user memory:', error);
+    } catch (error: any) {
+      errorEmitter.emit('permission-error', new FirestorePermissionError({
+        path: `users/${userId}/memory/main`,
+        operation: 'write',
+        requestResourceData: updates,
+      }));
     }
   }
 
@@ -69,8 +78,11 @@ export class MemoryService {
         behaviorSummary: "Passive intelligence gathering reset.",
         lastUpdated: serverTimestamp()
       });
-    } catch (error) {
-      console.error('Failed to reset memory:', error);
+    } catch (error: any) {
+      errorEmitter.emit('permission-error', new FirestorePermissionError({
+        path: `users/${userId}/memory/main`,
+        operation: 'write',
+      }));
     }
   }
 }

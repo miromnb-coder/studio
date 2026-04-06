@@ -15,8 +15,8 @@ import {
   Trash2
 } from 'lucide-react';
 import Link from 'next/link';
-import { useFirestore, useUser } from '@/firebase';
-import { doc, updateDoc } from 'firebase/firestore';
+import { useFirestore, useUser, updateDocumentNonBlocking } from '@/firebase';
+import { doc } from 'firebase/firestore';
 import { cn } from '@/lib/utils';
 
 interface Alert {
@@ -43,7 +43,7 @@ export function ProactiveAlerts({ alerts, isLoading }: ProactiveAlertsProps) {
   const handleDismiss = async (alertId: string) => {
     if (!db || !user) return;
     const alertRef = doc(db, 'users', user.uid, 'alerts', alertId);
-    await updateDoc(alertRef, { isDismissed: true });
+    updateDocumentNonBlocking(alertRef, { isDismissed: true });
   };
 
   if (isLoading) {
