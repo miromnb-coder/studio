@@ -1,4 +1,3 @@
-
 "use client";
 
 import { useState, useRef, useEffect, Suspense, memo, useCallback } from 'react';
@@ -21,18 +20,17 @@ import { useToast } from '@/hooks/use-toast';
 import { PaywallOverlay } from '@/components/monetization/PaywallOverlay';
 import { OnboardingOverlay } from '@/components/onboarding/OnboardingOverlay';
 import AICoreOrbit from '@/components/ai-core/AICoreOrbit';
+import { RichAnalysisCard } from '@/components/chat/RichAnalysisCard';
 
 const BackgroundEnergyField = memo(() => {
   const { scrollY } = useScroll();
   
-  // Parallax transforms for different layers
   const y1 = useTransform(scrollY, [0, 1000], [0, 200]);
   const y2 = useTransform(scrollY, [0, 1000], [0, -150]);
   const y3 = useTransform(scrollY, [0, 1000], [0, 100]);
 
   return (
     <div className="fixed inset-0 pointer-events-none z-0 overflow-hidden bg-[#FBFBFE]">
-      {/* Layer 1: Deep Background Glow */}
       <motion.div 
         style={{ y: y1 }}
         animate={{
@@ -43,7 +41,6 @@ const BackgroundEnergyField = memo(() => {
         className="absolute top-[-20%] left-[-10%] w-[120vw] h-[120vw] rounded-full bg-gradient-to-r from-blue-400 via-cyan-300 to-purple-400 blur-[150px]"
       />
       
-      {/* Layer 2: Mid Energy Wave */}
       <motion.div 
         style={{ y: y2 }}
         className="absolute inset-0 opacity-[0.03]"
@@ -64,7 +61,6 @@ const BackgroundEnergyField = memo(() => {
         </svg>
       </motion.div>
 
-      {/* Layer 3: Brighter Center Halo */}
       <motion.div 
         style={{ y: y3 }}
         className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[600px] rounded-full bg-blue-400/5 blur-[100px] opacity-40"
@@ -138,8 +134,35 @@ function ChatContent() {
   const sendMessage = async () => {
     if (!user || (!input.trim() && !selectedImage) || !db || isProcessing) return;
     
+    let activeConversationId = conversationId;
+
+    if (!activeConversationId) {
+      const convRef = await addDoc(collection(db, 'users', user.uid, 'conversations'), {
+        userId: user.uid,
+        title: input.slice(0, 30) + '...',
+        createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp(),
+      });
+      activeConversationId = convRef.id;
+      router.push(`/?c=${activeConversationId}`);
+    }
+
+    const messagesRef = collection(db, 'users', user.uid, 'conversations', activeConversationId, 'messages');
+    
+    await addDoc(messagesRef, {
+      role: 'user',
+      content: input,
+      imageUri: selectedImage,
+      timestamp: serverTimestamp(),
+    });
+
     setFlyingSignal(true);
     setIsProcessing(true);
+    const userMessage = input;
+    const currentImage = selectedImage;
+    
+    setInput('');
+    setSelectedToolImage(null);
 
     setTimeout(() => {
       setFlyingSignal(false);
@@ -147,9 +170,63 @@ function ChatContent() {
       setTimeout(() => setTriggerBurst(false), 1000);
     }, 600);
 
-    setTimeout(() => setIsProcessing(false), 3000);
-    setInput('');
-    setSelectedToolImage(null);
+    try {
+      const response = await fetch('/api/agent', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          input: userMessage,
+          imageUri: currentImage,
+          userId: user.uid,
+          history: (messages || []).map(m => ({ role: m.role, content: m.content })),
+        }),
+      });
+
+      if (!response.ok) {
+        const err = await response.json();
+        if (err.error === 'LIMIT_REACHED') {
+          setPaywallReason('limit_reached');
+          setShowPaywall(true);
+        }
+        throw new Error(err.message || 'Logic core failure');
+      }
+
+      const reader = response.body?.getReader();
+      const decoder = new TextEncoder();
+      let assistantContent = '';
+      let metadata: any = null;
+
+      if (reader) {
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          
+          const chunk = new TextDecoder().decode(value);
+          const lines = chunk.split('\n');
+          
+          for (const line of lines) {
+            if (line.startsWith('__METADATA__:')) {
+              metadata = JSON.parse(line.replace('__METADATA__:', ''));
+            } else {
+              assistantContent += line;
+            }
+          }
+        }
+      }
+
+      await addDoc(messagesRef, {
+        role: 'assistant',
+        content: assistantContent,
+        timestamp: serverTimestamp(),
+        data: metadata?.structuredData || null,
+        metadata: metadata || null,
+      });
+
+    } catch (err: any) {
+      toast({ variant: 'destructive', title: "Sync Interrupted", description: err.message });
+    } finally {
+      setIsProcessing(false);
+    }
   };
 
   const hasMessages = (messages || []).length > 0;
@@ -180,13 +257,12 @@ function ChatContent() {
                     {msg.imageUri && <img src={msg.imageUri} alt="Source" className="max-w-full rounded-2xl mb-4" />}
                     <div className="whitespace-pre-wrap">{msg.content}</div>
                   </div>
+                  {msg.data && <RichAnalysisCard data={msg.data} />}
                 </div>
               </motion.div>
             ))
           ) : !showOnboarding && (
             <div className="flex flex-col items-center justify-center min-h-[60vh] text-center space-y-12 px-4">
-              
-              {/* Center Glowing Core */}
               <div className="relative">
                 <AICoreOrbit 
                   state={isProcessing ? "thinking" : input.length > 20 ? "reasoning" : "idle"} 
@@ -195,7 +271,6 @@ function ChatContent() {
                 />
               </div>
               
-              {/* Header Text Section */}
               <div className="space-y-8">
                 <motion.div 
                   initial={{ opacity: 0, y: 10 }}
@@ -229,7 +304,6 @@ function ChatContent() {
         </AnimatePresence>
       </div>
 
-      {/* Flying Signal Element */}
       <AnimatePresence>
         {flyingSignal && (
           <motion.div
@@ -248,7 +322,6 @@ function ChatContent() {
         )}
       </AnimatePresence>
 
-      {/* Input Section */}
       <div className="fixed bottom-6 sm:bottom-10 left-1/2 -translate-x-1/2 w-full max-w-2xl px-4 sm:px-6 z-50">
         <div className="relative group">
           <div className={cn(
@@ -277,12 +350,19 @@ function ChatContent() {
               onFocus={() => setIsFocused(true)}
               onBlur={() => setIsFocused(false)}
               onChange={(e) => setInput(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' && !e.shiftKey) {
+                  e.preventDefault();
+                  sendMessage();
+                }
+              }}
               placeholder="Describe intent..."
               className="flex-1 bg-transparent border-0 focus:ring-0 text-sm font-medium text-slate-700 placeholder:text-slate-300 resize-none py-1 max-h-[200px] stealth-scrollbar"
             />
 
             <button 
               onClick={sendMessage}
+              disabled={isProcessing}
               className={cn(
                 "w-10 h-10 rounded-full flex items-center justify-center text-white shadow-lg active:scale-95 transition-all shrink-0",
                 (input.trim() || selectedImage) ? "bg-primary shadow-blue-500/20" : "bg-slate-100 text-slate-300"
