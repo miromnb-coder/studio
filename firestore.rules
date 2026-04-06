@@ -44,6 +44,14 @@ service cloud.firestore {
       allow delete: if isExistingOwner(userId);
       
       /**
+       * @description User usage quotas and plan status.
+       */
+      match /usage/{date} {
+        allow get: if isOwner(userId);
+        allow create, update: if isOwner(userId);
+      }
+
+      /**
        * @description User long-term memory.
        */
       match /memory/main {
@@ -54,7 +62,6 @@ service cloud.firestore {
 
       /**
        * @description User chat threads and persistent memory.
-       * @path /users/{userId}/conversations/{conversationId}
        */
       match /conversations/{conversationId} {
         allow get, list: if isOwner(userId);

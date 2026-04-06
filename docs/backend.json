@@ -24,6 +24,14 @@
           "type": "string",
           "description": "The user's preferred display name."
         },
+        "plan": {
+          "type": "string",
+          "enum": ["FREE", "STARTER", "PREMIUM"],
+          "description": "The user's current subscription plan."
+        },
+        "totalSavedOverall": {
+          "type": "number"
+        },
         "createdAt": {
           "type": "string",
           "format": "date-time"
@@ -54,6 +62,14 @@
       },
       "required": ["userId"]
     },
+    "Usage": {
+      "title": "Usage",
+      "type": "object",
+      "properties": {
+        "agentRuns": { "type": "number" },
+        "lastUpdated": { "type": "string", "format": "date-time" }
+      }
+    },
     "Conversation": {
       "$schema": "http://json-schema.org/draft-07/schema#",
       "title": "Conversation",
@@ -81,7 +97,8 @@
         "content": { "type": "string" },
         "timestamp": { "type": "string", "format": "date-time" },
         "type": { "type": "string" },
-        "data": { "type": "object" }
+        "data": { "type": "object" },
+        "metadata": { "type": "object" }
       },
       "required": ["role", "content", "timestamp"]
     },
@@ -198,6 +215,14 @@
           "entityName": "UserProfile",
           "schema": { "$ref": "#/backend/entities/UserProfile" },
           "description": "Stores core profile information."
+        }
+      },
+      {
+        "path": "/users/{userId}/usage/{date}",
+        "definition": {
+          "entityName": "Usage",
+          "schema": { "$ref": "#/backend/entities/Usage" },
+          "description": "Daily usage limits."
         }
       },
       {

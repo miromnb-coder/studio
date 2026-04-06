@@ -63,7 +63,14 @@ export class SubscriptionService {
 
     try {
       const userRef = doc(db, 'users', userId);
-      const userSnap = await getDoc(userRef);
+      const userSnap = await getDoc(userRef).catch(err => {
+        errorEmitter.emit('permission-error', new FirestorePermissionError({
+          path: `users/${userId}`,
+          operation: 'get',
+        }));
+        throw err;
+      });
+      
       const userData = userSnap.data();
       const plan: UserPlan = (userData?.plan || 'FREE').toUpperCase() as UserPlan;
 
@@ -72,7 +79,14 @@ export class SubscriptionService {
 
       const today = new Date().toISOString().split('T')[0];
       const usageRef = doc(db, 'users', userId, 'usage', today);
-      const usageSnap = await getDoc(usageRef);
+      const usageSnap = await getDoc(usageRef).catch(err => {
+        errorEmitter.emit('permission-error', new FirestorePermissionError({
+          path: `users/${userId}/usage/${today}`,
+          operation: 'get',
+        }));
+        throw err;
+      });
+      
       const usageData = usageSnap.data();
 
       return {
@@ -86,15 +100,12 @@ export class SubscriptionService {
         limits
       };
     } catch (e: any) {
-      errorEmitter.emit('permission-error', new FirestorePermissionError({
-        path: `users/${userId}`,
-        operation: 'get',
-      }));
+      // General fallback if not handled by inner catches
       return { 
         plan: 'FREE' as UserPlan, 
         usage: { agentRuns: 0, limit: 5 },
         isPremium: false,
-        label: 'Error'
+        label: 'Syncing...'
       };
     }
   }
