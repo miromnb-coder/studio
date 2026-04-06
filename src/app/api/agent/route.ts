@@ -8,15 +8,21 @@ export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
 
 /**
- * @fileOverview Streaming API Entry Point for Agent Engine v5.
- * Includes Rigorous Monetization Enforcement.
+ * @fileOverview Streaming API Entry Point for Agent Engine v6.
+ * Includes Rigorous Monetization Enforcement and Debug Logging.
  */
 
 export async function POST(req: Request) {
   try {
     const { input, history, imageUri, userId } = await req.json();
 
+    console.log("--- AGENT_API_INBOUND ---");
+    console.log("USER_ID:", userId);
+    console.log("INPUT_LENGTH:", input?.length);
+    console.log("HAS_IMAGE:", !!imageUri);
+
     if (!process.env.GROQ_API_KEY) {
+      console.error("[CRITICAL] GROQ_API_KEY is missing from environment.");
       throw new Error('GROQ_API_KEY is not configured.');
     }
 
@@ -24,6 +30,7 @@ export async function POST(req: Request) {
     
     // 1. Rigorous Monetization Check
     if (userId && userId !== 'system_anonymous' && firestore) {
+      console.log("Checking limits for user:", userId);
       const { plan, usage } = await SubscriptionService.getUserStatus(firestore, userId);
       
       const planKey = (plan || 'FREE').toUpperCase() as keyof typeof PLAN_LIMITS;
@@ -36,18 +43,19 @@ export async function POST(req: Request) {
           error: 'LIMIT_REACHED',
           message: "Daily intelligence quota exceeded. Please elevate clearance.",
           usage: { ...usage, limit }
-        }, { status: 403 }); // 403 Forbidden is the standard for paywalls
+        }, { status: 403 });
       }
       
-      // Increment usage immediately (optimistic update)
       await SubscriptionService.incrementUsage(firestore, userId);
     }
 
+    console.log("Initializing Agent V6 Orchestrator...");
     const { stream, metadata } = await runAgentV6(input, userId || 'system_anonymous', history, imageUri);
 
     const encoder = new TextEncoder();
     const readableStream = new ReadableStream({
       async start(controller) {
+        console.log("Stream starting...");
         // First chunk is always metadata for UI routing
         controller.enqueue(encoder.encode(`__METADATA__:${JSON.stringify(metadata)}\n`));
 
@@ -58,8 +66,10 @@ export async function POST(req: Request) {
               controller.enqueue(encoder.encode(content));
             }
           }
-        } catch (e) {
-          console.error("Stream iteration error", e);
+          console.log("Stream finished successfully.");
+        } catch (e: any) {
+          console.error("STREAM_ITERATION_ERROR:", e.message);
+          controller.enqueue(encoder.encode(`\n[ERROR: ${e.message}]`));
         } finally {
           controller.close();
         }
@@ -74,11 +84,15 @@ export async function POST(req: Request) {
       },
     });
   } catch (error: any) {
-    console.error('ENGINE_V5_CRITICAL_ERROR:', error.message);
+    console.error('--- AGENT_API_CRITICAL_FAILURE ---');
+    console.error('ERROR_MESSAGE:', error.message);
+    console.error('STACK:', error.stack);
+    
     return NextResponse.json(
       { 
-        content: "Operational sync delayed. Recalibrating logic core.",
-        error: error.message 
+        success: false,
+        error: error.message,
+        content: "Operational sync delayed. Recalibrating logic core."
       }, 
       { status: 500 }
     );

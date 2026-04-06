@@ -1,19 +1,19 @@
 
 import { groq } from '@/ai/groq';
 import { Intent, AgentStep, Decision, AgentMetadata, ToolDefinition } from './types';
-import { activeRegistry, STATIC_TOOLS } from './registry';
-import { fetchMemory, updateMemory, addEpisodicEvent, fetchRecentEpisodicEvents, summarizeEpisodicMemory, AgentMemory, EpisodicEvent } from './memory';
-import { collection, addDoc, serverTimestamp } from 'firebase/firestore';
+import { activeRegistry } from './registry';
+import { fetchMemory, addEpisodicEvent, fetchRecentEpisodicEvents, summarizeEpisodicMemory, AgentMemory } from './memory';
+import { collection, addDoc, serverTimestamp, query, orderBy, limit, getDocs, where } from 'firebase/firestore';
 import { initializeFirebase } from '@/firebase';
 
 /**
- * @fileOverview Orchestrator Engine v6.0: Hierarchical Memory, Advanced Tool Use, and Metareasoning.
- * Optimized for real-world tool execution and proactive signal detection.
+ * @fileOverview Orchestrator Engine v6.1: Hierarchical Memory, Deep Context Fetching, and Verbose Logging.
  */
 
 const MAX_ITERATIONS = 4;
 
 async function classifyIntent(input: string, history: any[]): Promise<{ intent: Intent; language: string }> {
+  console.log("[ORCHESTRATOR] Classifying intent...");
   const res = await groq.chat.completions.create({
     model: 'llama-3.3-70b-versatile',
     messages: [
@@ -24,7 +24,9 @@ async function classifyIntent(input: string, history: any[]): Promise<{ intent: 
     response_format: { type: 'json_object' },
     temperature: 0,
   });
-  return JSON.parse(res.choices[0]?.message?.content || '{"intent": "general", "language": "English"}');
+  const result = JSON.parse(res.choices[0]?.message?.content || '{"intent": "general", "language": "English"}');
+  console.log(`[ORCHESTRATOR] Intent: ${result.intent}, Language: ${result.language}`);
+  return result;
 }
 
 async function forgeNewTool(purpose: string, userId: string): Promise<ToolDefinition> {
@@ -62,6 +64,7 @@ async function forgeNewTool(purpose: string, userId: string): Promise<ToolDefini
     inputSchema: config.inputSchema,
     isDynamic: true,
     execute: async (input: any) => {
+      console.log(`[DYNAMIC_TOOL:${config.id}] Executing...`);
       const runRes = await groq.chat.completions.create({
         model: 'llama-3.3-70b-versatile',
         messages: [
@@ -91,10 +94,33 @@ async function forgeNewTool(purpose: string, userId: string): Promise<ToolDefini
 }
 
 export async function runAgentV6(input: string, userId: string, history: any[] = [], imageUri?: string) {
+  console.log(`[AGENT_V6_START] User: ${userId}`);
+  
+  const { firestore } = initializeFirebase();
+  
+  // 1. FETCH RECENT ANALYTICS CONTEXT (As requested for debugging)
+  let analyses: any[] = [];
+  let alerts: any[] = [];
+  try {
+    if (firestore && userId !== 'system_anonymous') {
+      console.log("[ORCHESTRATOR] Fetching live Firestore context...");
+      const [analysesSnap, alertsSnap] = await Promise.all([
+        getDocs(query(collection(firestore, 'users', userId, 'analyses'), orderBy('createdAt', 'desc'), limit(5))),
+        getDocs(query(collection(firestore, 'users', userId, 'alerts'), where('isDismissed', '==', false), limit(5)))
+      ]);
+      analyses = analysesSnap.docs.map(d => ({ id: d.id, ...d.data() }));
+      alerts = alertsSnap.docs.map(d => ({ id: d.id, ...d.data() }));
+      console.log(`[CONTEXT] Fetched ${analyses.length} analyses and ${alerts.length} active alerts.`);
+    }
+  } catch (err: any) {
+    console.error("[CONTEXT_FETCH_FAILED]", err.message);
+  }
+
   const [mainMemory, { intent, language }] = await Promise.all([
     fetchMemory(userId),
     classifyIntent(input, history)
   ]);
+
   let memory: AgentMemory = mainMemory || { userId, goals: [], preferences: [], behaviorSummary: 'Initial state.', semanticMemory: [], lastUpdated: serverTimestamp() };
   const recentEpisodicEvents = await fetchRecentEpisodicEvents(userId);
   const episodicSummary = await summarizeEpisodicMemory(userId, recentEpisodicEvents);
@@ -102,12 +128,12 @@ export async function runAgentV6(input: string, userId: string, history: any[] =
   const steps: AgentStep[] = [];
   let currentIteration = 0;
   let loopFinished = false;
-  let finalContext = "";
   let toolData: any = null;
 
   while (!loopFinished && currentIteration < MAX_ITERATIONS) {
     currentIteration++;
     const availableTools = activeRegistry.getAvailableTools();
+    console.log(`[LOOP] Iteration ${currentIteration}. Deciding next action...`);
     
     const decisionRes = await groq.chat.completions.create({
       model: 'llama-3.3-70b-versatile',
@@ -117,6 +143,8 @@ export async function runAgentV6(input: string, userId: string, history: any[] =
           content: `
             You are an autonomous agent. Current Intent: ${intent}. Language: ${language}.
             TOOLS: ${availableTools.map(t => `${t.id}: ${t.description}`).join("\n")}
+            CONTEXT_ANALYSES: ${JSON.stringify(analyses)}
+            CONTEXT_ALERTS: ${JSON.stringify(alerts)}
             MEMORY: ${JSON.stringify(memory)}
             RECENT_ACTIVITY: ${episodicSummary}
             META: If no tool fits, action: "forge_tool", input: {"purpose": "description"}.
@@ -130,6 +158,7 @@ export async function runAgentV6(input: string, userId: string, history: any[] =
     });
 
     const decision: Decision = JSON.parse(decisionRes.choices[0]?.message?.content || '{"action": "final"}');
+    console.log(`[DECISION] Action: ${decision.action}. Thought: ${decision.thought}`);
     
     if (decision.action === 'forge_tool') {
       const newTool = await forgeNewTool(decision.input.purpose, userId);
@@ -139,39 +168,34 @@ export async function runAgentV6(input: string, userId: string, history: any[] =
     }
 
     if (decision.action === 'final' || !activeRegistry.getTool(decision.action)) {
-      finalContext = decision.final || decision.thought;
       loopFinished = true;
     } else {
       const tool = activeRegistry.getTool(decision.action)!;
       try {
-        let observation;
-        try {
-          observation = await tool.execute(decision.input || {}, { userId, imageUri });
-          steps.push({ thought: decision.thought, action: decision.action, input: decision.input, observation });
-          await addEpisodicEvent(userId, { input: decision.input, action: decision.action, observation });
-          
-          // ENHANCED: Capture structured data for UI and Proactive Alerts
-          if (observation.leaks || observation.insights || observation.findings) {
-            toolData = {
-              ...toolData,
-              ...observation,
-              estimatedMonthlySavings: observation.estimatedMonthlySavings || observation.impact || toolData?.estimatedMonthlySavings || 0
-            };
-          }
-        } catch (err: any) {
-          observation = { error: `Tool execution failed: ${err.message}` };
-          steps.push({ thought: decision.thought, action: decision.action, input: decision.input, observation });
-          await addEpisodicEvent(userId, { input: decision.input, action: decision.action, observation });
-          // Agent should reflect on this error and potentially re-decide
-          // For now, we just log and continue, but this is a point for future enhancement
-          console.error(`[ORCHESTRATOR_V6] Tool ${tool.id} failed:`, err);
+        console.log(`[EXECUTE] Running tool: ${tool.id}...`);
+        const observation = await tool.execute(decision.input || {}, { userId, imageUri });
+        console.log(`[OBSERVATION] Tool ${tool.id} returned data.`);
+        
+        steps.push({ thought: decision.thought, action: decision.action, input: decision.input, observation });
+        await addEpisodicEvent(userId, { input: decision.input, action: decision.action, observation });
+        
+        if (observation.leaks || observation.insights || observation.findings) {
+          toolData = {
+            ...toolData,
+            ...observation,
+            estimatedMonthlySavings: observation.estimatedMonthlySavings || observation.impact || toolData?.estimatedMonthlySavings || 0
+          };
         }
-      } catch (err) {
-        steps.push({ thought: decision.thought, action: decision.action, input: decision.input, observation: { error: "Failed" } });
+      } catch (err: any) {
+        console.error(`[EXECUTION_ERROR] Tool ${tool.id} failed:`, err.message);
+        const errorObservation = { error: `Execution failed: ${err.message}` };
+        steps.push({ thought: decision.thought, action: decision.action, input: decision.input, observation: errorObservation });
+        await addEpisodicEvent(userId, { input: decision.input, action: decision.action, observation: errorObservation });
       }
     }
   }
 
+  console.log("[ORCHESTRATOR] Synthesizing final response...");
   const stream = await groq.chat.completions.create({
     model: 'llama-3.3-70b-versatile',
     messages: [
@@ -183,6 +207,7 @@ export async function runAgentV6(input: string, userId: string, history: any[] =
           Main Memory: ${JSON.stringify(memory)}
           Recent Episodic Events: ${episodicSummary}
           Respond directly. If a tool found savings or data, confirm it clearly.
+          IF ERRORS OCCURRED IN TOOLS, EXPLAIN THEM TO THE USER HONESTLY.
         ` 
       },
       ...history.slice(-3),
