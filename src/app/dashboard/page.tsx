@@ -28,44 +28,44 @@ const item = {
 };
 
 export default function DashboardPage() {
-  const { user } = useUser();
+  const { user, isUserLoading } = useUser();
   const db = useFirestore();
   const router = useRouter();
   const [latestDigest, setLatestDigest] = useState<DailyDigest | null>(null);
   const [isDigestLoading, setIsDigestLoading] = useState(true);
 
   const analysesQuery = useMemoFirebase(() => {
-    if (!db || !user) return null;
+    if (!db || !user || isUserLoading) return null;
     return query(
       collection(db, 'users', user.uid, 'analyses'),
       orderBy('createdAt', 'desc'),
       limit(20)
     );
-  }, [db, user]);
+  }, [db, user, isUserLoading]);
 
   const { data: analyses, isLoading } = useCollection(analysesQuery);
 
-  // FETCH REAL PROACTIVE ALERTS
+  // FETCH REAL PROACTIVE ALERTS with loading check
   const alertsQuery = useMemoFirebase(() => {
-    if (!db || !user) return null;
+    if (!db || !user || isUserLoading) return null;
     return query(
       collection(db, 'users', user.uid, 'alerts'),
       where('isDismissed', '==', false),
       orderBy('createdAt', 'desc'),
       limit(5)
     );
-  }, [db, user]);
+  }, [db, user, isUserLoading]);
 
   const { data: alerts, isLoading: isAlertsLoading } = useCollection(alertsQuery);
   
   useEffect(() => {
-    if (db && user) {
+    if (db && user && !isUserLoading) {
       DigestService.getLatestDigest(db, user.uid).then(digest => {
         setLatestDigest(digest);
         setIsDigestLoading(false);
       });
     }
-  }, [db, user, analyses]);
+  }, [db, user, isUserLoading, analyses]);
 
   const totalReclaimed = useMemo(() => {
     return (analyses || []).reduce((acc, a) => acc + (a.estimatedMonthlySavings || 0), 0);

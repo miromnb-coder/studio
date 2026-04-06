@@ -6,7 +6,6 @@ service cloud.firestore {
     /**
      * AI LIFE OPERATOR - TIETOTURVASÄÄNNÖT
      * Sallii pääsyn omiin tietoihin auth.uid:n perusteella.
-     * Sähköpostin vahvistusta ei vaadita perustoimintoihin.
      */
 
     // --- Globaalit apufunktiot ---
@@ -16,8 +15,6 @@ service cloud.firestore {
     }
 
     function isOwner(userId) {
-      // Sallitaan pääsy, jos käyttäjä on kirjautunut ja UID täsmää
-      // Emme vaadi request.auth.token.email_verified == true tässä vaiheessa
       return isSignedIn() && request.auth.uid == userId;
     }
 
@@ -26,7 +23,7 @@ service cloud.firestore {
     match /users/{userId} {
       // Käyttäjäprofiili
       allow get, create, update: if isOwner(userId);
-      allow delete: if false; // Profiilin poisto vaatii manuaalisen tarkistuksen
+      allow delete: if false; 
       
       /**
        * @description Käyttömäärät ja kiintiöt.
@@ -66,9 +63,10 @@ service cloud.firestore {
 
       /**
        * @description Hälytykset ja ilmoitukset.
+       * Sallitaan 'read' (get + list) jotta queryt toimivat.
        */
       match /alerts/{alertId} {
-        allow read, write: if isOwner(userId);
+        allow read, write: if request.auth != null && request.auth.uid == userId;
       }
 
       /**
