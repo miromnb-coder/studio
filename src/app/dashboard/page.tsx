@@ -4,12 +4,13 @@ import { SystemCard } from '@/components/systems/SystemCard';
 import { useUser, useFirestore, useCollection, useMemoFirebase } from '@/firebase';
 import { collection, query, orderBy, limit, where } from 'firebase/firestore';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Terminal, ShieldCheck, Zap, ChevronRight, Activity, Clock, Cpu, BarChart3, Bell, ArrowRight, Sparkles, Loader2 } from 'lucide-react';
+import { Terminal, ShieldCheck, Zap, ChevronRight, Activity, Clock, Cpu, BarChart3, Bell, ArrowRight, Sparkles, Loader2, AlertCircle } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { useMemo, useEffect, useState } from 'react';
 import { ProactiveAlerts } from '@/components/dashboard/ProactiveAlerts';
 import { DigestService, DailyDigest } from '@/services/digest-service';
 import { DailyDigestCard } from '@/components/chat/DailyDigestCard';
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 
 const container = {
   hidden: { opacity: 0 },
@@ -42,7 +43,7 @@ export default function DashboardPage() {
     );
   }, [db, user, isUserLoading]);
 
-  const { data: analyses, isLoading } = useCollection(analysesQuery);
+  const { data: analyses, isLoading, error: analysesError } = useCollection(analysesQuery);
 
   const alertsQuery = useMemoFirebase(() => {
     if (!db || !user || isUserLoading) return null;
@@ -54,14 +55,17 @@ export default function DashboardPage() {
     );
   }, [db, user, isUserLoading]);
 
-  const { data: alerts, isLoading: isAlertsLoading } = useCollection(alertsQuery);
+  const { data: alerts, isLoading: isAlertsLoading, error: alertsError } = useCollection(alertsQuery);
   
   useEffect(() => {
     if (db && user && !isUserLoading) {
-      DigestService.getLatestDigest(db, user.uid).then(digest => {
-        setLatestDigest(digest);
-        setIsDigestLoading(false);
-      });
+      DigestService.getLatestDigest(db, user.uid)
+        .then(digest => {
+          setLatestDigest(digest);
+        })
+        .finally(() => {
+          setIsDigestLoading(false);
+        });
     }
   }, [db, user, isUserLoading, analyses]);
 
@@ -106,6 +110,16 @@ export default function DashboardPage() {
           </p>
         </div>
       </motion.header>
+
+      {(analysesError || alertsError) && (
+        <Alert variant="destructive" className="rounded-3xl border-danger/20 bg-danger/5">
+          <AlertCircle className="h-4 w-4" />
+          <AlertTitle>Telemetry Sync Error</AlertTitle>
+          <AlertDescription>
+            Some operational data could not be retrieved due to permission restrictions. Please ensure your session is active.
+          </AlertDescription>
+        </Alert>
+      )}
 
       <AnimatePresence>
         {latestDigest && (
