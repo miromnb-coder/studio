@@ -11,73 +11,66 @@ type Props = {
 export default function AICoreOrbit({ state = "idle" }: Props) {
   const isBusy = state === "thinking" || state === "executing";
   
-  const speedScale =
-    state === "thinking" ? 0.6 :
-    state === "executing" ? 0.4 :
-    1;
-
   const coreColor =
-    state === "thinking" ? "rgba(59, 130, 246, 0.8)" :
+    state === "thinking" ? "rgba(79, 149, 255, 0.8)" :
     state === "executing" ? "rgba(147, 51, 234, 0.8)" :
     state === "success" ? "rgba(34, 197, 94, 0.8)" :
-    state === "error" ? "rgba(239, 68, 68, 0.8)" :
-    "rgba(59, 130, 246, 0.5)";
+    "rgba(79, 149, 255, 0.6)";
 
-  // Orbital definitions for the "Neural Web" look
   const orbits = [
-    { id: 'o1', rx: 100, ry: 40, duration: 20, rotate: 0, nodeSize: 4, nodeColor: "bg-blue-400" },
-    { id: 'o2', rx: 90, ry: 35, duration: 15, rotate: 60, nodeSize: 3, nodeColor: "bg-white" },
-    { id: 'o3', rx: 80, ry: 45, duration: 25, rotate: -45, nodeSize: 5, nodeColor: "bg-blue-200" },
+    { id: 'o1', rx: 110, ry: 45, duration: 25, rotate: 15, nodeSize: 4, nodeColor: "bg-blue-400" },
+    { id: 'o2', rx: 100, ry: 40, duration: 18, rotate: -20, nodeSize: 3, nodeColor: "bg-purple-400" },
+    { id: 'o3', rx: 90, ry: 50, duration: 30, rotate: 45, nodeSize: 5, nodeColor: "bg-cyan-300" },
   ];
 
   return (
-    <div className="relative flex items-center justify-center w-[280px] h-[280px] perspective-1000">
+    <div className="relative flex items-center justify-center w-[320px] h-[320px] perspective-1000">
       
-      {/* 🔮 ATMOSPHERIC DIFFUSION (Deep Glow) */}
+      {/* 🔮 AMBIENT BACK GLOW */}
       <motion.div
-        className="absolute w-[240px] h-[240px] rounded-full blur-[100px]"
-        style={{ backgroundColor: coreColor }}
-        animate={{ 
-          scale: isBusy ? [1, 1.3, 1] : [1, 1.1, 1],
-          opacity: isBusy ? [0.4, 0.8, 0.4] : [0.2, 0.4, 0.2]
-        }}
-        transition={{ duration: 4, repeat: Infinity, ease: "easeInOut" }}
+        className="absolute w-[280px] h-[280px] rounded-full blur-[120px] opacity-20"
+        style={{ background: `radial-gradient(circle, ${coreColor} 0%, transparent 70%)` }}
+        animate={{ scale: [1, 1.2, 1] }}
+        transition={{ duration: 8, repeat: Infinity, ease: "easeInOut" }}
       />
 
-      {/* 🌀 NEURAL ORBITAL SYSTEM */}
-      <svg className="absolute w-full h-full pointer-events-none" viewBox="0 0 280 280">
+      {/* 🌀 ORBITAL SYSTEM */}
+      <svg className="absolute w-full h-full pointer-events-none overflow-visible" viewBox="0 0 320 320">
         <defs>
-          <filter id="nodeGlow">
-            <feGaussianBlur stdDeviation="2" result="blur" />
+          <filter id="nodeGlow" x="-50%" y="-50%" width="200%" height="200%">
+            <feGaussianBlur stdDeviation="3" result="blur" />
             <feComposite in="SourceGraphic" in2="blur" operator="over" />
           </filter>
         </defs>
         
-        {orbits.map((orbit, i) => (
-          <g key={orbit.id} transform={`translate(140, 140) rotate(${orbit.rotate})`}>
-            {/* The Path */}
+        {orbits.map((orbit) => (
+          <g key={orbit.id} transform={`translate(160, 160) rotate(${orbit.rotate})`}>
             <ellipse 
               cx="0" cy="0" 
               rx={orbit.rx} ry={orbit.ry} 
               fill="none" 
-              stroke="white" 
+              stroke="url(#lineGradient)" 
               strokeWidth="0.5" 
-              strokeOpacity="0.1" 
+              className="opacity-20"
             />
+            <linearGradient id="lineGradient" x1="0%" y1="0%" x2="100%" y2="0%">
+              <stop offset="0%" stopColor="white" stopOpacity="0" />
+              <stop offset="50%" stopColor="white" stopOpacity="0.5" />
+              <stop offset="100%" stopColor="white" stopOpacity="0" />
+            </linearGradient>
             
-            {/* The Kinetic Node */}
             <motion.circle
-              r={orbit.nodeSize}
+              r={orbit.nodeSize / 2}
               fill="white"
               filter="url(#nodeGlow)"
               animate={{
                 cx: [orbit.rx, 0, -orbit.rx, 0, orbit.rx],
                 cy: [0, orbit.ry, 0, -orbit.ry, 0],
-                opacity: [0.2, 1, 0.2, 1, 0.2],
-                scale: [1, 1.5, 1, 1.5, 1]
+                opacity: [0.4, 1, 0.4, 1, 0.4],
+                scale: [1, 1.4, 1, 1.4, 1]
               }}
               transition={{
-                duration: orbit.duration * speedScale,
+                duration: orbit.duration * (isBusy ? 0.5 : 1),
                 repeat: Infinity,
                 ease: "linear"
               }}
@@ -86,72 +79,68 @@ export default function AICoreOrbit({ state = "idle" }: Props) {
         ))}
       </svg>
 
-      {/* 💎 THE NEURAL ARTIFACT (Core Artifact) */}
-      <motion.div className="relative w-20 h-20 flex items-center justify-center">
-        {/* Specular highlights */}
-        <motion.div 
-          className="absolute inset-0 rounded-full bg-gradient-to-tr from-transparent via-white/30 to-transparent z-20 pointer-events-none"
-          animate={{ rotate: [0, 360] }}
-          transition={{ duration: 10, repeat: Infinity, ease: "linear" }}
+      {/* 💎 THE AI CORE ARTIFACT */}
+      <div className="relative w-24 h-24 flex items-center justify-center">
+        {/* Core Layers */}
+        <motion.div
+          className="absolute inset-0 rounded-full bg-gradient-to-br from-blue-400 to-purple-600 blur-md opacity-40"
+          animate={{ scale: isBusy ? [1, 1.15, 1] : [1, 1.05, 1] }}
+          transition={{ duration: 2, repeat: Infinity }}
         />
         
-        {/* Refractive Glass Core */}
-        <motion.div
-          className="w-full h-full rounded-full backdrop-blur-3xl border border-white/40 shadow-[0_0_50px_rgba(59,130,246,0.3)] bg-white/10 overflow-hidden relative"
-          animate={{
-            scale: isBusy ? [1, 1.1, 1] : [1, 1.05, 1],
-          }}
-          transition={{ duration: 3, repeat: Infinity, ease: "easeInOut" }}
-        >
-          {/* Inner Neural Web (Electric Flicker) */}
+        {/* Glass Outer Shell */}
+        <div className="w-full h-full rounded-full border border-white/40 bg-white/10 backdrop-blur-xl shadow-[inset_0_0_20px_rgba(255,255,255,0.3)] relative overflow-hidden">
+          {/* Inner Light Flow */}
           <motion.div 
-            className="absolute inset-[-50%] opacity-40"
+            className="absolute inset-[-50%] opacity-60"
             style={{
-              background: `radial-gradient(circle, ${coreColor} 0%, transparent 70%)`,
+              background: `radial-gradient(circle at center, white 0%, transparent 60%)`,
             }}
             animate={{ 
-              rotate: [0, 360],
-              opacity: isBusy ? [0.4, 0.9, 0.4] : [0.3, 0.5, 0.3],
-              scale: isBusy ? [1, 1.2, 1] : 1
+              x: ['-20%', '20%'],
+              y: ['-20%', '20%'],
+              opacity: [0.4, 0.8, 0.4]
             }}
-            transition={{ duration: 8, repeat: Infinity, ease: "linear" }}
+            transition={{ duration: 4, repeat: Infinity, ease: "easeInOut" }}
           />
           
-          {/* Electric Signal Layer */}
-          <motion.div
-            className="absolute inset-0 flex items-center justify-center"
-            animate={{ opacity: isBusy ? [0.2, 1, 0.2] : 0.1 }}
-            transition={{ duration: 0.1, repeat: Infinity }}
-          >
-            <div className="w-full h-px bg-white/20 rotate-45" />
-            <div className="w-full h-px bg-white/20 -rotate-45" />
-          </motion.div>
-        </motion.div>
+          {/* Central Bright Spot */}
+          <div className="absolute inset-0 flex items-center justify-center">
+            <motion.div 
+              className="w-4 h-4 rounded-full bg-white shadow-[0_0_30px_10px_rgba(255,255,255,0.8)]"
+              animate={{ scale: isBusy ? [1, 1.5, 1] : [1, 1.2, 1] }}
+              transition={{ duration: 1.5, repeat: Infinity }}
+            />
+          </div>
+        </div>
 
-        {/* Central Intelligence Signal */}
-        <motion.div
-          className="absolute w-3 h-3 rounded-full bg-white z-30 shadow-[0_0_20px_4px_rgba(255,255,255,0.8)]"
-          animate={{
-            scale: isBusy ? [1, 1.8, 1] : [1, 1.2, 1],
-            opacity: state === 'executing' ? [0.5, 1, 0.5] : 1
-          }}
-          transition={{ duration: 2, repeat: Infinity, ease: "easeInOut" }}
-        />
-      </motion.div>
+        {/* Specular Glint */}
+        <div className="absolute top-2 left-4 w-6 h-3 bg-white/30 rounded-full blur-[2px] rotate-[-30deg]" />
+      </div>
 
-      {/* 🌊 CAUSTIC AMBIENT PULSE */}
-      <AnimatePresence>
-        {isBusy && (
+      {/* ✨ FLOATING PARTICLES */}
+      <div className="absolute inset-0 pointer-events-none">
+        {[...Array(6)].map((_, i) => (
           <motion.div
-            initial={{ scale: 0.5, opacity: 0 }}
-            animate={{ scale: 2.5, opacity: [0, 0.15, 0] }}
-            exit={{ opacity: 0 }}
-            transition={{ duration: 2, repeat: Infinity, ease: "easeOut" }}
-            className="absolute inset-0 rounded-full border-[0.5px] border-white/20 blur-md pointer-events-none"
+            key={i}
+            className="absolute w-1 h-1 bg-white rounded-full opacity-20"
+            style={{
+              left: `${20 + Math.random() * 60}%`,
+              top: `${20 + Math.random() * 60}%`,
+            }}
+            animate={{
+              y: [0, -40, 0],
+              opacity: [0, 0.4, 0],
+              scale: [0, 1, 0]
+            }}
+            transition={{
+              duration: 4 + Math.random() * 4,
+              repeat: Infinity,
+              delay: Math.random() * 5
+            }}
           />
-        )}
-      </AnimatePresence>
-
+        ))}
+      </div>
     </div>
   );
 }

@@ -43,11 +43,11 @@ export function TopBar() {
     <button 
       onClick={onClick}
       className={cn(
-        "w-9 h-9 sm:w-10 sm:h-10 rounded-full bg-white flex items-center justify-center text-slate-400 border border-slate-100 shadow-sm hover:bg-slate-50 transition-all active:scale-95 shrink-0",
+        "w-10 h-10 rounded-full bg-white/80 backdrop-blur-md flex items-center justify-center text-slate-400 border border-slate-100 shadow-sm hover:bg-white transition-all active:scale-95 shrink-0",
         className
       )}
     >
-      <Icon className="w-4 h-4" />
+      <Icon className="w-4 h-4 stroke-[1.5]" />
     </button>
   );
 
@@ -56,8 +56,8 @@ export function TopBar() {
       <header className="fixed top-4 sm:top-6 left-0 right-0 z-[150] px-4 pointer-events-none flex justify-center">
         <div className="w-full max-w-6xl flex items-center justify-between pointer-events-auto">
           
-          {/* Left Buttons */}
-          <div className="flex items-center gap-1.5 sm:gap-2">
+          {/* Left Navigation Group */}
+          <div className="flex items-center gap-2 sm:gap-3">
             <NavButton icon={isMenuOpen ? X : Menu} onClick={toggleMenu} />
             <Popover>
               <PopoverTrigger asChild>
@@ -65,41 +65,41 @@ export function TopBar() {
               </PopoverTrigger>
               <PopoverContent className="w-72 glass-panel p-0 shadow-2xl mt-4 rounded-[2.5rem] border-white/60 overflow-hidden" align="start">
                 <div className="p-5 border-b border-slate-100/60 bg-white/40">
-                  <p className="text-[10px] font-black uppercase tracking-[0.3em] text-slate-400">History</p>
+                  <p className="text-[10px] font-black uppercase tracking-[0.3em] text-slate-400">Context Memory</p>
                 </div>
                 <div className="p-8 text-center text-[10px] text-slate-400 uppercase font-bold tracking-widest opacity-40 italic">
-                  Neural memory empty
+                  No active memories found
                 </div>
               </PopoverContent>
             </Popover>
             <NavButton icon={Plus} onClick={() => router.push('/')} />
           </div>
 
-          {/* Center Star Pill */}
+          {/* Center Action Pill */}
           <motion.button 
-            whileHover={{ scale: 1.05 }}
+            whileHover={{ scale: 1.05, y: -1 }}
             whileTap={{ scale: 0.95 }}
             onClick={() => router.push('/upgrade')}
-            className="h-9 sm:h-10 px-4 sm:px-5 rounded-full bg-[#4F95FF] flex items-center gap-2 text-white shadow-[0_8px_30px_rgb(79,149,255,0.3)] active:scale-95 transition-all"
+            className="h-11 px-6 rounded-full bg-gradient-to-r from-blue-500 to-indigo-600 flex items-center gap-3 text-white shadow-[0_12px_24px_-8px_rgba(59,130,246,0.5)] active:scale-95 transition-all group"
           >
-            <Star className="w-3.5 h-3.5 fill-white" />
-            <ArrowRight className="w-3.5 h-3.5" />
+            <Star className="w-4 h-4 fill-white group-hover:rotate-12 transition-transform" />
+            <ArrowRight className="w-4 h-4 opacity-80" />
           </motion.button>
 
-          {/* Right Buttons */}
-          <div className="flex items-center gap-1.5 sm:gap-2">
+          {/* Right Navigation Group */}
+          <div className="flex items-center gap-2 sm:gap-3">
             <Popover>
               <PopoverTrigger asChild>
                 <NavButton icon={Bell} />
               </PopoverTrigger>
               <PopoverContent className="w-72 glass-panel p-4 shadow-xl mt-4 rounded-[2rem] border-white/60" align="end">
-                <p className="text-[10px] text-center py-4 text-slate-400 font-bold uppercase tracking-widest">No Alerts</p>
+                <p className="text-[10px] text-center py-4 text-slate-400 font-bold uppercase tracking-widest">No New Signals</p>
               </PopoverContent>
             </Popover>
 
             <Popover>
               <PopoverTrigger asChild>
-                <button className="w-9 h-9 sm:w-10 sm:h-10 rounded-full overflow-hidden border-2 border-white shadow-md ring-1 ring-slate-100 active:scale-95 transition-transform shrink-0">
+                <button className="w-10 h-10 rounded-full overflow-hidden border-2 border-white shadow-md ring-1 ring-slate-100 active:scale-95 transition-transform shrink-0">
                   {user?.uid ? (
                     <img src={`https://picsum.photos/seed/${user.uid}/40/40`} alt="User" className="w-full h-full object-cover" />
                   ) : (
@@ -111,7 +111,9 @@ export function TopBar() {
                 <div className="p-3 border-b border-slate-100/60 mb-1">
                   <p className="text-xs font-bold text-slate-900 truncate">{user?.displayName || 'Operator'}</p>
                 </div>
-                <button onClick={handleLogout} className="w-full flex items-center gap-3 p-3 text-slate-600 hover:text-danger hover:bg-danger/5 rounded-2xl text-xs font-bold"><LogOut className="w-4 h-4" />Terminate Session</button>
+                <button onClick={handleLogout} className="w-full flex items-center gap-3 p-3 text-slate-600 hover:text-danger hover:bg-danger/5 rounded-2xl text-xs font-bold transition-colors">
+                  <LogOut className="w-4 h-4" /> Terminate Session
+                </button>
               </PopoverContent>
             </Popover>
           </div>
