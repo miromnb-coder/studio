@@ -26,21 +26,21 @@ export async function POST(req: Request) {
       throw new Error('GROQ_API_KEY is not configured.');
     }
 
-    // MANDATORY SANITIZATION: Ensure every message has valid string content.
+    // 🛡️ MANDATORY SANITIZATION: Ensure every message has valid content string.
     // This prevents 400 invalid_request_error: 'messages.1.content' is missing.
-    const sanitizedHistory = (history || [])
+    const safeHistory = (history || [])
       .filter((m: any) => m && typeof m.content === 'string' && m.content.trim().length > 0)
       .map((m: any) => ({
         role: m.role || 'user',
         content: m.content.trim()
       }));
 
-    // Fallback if history becomes empty after filtering (usually not possible if user input exists)
-    const sanitizedInput = (typeof input === 'string' && input.trim().length > 0) 
+    // Fallback if history becomes empty after filtering
+    const safeInput = (typeof input === 'string' && input.trim().length > 0) 
       ? input.trim() 
-      : "[Analyze current state]";
+      : "[Analyze visual data]";
 
-    console.log("MESSAGES SENT TO AI (SANITIZED):", sanitizedHistory);
+    console.log("MESSAGES SENT TO AI (SAFE):", safeHistory);
 
     const { firestore } = initializeFirebase();
     
@@ -65,7 +65,7 @@ export async function POST(req: Request) {
     }
 
     console.log("Initializing Agent V6 Orchestrator...");
-    const { stream, metadata } = await runAgentV6(sanitizedInput, userId || 'system_anonymous', sanitizedHistory, imageUri);
+    const { stream, metadata } = await runAgentV6(safeInput, userId || 'system_anonymous', safeHistory, imageUri);
 
     const encoder = new TextEncoder();
     const readableStream = new ReadableStream({

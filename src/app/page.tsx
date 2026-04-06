@@ -157,9 +157,12 @@ function ChatContent() {
 
     const messagesRef = collection(db, 'users', user.uid, 'conversations', activeConversationId, 'messages');
     
+    // ENSURE we don't write empty content to Firestore
+    const contentToSave = trimmedInput || "[Image Attached]";
+    
     addDocumentNonBlocking(messagesRef, {
       role: 'user',
-      content: trimmedInput || "[Image Attached]",
+      content: contentToSave,
       imageUri: selectedImage,
       timestamp: serverTimestamp(),
     });
@@ -179,15 +182,16 @@ function ChatContent() {
     }, 600);
 
     try {
-      // MANDATORY: Sanitize messages to ensure every entry has valid content
-      const sanitizedHistory = (messages || [])
-        .filter(m => m && typeof m.content === 'string' && m.content.trim() !== '')
+      // 🛡️ MANDATORY FIX: Sanitize history before sending to API
+      const safeHistory = (messages || [])
+        .filter(m => m && typeof m.content === 'string' && m.content.trim().length > 0)
         .map(m => ({
           role: m.role || 'user',
           content: m.content.trim()
         }));
 
-      console.log("MESSAGES SENT TO AI:", sanitizedHistory);
+      console.log("SENDING TO AI (RAW):", messages);
+      console.log("SENDING TO AI (SAFE):", safeHistory);
 
       const response = await fetch('/api/agent', {
         method: 'POST',
@@ -196,7 +200,7 @@ function ChatContent() {
           input: userMessage,
           imageUri: currentImage,
           userId: user.uid,
-          history: sanitizedHistory,
+          history: safeHistory,
         }),
       });
 

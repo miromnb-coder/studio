@@ -15,7 +15,7 @@ const MAX_ITERATIONS = 4;
 async function classifyIntent(input: string, history: any[]): Promise<{ intent: Intent; language: string }> {
   console.log("[ORCHESTRATOR] Classifying intent...");
   
-  // Defensive history filtering: Ensure NO message has empty content
+  // 🛡️ Defensive history filtering: Ensure NO message has empty content
   const historyContext = (history || [])
     .slice(-2)
     .filter(m => m && typeof m.content === 'string' && m.content.trim().length > 0)
@@ -194,7 +194,7 @@ export async function runAgentV6(input: string, userId: string, history: any[] =
     }
   }
 
-  // FINAL SYNTHESIS: Sanitize history once more to avoid empty content 400s
+  // 🛡️ FINAL SYNTHESIS: Sanitize history once more to avoid empty content 400s
   const synthesisHistory = (history || [])
     .slice(-3)
     .filter(m => m && typeof m.content === 'string' && m.content.trim().length > 0)
