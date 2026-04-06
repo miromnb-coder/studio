@@ -1,10 +1,10 @@
-import { groq } from '@/ai/groq';
+import { ai } from '@/ai/genkit';
 import { ToolDefinition } from './types';
 import { GmailService } from '@/services/gmail-service';
 
 /**
  * @fileOverview Dynamic Tool Registry for Agent v5.
- * Supports built-in tools and tools forged at runtime.
+ * Standardized using Genkit 1.x models.
  */
 
 export const STATIC_TOOLS: Record<string, ToolDefinition> = {
@@ -15,16 +15,20 @@ export const STATIC_TOOLS: Record<string, ToolDefinition> = {
     inputSchema: { type: 'object', properties: { input: { type: 'string' } } },
     impact: { timeSavedMinutes: 15 },
     execute: async ({ input }, { imageUri }) => {
-      const model = imageUri ? 'llama-3.2-11b-vision-preview' : 'llama-3.3-70b-versatile';
-      const res = await groq.chat.completions.create({
+      const model = imageUri ? 'groq/llama-3.2-11b-vision-preview' : 'groq/llama-3.3-70b-versatile';
+      
+      const promptParts: any[] = [{ text: 'Extract key structural details and objective insights.' }];
+      if (imageUri) {
+        promptParts.push({ media: { url: imageUri } });
+      }
+      promptParts.push({ text: input });
+
+      const { output } = await ai.generate({
         model,
-        messages: [
-          { role: 'system', content: 'Extract key structural details and objective insights.' },
-          { role: 'user', content: imageUri ? [{ type: 'text', text: input }, { type: 'image_url', image_url: { url: imageUri } }] : input }
-        ],
-        temperature: 0
+        prompt: promptParts,
+        config: { temperature: 0 }
       });
-      return { insights: res.choices[0]?.message?.content || '' };
+      return { insights: output?.text || '' };
     }
   },
 
@@ -35,16 +39,16 @@ export const STATIC_TOOLS: Record<string, ToolDefinition> = {
     inputSchema: { type: 'object', properties: { text: { type: 'string' } } },
     impact: { moneySaved: 45, timeSavedMinutes: 30 },
     execute: async ({ text }) => {
-      const res = await groq.chat.completions.create({
-        model: 'llama-3.3-70b-versatile',
-        messages: [
-          { role: 'system', content: 'Scan for subscriptions, hidden fees, and leaks. Return JSON: {"leaks": [], "estimatedMonthlySavings": 0}' },
-          { role: 'user', content: text }
-        ],
-        response_format: { type: 'json_object' },
-        temperature: 0
+      const { output } = await ai.generate({
+        model: 'groq/llama-3.3-70b-versatile',
+        system: 'Scan for subscriptions, hidden fees, and leaks. Return JSON: {"leaks": [], "estimatedMonthlySavings": 0}',
+        prompt: text,
+        config: {
+          responseFormat: 'json',
+          temperature: 0
+        }
       });
-      return JSON.parse(res.choices[0]?.message?.content || '{"leaks": [], "estimatedMonthlySavings": 0}');
+      return JSON.parse(output?.text || '{"leaks": [], "estimatedMonthlySavings": 0}');
     }
   },
 
@@ -55,15 +59,13 @@ export const STATIC_TOOLS: Record<string, ToolDefinition> = {
     inputSchema: { type: 'object', properties: { context: { type: 'string' } } },
     impact: { timeSavedMinutes: 120 },
     execute: async ({ context }) => {
-      const res = await groq.chat.completions.create({
-        model: 'llama-3.3-70b-versatile',
-        messages: [
-          { role: 'system', content: 'Audit schedule for time leaks and automation opportunities.' },
-          { role: 'user', content: context }
-        ],
-        temperature: 0.1
+      const { output } = await ai.generate({
+        model: 'groq/llama-3.3-70b-versatile',
+        system: 'Audit schedule for time leaks and automation opportunities.',
+        prompt: context,
+        config: { temperature: 0.1 }
       });
-      return { timeAudit: res.choices[0]?.message?.content || '' };
+      return { timeAudit: output?.text || '' };
     }
   },
 
