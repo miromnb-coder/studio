@@ -157,7 +157,6 @@ function ChatContent() {
 
     const messagesRef = collection(db, 'users', user.uid, 'conversations', activeConversationId, 'messages');
     
-    // ENSURE we don't write empty content to Firestore
     const contentToSave = trimmedInput || "[Image Attached]";
     
     addDocumentNonBlocking(messagesRef, {
@@ -182,7 +181,7 @@ function ChatContent() {
     }, 600);
 
     try {
-      // 🛡️ MANDATORY FIX: Sanitize history before sending to API
+      // 🛡️ CRITICAL FIX: Sanitize messages array before API call
       const safeHistory = (messages || [])
         .filter(m => m && typeof m.content === 'string' && m.content.trim().length > 0)
         .map(m => ({
@@ -190,8 +189,9 @@ function ChatContent() {
           content: m.content.trim()
         }));
 
-      console.log("SENDING TO AI (RAW):", messages);
-      console.log("SENDING TO AI (SAFE):", safeHistory);
+      // DEBUGGING LOGS
+      console.log("RAW MESSAGES:", messages);
+      console.log("SAFE MESSAGES:", safeHistory);
 
       const response = await fetch('/api/agent', {
         method: 'POST',
@@ -326,7 +326,10 @@ function ChatContent() {
           
           {isProcessing && (
             <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="px-4 text-center">
-              <Loader2 className="w-6 h-6 text-blue-400/40 animate-spin mx-auto" />
+              <div className="flex flex-col items-center gap-2">
+                <Loader2 className="w-6 h-6 text-blue-400/40 animate-spin" />
+                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Logic Loop Iterating...</p>
+              </div>
             </motion.div>
           )}
         </AnimatePresence>

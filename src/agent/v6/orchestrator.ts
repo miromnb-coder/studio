@@ -7,7 +7,7 @@ import { collection, addDoc, serverTimestamp, query, orderBy, limit, getDocs, wh
 import { initializeFirebase } from '@/firebase';
 
 /**
- * @fileOverview Orchestrator Engine v6.1: Hierarchical Memory, Deep Context Fetching, and Defensive Sanitization.
+ * @fileOverview Orchestrator Engine v6.1: Hierarchical Memory, Deep Context Fetching, and Mandatory Sanitization.
  */
 
 const MAX_ITERATIONS = 4;
@@ -15,17 +15,19 @@ const MAX_ITERATIONS = 4;
 async function classifyIntent(input: string, history: any[]): Promise<{ intent: Intent; language: string }> {
   console.log("[ORCHESTRATOR] Classifying intent...");
   
-  // 🛡️ Defensive history filtering: Ensure NO message has empty content
-  const historyContext = (history || [])
-    .slice(-2)
+  // 🛡️ Mandatory sanitization for classifyIntent history
+  const safeHistory = (history || [])
     .filter(m => m && typeof m.content === 'string' && m.content.trim().length > 0)
-    .map(m => ({ role: m.role || 'user', content: m.content.trim() }));
+    .map(m => ({
+      role: m.role || 'user',
+      content: m.content.trim()
+    }));
 
   const res = await groq.chat.completions.create({
     model: 'llama-3.3-70b-versatile',
     messages: [
       { role: 'system', content: 'Identify intent: finance, time_optimizer, monetization, technical, analysis, general. Detect language. JSON: {"intent": "...", "language": "..."}' },
-      ...historyContext,
+      ...safeHistory.slice(-2),
       { role: 'user', content: input || "Initialize intent check." }
     ],
     response_format: { type: 'json_object' },
@@ -194,11 +196,13 @@ export async function runAgentV6(input: string, userId: string, history: any[] =
     }
   }
 
-  // 🛡️ FINAL SYNTHESIS: Sanitize history once more to avoid empty content 400s
+  // 🛡️ Final Synthesis sanitization
   const synthesisHistory = (history || [])
-    .slice(-3)
     .filter(m => m && typeof m.content === 'string' && m.content.trim().length > 0)
-    .map(m => ({ role: m.role || 'user', content: m.content.trim() }));
+    .map(m => ({
+      role: m.role || 'user',
+      content: m.content.trim()
+    }));
 
   const stream = await groq.chat.completions.create({
     model: 'llama-3.3-70b-versatile',
@@ -214,7 +218,7 @@ export async function runAgentV6(input: string, userId: string, history: any[] =
           IF ERRORS OCCURRED IN TOOLS, EXPLAIN THEM TO THE USER HONESTLY.
         ` 
       },
-      ...synthesisHistory,
+      ...synthesisHistory.slice(-3),
       { role: 'user', content: input || "Complete synthesis." }
     ],
     temperature: 0.2,

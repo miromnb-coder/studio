@@ -9,7 +9,7 @@ export const runtime = 'nodejs';
 
 /**
  * @fileOverview Streaming API Entry Point for Agent Engine v6.
- * Includes Rigorous Sanitization, Monetization Enforcement, and Debug Logging.
+ * Includes Mandatory Message Sanitization, Monetization Enforcement, and Debug Logging.
  */
 
 export async function POST(req: Request) {
@@ -35,12 +35,18 @@ export async function POST(req: Request) {
         content: m.content.trim()
       }));
 
+    // DEBUGGING LOGS FOR SANITIZATION
+    console.log("RAW MESSAGES RECEIVED:", history);
+    console.log("SAFE MESSAGES TO AI:", safeHistory);
+
     // Fallback if history becomes empty after filtering
     const safeInput = (typeof input === 'string' && input.trim().length > 0) 
       ? input.trim() 
-      : "[Analyze visual data]";
+      : (imageUri ? "[Analyze visual data]" : null);
 
-    console.log("MESSAGES SENT TO AI (SAFE):", safeHistory);
+    if (!safeInput && safeHistory.length === 0) {
+      throw new Error("No valid content found in input or history to send to AI.");
+    }
 
     const { firestore } = initializeFirebase();
     
@@ -65,7 +71,7 @@ export async function POST(req: Request) {
     }
 
     console.log("Initializing Agent V6 Orchestrator...");
-    const { stream, metadata } = await runAgentV6(safeInput, userId || 'system_anonymous', safeHistory, imageUri);
+    const { stream, metadata } = await runAgentV6(safeInput || "[Context only]", userId || 'system_anonymous', safeHistory, imageUri);
 
     const encoder = new TextEncoder();
     const readableStream = new ReadableStream({
