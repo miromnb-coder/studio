@@ -36,7 +36,7 @@ export function AppShell({ children }: { children: ReactNode }) {
         <TopBar />
       </Suspense>
       
-      <main className="relative z-10 flex flex-col items-center w-full min-h-screen pt-32 pb-32">
+      <main className="relative z-10 flex flex-col items-center w-full min-h-screen pt-24 pb-24">
         <div className="w-full max-w-5xl px-6">
           <AnimatePresence mode="wait">
             <motion.div

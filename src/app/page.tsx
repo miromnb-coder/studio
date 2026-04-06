@@ -32,7 +32,7 @@ const BackgroundEnergyField = memo(() => {
 
   return (
     <div className="fixed inset-0 pointer-events-none z-0 overflow-hidden bg-[#FBFBFE]">
-      {/* Layer 1: Deep Background Glow (Slowest) */}
+      {/* Layer 1: Deep Background Glow */}
       <motion.div 
         style={{ y: y1 }}
         animate={{
@@ -64,25 +64,11 @@ const BackgroundEnergyField = memo(() => {
         </svg>
       </motion.div>
 
-      {/* Layer 3: Brighter Center Halo (Guides Focus) */}
+      {/* Layer 3: Brighter Center Halo */}
       <motion.div 
         style={{ y: y3 }}
         className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[600px] rounded-full bg-blue-400/5 blur-[100px] opacity-40"
       />
-
-      {/* Layer 4: Micro Particles (Subtle Shimmer) */}
-      {[...Array(15)].map((_, i) => (
-        <motion.div
-          key={i}
-          className="absolute w-1 h-1 bg-blue-400 rounded-full opacity-[0.08]"
-          initial={{ x: Math.random() * 100 + "vw", y: Math.random() * 100 + "vh" }}
-          animate={{ 
-            y: ["0vh", "100vh"],
-            x: ["0vw", "5vw", "-5vw", "0vw"]
-          }}
-          transition={{ duration: 30 + Math.random() * 20, repeat: Infinity, ease: "linear" }}
-        />
-      ))}
     </div>
   );
 });
@@ -152,20 +138,15 @@ function ChatContent() {
   const sendMessage = async () => {
     if (!user || (!input.trim() && !selectedImage) || !db || isProcessing) return;
     
-    // 1. Trigger the "Flying Signal" animation
     setFlyingSignal(true);
-    
-    // 2. Set processing state
     setIsProcessing(true);
 
-    // 3. Simulated flight time before core reaction
     setTimeout(() => {
       setFlyingSignal(false);
       setTriggerBurst(true);
       setTimeout(() => setTriggerBurst(false), 1000);
     }, 600);
 
-    // 4. Actual logic (placeholder)
     setTimeout(() => setIsProcessing(false), 3000);
     setInput('');
     setSelectedToolImage(null);
@@ -181,7 +162,7 @@ function ChatContent() {
         {showOnboarding && <OnboardingOverlay onSelectGoal={() => setShowOnboarding(false)} />}
       </AnimatePresence>
 
-      <div ref={scrollRef} className="flex-1 overflow-y-auto space-y-12 pb-48 pt-10 px-4 md:px-0 stealth-scrollbar relative z-10">
+      <div ref={scrollRef} className="flex-1 overflow-y-auto space-y-12 pb-48 pt-6 px-4 md:px-0 stealth-scrollbar relative z-10">
         <AnimatePresence initial={false}>
           {hasMessages ? (
             messages!.map((msg, idx) => (
@@ -203,7 +184,7 @@ function ChatContent() {
               </motion.div>
             ))
           ) : !showOnboarding && (
-            <div className="flex flex-col items-center justify-center py-10 text-center space-y-12 px-4">
+            <div className="flex flex-col items-center justify-center min-h-[60vh] text-center space-y-12 px-4">
               
               {/* Center Glowing Core */}
               <div className="relative">
@@ -215,7 +196,7 @@ function ChatContent() {
               </div>
               
               {/* Header Text Section */}
-              <div className="space-y-6">
+              <div className="space-y-8">
                 <motion.div 
                   initial={{ opacity: 0, y: 10 }}
                   animate={{ opacity: 1, y: 0 }}
@@ -228,11 +209,11 @@ function ChatContent() {
                   </div>
                 </motion.div>
 
-                <div className="space-y-3">
-                  <h2 className="text-5xl sm:text-7xl md:text-8xl font-black tracking-tighter text-slate-900 leading-[0.9]">
+                <div className="space-y-4">
+                  <h2 className="text-5xl sm:text-7xl md:text-8xl font-black tracking-tighter text-slate-900 leading-[0.85]">
                     Intelligence<br/>Hub
                   </h2>
-                  <p className="text-[9px] sm:text-[11px] font-black uppercase tracking-[0.5em] text-slate-400">
+                  <p className="text-[9px] sm:text-[11px] font-black uppercase tracking-[0.5em] text-slate-400 pt-2">
                     AUTONOMOUS FORGE ACTIVE
                   </p>
                 </div>
@@ -241,8 +222,8 @@ function ChatContent() {
           )}
           
           {isProcessing && (
-            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="px-4">
-              <Loader2 className="w-6 h-6 text-blue-400/40 animate-spin" />
+            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="px-4 text-center">
+              <Loader2 className="w-6 h-6 text-blue-400/40 animate-spin mx-auto" />
             </motion.div>
           )}
         </AnimatePresence>
@@ -254,7 +235,7 @@ function ChatContent() {
           <motion.div
             initial={{ bottom: "40px", left: "50%", x: "-50%", opacity: 1, scale: 1 }}
             animate={{ 
-              bottom: "65vh", // Approx core position
+              bottom: "60vh",
               opacity: [1, 1, 0],
               scale: [1, 1.5, 0.5]
             }}
@@ -274,7 +255,7 @@ function ChatContent() {
             "absolute -inset-1 bg-gradient-to-r from-blue-500/20 to-purple-500/20 rounded-[2.5rem] blur-xl transition-opacity duration-500",
             isFocused ? "opacity-100" : "opacity-0"
           )} />
-          <div className="relative flex items-center gap-2 sm:gap-4 bg-white/80 backdrop-blur-3xl border border-white/80 shadow-[0_32px_64px_-16px_rgba(0,0,0,0.1)] rounded-[2.5rem] px-4 sm:px-6 py-3 sm:py-4 transition-all">
+          <div className="relative flex items-center gap-2 sm:gap-4 bg-white/90 backdrop-blur-3xl border border-white/80 shadow-[0_24px_48px_-12px_rgba(0,0,0,0.08)] rounded-[2.5rem] px-4 sm:px-6 py-3 sm:py-4 transition-all">
             <input 
               type="file" 
               ref={fileInputRef} 

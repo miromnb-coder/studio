@@ -43,7 +43,7 @@ export function TopBar() {
     <button 
       onClick={onClick}
       className={cn(
-        "w-10 h-10 rounded-full bg-white/80 backdrop-blur-md flex items-center justify-center text-slate-400 border border-slate-100 shadow-sm hover:bg-white transition-all active:scale-95 shrink-0",
+        "w-10 h-10 rounded-full bg-white/90 backdrop-blur-md flex items-center justify-center text-slate-400 border border-slate-100 shadow-sm hover:bg-white hover:text-slate-900 transition-all active:scale-90 shrink-0",
         className
       )}
     >
@@ -99,7 +99,7 @@ export function TopBar() {
 
             <Popover>
               <PopoverTrigger asChild>
-                <button className="w-10 h-10 rounded-full overflow-hidden border-2 border-white shadow-md ring-1 ring-slate-100 active:scale-95 transition-transform shrink-0">
+                <button className="w-10 h-10 rounded-full overflow-hidden border-2 border-white shadow-md ring-1 ring-slate-100 active:scale-90 transition-transform shrink-0">
                   {user?.uid ? (
                     <img src={`https://picsum.photos/seed/${user.uid}/40/40`} alt="User" className="w-full h-full object-cover" />
                   ) : (
