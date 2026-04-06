@@ -9,7 +9,7 @@ export const runtime = 'nodejs';
 
 /**
  * @fileOverview Streaming API Entry Point for Agent Engine v6.
- * Includes Rigorous Monetization Enforcement and Debug Logging.
+ * Includes Rigorous Sanitization, Monetization Enforcement, and Debug Logging.
  */
 
 export async function POST(req: Request) {
@@ -26,11 +26,28 @@ export async function POST(req: Request) {
       throw new Error('GROQ_API_KEY is not configured.');
     }
 
+    // SANITIZE HISTORY: Ensure content is never null or empty to prevent 400 invalid_request_error
+    const sanitizedHistory = (history || [])
+      .filter((m: any) => m && typeof m.content === 'string' && m.content.trim().length > 0)
+      .map((m: any) => ({
+        role: m.role || 'user',
+        content: m.content.trim()
+      }));
+
+    const sanitizedInput = (typeof input === 'string' && input.trim().length > 0) 
+      ? input.trim() 
+      : "Analyze current state.";
+
+    console.log("SENDING TO AI PAYLOAD:", {
+      inputLength: sanitizedInput.length,
+      historyCount: sanitizedHistory.length,
+      sanitizedHistorySample: sanitizedHistory.slice(-1)
+    });
+
     const { firestore } = initializeFirebase();
     
     // 1. Rigorous Monetization Check
     if (userId && userId !== 'system_anonymous' && firestore) {
-      console.log("Checking limits for user:", userId);
       const { plan, usage } = await SubscriptionService.getUserStatus(firestore, userId);
       
       const planKey = (plan || 'FREE').toUpperCase() as keyof typeof PLAN_LIMITS;
@@ -50,7 +67,7 @@ export async function POST(req: Request) {
     }
 
     console.log("Initializing Agent V6 Orchestrator...");
-    const { stream, metadata } = await runAgentV6(input, userId || 'system_anonymous', history, imageUri);
+    const { stream, metadata } = await runAgentV6(sanitizedInput, userId || 'system_anonymous', sanitizedHistory, imageUri);
 
     const encoder = new TextEncoder();
     const readableStream = new ReadableStream({
@@ -86,7 +103,6 @@ export async function POST(req: Request) {
   } catch (error: any) {
     console.error('--- AGENT_API_CRITICAL_FAILURE ---');
     console.error('ERROR_MESSAGE:', error.message);
-    console.error('STACK:', error.stack);
     
     return NextResponse.json(
       { 

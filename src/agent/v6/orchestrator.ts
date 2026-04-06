@@ -7,19 +7,25 @@ import { collection, addDoc, serverTimestamp, query, orderBy, limit, getDocs, wh
 import { initializeFirebase } from '@/firebase';
 
 /**
- * @fileOverview Orchestrator Engine v6.1: Hierarchical Memory, Deep Context Fetching, and Verbose Logging.
+ * @fileOverview Orchestrator Engine v6.1: Hierarchical Memory, Deep Context Fetching, and Defensive Sanitization.
  */
 
 const MAX_ITERATIONS = 4;
 
 async function classifyIntent(input: string, history: any[]): Promise<{ intent: Intent; language: string }> {
   console.log("[ORCHESTRATOR] Classifying intent...");
+  
+  // Defensive history slice
+  const historyContext = (history || [])
+    .slice(-2)
+    .filter(m => m && m.content && m.content.trim());
+
   const res = await groq.chat.completions.create({
     model: 'llama-3.3-70b-versatile',
     messages: [
       { role: 'system', content: 'Identify intent: finance, time_optimizer, monetization, technical, analysis, general. Detect language. JSON: {"intent": "...", "language": "..."}' },
-      ...history.slice(-2),
-      { role: 'user', content: input }
+      ...historyContext,
+      { role: 'user', content: input || "No input" }
     ],
     response_format: { type: 'json_object' },
     temperature: 0,
@@ -98,7 +104,7 @@ export async function runAgentV6(input: string, userId: string, history: any[] =
   
   const { firestore } = initializeFirebase();
   
-  // 1. FETCH RECENT ANALYTICS CONTEXT (As requested for debugging)
+  // 1. FETCH RECENT ANALYTICS CONTEXT
   let analyses: any[] = [];
   let alerts: any[] = [];
   try {
@@ -133,7 +139,6 @@ export async function runAgentV6(input: string, userId: string, history: any[] =
   while (!loopFinished && currentIteration < MAX_ITERATIONS) {
     currentIteration++;
     const availableTools = activeRegistry.getAvailableTools();
-    console.log(`[LOOP] Iteration ${currentIteration}. Deciding next action...`);
     
     const decisionRes = await groq.chat.completions.create({
       model: 'llama-3.3-70b-versatile',
@@ -151,14 +156,13 @@ export async function runAgentV6(input: string, userId: string, history: any[] =
             DECIDE. JSON ONLY: {"thought": "...", "action": "tool_id|forge_tool|final", "input": {}, "final": "..."}
           `
         },
-        { role: 'user', content: input }
+        { role: 'user', content: input || "Initialize reasoning." }
       ],
       response_format: { type: 'json_object' },
       temperature: 0.1
     });
 
     const decision: Decision = JSON.parse(decisionRes.choices[0]?.message?.content || '{"action": "final"}');
-    console.log(`[DECISION] Action: ${decision.action}. Thought: ${decision.thought}`);
     
     if (decision.action === 'forge_tool') {
       const newTool = await forgeNewTool(decision.input.purpose, userId);
@@ -172,10 +176,7 @@ export async function runAgentV6(input: string, userId: string, history: any[] =
     } else {
       const tool = activeRegistry.getTool(decision.action)!;
       try {
-        console.log(`[EXECUTE] Running tool: ${tool.id}...`);
         const observation = await tool.execute(decision.input || {}, { userId, imageUri });
-        console.log(`[OBSERVATION] Tool ${tool.id} returned data.`);
-        
         steps.push({ thought: decision.thought, action: decision.action, input: decision.input, observation });
         await addEpisodicEvent(userId, { input: decision.input, action: decision.action, observation });
         
@@ -195,7 +196,11 @@ export async function runAgentV6(input: string, userId: string, history: any[] =
     }
   }
 
-  console.log("[ORCHESTRATOR] Synthesizing final response...");
+  // Final Synthesis - Filter history once more defensively
+  const synthesisHistory = (history || [])
+    .slice(-3)
+    .filter(m => m && m.content && m.content.trim());
+
   const stream = await groq.chat.completions.create({
     model: 'llama-3.3-70b-versatile',
     messages: [
@@ -210,8 +215,8 @@ export async function runAgentV6(input: string, userId: string, history: any[] =
           IF ERRORS OCCURRED IN TOOLS, EXPLAIN THEM TO THE USER HONESTLY.
         ` 
       },
-      ...history.slice(-3),
-      { role: 'user', content: input }
+      ...synthesisHistory,
+      { role: 'user', content: input || "Generate synthesis." }
     ],
     temperature: 0.2,
     stream: true

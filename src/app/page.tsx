@@ -133,14 +133,20 @@ function ChatContent() {
   };
 
   const sendMessage = async () => {
-    if (!user || (!input.trim() && !selectedImage) || !db || isProcessing) return;
+    if (!user || !db || isProcessing) return;
+    
+    const trimmedInput = input.trim();
+    if (!trimmedInput && !selectedImage) {
+      console.warn("[CHAT] Empty submission ignored.");
+      return;
+    }
     
     let activeConversationId = conversationId;
 
     if (!activeConversationId) {
       const convRef = await addDocumentNonBlocking(collection(db, 'users', user.uid, 'conversations'), {
         userId: user.uid,
-        title: input.slice(0, 30) + '...',
+        title: (trimmedInput || 'Visual Audit').slice(0, 30) + '...',
         createdAt: serverTimestamp(),
         updatedAt: serverTimestamp(),
       });
@@ -154,14 +160,14 @@ function ChatContent() {
     
     addDocumentNonBlocking(messagesRef, {
       role: 'user',
-      content: input,
+      content: trimmedInput || "[Image Attached]",
       imageUri: selectedImage,
       timestamp: serverTimestamp(),
     });
 
     setFlyingSignal(true);
     setIsProcessing(true);
-    const userMessage = input;
+    const userMessage = trimmedInput || "Analyze visual source.";
     const currentImage = selectedImage;
     
     setInput('');
@@ -174,6 +180,14 @@ function ChatContent() {
     }, 600);
 
     try {
+      // Puhdistetaan historia kaikesta tyhjästä tai virheellisestä datasta ennen lähetyksiä
+      const sanitizedHistory = (messages || [])
+        .filter(m => m && typeof m.content === 'string' && m.content.trim().length > 0)
+        .map(m => ({
+          role: m.role || 'user',
+          content: m.content
+        }));
+
       const response = await fetch('/api/agent', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -181,7 +195,7 @@ function ChatContent() {
           input: userMessage,
           imageUri: currentImage,
           userId: user.uid,
-          history: (messages || []).map(m => ({ role: m.role, content: m.content })),
+          history: sanitizedHistory,
         }),
       });
 
@@ -209,7 +223,11 @@ function ChatContent() {
           
           for (const line of lines) {
             if (line.startsWith('__METADATA__:')) {
-              metadata = JSON.parse(line.replace('__METADATA__:', ''));
+              try {
+                metadata = JSON.parse(line.replace('__METADATA__:', ''));
+              } catch (e) {
+                console.error("Metadata parsing failed", e);
+              }
             } else {
               assistantContent += line;
             }
@@ -217,13 +235,15 @@ function ChatContent() {
         }
       }
 
-      addDocumentNonBlocking(messagesRef, {
-        role: 'assistant',
-        content: assistantContent,
-        timestamp: serverTimestamp(),
-        data: metadata?.structuredData || null,
-        metadata: metadata || null,
-      });
+      if (assistantContent.trim()) {
+        addDocumentNonBlocking(messagesRef, {
+          role: 'assistant',
+          content: assistantContent,
+          timestamp: serverTimestamp(),
+          data: metadata?.structuredData || null,
+          metadata: metadata || null,
+        });
+      }
 
     } catch (err: any) {
       toast({ variant: 'destructive', title: "Sync Interrupted", description: err.message });
@@ -258,7 +278,7 @@ function ChatContent() {
                     msg.role === 'user' ? "bg-slate-900 text-white" : "bg-white/80 backdrop-blur-xl border border-white/80 text-slate-700"
                   )}>
                     {msg.imageUri && <img src={msg.imageUri} alt="Source" className="max-w-full rounded-2xl mb-4" />}
-                    <div className="whitespace-pre-wrap">{msg.content}</div>
+                    <div className="whitespace-pre-wrap">{msg.content || "[Empty Message]"}</div>
                   </div>
                   {msg.data && <RichAnalysisCard data={msg.data} />}
                 </div>
