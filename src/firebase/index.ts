@@ -1,38 +1,33 @@
 import { firebaseConfig } from '@/firebase/config';
-import { initializeApp, getApps, getApp } from 'firebase/app';
-import { getAuth } from 'firebase/auth';
-import { getFirestore } from 'firebase/firestore';
+import { initializeApp, getApps, getApp, FirebaseApp } from 'firebase/app';
+import { getAuth, Auth } from 'firebase/auth';
+import { getFirestore, Firestore } from 'firebase/firestore';
 
 /**
- * @fileOverview Server-safe Firebase initialization.
- * Shared entry point for both client and server components.
+ * @fileOverview Turvallinen Firebase-alustus.
  */
 
-export function initializeFirebase() {
-  if (getApps().length > 0) {
-    const app = getApp();
-    return {
-      firebaseApp: app,
-      auth: getAuth(app),
-      firestore: getFirestore(app)
-    };
+interface FirebaseServices {
+  firebaseApp: FirebaseApp;
+  auth: Auth;
+  firestore: Firestore;
+}
+
+export function initializeFirebase(): FirebaseServices {
+  const apps = getApps();
+  let firebaseApp: FirebaseApp;
+
+  if (apps.length > 0) {
+    firebaseApp = getApp();
+  } else {
+    firebaseApp = initializeApp(firebaseConfig);
   }
 
-  try {
-    const firebaseApp = initializeApp(firebaseConfig);
-    return {
-      firebaseApp,
-      auth: getAuth(firebaseApp),
-      firestore: getFirestore(firebaseApp)
-    };
-  } catch (e) {
-    console.error('Firebase Initialization Failure:', e);
-    return {
-      firebaseApp: null as any,
-      auth: null as any,
-      firestore: null as any
-    };
-  }
+  return {
+    firebaseApp,
+    auth: getAuth(firebaseApp),
+    firestore: getFirestore(firebaseApp)
+  };
 }
 
 export * from './provider';

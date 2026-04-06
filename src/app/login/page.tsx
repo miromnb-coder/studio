@@ -29,7 +29,7 @@ export default function LoginPage() {
   const { user } = useUser();
   const auth = useAuth();
 
-  // Redirect if already logged in
+  // Ohjaus jos käyttäjä on jo kirjautunut
   useEffect(() => {
     if (user) {
       router.push('/dashboard');
@@ -38,19 +38,23 @@ export default function LoginPage() {
 
   const syncUserProfile = async (uid: string, email: string | null, displayName: string | null) => {
     if (!db) return;
-    const userRef = doc(db, 'users', uid);
-    const userDoc = await getDoc(userRef);
-    
-    if (!userDoc.exists()) {
-      await setDoc(userRef, {
-        id: uid,
-        email: email || '',
-        displayName: displayName || 'User',
-        createdAt: serverTimestamp(),
-        updatedAt: serverTimestamp(),
-        totalSavedOverall: 0,
-        inboundEmailAddress: `${uid.slice(0, 8)}@operator.ai`, // Magic address generation
-      }, { merge: true });
+    try {
+      const userRef = doc(db, 'users', uid);
+      const userDoc = await getDoc(userRef);
+      
+      if (!userDoc.exists()) {
+        await setDoc(userRef, {
+          id: uid,
+          email: email || '',
+          displayName: displayName || 'User',
+          createdAt: serverTimestamp(),
+          updatedAt: serverTimestamp(),
+          totalSavedOverall: 0,
+          inboundEmailAddress: `${uid.slice(0, 8)}@operator.ai`,
+        }, { merge: true });
+      }
+    } catch (e) {
+      console.error("Profile sync failed:", e);
     }
   };
 
@@ -93,7 +97,6 @@ export default function LoginPage() {
 
   return (
     <div className="min-h-screen bg-background flex items-center justify-center p-6 relative overflow-hidden">
-      {/* Background Accent */}
       <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[600px] bg-primary/10 rounded-full blur-[120px] pointer-events-none" />
 
       <motion.div
@@ -108,10 +111,10 @@ export default function LoginPage() {
             </div>
             <div className="space-y-2">
               <CardTitle className="text-4xl font-bold font-headline tracking-tight">
-                {isLogin ? 'Welcome Back' : 'Get Started'}
+                {isLogin ? 'Tervetuloa' : 'Aloita nyt'}
               </CardTitle>
               <CardDescription className="text-muted-foreground text-lg uppercase tracking-widest text-[10px] font-bold">
-                {isLogin ? 'The operator is standing by.' : 'Initialize your savings engine.'}
+                {isLogin ? 'Operaattori on valmiina.' : 'Alusta säästömoottorisi.'}
               </CardDescription>
             </div>
           </CardHeader>
@@ -124,24 +127,24 @@ export default function LoginPage() {
               disabled={loading || !auth}
             >
               <Chrome className="w-5 h-5" />
-              Continue with Google
+              Jatka Googlella
             </Button>
 
             <div className="relative">
               <div className="absolute inset-0 flex items-center"><span className="w-full border-t border-white/5"></span></div>
               <div className="relative flex justify-center text-[10px] uppercase font-bold tracking-[0.3em] text-muted-foreground/50">
-                <span className="bg-background px-4">Or use email</span>
+                <span className="bg-background px-4">Tai sähköpostilla</span>
               </div>
             </div>
 
             <form onSubmit={handleEmailAuth} className="space-y-6">
               <div className="space-y-2">
-                <Label className="text-[10px] uppercase font-bold tracking-widest text-muted-foreground ml-1">Email</Label>
+                <Label className="text-[10px] uppercase font-bold tracking-widest text-muted-foreground ml-1">Sähköposti</Label>
                 <div className="relative">
                   <Mail className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground/50" />
                   <Input 
                     type="email" 
-                    placeholder="name@example.com" 
+                    placeholder="nimi@esimerkki.fi" 
                     className="h-14 pl-12 rounded-2xl bg-white/5 border-white/10 focus:border-primary transition-all"
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
@@ -151,7 +154,7 @@ export default function LoginPage() {
               </div>
 
               <div className="space-y-2">
-                <Label className="text-[10px] uppercase font-bold tracking-widest text-muted-foreground ml-1">Password</Label>
+                <Label className="text-[10px] uppercase font-bold tracking-widest text-muted-foreground ml-1">Salasana</Label>
                 <div className="relative">
                   <Lock className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground/50" />
                   <Input 
@@ -176,7 +179,7 @@ export default function LoginPage() {
               >
                 {loading ? <Loader2 className="w-6 h-6 animate-spin" /> : (
                   <>
-                    {isLogin ? 'Sign In' : 'Create Account'}
+                    {isLogin ? 'Kirjaudu' : 'Luo tili'}
                     <ArrowRight className="ml-2 w-5 h-5 group-hover:translate-x-1 transition-transform" />
                   </>
                 )}
@@ -188,7 +191,7 @@ export default function LoginPage() {
                 className="text-muted-foreground hover:text-white transition-colors text-sm font-medium"
                 onClick={() => setIsLogin(!isLogin)}
               >
-                {isLogin ? "Don't have an account? Sign up" : "Already have an account? Sign in"}
+                {isLogin ? "Eikö sinulla ole tiliä? Rekisteröidy" : "Onko sinulla jo tili? Kirjaudu"}
               </button>
             </div>
           </CardContent>
