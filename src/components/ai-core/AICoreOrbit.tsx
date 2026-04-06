@@ -1,33 +1,63 @@
+
 "use client";
 
 import { motion, AnimatePresence } from "framer-motion";
-import { useMemo } from "react";
+import { useMemo, useState, useEffect } from "react";
 import { AICoreStatus } from "./types";
 import { cn } from "@/lib/utils";
 
 type Props = {
   state?: AICoreStatus;
   isFocused?: boolean;
+  triggerBurst?: boolean; // New prop to trigger the send-reaction
 };
 
-export default function AICoreOrbit({ state = "idle", isFocused = false }: Props) {
+// Internal Spark component for the "Forge" effect
+const ForgeSpark = ({ id }: { id: number }) => (
+  <motion.div
+    key={id}
+    initial={{ x: 0, y: 0, opacity: 0, scale: 0 }}
+    animate={{ 
+      x: (Math.random() - 0.5) * 100, 
+      y: -150 - Math.random() * 100, 
+      opacity: [0, 0.8, 0],
+      scale: [0, 1.5, 0.5]
+    }}
+    transition={{ duration: 3 + Math.random() * 2, ease: "easeOut" }}
+    className="absolute w-1 h-1 bg-blue-300 rounded-full blur-[1px] shadow-[0_0_8px_rgba(147,197,253,0.8)]"
+  />
+);
+
+export default function AICoreOrbit({ state = "idle", isFocused = false, triggerBurst = false }: Props) {
+  const [sparks, setSparks] = useState<{id: number}[]>([]);
   const isBusy = state === "thinking" || state === "executing" || state === "reasoning";
   
-  // Dynamic color logic based on state
+  // Forge Spark Generator logic
+  useEffect(() => {
+    const interval = setInterval(() => {
+      // Only emit sparks occasionally or when busy
+      if (Math.random() > (isBusy ? 0.3 : 0.8)) {
+        const id = Date.now();
+        setSparks(prev => [...prev, { id }].slice(-10)); // Keep last 10 sparks
+      }
+    }, 800);
+    return () => clearInterval(interval);
+  }, [isBusy]);
+
   const coreGlow = useMemo(() => {
     switch (state) {
-      case 'executing': return 'rgba(147, 51, 234, 0.8)'; // Purple
-      case 'reasoning': return 'rgba(34, 211, 238, 0.8)'; // Cyan
+      case 'executing': return 'rgba(34, 211, 238, 0.9)'; // Cyan
+      case 'reasoning': return 'rgba(45, 212, 191, 0.8)'; // Turquoise
       case 'success': return 'rgba(34, 197, 94, 0.8)'; // Green
       case 'error': return 'rgba(239, 68, 68, 0.8)'; // Red
-      default: return 'rgba(59, 130, 246, 0.6)'; // Blue
+      default: return 'rgba(59, 130, 246, 0.6)'; // Deep Blue
     }
   }, [state]);
 
   const orbits = [
-    { id: 'o1', rx: 110, ry: 45, duration: 25, rotate: 15, nodeSize: 4, speedMultiplier: 1 },
-    { id: 'o2', rx: 100, ry: 40, duration: 18, rotate: -20, nodeSize: 3, speedMultiplier: 1.5 },
-    { id: 'o3', rx: 90, ry: 50, duration: 30, rotate: 45, nodeSize: 5, speedMultiplier: 0.8 },
+    { id: 'o1', rx: 110, ry: 45, duration: 25, rotate: 15, nodeSize: 4 },
+    { id: 'o2', rx: 100, ry: 40, duration: 18, rotate: -20, nodeSize: 3 },
+    { id: 'o3', rx: 90, ry: 50, duration: 30, rotate: 45, nodeSize: 5 },
   ];
 
   return (
@@ -35,16 +65,23 @@ export default function AICoreOrbit({ state = "idle", isFocused = false }: Props
       
       {/* 🔮 CENTER HALO (Background guided focus) */}
       <motion.div
-        className="absolute w-[280px] h-[280px] rounded-full blur-[120px] opacity-20 pointer-events-none"
+        className="absolute w-[280px] h-[280px] rounded-full blur-[120px] pointer-events-none transition-colors duration-1000"
         style={{ background: `radial-gradient(circle, ${coreGlow} 0%, transparent 70%)` }}
         animate={{ 
-          scale: isFocused || isBusy ? [1, 1.3, 1] : [1, 1.1, 1],
-          opacity: isFocused || isBusy ? 0.4 : 0.2
+          scale: triggerBurst ? [1, 1.8, 1] : (isFocused || isBusy ? [1, 1.3, 1] : [1, 1.1, 1]),
+          opacity: triggerBurst ? [0.4, 0.9, 0.4] : (isFocused || isBusy ? 0.5 : 0.25)
         }}
-        transition={{ duration: 8, repeat: Infinity, ease: "easeInOut" }}
+        transition={{ duration: triggerBurst ? 0.6 : 8, repeat: triggerBurst ? 0 : Infinity, ease: "easeInOut" }}
       />
 
-      {/* 🌀 ORBITAL SYSTEM & NEURAL NETWORK LAYER */}
+      {/* ✨ FORGE SPARKS */}
+      <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+        <AnimatePresence>
+          {sparks.map(s => <ForgeSpark key={s.id} id={s.id} />)}
+        </AnimatePresence>
+      </div>
+
+      {/* 🌀 ORBITAL SYSTEM */}
       <svg className="absolute w-full h-full pointer-events-none overflow-visible" viewBox="0 0 320 320">
         <defs>
           <filter id="nodeGlow" x="-50%" y="-50%" width="200%" height="200%">
@@ -58,25 +95,8 @@ export default function AICoreOrbit({ state = "idle", isFocused = false }: Props
           </linearGradient>
         </defs>
         
-        {/* Connection Lines (Reasoning Mode) */}
-        <AnimatePresence>
-          {state === 'reasoning' && (
-            <motion.g 
-              initial={{ opacity: 0 }} 
-              animate={{ opacity: 0.2 }} 
-              exit={{ opacity: 0 }}
-              transition={{ duration: 1 }}
-            >
-              <line x1="160" y1="160" x2="270" y2="160" stroke="white" strokeWidth="0.5" strokeDasharray="4 2" />
-              <line x1="160" y1="160" x2="60" y2="160" stroke="white" strokeWidth="0.5" strokeDasharray="4 2" />
-              <line x1="160" y1="160" x2="160" y2="250" stroke="white" strokeWidth="0.5" strokeDasharray="4 2" />
-            </motion.g>
-          )}
-        </AnimatePresence>
-
         {orbits.map((orbit) => (
           <g key={orbit.id} transform={`translate(160, 160) rotate(${orbit.rotate})`}>
-            {/* The Path */}
             <ellipse 
               cx="0" cy="0" 
               rx={orbit.rx} ry={orbit.ry} 
@@ -85,8 +105,6 @@ export default function AICoreOrbit({ state = "idle", isFocused = false }: Props
               strokeWidth="0.5" 
               className="opacity-10"
             />
-            
-            {/* Traveling Data Node */}
             <motion.circle
               r={orbit.nodeSize / 2}
               fill="white"
@@ -94,13 +112,12 @@ export default function AICoreOrbit({ state = "idle", isFocused = false }: Props
               animate={{
                 cx: [orbit.rx, 0, -orbit.rx, 0, orbit.rx],
                 cy: [0, orbit.ry, 0, -orbit.ry, 0],
-                opacity: [0.4, 1, 0.4, 1, 0.4],
-                scale: [1, 1.4, 1, 1.4, 1]
+                scale: triggerBurst ? [1, 2, 1] : [1, 1.4, 1]
               }}
               transition={{
-                duration: orbit.duration * (state === 'idle' ? 1 : 0.5),
-                repeat: Infinity,
-                ease: "linear"
+                duration: triggerBurst ? (orbit.duration * 0.1) : (orbit.duration * (state === 'idle' ? 1 : 0.5)),
+                repeat: triggerBurst ? 0 : Infinity,
+                ease: triggerBurst ? "easeOut" : "linear"
               }}
             />
           </g>
@@ -108,76 +125,50 @@ export default function AICoreOrbit({ state = "idle", isFocused = false }: Props
       </svg>
 
       {/* 💎 THE AI CORE ARTIFACT */}
-      <div className="relative w-24 h-24 flex items-center justify-center">
-        {/* Core Layers */}
+      <motion.div 
+        className="relative w-24 h-24 flex items-center justify-center"
+        animate={{
+          scale: triggerBurst ? [1, 1.4, 1] : 1,
+          rotate: triggerBurst ? [0, 15, -15, 0] : 0
+        }}
+        transition={{ duration: 0.5 }}
+      >
         <motion.div
           className={cn(
             "absolute inset-0 rounded-full blur-md transition-colors duration-1000",
-            state === 'executing' ? "bg-purple-500/40" : "bg-blue-400/40"
+            isBusy ? "bg-cyan-400/40" : "bg-blue-400/40"
           )}
           animate={{ 
-            scale: isBusy ? [1, 1.2, 1] : [1, 1.05, 1],
-            opacity: isBusy ? 0.6 : 0.4
+            scale: isBusy ? [1, 1.25, 1] : [1, 1.05, 1],
+            opacity: isBusy ? 0.7 : 0.4
           }}
           transition={{ duration: 2, repeat: Infinity }}
         />
         
-        {/* Glass Outer Shell */}
         <div className="w-full h-full rounded-full border border-white/40 bg-white/10 backdrop-blur-xl shadow-[inset_0_0_20px_rgba(255,255,255,0.3)] relative overflow-hidden">
-          {/* Inner Light Flow */}
           <motion.div 
             className="absolute inset-[-50%] opacity-60"
-            style={{
-              background: `radial-gradient(circle at center, white 0%, transparent 60%)`,
-            }}
+            style={{ background: `radial-gradient(circle at center, white 0%, transparent 60%)` }}
             animate={{ 
-              x: ['-20%', '20%'],
-              y: ['-20%', '20%'],
+              x: triggerBurst ? ['-40%', '40%'] : ['-20%', '20%'],
+              y: triggerBurst ? ['-40%', '40%'] : ['-20%', '20%'],
               opacity: isBusy ? [0.6, 1, 0.6] : [0.4, 0.8, 0.4]
             }}
-            transition={{ duration: isBusy ? 2 : 4, repeat: Infinity, ease: "easeInOut" }}
+            transition={{ duration: isBusy ? 1.5 : 4, repeat: Infinity, ease: "easeInOut" }}
           />
           
-          {/* Central Bright Spot */}
           <div className="absolute inset-0 flex items-center justify-center">
             <motion.div 
               className="w-4 h-4 rounded-full bg-white shadow-[0_0_30px_10px_rgba(255,255,255,0.8)]"
               animate={{ 
-                scale: isBusy ? [1, 1.8, 1] : [1, 1.2, 1],
+                scale: isBusy ? [1, 2, 1] : [1, 1.2, 1],
                 filter: isBusy ? "brightness(1.5)" : "brightness(1)"
               }}
               transition={{ duration: 1.5, repeat: Infinity }}
             />
           </div>
         </div>
-
-        {/* Specular Glint */}
-        <div className="absolute top-2 left-4 w-6 h-3 bg-white/30 rounded-full blur-[2px] rotate-[-30deg]" />
-      </div>
-
-      {/* ✨ MICRO PARTICLES (Floating Energy) */}
-      <div className="absolute inset-0 pointer-events-none overflow-visible">
-        {[...Array(12)].map((_, i) => (
-          <motion.div
-            key={i}
-            className="absolute w-0.5 h-0.5 bg-white rounded-full opacity-10"
-            style={{
-              left: `${10 + Math.random() * 80}%`,
-              top: `${10 + Math.random() * 80}%`,
-            }}
-            animate={{
-              y: [0, -60, 0],
-              opacity: [0, 0.3, 0],
-              scale: [0, 1, 0]
-            }}
-            transition={{
-              duration: 10 + Math.random() * 10,
-              repeat: Infinity,
-              delay: Math.random() * 10
-            }}
-          />
-        ))}
-      </div>
+      </motion.div>
     </div>
   );
 }

@@ -1,6 +1,7 @@
+
 "use client";
 
-import { useState, useRef, useEffect, Suspense, memo } from 'react';
+import { useState, useRef, useEffect, Suspense, memo, useCallback } from 'react';
 import { 
   ArrowRight,
   Loader2,
@@ -12,8 +13,8 @@ import {
   Cpu
 } from 'lucide-react';
 import { useFirestore, useUser, useCollection, useMemoFirebase } from '@/firebase';
-import { collection, query, orderBy, limit } from 'firebase/firestore';
-import { motion, AnimatePresence } from 'framer-motion';
+import { collection, query, orderBy, limit, addDoc, serverTimestamp } from 'firebase/firestore';
+import { motion, AnimatePresence, useScroll, useTransform } from 'framer-motion';
 import { cn } from '@/lib/utils';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useToast } from '@/hooks/use-toast';
@@ -21,52 +22,70 @@ import { PaywallOverlay } from '@/components/monetization/PaywallOverlay';
 import { OnboardingOverlay } from '@/components/onboarding/OnboardingOverlay';
 import AICoreOrbit from '@/components/ai-core/AICoreOrbit';
 
-const BackgroundEnergyField = memo(() => (
-  <div className="fixed inset-0 pointer-events-none z-0 overflow-hidden bg-[#FBFBFE]">
-    {/* Shader-style moving halo */}
-    <motion.div 
-      animate={{
-        scale: [1, 1.2, 1],
-        x: [0, 50, 0],
-        y: [0, 30, 0],
-      }}
-      transition={{ duration: 20, repeat: Infinity, ease: "linear" }}
-      className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[100vw] h-[100vw] rounded-full opacity-[0.03] bg-gradient-to-r from-blue-400 via-cyan-300 to-purple-400 blur-[120px]"
-    />
-    
-    {/* Fluid energy field (Lower opacity waves) */}
-    <div className="absolute inset-0 opacity-[0.05]">
-      <svg className="w-full h-full" viewBox="0 0 100 100" preserveAspectRatio="none">
-        <motion.path 
-          d="M0,50 Q25,40 50,50 T100,50 V100 H0 Z" 
-          fill="url(#waveGradient)"
-          animate={{ d: ["M0,50 Q25,45 50,50 T100,50 V100 H0 Z", "M0,50 Q25,55 50,50 T100,50 V100 H0 Z", "M0,50 Q25,45 50,50 T100,50 V100 H0 Z"] }}
-          transition={{ duration: 15, repeat: Infinity, ease: "easeInOut" }}
-        />
-        <defs>
-          <linearGradient id="waveGradient" x1="0%" y1="0%" x2="100%" y2="0%">
-            <stop offset="0%" stopColor="#3b82f6" />
-            <stop offset="100%" stopColor="#a855f7" />
-          </linearGradient>
-        </defs>
-      </svg>
-    </div>
+const BackgroundEnergyField = memo(() => {
+  const { scrollY } = useScroll();
+  
+  // Parallax transforms for different layers
+  const y1 = useTransform(scrollY, [0, 1000], [0, 200]);
+  const y2 = useTransform(scrollY, [0, 1000], [0, -150]);
+  const y3 = useTransform(scrollY, [0, 1000], [0, 100]);
 
-    {/* Micro Particles */}
-    {[...Array(20)].map((_, i) => (
-      <motion.div
-        key={i}
-        className="absolute w-1 h-1 bg-blue-400 rounded-full opacity-[0.08]"
-        initial={{ x: Math.random() * 100 + "vw", y: Math.random() * 100 + "vh" }}
-        animate={{ 
-          y: ["0vh", "100vh"],
-          x: ["0vw", "10vw", "-10vw", "0vw"]
+  return (
+    <div className="fixed inset-0 pointer-events-none z-0 overflow-hidden bg-[#FBFBFE]">
+      {/* Layer 1: Deep Background Glow (Slowest) */}
+      <motion.div 
+        style={{ y: y1 }}
+        animate={{
+          scale: [1, 1.2, 1],
+          opacity: [0.02, 0.04, 0.02],
         }}
-        transition={{ duration: 25 + Math.random() * 20, repeat: Infinity, ease: "linear" }}
+        transition={{ duration: 25, repeat: Infinity, ease: "linear" }}
+        className="absolute top-[-20%] left-[-10%] w-[120vw] h-[120vw] rounded-full bg-gradient-to-r from-blue-400 via-cyan-300 to-purple-400 blur-[150px]"
       />
-    ))}
-  </div>
-));
+      
+      {/* Layer 2: Mid Energy Wave */}
+      <motion.div 
+        style={{ y: y2 }}
+        className="absolute inset-0 opacity-[0.03]"
+      >
+        <svg className="w-full h-full" viewBox="0 0 100 100" preserveAspectRatio="none">
+          <motion.path 
+            d="M0,50 Q25,40 50,50 T100,50 V100 H0 Z" 
+            fill="url(#waveGradient)"
+            animate={{ d: ["M0,50 Q25,45 50,50 T100,50 V100 H0 Z", "M0,50 Q25,55 50,50 T100,50 V100 H0 Z", "M0,50 Q25,45 50,50 T100,50 V100 H0 Z"] }}
+            transition={{ duration: 15, repeat: Infinity, ease: "easeInOut" }}
+          />
+          <defs>
+            <linearGradient id="waveGradient" x1="0%" y1="0%" x2="100%" y2="0%">
+              <stop offset="0%" stopColor="#3b82f6" />
+              <stop offset="100%" stopColor="#a855f7" />
+            </linearGradient>
+          </defs>
+        </svg>
+      </motion.div>
+
+      {/* Layer 3: Brighter Center Halo (Guides Focus) */}
+      <motion.div 
+        style={{ y: y3 }}
+        className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[600px] rounded-full bg-blue-400/5 blur-[100px] opacity-40"
+      />
+
+      {/* Layer 4: Micro Particles (Subtle Shimmer) */}
+      {[...Array(15)].map((_, i) => (
+        <motion.div
+          key={i}
+          className="absolute w-1 h-1 bg-blue-400 rounded-full opacity-[0.08]"
+          initial={{ x: Math.random() * 100 + "vw", y: Math.random() * 100 + "vh" }}
+          animate={{ 
+            y: ["0vh", "100vh"],
+            x: ["0vw", "5vw", "-5vw", "0vw"]
+          }}
+          transition={{ duration: 30 + Math.random() * 20, repeat: Infinity, ease: "linear" }}
+        />
+      ))}
+    </div>
+  );
+});
 BackgroundEnergyField.displayName = 'BackgroundEnergyField';
 
 function ChatContent() {
@@ -77,6 +96,8 @@ function ChatContent() {
   const [showPaywall, setShowPaywall] = useState(false);
   const [paywallReason, setPaywallReason] = useState<'limit_reached' | 'premium_tool'>('limit_reached');
   const [showOnboarding, setShowOnboarding] = useState(false);
+  const [triggerBurst, setTriggerBurst] = useState(false);
+  const [flyingSignal, setFlyingSignal] = useState(false);
   
   const scrollRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -130,9 +151,24 @@ function ChatContent() {
 
   const sendMessage = async () => {
     if (!user || (!input.trim() && !selectedImage) || !db || isProcessing) return;
+    
+    // 1. Trigger the "Flying Signal" animation
+    setFlyingSignal(true);
+    
+    // 2. Set processing state
     setIsProcessing(true);
-    // Simulated processing state
+
+    // 3. Simulated flight time before core reaction
+    setTimeout(() => {
+      setFlyingSignal(false);
+      setTriggerBurst(true);
+      setTimeout(() => setTriggerBurst(false), 1000);
+    }, 600);
+
+    // 4. Actual logic (placeholder)
     setTimeout(() => setIsProcessing(false), 3000);
+    setInput('');
+    setSelectedToolImage(null);
   };
 
   const hasMessages = (messages || []).length > 0;
@@ -174,6 +210,7 @@ function ChatContent() {
                 <AICoreOrbit 
                   state={isProcessing ? "thinking" : input.length > 20 ? "reasoning" : "idle"} 
                   isFocused={isFocused}
+                  triggerBurst={triggerBurst}
                 />
               </div>
               
@@ -243,6 +280,25 @@ function ChatContent() {
           )}
         </AnimatePresence>
       </div>
+
+      {/* Flying Signal Element */}
+      <AnimatePresence>
+        {flyingSignal && (
+          <motion.div
+            initial={{ bottom: "40px", left: "50%", x: "-50%", opacity: 1, scale: 1 }}
+            animate={{ 
+              bottom: "65vh", // Approx core position
+              opacity: [1, 1, 0],
+              scale: [1, 1.5, 0.5]
+            }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.6, ease: [0.4, 0, 0.2, 1] }}
+            className="fixed z-[100] w-4 h-4 bg-primary rounded-full shadow-[0_0_20px_rgba(59,130,246,0.8)] flex items-center justify-center"
+          >
+            <ArrowRight className="w-2 h-2 text-white -rotate-90" />
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       {/* Input Section */}
       <div className="fixed bottom-6 sm:bottom-10 left-1/2 -translate-x-1/2 w-full max-w-2xl px-4 sm:px-6 z-50">
