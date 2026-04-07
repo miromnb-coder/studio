@@ -8,28 +8,35 @@ import { useToast } from '@/hooks/use-toast';
 
 /**
  * A component that listens for globally emitted 'permission-error' events.
- * It logs the error and shows a toast instead of crashing the entire app.
+ * It handles the logic for displaying meaningful synchronization messages.
  */
 export function FirebaseErrorListener() {
   const { toast } = useToast();
 
   useEffect(() => {
     const handleError = (error: FirestorePermissionError) => {
-      // Log the detailed error for the developer
-      console.warn('[FIRESTORE_PERMISSION_DENIED]', error.message);
+      // Log for developer
+      console.warn('[FIRESTORE_SYNC_SIGNAL]', error.message);
       
-      // Vaimennetaan toast-ilmoitukset Dashboardin alustusvaiheen hakuviiveiden aikana
-      // jotta käyttäjä ei näe turhia virheilmoituksia profiilin luonnin aikana.
-      const isInitialSync = 
-        error.request.path.includes('/usage/') || 
-        error.request.path.endsWith('/digests') ||
-        error.request.path.endsWith('/alerts');
+      const path = error.request.path;
+      const isInitialSyncPath = 
+        path.includes('/usage/') || 
+        path.endsWith('/digests') ||
+        path.endsWith('/alerts') ||
+        path.includes('/memory/');
 
-      if (!isInitialSync) {
+      // If it's a known initial sync path, we use a more helpful message
+      if (isInitialSyncPath) {
+        toast({
+          variant: 'default',
+          title: 'Syncing Environment',
+          description: 'Your neural profile is being initialized. This usually takes 2-3 seconds.',
+        });
+      } else {
         toast({
           variant: 'destructive',
           title: 'Access Restricted',
-          description: 'Your profile is being synchronized. Please standby.',
+          description: 'Permission denied for this operation. Please verify your clearance level.',
         });
       }
     };

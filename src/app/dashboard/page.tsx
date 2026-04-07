@@ -3,7 +3,7 @@
 
 import { SystemCard } from '@/components/systems/SystemCard';
 import { useUser, useFirestore, useCollection, useMemoFirebase } from '@/firebase';
-import { collection, query, orderBy, limit, where } from 'firebase/firestore';
+import { collection, query, orderBy, limit, where, doc } from 'firebase/firestore';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Terminal, ShieldCheck, Zap, ChevronRight, Activity, Clock, Cpu, BarChart3, Bell, ArrowRight, Sparkles, Loader2, AlertCircle } from 'lucide-react';
 import { useRouter } from 'next/navigation';
@@ -12,6 +12,7 @@ import { ProactiveAlerts } from '@/components/dashboard/ProactiveAlerts';
 import { DigestService, DailyDigest } from '@/services/digest-service';
 import { DailyDigestCard } from '@/components/chat/DailyDigestCard';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
+import { SubscriptionService } from '@/services/subscription-service';
 
 const container = {
   hidden: { opacity: 0 },
@@ -33,49 +34,50 @@ export default function DashboardPage() {
   const db = useFirestore();
   const router = useRouter();
   const [latestDigest, setLatestDigest] = useState<DailyDigest | null>(null);
-  const [isDigestLoading, setIsDigestLoading] = useState(true);
+  const [status, setStatus] = useState<any>(null);
+  const [isInitializing, setIsInitializing] = useState(true);
 
-  // Varmistetaan että hakuja ei aloiteta ennen kuin autentikaatio on varmasti valmis
-  const analysesQuery = useMemoFirebase(() => {
-    if (!db || !user || isUserLoading) {
-      console.log("[DASHBOARD_DEBUG] Waiting for user session to stabilize...");
-      return null;
+  // Sync profile and get status
+  useEffect(() => {
+    if (db && user && !isUserLoading) {
+      SubscriptionService.getUserStatus(db, user.uid)
+        .then(res => {
+          setStatus(res);
+          setIsInitializing(false);
+        })
+        .catch(() => setIsInitializing(false));
     }
+  }, [db, user, isUserLoading]);
+
+  const analysesQuery = useMemoFirebase(() => {
+    if (!db || !user || isUserLoading || isInitializing) return null;
     return query(
       collection(db, 'users', user.uid, 'analyses'),
       orderBy('createdAt', 'desc'),
       limit(20)
     );
-  }, [db, user, isUserLoading]);
+  }, [db, user, isUserLoading, isInitializing]);
 
   const { data: analyses, isLoading, error: analysesError } = useCollection(analysesQuery);
 
   const alertsQuery = useMemoFirebase(() => {
-    if (!db || !user || isUserLoading) return null;
+    if (!db || !user || isUserLoading || isInitializing) return null;
     return query(
       collection(db, 'users', user.uid, 'alerts'),
       where('isDismissed', '==', false),
       orderBy('createdAt', 'desc'),
       limit(5)
     );
-  }, [db, user, isUserLoading]);
+  }, [db, user, isUserLoading, isInitializing]);
 
   const { data: alerts, isLoading: isAlertsLoading, error: alertsError } = useCollection(alertsQuery);
   
   useEffect(() => {
-    if (db && user && !isUserLoading) {
+    if (db && user && !isUserLoading && !isInitializing) {
       DigestService.getLatestDigest(db, user.uid)
-        .then(digest => {
-          setLatestDigest(digest);
-        })
-        .finally(() => {
-          setIsDigestLoading(false);
-        })
-        .catch(() => {
-          setIsDigestLoading(false);
-        });
+        .then(digest => setLatestDigest(digest));
     }
-  }, [db, user, isUserLoading, analyses]);
+  }, [db, user, isUserLoading, isInitializing, analyses]);
 
   const totalReclaimed = useMemo(() => {
     return (analyses ?? []).reduce((acc, a) => acc + (a.estimatedMonthlySavings || 0), 0);
@@ -87,7 +89,7 @@ export default function DashboardPage() {
 
   const activePatterns = (analyses ?? []).filter(a => a.status === 'completed').length;
 
-  if (isUserLoading) {
+  if (isUserLoading || isInitializing) {
     return (
       <div className="min-h-[60vh] flex flex-col items-center justify-center space-y-4">
         <Loader2 className="w-8 h-8 animate-spin text-primary/40" />
@@ -106,7 +108,7 @@ export default function DashboardPage() {
       <motion.header variants={item} className="space-y-6">
         <div className="flex items-center gap-3 px-4 py-1.5 bg-primary/5 border border-primary/10 rounded-full w-fit">
           <ShieldCheck className="w-3.5 h-3.5 text-primary" />
-          <span className="text-[10px] font-bold text-primary uppercase tracking-[0.3em]">Operational Readiness High</span>
+          <span className="text-[10px] font-bold text-primary uppercase tracking-[0.3em]">Operational Readiness: {status?.label || 'Normal'}</span>
         </div>
         
         <div className="space-y-2">
@@ -119,13 +121,12 @@ export default function DashboardPage() {
         </div>
       </motion.header>
 
-      {/* Turvallinen virheilmoitus */}
-      {(analysesError || alertsError) && !isLoading && !isAlertsLoading && (
+      {(analysesError || alertsError) && (
         <Alert variant="destructive" className="rounded-3xl border-danger/20 bg-danger/5">
           <AlertCircle className="h-4 w-4" />
-          <AlertTitle>Telemetry Sync Error</AlertTitle>
+          <AlertTitle>Telemetry Sync Latency</AlertTitle>
           <AlertDescription>
-            Some operational data is still initializing. Your profile is being synchronized with the logic core.
+            Your neural environment is still settling. Data will populate as signals are verified.
           </AlertDescription>
         </Alert>
       )}

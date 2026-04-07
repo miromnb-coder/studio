@@ -50,6 +50,7 @@ export const PLAN_LIMITS = {
 export class SubscriptionService {
   /**
    * Fetches the user's current plan and daily usage stats.
+   * 🔥 AUTO-CREATES PROFILE if missing.
    */
   static async getUserStatus(db: Firestore, userId: string) {
     if (!userId || userId === 'system_anonymous') {
@@ -67,12 +68,27 @@ export class SubscriptionService {
       const userSnap = await getDoc(userRef);
       
       if (!userSnap.exists()) {
-        console.warn("[SUBSCRIPTION_SERVICE] Profile missing for:", userId);
+        console.warn("[SUBSCRIPTION_SERVICE] Profile missing for:", userId, "- Creating default profile.");
+        
+        // 🔥 AUTO-CREATE PROFILE IF MISSING
+        const defaultProfile = {
+          id: userId,
+          email: '', // Will be updated by auth sync if possible
+          displayName: 'Operator',
+          plan: 'FREE',
+          createdAt: serverTimestamp(),
+          updatedAt: serverTimestamp(),
+          totalSavedOverall: 0,
+          inboundEmailAddress: `${userId.slice(0, 8)}@operator.ai`,
+        };
+        
+        await setDoc(userRef, defaultProfile, { merge: true });
+        
         return {
           plan: 'FREE' as UserPlan,
           usage: { agentRuns: 0, limit: 5 },
           isPremium: false,
-          label: 'Initializing...',
+          label: 'Ultra Free',
           limits: PLAN_LIMITS.FREE
         };
       }

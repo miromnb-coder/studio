@@ -23,6 +23,7 @@ export default function LoginPage() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
+  const [isSyncing, setIsSyncing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   
   const router = useRouter();
@@ -31,14 +32,15 @@ export default function LoginPage() {
   const auth = useAuth();
 
   useEffect(() => {
-    if (user && !isUserLoading) {
+    if (user && !isUserLoading && !isSyncing) {
       console.log("[AUTH_DEBUG] User detected, redirecting to dashboard:", user.uid);
       router.push('/dashboard');
     }
-  }, [user, isUserLoading, router]);
+  }, [user, isUserLoading, isSyncing, router]);
 
   const syncUserProfile = async (uid: string, email: string | null, displayName: string | null) => {
     if (!db) return;
+    setIsSyncing(true);
     const userRef = doc(db, 'users', uid);
     
     try {
@@ -59,6 +61,10 @@ export default function LoginPage() {
         }, { merge: true });
         console.log("[AUTH_DEBUG] Profile created successfully.");
       } else {
+        // Update email if it changed or was missing
+        if (email && !userDoc.data()?.email) {
+          await setDoc(userRef, { email }, { merge: true });
+        }
         console.log("[AUTH_DEBUG] Profile already exists.");
       }
     } catch (err: any) {
@@ -69,6 +75,9 @@ export default function LoginPage() {
           operation: 'get',
         }));
       }
+    } finally {
+      // 🔥 ALWAYS END SYNC
+      setIsSyncing(false);
     }
   };
 
@@ -85,10 +94,9 @@ export default function LoginPage() {
         const cred = await createUserWithEmailAndPassword(auth, email, password);
         await syncUserProfile(cred.user.uid, cred.user.email, cred.user.displayName);
       }
-      router.push('/dashboard');
+      // Redirection is handled by the useEffect above
     } catch (err: any) {
       setError(err.message);
-    } finally {
       setLoading(false);
     }
   };
@@ -101,13 +109,24 @@ export default function LoginPage() {
     try {
       const cred = await signInWithPopup(auth, provider);
       await syncUserProfile(cred.user.uid, cred.user.email, cred.user.displayName);
-      router.push('/dashboard');
+      // Redirection is handled by the useEffect above
     } catch (err: any) {
       setError(err.message);
-    } finally {
       setLoading(false);
     }
   };
+
+  if (isSyncing) {
+    return (
+      <div className="min-h-screen bg-background flex flex-col items-center justify-center space-y-6">
+        <Loader2 className="w-12 h-12 text-primary animate-spin" />
+        <div className="text-center space-y-2">
+          <h2 className="text-2xl font-bold tracking-tight">Syncing Intelligence...</h2>
+          <p className="text-muted-foreground text-sm font-medium uppercase tracking-widest">Configuring your neural environment</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-background flex items-center justify-center p-6 relative overflow-hidden">
