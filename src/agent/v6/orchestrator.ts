@@ -21,6 +21,7 @@ async function classifyIntent(input: string, history: any[]): Promise<{ intent: 
       content: m.content.trim()
     }));
 
+  console.log("CALLING GROQ...");
   const res = await groq.chat.completions.create({
     model: 'llama-3.3-70b-versatile',
     messages: [
@@ -31,11 +32,13 @@ async function classifyIntent(input: string, history: any[]): Promise<{ intent: 
     response_format: { type: 'json_object' },
     temperature: 0,
   });
+  console.log("GROQ RESPONSE RECEIVED");
   const result = JSON.parse(res.choices[0]?.message?.content || '{"intent": "general", "language": "English"}');
   return result;
 }
 
 async function forgeNewTool(purpose: string, userId: string): Promise<ToolDefinition> {
+  console.log("CALLING GROQ...");
   const forgeRes = await groq.chat.completions.create({
     model: 'llama-3.3-70b-versatile',
     messages: [
@@ -48,6 +51,7 @@ async function forgeNewTool(purpose: string, userId: string): Promise<ToolDefini
     response_format: { type: 'json_object' },
     temperature: 0.2
   });
+  console.log("GROQ RESPONSE RECEIVED");
 
   const config = JSON.parse(forgeRes.choices[0]?.message?.content || '{}');
   
@@ -58,6 +62,7 @@ async function forgeNewTool(purpose: string, userId: string): Promise<ToolDefini
     inputSchema: config.inputSchema,
     isDynamic: true,
     execute: async (input: any) => {
+      console.log("CALLING GROQ...");
       const runRes = await groq.chat.completions.create({
         model: 'llama-3.3-70b-versatile',
         messages: [
@@ -66,6 +71,7 @@ async function forgeNewTool(purpose: string, userId: string): Promise<ToolDefini
         ],
         temperature: 0
       });
+      console.log("GROQ RESPONSE RECEIVED");
       return { result: runRes.choices[0]?.message?.content || '', findings: [], forged: true };
     }
   };
@@ -79,6 +85,7 @@ async function forgeNewTool(purpose: string, userId: string): Promise<ToolDefini
 }
 
 export async function runAgentV6(input: string, userId: string, history: any[] = [], imageUri?: string) {
+  console.log("AGENT STARTED", input);
   const { firestore } = initializeFirebase();
   
   let analyses: any[] = [];
@@ -112,6 +119,7 @@ export async function runAgentV6(input: string, userId: string, history: any[] =
     currentIteration++;
     const availableTools = activeRegistry.getAvailableTools();
     
+    console.log("CALLING GROQ...");
     const decisionRes = await groq.chat.completions.create({
       model: 'llama-3.3-70b-versatile',
       messages: [
@@ -132,6 +140,7 @@ export async function runAgentV6(input: string, userId: string, history: any[] =
       response_format: { type: 'json_object' },
       temperature: 0.1
     });
+    console.log("GROQ RESPONSE RECEIVED");
 
     const decision: Decision = JSON.parse(decisionRes.choices[0]?.message?.content || '{"action": "final"}');
     
@@ -168,6 +177,7 @@ export async function runAgentV6(input: string, userId: string, history: any[] =
       content: m.content.trim()
     }));
 
+  console.log("CALLING GROQ...");
   const stream = await groq.chat.completions.create({
     model: 'llama-3.3-70b-versatile',
     messages: [
@@ -181,6 +191,7 @@ export async function runAgentV6(input: string, userId: string, history: any[] =
     temperature: 0.2,
     stream: true
   });
+  console.log("GROQ RESPONSE RECEIVED");
 
   const metadata: AgentMetadata = {
     intent,
