@@ -31,16 +31,12 @@ export function MoneySaver() {
         source: 'pasted_text'
       });
 
-      if (!result || !result.title) {
-        throw new Error("Invalid analysis output");
-      }
-
       const analysesRef = collection(db, 'users', user.uid, 'analyses');
       const docRef = await addDocumentNonBlocking(analysesRef, {
         userId: user.uid,
         title: result.title,
         summary: result.summary,
-        estimatedMonthlySavings: result.savingsEstimate || 0,
+        estimatedMonthlySavings: result.savingsEstimate,
         analysisDate: new Date().toISOString(),
         status: 'completed',
         inputMethod: 'savings_dashboard',
@@ -52,14 +48,12 @@ export function MoneySaver() {
 
       if (docRef) {
         const itemsRef = collection(db, 'users', user.uid, 'analyses', docRef.id, 'detected_items');
-        for (const item of (result.detectedItems || [])) {
-          if (item && item.title) {
-            addDocumentNonBlocking(itemsRef, {
-              ...item,
-              userId: user.uid,
-              analysisId: docRef.id,
-            });
-          }
+        for (const item of result.detectedItems) {
+          addDocumentNonBlocking(itemsRef, {
+            ...item,
+            userId: user.uid,
+            analysisId: docRef.id,
+          });
         }
         router.push(`/results/${docRef.id}`);
       }
