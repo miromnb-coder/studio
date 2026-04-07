@@ -3,7 +3,7 @@ import { runAgent } from '@/agent/agent';
 
 /**
  * @fileOverview Legacy API Wrapper.
- * Redirects legacy /api/analyze calls to the unified Agent v3 Pipeline.
+ * Redirects legacy /api/analyze calls to the unified Agent V6 Pipeline via src/agent/agent.ts.
  */
 
 export const dynamic = 'force-dynamic';
@@ -13,7 +13,7 @@ export async function POST(req: Request) {
   try {
     const body = await req.json();
     
-    console.log("LEGACY_REDIRECT: Routing to Agent v3...");
+    console.log("[LEGACY_API] Routing to Agent V6 Bridge...");
     const result = await runAgent(
       body.documentText || "Analysis Request",
       body.history || [],
@@ -28,10 +28,10 @@ export async function POST(req: Request) {
       strategy: result.data?.strategy || "Standard advisor protocol.",
       mode: result.mode,
       isActionable: result.isActionable,
-      detectedItems: result.data?.data?.detectedItems || result.data?.detectedItems || [],
-      savingsEstimate: result.data?.data?.savingsEstimate || result.data?.savingsEstimate || 0,
+      detectedItems: result.data?.structuredData?.detectedItems || result.data?.detectedItems || [],
+      savingsEstimate: result.data?.structuredData?.estimatedMonthlySavings || result.data?.savingsEstimate || 0,
       beforeAfterComparison: result.data?.beforeAfterComparison || null,
-      memoryUpdates: result.data?.memoryUpdates || null
+      memoryUpdates: null
     });
   } catch (error: any) {
     console.error('LEGACY_API_ERROR:', error.message);
