@@ -1,17 +1,16 @@
-
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
 
 import { NextRequest, NextResponse } from 'next/server';
 import { initializeFirebase } from '@/firebase';
 import { collection, query, where, getDocs, addDoc, serverTimestamp } from 'firebase/firestore';
-import { runAgentV4 } from '@/agent/v4/orchestrator';
+import { runAgentV6 } from '@/agent/v6/orchestrator';
 import { scanForSignals } from '@/services/proactive-service';
 
 /**
  * @fileOverview Inbound Email Webhook.
  * Maps incoming magic-forwarded emails to UserProfiles via inboundEmailAddress.
- * Now triggers Proactive Intelligence Scan.
+ * Now triggers Engine V6.1 for deep analysis.
  */
 
 export async function POST(req: NextRequest) {
@@ -41,7 +40,7 @@ export async function POST(req: NextRequest) {
     const userId = userDoc.id;
 
     const inboxRef = collection(firestore, 'users', userId, 'inbox');
-    const inboxDoc = await addDoc(inboxRef, {
+    await addDoc(inboxRef, {
       userId,
       subject,
       body,
@@ -51,19 +50,26 @@ export async function POST(req: NextRequest) {
       source: 'webhook'
     });
 
-    console.log(`[WEBHOOK] Initializing Agent v4.2 for User ${userId}...`);
-    const agentResult = await runAgentV4(
+    console.log(`[WEBHOOK] Initializing Agent v6.1 for User ${userId}...`);
+    const { stream, metadata } = await runAgentV6(
       `Autonomous Inbound Audit: [Subject: ${subject}] [Content: ${body}]`,
-      userId
+      userId,
+      [] // Static history for webhooks
     );
+
+    // Consume stream for database persistence
+    let assistantContent = "";
+    for await (const chunk of stream) {
+      assistantContent += chunk.choices[0]?.delta?.content || "";
+    }
 
     const analysesRef = collection(firestore, 'users', userId, 'analyses');
     const analysisDoc = await addDoc(analysesRef, {
       userId,
       source: 'email',
-      title: agentResult.intent.toUpperCase() + ": " + subject,
-      summary: agentResult.content,
-      estimatedMonthlySavings: (agentResult as any).data?.structuredData?.estimatedMonthlySavings || 0,
+      title: metadata.intent.toUpperCase() + ": " + subject,
+      summary: assistantContent,
+      estimatedMonthlySavings: metadata.structuredData?.estimatedMonthlySavings || 0,
       analysisDate: new Date().toISOString(),
       status: 'completed',
       inputMethod: 'email',
@@ -76,7 +82,7 @@ export async function POST(req: NextRequest) {
 
     return NextResponse.json({ 
       success: true, 
-      intent: agentResult.intent,
+      intent: metadata.intent,
       operationId: userId.slice(0, 8)
     });
   } catch (error: any) {

@@ -1,6 +1,6 @@
 /**
  * @fileOverview AI Agent Service Wrapper.
- * Unifies all intelligence calls through the Agent v3 pipeline.
+ * Unifies all intelligence calls through the Engine V6 bridge.
  */
 
 export interface AnalysisInput {
@@ -29,7 +29,7 @@ export interface AnalysisOutput {
 export class AnalysisService {
   /**
    * Main entry point for all AI intelligence.
-   * Routes requests through the Agent v3 Pipeline.
+   * Routes requests through the static Agent Bridge (V6 powered).
    */
   static async analyze(input: AnalysisInput): Promise<AnalysisOutput> {
     const fallbackResponse: AnalysisOutput = {
@@ -43,14 +43,15 @@ export class AnalysisService {
     };
 
     try {
-      const response = await fetch('/api/agent', {
+      // Use /api/analyze for static JSON response (V6 Bridge)
+      const response = await fetch('/api/analyze', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          input: input.documentText || "Analyze visual source.",
+          documentText: input.documentText || "Analyze visual source.",
           history: input.history || [],
-          memory: input.userMemory || null,
-          imageUri: input.imageDataUri
+          userMemory: input.userMemory || null,
+          imageDataUri: input.imageDataUri
         }),
       });
 
@@ -58,17 +59,16 @@ export class AnalysisService {
 
       const result = await response.json();
       
-      // Map AgentResult back to the legacy AnalysisOutput format for UI compatibility
       return {
-        title: result.data?.title || result.intent.toUpperCase() + " Audit",
-        summary: result.content,
-        strategy: result.data?.strategy || "Execution protocol generated.",
+        title: result.title || "Audit Report",
+        summary: result.summary,
+        strategy: result.strategy || "Execution protocol generated.",
         mode: result.mode,
         isActionable: result.isActionable,
-        detectedItems: result.data?.data?.detectedItems || result.data?.detectedItems || [],
-        savingsEstimate: result.data?.data?.savingsEstimate || result.data?.savingsEstimate || 0,
-        beforeAfterComparison: result.data?.beforeAfterComparison || null,
-        memoryUpdates: result.data?.memoryUpdates || null
+        detectedItems: result.detectedItems || [],
+        savingsEstimate: result.savingsEstimate || 0,
+        beforeAfterComparison: result.beforeAfterComparison || null,
+        memoryUpdates: result.memoryUpdates || null
       };
     } catch (error: any) {
       console.error('Agent Service Error:', error);
