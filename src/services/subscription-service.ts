@@ -67,14 +67,20 @@ export class SubscriptionService {
     console.log('[SYNC] Starting sync for profile:', userId);
 
     try {
-      // Proactively ensure the document exists to avoid "permission-denied" on read for new users
-      await setDoc(userRef, {
-        id: userId,
-        updatedAt: serverTimestamp(),
-      }, { merge: true });
-
       const userSnap = await getDoc(userRef);
       const userData = userSnap.exists() ? userSnap.data() : null;
+
+      // Create baseline profile only when it does not exist.
+      // Avoid writing on every status read, which can trigger noisy snapshot loops.
+      if (!userSnap.exists()) {
+        await setDoc(userRef, {
+          id: userId,
+          plan: 'FREE',
+          totalSavedOverall: 0,
+          createdAt: serverTimestamp(),
+          updatedAt: serverTimestamp(),
+        }, { merge: true });
+      }
 
       // Fallback values if it was JUST created
       const plan: UserPlan = (userData?.plan || 'FREE').toUpperCase() as UserPlan;
