@@ -4,7 +4,6 @@
 import { useState, useCallback, useEffect } from 'react';
 import { Bell, User, X, LogOut, Star, ArrowRight, Plus, History, Menu } from 'lucide-react';
 import { useUser, useFirestore } from '@/firebase';
-import { doc, onSnapshot } from 'firebase/firestore';
 import { FloatingNavMenu } from './FloatingNavMenu';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
@@ -22,11 +21,7 @@ export function TopBar() {
 
   useEffect(() => {
     if (db && user) {
-      const userRef = doc(db, 'users', user.uid);
-      const unsub = onSnapshot(userRef, () => {
-        SubscriptionService.getUserStatus(db, user.uid).then(setStatus);
-      });
-      return () => unsub();
+      SubscriptionService.getUserStatus(db, user.uid).then(setStatus);
     }
   }, [db, user]);
 
