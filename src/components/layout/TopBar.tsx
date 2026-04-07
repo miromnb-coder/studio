@@ -1,131 +1,66 @@
-
 "use client";
 
-import { useState, useCallback, useEffect } from 'react';
-import { Bell, User, X, LogOut, Star, ArrowRight, Plus, History, Menu } from 'lucide-react';
-import { useUser, useFirestore } from '@/firebase';
-import { doc, onSnapshot } from 'firebase/firestore';
-import { FloatingNavMenu } from './FloatingNavMenu';
-import { motion, AnimatePresence } from 'framer-motion';
-import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
-import { getAuth, signOut } from 'firebase/auth';
-import { useRouter } from 'next/navigation';
-import { SubscriptionService } from '@/services/subscription-service';
-import { cn } from '@/lib/utils';
+import Link from "next/link";
+import { usePathname, useRouter } from "next/navigation";
+import { Bell, Sparkles } from "lucide-react";
+import { useUser } from "@/firebase";
+import { cn } from "@/lib/utils";
+
+const desktopLinks = [
+  { href: "/", label: "Home" },
+  { href: "/dashboard", label: "Dashboard" },
+  { href: "/analyze", label: "Chat" },
+  { href: "/tools", label: "Agents" },
+  { href: "/history", label: "History" },
+  { href: "/settings", label: "Settings" },
+];
 
 export function TopBar() {
-  const { user } = useUser();
-  const db = useFirestore();
+  const pathname = usePathname();
   const router = useRouter();
-  const [isMenuOpen, setIsMenuOpen] = useState(false);
-  const [status, setStatus] = useState<any>(null);
-
-  useEffect(() => {
-    if (db && user) {
-      const userRef = doc(db, 'users', user.uid);
-      const unsub = onSnapshot(userRef, () => {
-        SubscriptionService.getUserStatus(db, user.uid).then(setStatus);
-      });
-      return () => unsub();
-    }
-  }, [db, user]);
-
-  const toggleMenu = useCallback(() => setIsMenuOpen(prev => !prev), []);
-  const closeMenu = useCallback(() => setIsMenuOpen(false), []);
-
-  const handleLogout = async () => {
-    const auth = getAuth();
-    await signOut(auth);
-    router.push('/login');
-  };
-
-  const NavButton = ({ icon: Icon, onClick, className }: { icon: any, onClick?: () => void, className?: string }) => (
-    <button 
-      onClick={onClick}
-      className={cn(
-        "w-10 h-10 rounded-full bg-white/90 backdrop-blur-md flex items-center justify-center text-slate-400 border border-slate-100 shadow-sm hover:bg-white hover:text-slate-900 transition-all active:scale-90 shrink-0",
-        className
-      )}
-    >
-      <Icon className="w-4 h-4 stroke-[1.5]" />
-    </button>
-  );
+  const { user } = useUser();
 
   return (
-    <>
-      <header className="fixed top-4 sm:top-6 left-0 right-0 z-[150] px-4 pointer-events-none flex justify-center">
-        <div className="w-full max-w-6xl flex items-center justify-between pointer-events-auto">
-          
-          {/* Left Navigation Group */}
-          <div className="flex items-center gap-2 sm:gap-3">
-            <NavButton icon={isMenuOpen ? X : Menu} onClick={toggleMenu} />
-            <Popover>
-              <PopoverTrigger asChild>
-                <NavButton icon={History} />
-              </PopoverTrigger>
-              <PopoverContent className="w-72 glass-panel p-0 shadow-2xl mt-4 rounded-[2.5rem] border-white/60 overflow-hidden" align="start">
-                <div className="p-5 border-b border-slate-100/60 bg-white/40">
-                  <p className="text-[10px] font-black uppercase tracking-[0.3em] text-slate-400">Context Memory</p>
-                </div>
-                <div className="p-8 text-center text-[10px] text-slate-400 uppercase font-bold tracking-widest opacity-40 italic">
-                  No active memories found
-                </div>
-              </PopoverContent>
-            </Popover>
-            <NavButton icon={Plus} onClick={() => router.push('/')} />
+    <header className="fixed inset-x-0 top-0 z-50 border-b border-slate-200/70 bg-[#F6F7FB]/95 backdrop-blur">
+      <div className="mx-auto flex h-16 w-full max-w-6xl items-center justify-between px-4 sm:px-6">
+        <Link href="/" className="flex items-center gap-2.5">
+          <div className="flex h-9 w-9 items-center justify-center rounded-2xl bg-gradient-to-br from-indigo-500 to-violet-500 text-white shadow-sm">
+            <Sparkles className="h-4 w-4" />
           </div>
+          <span className="text-lg font-semibold tracking-tight text-slate-900">MiroAI</span>
+        </Link>
 
-          {/* Center Action Pill */}
-          <motion.button 
-            whileHover={{ scale: 1.05, y: -1 }}
-            whileTap={{ scale: 0.95 }}
-            onClick={() => router.push('/upgrade')}
-            className="h-11 px-6 rounded-full bg-gradient-to-r from-blue-500 to-indigo-600 flex items-center gap-3 text-white shadow-[0_12px_24px_-8px_rgba(59,130,246,0.5)] active:scale-95 transition-all group"
+        <nav className="hidden items-center gap-1 md:flex">
+          {desktopLinks.map((link) => {
+            const active = pathname === link.href;
+            return (
+              <Link
+                key={link.href}
+                href={link.href}
+                className={cn(
+                  "rounded-full px-4 py-2 text-sm font-medium transition-colors",
+                  active ? "bg-white text-slate-900 shadow-sm ring-1 ring-slate-200" : "text-slate-500 hover:text-slate-900"
+                )}
+              >
+                {link.label}
+              </Link>
+            );
+          })}
+        </nav>
+
+        <div className="flex items-center gap-2">
+          <button className="relative flex h-10 w-10 items-center justify-center rounded-full border border-slate-200 bg-white text-slate-500 shadow-sm">
+            <Bell className="h-4 w-4" />
+            <span className="absolute right-2 top-2 h-2 w-2 rounded-full bg-rose-500" />
+          </button>
+          <button
+            onClick={() => router.push("/settings")}
+            className="flex h-10 w-10 items-center justify-center rounded-full bg-slate-900 text-sm font-semibold text-white"
           >
-            <Star className="w-4 h-4 fill-white group-hover:rotate-12 transition-transform" />
-            <ArrowRight className="w-4 h-4 opacity-80" />
-          </motion.button>
-
-          {/* Right Navigation Group */}
-          <div className="flex items-center gap-2 sm:gap-3">
-            <Popover>
-              <PopoverTrigger asChild>
-                <NavButton icon={Bell} />
-              </PopoverTrigger>
-              <PopoverContent className="w-72 glass-panel p-4 shadow-xl mt-4 rounded-[2rem] border-white/60" align="end">
-                <p className="text-[10px] text-center py-4 text-slate-400 font-bold uppercase tracking-widest">No New Signals</p>
-              </PopoverContent>
-            </Popover>
-
-            <Popover>
-              <PopoverTrigger asChild>
-                <button className="w-10 h-10 rounded-full overflow-hidden border-2 border-white shadow-md ring-1 ring-slate-100 active:scale-90 transition-transform shrink-0">
-                  {user?.uid ? (
-                    <img src={`https://picsum.photos/seed/${user.uid}/40/40`} alt="User" className="w-full h-full object-cover" />
-                  ) : (
-                    <div className="w-full h-full bg-slate-50 flex items-center justify-center"><User className="w-4 h-4 text-slate-300" /></div>
-                  )}
-                </button>
-              </PopoverTrigger>
-              <PopoverContent className="w-56 glass-panel p-2 shadow-xl mt-4 rounded-3xl border-white/60" align="end">
-                <div className="p-3 border-b border-slate-100/60 mb-1">
-                  <p className="text-xs font-bold text-slate-900 truncate">{user?.displayName || 'Operator'}</p>
-                </div>
-                <button onClick={handleLogout} className="w-full flex items-center gap-3 p-3 text-slate-600 hover:text-danger hover:bg-danger/5 rounded-2xl text-xs font-bold transition-colors">
-                  <LogOut className="w-4 h-4" /> Terminate Session
-                </button>
-              </PopoverContent>
-            </Popover>
-          </div>
-
+            {(user?.displayName?.[0] || "M").toUpperCase()}
+          </button>
         </div>
-      </header>
-
-      <AnimatePresence>
-        {isMenuOpen && (
-          <FloatingNavMenu key="nav-menu" onClose={closeMenu} />
-        )}
-      </AnimatePresence>
-    </>
+      </div>
+    </header>
   );
 }
