@@ -9,8 +9,8 @@ import {
   GoogleAuthProvider, 
   signInWithPopup 
 } from 'firebase/auth';
-import { doc, getDoc, serverTimestamp } from 'firebase/firestore';
-import { useFirestore, useUser, useAuth, setDocumentNonBlocking, errorEmitter, FirestorePermissionError } from '@/firebase';
+import { doc, getDoc, serverTimestamp, setDoc } from 'firebase/firestore';
+import { useFirestore, useUser, useAuth, errorEmitter, FirestorePermissionError } from '@/firebase';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
@@ -27,40 +27,49 @@ export default function LoginPage() {
   
   const router = useRouter();
   const db = useFirestore();
-  const { user } = useUser();
+  const { user, isUserLoading } = useUser();
   const auth = useAuth();
 
   useEffect(() => {
-    if (user) {
+    if (user && !isUserLoading) {
+      console.log("[AUTH_DEBUG] User detected, redirecting to dashboard:", user.uid);
       router.push('/dashboard');
     }
-  }, [user, router]);
+  }, [user, isUserLoading, router]);
 
   const syncUserProfile = async (uid: string, email: string | null, displayName: string | null) => {
     if (!db) return;
     const userRef = doc(db, 'users', uid);
     
-    getDoc(userRef)
-      .then((userDoc) => {
-        if (!userDoc.exists()) {
-          setDocumentNonBlocking(userRef, {
-            id: uid,
-            email: email || '',
-            displayName: displayName || 'User',
-            createdAt: serverTimestamp(),
-            updatedAt: serverTimestamp(),
-            totalSavedOverall: 0,
-            inboundEmailAddress: `${uid.slice(0, 8)}@operator.ai`,
-          }, { merge: true });
-        }
-      })
-      .catch(async (err) => {
-        const permissionError = new FirestorePermissionError({
+    try {
+      console.log("[AUTH_DEBUG] Syncing profile for:", uid);
+      const userDoc = await getDoc(userRef);
+      
+      if (!userDoc.exists()) {
+        console.log("[AUTH_DEBUG] Profile missing, creating initial record...");
+        await setDoc(userRef, {
+          id: uid,
+          email: email || '',
+          displayName: displayName || 'User',
+          plan: 'FREE',
+          createdAt: serverTimestamp(),
+          updatedAt: serverTimestamp(),
+          totalSavedOverall: 0,
+          inboundEmailAddress: `${uid.slice(0, 8)}@operator.ai`,
+        }, { merge: true });
+        console.log("[AUTH_DEBUG] Profile created successfully.");
+      } else {
+        console.log("[AUTH_DEBUG] Profile already exists.");
+      }
+    } catch (err: any) {
+      console.error("[AUTH_DEBUG] Profile sync failed:", err.message);
+      if (err.code === 'permission-denied') {
+        errorEmitter.emit('permission-error', new FirestorePermissionError({
           path: userRef.path,
           operation: 'get',
-        });
-        errorEmitter.emit('permission-error', permissionError);
-      });
+        }));
+      }
+    }
   };
 
   const handleEmailAuth = async (e: React.FormEvent) => {

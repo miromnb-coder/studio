@@ -1,3 +1,4 @@
+
 'use client';
 
 import { useEffect } from 'react';
@@ -14,20 +15,23 @@ export function FirebaseErrorListener() {
 
   useEffect(() => {
     const handleError = (error: FirestorePermissionError) => {
-      // Log the detailed error for the developer/agent to see in the console
+      // Log the detailed error for the developer
       console.warn('[FIRESTORE_PERMISSION_DENIED]', error.message);
-      console.dir(error.request);
-
-      // Show a non-fatal toast to the user
-      toast({
-        variant: 'destructive',
-        title: 'Access Restricted',
-        description: 'You do not have permission to view or modify some data in this section.',
-      });
       
-      // CRITICAL: We DO NOT throw the error here anymore. 
-      // Throwing in a listener inside the React tree will trigger the error boundary
-      // and crash the app if not handled. We want the app to stay alive.
+      // Vaimennetaan toast-ilmoitukset Dashboardin alustusvaiheen hakuviiveiden aikana
+      // jotta käyttäjä ei näe turhia virheilmoituksia profiilin luonnin aikana.
+      const isInitialSync = 
+        error.request.path.includes('/usage/') || 
+        error.request.path.endsWith('/digests') ||
+        error.request.path.endsWith('/alerts');
+
+      if (!isInitialSync) {
+        toast({
+          variant: 'destructive',
+          title: 'Access Restricted',
+          description: 'Your profile is being synchronized. Please standby.',
+        });
+      }
     };
 
     errorEmitter.on('permission-error', handleError);

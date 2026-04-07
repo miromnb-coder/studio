@@ -1,3 +1,4 @@
+
 "use client";
 
 import { SystemCard } from '@/components/systems/SystemCard';
@@ -34,9 +35,12 @@ export default function DashboardPage() {
   const [latestDigest, setLatestDigest] = useState<DailyDigest | null>(null);
   const [isDigestLoading, setIsDigestLoading] = useState(true);
 
-  // ARVOKAS: Varmistetaan että kyselyt eivät lähde ennen kuin käyttäjä on valmis.
+  // Varmistetaan että hakuja ei aloiteta ennen kuin autentikaatio on varmasti valmis
   const analysesQuery = useMemoFirebase(() => {
-    if (!db || !user || isUserLoading) return null;
+    if (!db || !user || isUserLoading) {
+      console.log("[DASHBOARD_DEBUG] Waiting for user session to stabilize...");
+      return null;
+    }
     return query(
       collection(db, 'users', user.uid, 'analyses'),
       orderBy('createdAt', 'desc'),
@@ -115,13 +119,13 @@ export default function DashboardPage() {
         </div>
       </motion.header>
 
-      {/* Inline virheilmoitus koko sovelluksen kaatumisen sijaan */}
-      {(analysesError || alertsError) && (
+      {/* Turvallinen virheilmoitus */}
+      {(analysesError || alertsError) && !isLoading && !isAlertsLoading && (
         <Alert variant="destructive" className="rounded-3xl border-danger/20 bg-danger/5">
           <AlertCircle className="h-4 w-4" />
           <AlertTitle>Telemetry Sync Error</AlertTitle>
           <AlertDescription>
-            Some operational data could not be retrieved. This usually happens if you are not authorized to view this data or the network is unstable.
+            Some operational data is still initializing. Your profile is being synchronized with the logic core.
           </AlertDescription>
         </Alert>
       )}

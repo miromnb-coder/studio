@@ -1,3 +1,4 @@
+
 /**
  * @fileOverview Service for managing user plans, usage limits, and subscriptions.
  * Centered source of truth for all monetization logic.
@@ -56,41 +57,34 @@ export class SubscriptionService {
         plan: 'FREE' as UserPlan, 
         usage: { agentRuns: 0, limit: 5 },
         isPremium: false,
-        label: 'Guest'
+        label: 'Guest',
+        limits: PLAN_LIMITS.FREE
       };
     }
 
     try {
       const userRef = doc(db, 'users', userId);
-      const userSnap = await getDoc(userRef).catch(err => {
-        if (err.code === 'permission-denied') {
-          errorEmitter.emit('permission-error', new FirestorePermissionError({
-            path: `users/${userId}`,
-            operation: 'get',
-          }));
-        }
-        throw err;
-      });
+      const userSnap = await getDoc(userRef);
       
+      if (!userSnap.exists()) {
+        console.warn("[SUBSCRIPTION_SERVICE] Profile missing for:", userId);
+        return {
+          plan: 'FREE' as UserPlan,
+          usage: { agentRuns: 0, limit: 5 },
+          isPremium: false,
+          label: 'Initializing...',
+          limits: PLAN_LIMITS.FREE
+        };
+      }
+
       const userData = userSnap.data();
       const plan: UserPlan = (userData?.plan || 'FREE').toUpperCase() as UserPlan;
-
-      // Plan limits from config
       const limits = PLAN_LIMITS[plan] || PLAN_LIMITS.FREE;
 
       const today = new Date().toISOString().split('T')[0];
       const usageRef = doc(db, 'users', userId, 'usage', today);
-      const usageSnap = await getDoc(usageRef).catch(err => {
-        if (err.code === 'permission-denied') {
-          errorEmitter.emit('permission-error', new FirestorePermissionError({
-            path: `users/${userId}/usage/${today}`,
-            operation: 'get',
-          }));
-        }
-        throw err;
-      });
-      
-      const usageData = usageSnap.data();
+      const usageSnap = await getDoc(usageRef);
+      const usageData = usageSnap.exists() ? usageSnap.data() : null;
 
       return {
         plan,
@@ -103,7 +97,15 @@ export class SubscriptionService {
         limits
       };
     } catch (e: any) {
-      console.warn("[SUBSCRIPTION_SERVICE] Error fetching status, using fallback:", e.message);
+      console.warn("[SUBSCRIPTION_SERVICE] Error fetching status:", e.message);
+      
+      if (e.code === 'permission-denied') {
+        errorEmitter.emit('permission-error', new FirestorePermissionError({
+          path: `users/${userId}`,
+          operation: 'get',
+        }));
+      }
+
       return { 
         plan: 'FREE' as UserPlan, 
         usage: { agentRuns: 0, limit: 5 },
@@ -123,10 +125,12 @@ export class SubscriptionService {
     const today = new Date().toISOString().split('T')[0];
     const usageRef = doc(db, 'users', userId, 'usage', today);
 
-    setDoc(usageRef, {
-      agentRuns: increment(1),
-      lastUpdated: serverTimestamp()
-    }, { merge: true }).catch(async (err) => {
+    try {
+      await setDoc(usageRef, {
+        agentRuns: increment(1),
+        lastUpdated: serverTimestamp()
+      }, { merge: true });
+    } catch (err: any) {
       if (err.code === 'permission-denied') {
         errorEmitter.emit('permission-error', new FirestorePermissionError({
           path: usageRef.path,
@@ -134,11 +138,11 @@ export class SubscriptionService {
           requestResourceData: { agentRuns: 'increment' }
         }));
       }
-    });
+    }
   }
 
   /**
-   * Updates user plan in database. (Internal/Webhook/Simulated use)
+   * Updates user plan in database.
    */
   static async updatePlan(db: Firestore, userId: string, plan: UserPlan) {
     if (!userId) return false;
@@ -149,7 +153,7 @@ export class SubscriptionService {
         plan: plan,
         upgradedAt: serverTimestamp(),
         updatedAt: serverTimestamp(),
-        totalSavedOverall: increment(0), // Ensure field exists
+        totalSavedOverall: increment(0),
       });
       return true;
     } catch (e: any) {
@@ -164,9 +168,6 @@ export class SubscriptionService {
     }
   }
 
-  /**
-   * Quick upgrade method for testing or legacy calls.
-   */
   static async upgradeToPremium(db: Firestore, userId: string) {
     return this.updatePlan(db, userId, 'PREMIUM');
   }
