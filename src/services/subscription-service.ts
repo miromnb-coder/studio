@@ -50,7 +50,7 @@ export const PLAN_LIMITS = {
 export class SubscriptionService {
   /**
    * Fetches the user's current plan and daily usage stats.
-   * 🔥 AUTO-CREATES PROFILE if missing.
+   * 🔥 AUTO-CREATES PROFILE if missing using proactive setDoc.
    */
   static async getUserStatus(db: Firestore, userId: string) {
     if (!userId || userId === 'system_anonymous') {
@@ -63,37 +63,20 @@ export class SubscriptionService {
       };
     }
 
-    try {
-      const userRef = doc(db, 'users', userId);
-      const userSnap = await getDoc(userRef);
-      
-      if (!userSnap.exists()) {
-        console.warn("[SUBSCRIPTION_SERVICE] Profile missing for:", userId, "- Creating default profile.");
-        
-        // 🔥 AUTO-CREATE PROFILE IF MISSING
-        const defaultProfile = {
-          id: userId,
-          email: '', // Will be updated by auth sync if possible
-          displayName: 'Operator',
-          plan: 'FREE',
-          createdAt: serverTimestamp(),
-          updatedAt: serverTimestamp(),
-          totalSavedOverall: 0,
-          inboundEmailAddress: `${userId.slice(0, 8)}@operator.ai`,
-        };
-        
-        await setDoc(userRef, defaultProfile, { merge: true });
-        
-        return {
-          plan: 'FREE' as UserPlan,
-          usage: { agentRuns: 0, limit: 5 },
-          isPremium: false,
-          label: 'Ultra Free',
-          limits: PLAN_LIMITS.FREE
-        };
-      }
+    const userRef = doc(db, 'users', userId);
+    console.log('[SYNC] Starting sync for profile:', userId);
 
-      const userData = userSnap.data();
+    try {
+      // Proactively ensure the document exists to avoid "permission-denied" on read for new users
+      await setDoc(userRef, {
+        id: userId,
+        updatedAt: serverTimestamp(),
+      }, { merge: true });
+
+      const userSnap = await getDoc(userRef);
+      const userData = userSnap.exists() ? userSnap.data() : null;
+
+      // Fallback values if it was JUST created
       const plan: UserPlan = (userData?.plan || 'FREE').toUpperCase() as UserPlan;
       const limits = PLAN_LIMITS[plan] || PLAN_LIMITS.FREE;
 
@@ -102,6 +85,8 @@ export class SubscriptionService {
       const usageSnap = await getDoc(usageRef);
       const usageData = usageSnap.exists() ? usageSnap.data() : null;
 
+      console.log('[SYNC] Sync complete for:', userId);
+
       return {
         plan,
         usage: {
@@ -109,24 +94,25 @@ export class SubscriptionService {
           limit: limits.dailyAgentRuns
         },
         isPremium: plan === 'PREMIUM' || plan === 'STARTER',
-        label: limits.label,
+        label: userData?.plan === 'PREMIUM' ? 'Ultra' : userData?.plan === 'STARTER' ? 'Starter' : 'Free',
         limits
       };
     } catch (e: any) {
-      console.warn("[SUBSCRIPTION_SERVICE] Error fetching status:", e.message);
+      console.error("[SYNC_ERROR] Error fetching status:", e.message);
       
       if (e.code === 'permission-denied') {
         errorEmitter.emit('permission-error', new FirestorePermissionError({
           path: `users/${userId}`,
-          operation: 'get',
+          operation: 'write',
         }));
       }
 
+      // Return a safe fallback to prevent UI lock
       return { 
         plan: 'FREE' as UserPlan, 
         usage: { agentRuns: 0, limit: 5 },
         isPremium: false,
-        label: 'Syncing...',
+        label: 'Error - Safe Mode',
         limits: PLAN_LIMITS.FREE
       };
     }

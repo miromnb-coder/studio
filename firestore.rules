@@ -1,3 +1,4 @@
+
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
@@ -21,18 +22,18 @@ service cloud.firestore {
 
     match /users/{userId} {
       // Käyttäjäprofiili
+      // Salli luku ja kirjoitus (mukaan lukien luonti), jos käyttäjä on dokumentin omistaja
       allow read, write: if isOwner(userId);
       
       /**
        * @description Kaikki käyttäjän subkokoelmat.
-       * Käytetään yleistä sääntöä helpottamaan ylläpitoa ja varmistamaan hakuoikeudet.
        */
       match /{collectionName}/{docId} {
         allow read, write: if isOwner(userId);
       }
 
       /**
-       * @description Rekursiivinen sääntö syville polulle (esim. messages).
+       * @description Rekursiivinen sääntö syville polulle.
        */
       match /{document=**} {
         allow read, write: if isOwner(userId);

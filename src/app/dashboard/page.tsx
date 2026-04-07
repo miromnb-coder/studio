@@ -40,12 +40,19 @@ export default function DashboardPage() {
   // Sync profile and get status
   useEffect(() => {
     if (db && user && !isUserLoading) {
+      console.log('[DASHBOARD] User ready, fetching status...');
       SubscriptionService.getUserStatus(db, user.uid)
         .then(res => {
           setStatus(res);
           setIsInitializing(false);
         })
-        .catch(() => setIsInitializing(false));
+        .catch((err) => {
+          console.error('[DASHBOARD] Initialization error:', err);
+          setIsInitializing(false);
+        });
+    } else if (!isUserLoading && !user) {
+      // Not logged in
+      setIsInitializing(false);
     }
   }, [db, user, isUserLoading]);
 
@@ -93,7 +100,7 @@ export default function DashboardPage() {
     return (
       <div className="min-h-[60vh] flex flex-col items-center justify-center space-y-4">
         <Loader2 className="w-8 h-8 animate-spin text-primary/40" />
-        <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Authenticating Session...</p>
+        <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Accessing Neural Telemetry...</p>
       </div>
     );
   }
@@ -108,7 +115,7 @@ export default function DashboardPage() {
       <motion.header variants={item} className="space-y-6">
         <div className="flex items-center gap-3 px-4 py-1.5 bg-primary/5 border border-primary/10 rounded-full w-fit">
           <ShieldCheck className="w-3.5 h-3.5 text-primary" />
-          <span className="text-[10px] font-bold text-primary uppercase tracking-[0.3em]">Operational Readiness: {status?.label || 'Normal'}</span>
+          <span className="text-[10px] font-bold text-primary uppercase tracking-[0.3em]">Operational Readiness: {status?.label || 'Verified'}</span>
         </div>
         
         <div className="space-y-2">
