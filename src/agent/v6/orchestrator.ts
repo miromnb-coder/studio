@@ -7,14 +7,12 @@ import { collection, addDoc, serverTimestamp, query, orderBy, limit, getDocs, wh
 import { initializeFirebase } from '@/firebase';
 
 /**
- * @fileOverview Orchestrator Engine v6.1: Hierarchical Memory, Deep Context Fetching, and Mandatory Sanitization.
+ * @fileOverview Orchestrator Engine v6.1: Hierarchical Memory, Deep Context, and Mandatory Message Sanitization.
  */
 
 const MAX_ITERATIONS = 4;
 
 async function classifyIntent(input: string, history: any[]): Promise<{ intent: Intent; language: string }> {
-  console.log("[ORCHESTRATOR] Classifying intent...");
-  
   // 🛡️ Mandatory sanitization for classifyIntent history
   const safeHistory = (history || [])
     .filter(m => m && typeof m.content === 'string' && m.content.trim().length > 0)
@@ -34,29 +32,16 @@ async function classifyIntent(input: string, history: any[]): Promise<{ intent: 
     temperature: 0,
   });
   const result = JSON.parse(res.choices[0]?.message?.content || '{"intent": "general", "language": "English"}');
-  console.log(`[ORCHESTRATOR] Intent: ${result.intent}, Language: ${result.language}`);
   return result;
 }
 
 async function forgeNewTool(purpose: string, userId: string): Promise<ToolDefinition> {
-  console.log(`[THE_FORGE] Forging new tool for purpose: ${purpose}`);
-  
   const forgeRes = await groq.chat.completions.create({
     model: 'llama-3.3-70b-versatile',
     messages: [
       { 
         role: 'system', 
-        content: `
-          Forge a new AI Tool definition. 
-          Return JSON ONLY:
-          {
-            "id": "slug_style_id",
-            "name": "Human Friendly Name",
-            "description": "Short purpose",
-            "systemPrompt": "Instructions for sub-agent",
-            "inputSchema": { "type": "object", "properties": { "context": { "type": "string" } } }
-          }
-        `
+        content: `Forge a new AI Tool definition. JSON: {"id": "slug", "name": "Name", "description": "Desc", "systemPrompt": "Instructions", "inputSchema": {}}`
       },
       { role: 'user', content: `Purpose: ${purpose}` }
     ],
@@ -73,11 +58,10 @@ async function forgeNewTool(purpose: string, userId: string): Promise<ToolDefini
     inputSchema: config.inputSchema,
     isDynamic: true,
     execute: async (input: any) => {
-      console.log(`[DYNAMIC_TOOL:${config.id}] Executing...`);
       const runRes = await groq.chat.completions.create({
         model: 'llama-3.3-70b-versatile',
         messages: [
-          { role: 'system', content: config.systemPrompt + ". ALWAYS output a summary and findings array." },
+          { role: 'system', content: config.systemPrompt + ". ALWAYS output summary." },
           { role: 'user', content: JSON.stringify(input) }
         ],
         temperature: 0
@@ -88,26 +72,15 @@ async function forgeNewTool(purpose: string, userId: string): Promise<ToolDefini
 
   const { firestore } = initializeFirebase();
   if (firestore && userId !== 'system_anonymous') {
-    try {
-      await addDoc(collection(firestore, 'users', userId, 'forged_tools'), {
-        ...config,
-        userId,
-        createdAt: serverTimestamp(),
-      });
-    } catch (e) {
-      console.warn("[ORCHESTRATOR] Failed to persist tool.");
-    }
+    await addDoc(collection(firestore, 'users', userId, 'forged_tools'), { ...config, userId, createdAt: serverTimestamp() });
   }
 
   return forgedTool;
 }
 
 export async function runAgentV6(input: string, userId: string, history: any[] = [], imageUri?: string) {
-  console.log(`[AGENT_V6_START] User: ${userId}`);
-  
   const { firestore } = initializeFirebase();
   
-  // 1. FETCH RECENT ANALYTICS CONTEXT
   let analyses: any[] = [];
   let alerts: any[] = [];
   try {
@@ -119,9 +92,7 @@ export async function runAgentV6(input: string, userId: string, history: any[] =
       analyses = analysesSnap.docs.map(d => ({ id: d.id, ...d.data() }));
       alerts = alertsSnap.docs.map(d => ({ id: d.id, ...d.data() }));
     }
-  } catch (err: any) {
-    console.error("[CONTEXT_FETCH_FAILED]", err.message);
-  }
+  } catch (err) {}
 
   const [mainMemory, { intent, language }] = await Promise.all([
     fetchMemory(userId),
@@ -153,11 +124,10 @@ export async function runAgentV6(input: string, userId: string, history: any[] =
             CONTEXT_ALERTS: ${JSON.stringify(alerts)}
             MEMORY: ${JSON.stringify(memory)}
             RECENT_ACTIVITY: ${episodicSummary}
-            META: If no tool fits, action: "forge_tool", input: {"purpose": "description"}.
             DECIDE. JSON ONLY: {"thought": "...", "action": "tool_id|forge_tool|final", "input": {}, "final": "..."}
           `
         },
-        { role: 'user', content: input || "Analyze current signals." }
+        { role: 'user', content: input || "Process current context." }
       ],
       response_format: { type: 'json_object' },
       temperature: 0.1
@@ -182,16 +152,10 @@ export async function runAgentV6(input: string, userId: string, history: any[] =
         await addEpisodicEvent(userId, { input: decision.input, action: decision.action, observation });
         
         if (observation.leaks || observation.insights || observation.findings) {
-          toolData = {
-            ...toolData,
-            ...observation,
-            estimatedMonthlySavings: observation.estimatedMonthlySavings || observation.impact || toolData?.estimatedMonthlySavings || 0
-          };
+          toolData = { ...toolData, ...observation };
         }
       } catch (err: any) {
-        const errorObservation = { error: `Execution failed: ${err.message}` };
-        steps.push({ thought: decision.thought, action: decision.action, input: decision.input, observation: errorObservation });
-        await addEpisodicEvent(userId, { input: decision.input, action: decision.action, observation: errorObservation });
+        steps.push({ thought: decision.thought, action: decision.action, input: decision.input, observation: { error: err.message } });
       }
     }
   }
@@ -209,17 +173,10 @@ export async function runAgentV6(input: string, userId: string, history: any[] =
     messages: [
       { 
         role: 'system', 
-        content: `
-          Synthesis in ${language}.
-          Tool Results: ${JSON.stringify(steps)}
-          Main Memory: ${JSON.stringify(memory)}
-          Recent Episodic Events: ${episodicSummary}
-          Respond directly. If a tool found savings or data, confirm it clearly.
-          IF ERRORS OCCURRED IN TOOLS, EXPLAIN THEM TO THE USER HONESTLY.
-        ` 
+        content: `Synthesis in ${language}. Tool Results: ${JSON.stringify(steps)}. Respond directly.` 
       },
       ...synthesisHistory.slice(-3),
-      { role: 'user', content: input || "Complete synthesis." }
+      { role: 'user', content: input || "Finalize." }
     ],
     temperature: 0.2,
     stream: true

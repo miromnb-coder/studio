@@ -9,7 +9,7 @@ export const runtime = 'nodejs';
 
 /**
  * @fileOverview Streaming API Entry Point for Agent Engine v6.
- * Includes Mandatory Message Sanitization, Monetization Enforcement, and Debug Logging.
+ * Includes Mandatory Message Sanitization to prevent 'messages.content is missing' errors.
  */
 
 export async function POST(req: Request) {
@@ -18,7 +18,6 @@ export async function POST(req: Request) {
 
     console.log("--- AGENT_API_INBOUND ---");
     console.log("USER_ID:", userId);
-    console.log("INPUT_LENGTH:", input?.length);
     console.log("HAS_IMAGE:", !!imageUri);
 
     if (!process.env.GROQ_API_KEY) {
@@ -35,18 +34,16 @@ export async function POST(req: Request) {
         content: m.content.trim()
       }));
 
-    // DEBUGGING LOGS FOR SANITIZATION
-    console.log("RAW MESSAGES RECEIVED:", history);
-    console.log("SAFE MESSAGES TO AI:", safeHistory);
-
-    // Fallback if history becomes empty after filtering
+    // Ensure we have a valid input. If it's an image-only message, provide fallback text.
     const safeInput = (typeof input === 'string' && input.trim().length > 0) 
       ? input.trim() 
       : (imageUri ? "[Analyze visual data]" : null);
 
     if (!safeInput && safeHistory.length === 0) {
-      throw new Error("No valid content found in input or history to send to AI.");
+      return NextResponse.json({ error: 'No valid content provided.' }, { status: 400 });
     }
+
+    console.log("SAFE MESSAGES TO AI:", safeHistory);
 
     const { firestore } = initializeFirebase();
     
@@ -59,10 +56,9 @@ export async function POST(req: Request) {
       const limit = limits.dailyAgentRuns;
       
       if (usage.agentRuns >= limit) {
-        console.warn(`[ENFORCEMENT] Limit reached for User ${userId} (${usage.agentRuns}/${limit})`);
         return NextResponse.json({ 
           error: 'LIMIT_REACHED',
-          message: "Daily intelligence quota exceeded. Please elevate clearance.",
+          message: "Daily intelligence quota exceeded.",
           usage: { ...usage, limit }
         }, { status: 403 });
       }
@@ -71,12 +67,11 @@ export async function POST(req: Request) {
     }
 
     console.log("Initializing Agent V6 Orchestrator...");
-    const { stream, metadata } = await runAgentV6(safeInput || "[Context only]", userId || 'system_anonymous', safeHistory, imageUri);
+    const { stream, metadata } = await runAgentV6(safeInput || "Continue", userId || 'system_anonymous', safeHistory, imageUri);
 
     const encoder = new TextEncoder();
     const readableStream = new ReadableStream({
       async start(controller) {
-        console.log("Stream starting...");
         // First chunk is always metadata for UI routing
         controller.enqueue(encoder.encode(`__METADATA__:${JSON.stringify(metadata)}\n`));
 
@@ -87,7 +82,6 @@ export async function POST(req: Request) {
               controller.enqueue(encoder.encode(content));
             }
           }
-          console.log("Stream finished successfully.");
         } catch (e: any) {
           console.error("STREAM_ITERATION_ERROR:", e.message);
           controller.enqueue(encoder.encode(`\n[ERROR: ${e.message}]`));
@@ -105,15 +99,9 @@ export async function POST(req: Request) {
       },
     });
   } catch (error: any) {
-    console.error('--- AGENT_API_CRITICAL_FAILURE ---');
-    console.error('ERROR_MESSAGE:', error.message);
-    
+    console.error('--- AGENT_API_CRITICAL_FAILURE ---', error.message);
     return NextResponse.json(
-      { 
-        success: false,
-        error: error.message,
-        content: "Operational sync delayed. Recalibrating logic core."
-      }, 
+      { success: false, error: error.message }, 
       { status: 500 }
     );
   }
