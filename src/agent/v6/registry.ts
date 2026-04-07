@@ -3,27 +3,39 @@ import { ToolDefinition } from './types';
 import { GmailService } from '@/services/gmail-service';
 
 /**
- * @fileOverview Dynamic Tool Registry for Agent v5.
- * Supports built-in tools and tools forged at runtime.
+ * @fileOverview Dynamic Tool Registry.
+ * Exclusively uses Groq models for all tool-level intelligence.
  */
 
 export const STATIC_TOOLS: Record<string, ToolDefinition> = {
   analyze: {
     id: 'analyze',
     name: 'analyze',
-    description: 'Perform deep structural or visual analysis of inputs to extract insights.',
+    description: 'Perform deep structural or visual analysis using Groq Vision.',
     inputSchema: { type: 'object', properties: { input: { type: 'string' } } },
     impact: { timeSavedMinutes: 15 },
     execute: async ({ input }, { imageUri }) => {
+      // Use Llama 3.2 Vision for images, 3.3 for text
       const model = imageUri ? 'llama-3.2-11b-vision-preview' : 'llama-3.3-70b-versatile';
+      
+      console.log(`CALLING GROQ (Tool: analyze, Model: ${model})...`);
       const res = await groq.chat.completions.create({
         model,
         messages: [
           { role: 'system', content: 'Extract key structural details and objective insights.' },
-          { role: 'user', content: imageUri ? [{ type: 'text', text: input }, { type: 'image_url', image_url: { url: imageUri } }] : input }
+          { 
+            role: 'user', 
+            content: imageUri 
+              ? [
+                  { type: 'text', text: input || 'Analyze this source.' }, 
+                  { type: 'image_url', image_url: { url: imageUri } }
+                ] 
+              : (input || 'Analyze this source.')
+          }
         ],
         temperature: 0
       });
+      console.log("GROQ RESPONSE RECEIVED");
       return { insights: res.choices[0]?.message?.content || '' };
     }
   },
@@ -31,10 +43,11 @@ export const STATIC_TOOLS: Record<string, ToolDefinition> = {
   detect_leaks: {
     id: 'detect_leaks',
     name: 'detect_leaks',
-    description: 'Scan data for predatory subscriptions, hidden fees, and trial patterns.',
+    description: 'Scan data for leaks and waste using Groq Reasoning.',
     inputSchema: { type: 'object', properties: { text: { type: 'string' } } },
     impact: { moneySaved: 45, timeSavedMinutes: 30 },
     execute: async ({ text }) => {
+      console.log("CALLING GROQ (Tool: detect_leaks)...");
       const res = await groq.chat.completions.create({
         model: 'llama-3.3-70b-versatile',
         messages: [
@@ -44,6 +57,7 @@ export const STATIC_TOOLS: Record<string, ToolDefinition> = {
         response_format: { type: 'json_object' },
         temperature: 0
       });
+      console.log("GROQ RESPONSE RECEIVED");
       return JSON.parse(res.choices[0]?.message?.content || '{"leaks": [], "estimatedMonthlySavings": 0}');
     }
   },
@@ -51,10 +65,11 @@ export const STATIC_TOOLS: Record<string, ToolDefinition> = {
   optimize_time: {
     id: 'optimize_time',
     name: 'optimize_time',
-    description: 'Identify schedule friction and low-value tasks. Suggest removal or automation.',
+    description: 'Audit schedule for temporal leaks using Groq.',
     inputSchema: { type: 'object', properties: { context: { type: 'string' } } },
     impact: { timeSavedMinutes: 120 },
     execute: async ({ context }) => {
+      console.log("CALLING GROQ (Tool: optimize_time)...");
       const res = await groq.chat.completions.create({
         model: 'llama-3.3-70b-versatile',
         messages: [
@@ -63,6 +78,7 @@ export const STATIC_TOOLS: Record<string, ToolDefinition> = {
         ],
         temperature: 0.1
       });
+      console.log("GROQ RESPONSE RECEIVED");
       return { timeAudit: res.choices[0]?.message?.content || '' };
     }
   },
@@ -70,7 +86,7 @@ export const STATIC_TOOLS: Record<string, ToolDefinition> = {
   send_email: {
     id: 'send_email',
     name: 'send_email',
-    description: 'Send a professional email via Gmail. Requires recipient, subject, and body.',
+    description: 'Send a professional email via Gmail Transmitter.',
     inputSchema: { type: 'object', properties: { to: { type: 'string' }, subject: { type: 'string' }, body: { type: 'string' } } },
     impact: { timeSavedMinutes: 10 },
     execute: async ({ to, subject, body }) => {
@@ -82,9 +98,6 @@ export const STATIC_TOOLS: Record<string, ToolDefinition> = {
   }
 };
 
-/**
- * Dynamic registry that combines static tools with dynamically forged ones.
- */
 export class ToolRegistry {
   private dynamicTools: Record<string, ToolDefinition> = {};
 

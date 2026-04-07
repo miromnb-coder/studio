@@ -3,7 +3,7 @@ import { groq } from 'genkitx-groq';
 
 /**
  * @fileOverview AI Configuration Engine.
- * Powered by Firebase Genkit and Groq.
+ * Exclusively powered by Groq for high-performance reasoning.
  */
 
 export const ai = genkit({

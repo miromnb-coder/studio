@@ -1,4 +1,3 @@
-
 import { groq } from '@/ai/groq';
 import { Intent, AgentStep, Decision, AgentMetadata, ToolDefinition } from './types';
 import { activeRegistry } from './registry';
@@ -7,13 +6,12 @@ import { collection, addDoc, serverTimestamp, query, orderBy, limit, getDocs, wh
 import { initializeFirebase } from '@/firebase';
 
 /**
- * @fileOverview Orchestrator Engine v6.1: Hierarchical Memory, Deep Context, and Mandatory Message Sanitization.
+ * @fileOverview Orchestrator Engine v6.1: Exclusively Groq-powered reasoning loop.
  */
 
 const MAX_ITERATIONS = 4;
 
 async function classifyIntent(input: string, history: any[]): Promise<{ intent: Intent; language: string }> {
-  // 🛡️ Mandatory sanitization for classifyIntent history
   const safeHistory = (history || [])
     .filter(m => m && typeof m.content === 'string' && m.content.trim().length > 0)
     .map(m => ({
@@ -21,7 +19,7 @@ async function classifyIntent(input: string, history: any[]): Promise<{ intent: 
       content: m.content.trim()
     }));
 
-  console.log("CALLING GROQ...");
+  console.log("CALLING GROQ (classifyIntent)...");
   const res = await groq.chat.completions.create({
     model: 'llama-3.3-70b-versatile',
     messages: [
@@ -33,12 +31,11 @@ async function classifyIntent(input: string, history: any[]): Promise<{ intent: 
     temperature: 0,
   });
   console.log("GROQ RESPONSE RECEIVED");
-  const result = JSON.parse(res.choices[0]?.message?.content || '{"intent": "general", "language": "English"}');
-  return result;
+  return JSON.parse(res.choices[0]?.message?.content || '{"intent": "general", "language": "English"}');
 }
 
 async function forgeNewTool(purpose: string, userId: string): Promise<ToolDefinition> {
-  console.log("CALLING GROQ...");
+  console.log("CALLING GROQ (forgeNewTool)...");
   const forgeRes = await groq.chat.completions.create({
     model: 'llama-3.3-70b-versatile',
     messages: [
@@ -62,7 +59,7 @@ async function forgeNewTool(purpose: string, userId: string): Promise<ToolDefini
     inputSchema: config.inputSchema,
     isDynamic: true,
     execute: async (input: any) => {
-      console.log("CALLING GROQ...");
+      console.log("CALLING GROQ (DynamicTool Execution)...");
       const runRes = await groq.chat.completions.create({
         model: 'llama-3.3-70b-versatile',
         messages: [
@@ -85,7 +82,7 @@ async function forgeNewTool(purpose: string, userId: string): Promise<ToolDefini
 }
 
 export async function runAgentV6(input: string, userId: string, history: any[] = [], imageUri?: string) {
-  console.log("AGENT STARTED", input);
+  console.log("AGENT STARTED (Engine V6.1 / Groq Exclusive)", input);
   const { firestore } = initializeFirebase();
   
   let analyses: any[] = [];
@@ -119,14 +116,14 @@ export async function runAgentV6(input: string, userId: string, history: any[] =
     currentIteration++;
     const availableTools = activeRegistry.getAvailableTools();
     
-    console.log("CALLING GROQ...");
+    console.log("CALLING GROQ (decideNextStep)...");
     const decisionRes = await groq.chat.completions.create({
       model: 'llama-3.3-70b-versatile',
       messages: [
         { 
           role: 'system', 
           content: `
-            You are an autonomous agent. Current Intent: ${intent}. Language: ${language}.
+            You are an autonomous agent powered by Groq. Current Intent: ${intent}. Language: ${language}.
             TOOLS: ${availableTools.map(t => `${t.id}: ${t.description}`).join("\n")}
             CONTEXT_ANALYSES: ${JSON.stringify(analyses)}
             CONTEXT_ALERTS: ${JSON.stringify(alerts)}
@@ -169,7 +166,6 @@ export async function runAgentV6(input: string, userId: string, history: any[] =
     }
   }
 
-  // 🛡️ Final Synthesis sanitization
   const synthesisHistory = (history || [])
     .filter(m => m && typeof m.content === 'string' && m.content.trim().length > 0)
     .map(m => ({
@@ -177,13 +173,13 @@ export async function runAgentV6(input: string, userId: string, history: any[] =
       content: m.content.trim()
     }));
 
-  console.log("CALLING GROQ...");
+  console.log("CALLING GROQ (finalSynthesis)...");
   const stream = await groq.chat.completions.create({
     model: 'llama-3.3-70b-versatile',
     messages: [
       { 
         role: 'system', 
-        content: `Synthesis in ${language}. Tool Results: ${JSON.stringify(steps)}. Respond directly.` 
+        content: `Synthesis in ${language}. Tool Results: ${JSON.stringify(steps)}. Respond directly to user based on these results. Mention identified savings or insights explicitly.` 
       },
       ...synthesisHistory.slice(-3),
       { role: 'user', content: input || "Finalize." }
