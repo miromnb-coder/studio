@@ -17,7 +17,21 @@ import {
   Activity,
   Database,
 } from "lucide-react";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
+
+import {
+  addDocumentNonBlocking,
+  setDocumentNonBlocking,
+  useCollection,
+  useFirestore,
+  useMemoFirebase,
+  useUser,
+} from "@/firebase";
+import { collection, doc, limit, orderBy, query, serverTimestamp } from "firebase/firestore";
+import { SubscriptionService } from "@/services/subscription-service";
+import { DigestService } from "@/services/digest-service";
+import { MemoryService } from "@/services/memory-service";
+import { ChatMessage, ChatMessageItem } from "@/components/chat/ChatMessage";
 
 type ActivityItem = {
   id: string;
@@ -144,6 +158,208 @@ function ActionPill({
 
 function AiInputCard() {
   const [focused, setFocused] = useState(false);
+  const [input, setInput] = useState("");
+  const [isThinking, setIsThinking] = useState(false);
+  const [conversationId, setConversationId] = useState<string | null>(null);
+  const [messages, setMessages] = useState<ChatMessageItem[]>([]);
+  const [contextLine, setContextLine] = useState("Preparing your workspace context...");
+
+  const db = useFirestore();
+  const { user, isUserLoading } = useUser();
+  const bottomRef = useRef<HTMLDivElement | null>(null);
+
+  const alertsQuery = useMemoFirebase(() => {
+    if (!db || !user) return null;
+    return query(
+      collection(db, "users", user.uid, "alerts"),
+      orderBy("createdAt", "desc"),
+      limit(3)
+    );
+  }, [db, user]);
+
+  const analysesQuery = useMemoFirebase(() => {
+    if (!db || !user) return null;
+    return query(
+      collection(db, "users", user.uid, "analyses"),
+      orderBy("createdAt", "desc"),
+      limit(3)
+    );
+  }, [db, user]);
+
+  const { data: alerts } = useCollection(alertsQuery);
+  const { data: analyses } = useCollection(analysesQuery);
+
+  useEffect(() => {
+    bottomRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
+  }, [messages, isThinking]);
+
+  useEffect(() => {
+    let cancelled = false;
+    async function hydrateContext() {
+      if (!db || !user) {
+        setContextLine("Sign in to unlock memory-aware agent chat.");
+        return;
+      }
+
+      const [status, memory, digest] = await Promise.all([
+        SubscriptionService.getUserStatus(db, user.uid),
+        MemoryService.getMemory(db, user.uid),
+        DigestService.getLatestDigest(db, user.uid),
+      ]);
+
+      if (cancelled) return;
+
+      const summary = [
+        `Plan ${status.label}`,
+        `${status.usage.agentRuns}/${status.usage.limit} runs used today`,
+        memory?.behaviorSummary ? `Memory: ${memory.behaviorSummary}` : "Memory profile initializing",
+        digest?.summary ? `Latest digest ready` : "No digest yet",
+      ].join(" · ");
+
+      setContextLine(summary);
+    }
+
+    if (!isUserLoading) hydrateContext();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [db, user, isUserLoading]);
+
+  const persistMessage = (targetConversationId: string, message: ChatMessageItem) => {
+    if (!db || !user) return;
+
+    const messagesRef = collection(db, "users", user.uid, "conversations", targetConversationId, "messages");
+    addDocumentNonBlocking(messagesRef, {
+      role: message.role,
+      content: message.content,
+      createdAt: serverTimestamp(),
+    });
+
+    setDocumentNonBlocking(
+      doc(db, "users", user.uid, "conversations", targetConversationId),
+      {
+        title: message.role === "user" ? message.content.slice(0, 56) || "Agent Session" : "Agent Session",
+        updatedAt: serverTimestamp(),
+      },
+      { merge: true }
+    );
+  };
+
+  const sendMessage = async () => {
+    const trimmed = input.trim();
+    if (!trimmed || isThinking) return;
+
+    const userMessage: ChatMessageItem = {
+      id: `${Date.now()}-user`,
+      role: "user",
+      content: trimmed,
+      createdAt: Date.now(),
+    };
+
+    const nextMessages = [...messages, userMessage];
+    setMessages(nextMessages);
+    setInput("");
+    setIsThinking(true);
+
+    let activeConversationId = conversationId;
+    if (!activeConversationId && db && user) {
+      activeConversationId = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+      setConversationId(activeConversationId);
+      setDocumentNonBlocking(
+        doc(db, "users", user.uid, "conversations", activeConversationId),
+        {
+          title: trimmed.slice(0, 56),
+          createdAt: serverTimestamp(),
+          updatedAt: serverTimestamp(),
+        },
+        { merge: true }
+      );
+    }
+
+    if (activeConversationId) persistMessage(activeConversationId, userMessage);
+
+    const systemContext = [
+      `User display name: ${user?.displayName || "Unknown"}`,
+      contextLine,
+      `Recent alerts: ${(alerts || []).map((a) => a.title).join("; ") || "none"}`,
+      `Recent analyses: ${(analyses || []).map((a) => a.title).join("; ") || "none"}`,
+    ].join("\n");
+
+    const apiHistory = nextMessages
+      .filter((m) => m.role !== "system")
+      .slice(-12)
+      .map((m) => ({ role: m.role, content: m.content }));
+
+    try {
+      const response = await fetch("/api/agent", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          input: trimmed,
+          history: [{ role: "system", content: systemContext }, ...apiHistory],
+          userId: user?.uid || "system_anonymous",
+        }),
+      });
+
+      if (!response.ok || !response.body) {
+        throw new Error("Unable to connect to agent core.");
+      }
+
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder();
+      let assistantText = "";
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+
+        const chunk = decoder.decode(value, { stream: true });
+        if (chunk.startsWith("__METADATA__")) continue;
+
+        assistantText += chunk;
+        setMessages((current) => {
+          const withoutTail = current.filter((m) => m.id !== "assistant-stream");
+          return [
+            ...withoutTail,
+            {
+              id: "assistant-stream",
+              role: "assistant",
+              content: assistantText,
+              createdAt: Date.now(),
+            },
+          ];
+        });
+      }
+
+      const finalized: ChatMessageItem = {
+        id: `${Date.now()}-assistant`,
+        role: "assistant",
+        content: assistantText.trim() || "I processed that but have no output yet.",
+        createdAt: Date.now(),
+      };
+
+      setMessages((current) => {
+        const withoutTail = current.filter((m) => m.id !== "assistant-stream");
+        return [...withoutTail, finalized];
+      });
+
+      if (activeConversationId) persistMessage(activeConversationId, finalized);
+    } catch (error) {
+      setMessages((current) => [
+        ...current,
+        {
+          id: `${Date.now()}-assistant-error`,
+          role: "assistant",
+          content:
+            "I hit a connection delay while reaching your agent systems. Please try again.",
+          createdAt: Date.now(),
+        },
+      ]);
+    } finally {
+      setIsThinking(false);
+    }
+  };
 
   return (
     <section className="px-5 pt-5">
@@ -156,12 +372,36 @@ function AiInputCard() {
         )}
       >
         <div className="rounded-[22px] border border-slate-100 bg-slate-50/60 p-4">
+          <div className="max-h-72 space-y-3 overflow-y-auto pr-1">
+            {messages.length === 0 ? (
+              <p className="text-[14px] leading-6 text-slate-400">
+                Ask anything about your alerts, memory, usage, or latest analysis.
+              </p>
+            ) : (
+              messages.map((message) => <ChatMessage key={message.id} message={message} />)
+            )}
+
+            {isThinking && (
+              <div className="text-[13px] font-medium text-slate-400">AI is thinking…</div>
+            )}
+            <div ref={bottomRef} />
+          </div>
+
           <textarea
             rows={3}
+            value={input}
             placeholder="What would you like to accomplish today?"
+            onChange={(e) => setInput(e.target.value)}
             onFocus={() => setFocused(true)}
             onBlur={() => setFocused(false)}
-            className="w-full resize-none border-0 bg-transparent text-[16px] leading-7 text-slate-800 placeholder:text-slate-400 focus:outline-none"
+            onKeyDown={(e) => {
+              if (e.key === "Enter" && !e.shiftKey) {
+                e.preventDefault();
+                void sendMessage();
+              }
+            }}
+            className="mt-4 w-full resize-none border-0 bg-transparent text-[16px] leading-7 text-slate-800 placeholder:text-slate-400 focus:outline-none"
+            disabled={isThinking}
           />
 
           <div className="mt-4 flex flex-wrap gap-2">
@@ -175,12 +415,15 @@ function AiInputCard() {
         <div className="mt-4 flex items-center justify-between gap-3 border-t border-slate-200/70 pt-3">
           <div className="min-w-0">
             <p className="text-[14px] text-slate-400">
-              <span className="font-semibold text-slate-500">Try:</span>{" "}
-              Analyze my weekly productivity · Summarize recent news
+              <span className="font-semibold text-slate-500">Context:</span> {contextLine}
             </p>
           </div>
 
-          <button className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-slate-900 text-white shadow-[0_8px_20px_rgba(15,23,42,0.18)] transition-all duration-200 hover:bg-slate-800 active:scale-95">
+          <button
+            onClick={() => void sendMessage()}
+            disabled={isThinking || !input.trim()}
+            className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-slate-900 text-white shadow-[0_8px_20px_rgba(15,23,42,0.18)] transition-all duration-200 hover:bg-slate-800 active:scale-95 disabled:cursor-not-allowed disabled:opacity-40"
+          >
             <ArrowUp className="h-5 w-5" />
           </button>
         </div>
