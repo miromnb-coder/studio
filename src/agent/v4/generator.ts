@@ -25,14 +25,21 @@ export async function generateStreamResponse(context: AgentContext) {
     Critic Evaluation: ${JSON.stringify(context.criticFeedback || {})}
   `;
 
+  const safeHistory = (context.history || [])
+    .filter((m) => m && typeof m.content === 'string' && m.content.trim().length > 0)
+    .map((m) => ({
+      role: m.role || 'user',
+      content: m.content.trim(),
+    }));
+
   return groq.chat.completions.create({
     model: 'llama-3.3-70b-versatile',
     messages: [
       { role: 'system', content: systemPrompt },
-      ...context.history.slice(-10),
-      { role: 'user', content: context.input }
+      ...safeHistory.slice(-10),
+      { role: 'user', content: typeof context.input === 'string' ? context.input : 'Continue.' }
     ],
-    temperature: 0.1, // Low temperature for high precision
+    temperature: 0.1,
     stream: true,
   });
 }
