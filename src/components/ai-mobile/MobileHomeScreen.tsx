@@ -85,7 +85,7 @@ const agents: AgentItem[] = [
 
 function TopBar() {
   return (
-    <div className="flex items-center justify-between px-5 pt-4">
+    <div className="flex items-center justify-between border-b border-slate-200/70 px-5 pb-3 pt-4">
       <div className="flex items-center gap-2.5">
         <div className="flex h-9 w-9 items-center justify-center rounded-2xl bg-gradient-to-br from-indigo-500 via-violet-500 to-sky-400 text-white shadow-[0_8px_20px_rgba(99,102,241,0.18)]">
           <Sparkles className="h-4 w-4" />
@@ -172,11 +172,11 @@ function AiInputCard() {
           </div>
         </div>
 
-        <div className="mt-4 flex items-center justify-between gap-3">
+        <div className="mt-4 flex items-center justify-between gap-3 border-t border-slate-200/70 pt-3">
           <div className="min-w-0">
             <p className="text-[14px] text-slate-400">
               <span className="font-semibold text-slate-500">Try:</span>{" "}
-              Analyze my weekly productivity
+              Analyze my weekly productivity · Summarize recent news
             </p>
           </div>
 
@@ -398,7 +398,7 @@ export function MobileHomeScreen() {
   );
 
   return (
-    <div className="mx-auto min-h-screen max-w-md bg-[#F6F7FB]">
+    <div className="mx-auto min-h-screen max-w-md bg-[#F6F7FB] pb-28">
       <TopBar />
       <GreetingSection />
       <AiInputCard />
