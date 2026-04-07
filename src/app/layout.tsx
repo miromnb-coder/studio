@@ -1,13 +1,13 @@
-import type {Metadata} from 'next';
-import './globals.css';
-import { FirebaseClientProvider } from '@/firebase/client-provider';
-import { AuthGuard } from '@/components/auth/AuthGuard';
-import { RootClientLayout } from '@/components/layout/RootClientLayout';
-import { Toaster } from '@/components/ui/toaster';
+import type { Metadata } from "next";
+import "./globals.css";
+import { FirebaseClientProvider } from "@/firebase/client-provider";
+import { AuthGuard } from "@/components/auth/AuthGuard";
+import { RootClientLayout } from "@/components/layout/RootClientLayout";
+import { Toaster } from "@/components/ui/toaster";
 
 export const metadata: Metadata = {
-  title: 'OPERATOR // CRIMSON STEALTH',
-  description: 'TACTICAL FINANCIAL INTELLIGENCE UNIT',
+  title: "MiroAI",
+  description: "Minimal AI workspace",
 };
 
 export default function RootLayout({
@@ -16,18 +16,11 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en" className="dark">
-      <head>
-        <link rel="preconnect" href="https://fonts.googleapis.com" />
-        <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
-        <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet" />
-      </head>
-      <body className="font-mono antialiased bg-background text-foreground stealth-scrollbar">
+    <html lang="en">
+      <body className="bg-[#F6F7FB] font-sans text-slate-900 antialiased">
         <FirebaseClientProvider>
           <AuthGuard>
-            <RootClientLayout>
-              {children}
-            </RootClientLayout>
+            <RootClientLayout>{children}</RootClientLayout>
           </AuthGuard>
         </FirebaseClientProvider>
         <Toaster />
