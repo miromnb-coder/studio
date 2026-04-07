@@ -57,18 +57,20 @@ export function useDoc<T = any>(
         setIsLoading(false);
       },
       (err: FirestoreError) => {
-        const contextualError = new FirestorePermissionError({
-          operation: 'get',
-          path: memoizedDocRef.path,
-        });
+        if (err.code === 'permission-denied') {
+          const contextualError = new FirestorePermissionError({
+            operation: 'get',
+            path: memoizedDocRef.path,
+          });
+          errorEmitter.emit('permission-error', contextualError);
+          setError(contextualError);
+        } else {
+          console.warn(`[FIRESTORE_DOC_FAILED] ${err.code}: ${err.message}`);
+          setError(err);
+        }
 
-        // Update local state
-        setError(contextualError);
         setData(null);
         setIsLoading(false);
-
-        // Emit for debugging/toasts
-        errorEmitter.emit('permission-error', contextualError);
       }
     );
 

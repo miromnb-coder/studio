@@ -1,4 +1,3 @@
-
 /**
  * @fileOverview Service for managing user plans, usage limits, and subscriptions.
  * Centered source of truth for all monetization logic.
@@ -64,10 +63,12 @@ export class SubscriptionService {
     try {
       const userRef = doc(db, 'users', userId);
       const userSnap = await getDoc(userRef).catch(err => {
-        errorEmitter.emit('permission-error', new FirestorePermissionError({
-          path: `users/${userId}`,
-          operation: 'get',
-        }));
+        if (err.code === 'permission-denied') {
+          errorEmitter.emit('permission-error', new FirestorePermissionError({
+            path: `users/${userId}`,
+            operation: 'get',
+          }));
+        }
         throw err;
       });
       
@@ -80,10 +81,12 @@ export class SubscriptionService {
       const today = new Date().toISOString().split('T')[0];
       const usageRef = doc(db, 'users', userId, 'usage', today);
       const usageSnap = await getDoc(usageRef).catch(err => {
-        errorEmitter.emit('permission-error', new FirestorePermissionError({
-          path: `users/${userId}/usage/${today}`,
-          operation: 'get',
-        }));
+        if (err.code === 'permission-denied') {
+          errorEmitter.emit('permission-error', new FirestorePermissionError({
+            path: `users/${userId}/usage/${today}`,
+            operation: 'get',
+          }));
+        }
         throw err;
       });
       
@@ -100,12 +103,13 @@ export class SubscriptionService {
         limits
       };
     } catch (e: any) {
-      // General fallback if not handled by inner catches
+      console.warn("[SUBSCRIPTION_SERVICE] Error fetching status, using fallback:", e.message);
       return { 
         plan: 'FREE' as UserPlan, 
         usage: { agentRuns: 0, limit: 5 },
         isPremium: false,
-        label: 'Syncing...'
+        label: 'Syncing...',
+        limits: PLAN_LIMITS.FREE
       };
     }
   }
@@ -123,11 +127,13 @@ export class SubscriptionService {
       agentRuns: increment(1),
       lastUpdated: serverTimestamp()
     }, { merge: true }).catch(async (err) => {
-      errorEmitter.emit('permission-error', new FirestorePermissionError({
-        path: usageRef.path,
-        operation: 'write',
-        requestResourceData: { agentRuns: 'increment' }
-      }));
+      if (err.code === 'permission-denied') {
+        errorEmitter.emit('permission-error', new FirestorePermissionError({
+          path: usageRef.path,
+          operation: 'write',
+          requestResourceData: { agentRuns: 'increment' }
+        }));
+      }
     });
   }
 
@@ -147,11 +153,13 @@ export class SubscriptionService {
       });
       return true;
     } catch (e: any) {
-      errorEmitter.emit('permission-error', new FirestorePermissionError({
-        path: `users/${userId}`,
-        operation: 'update',
-        requestResourceData: { plan }
-      }));
+      if (e.code === 'permission-denied') {
+        errorEmitter.emit('permission-error', new FirestorePermissionError({
+          path: `users/${userId}`,
+          operation: 'update',
+          requestResourceData: { plan }
+        }));
+      }
       return false;
     }
   }

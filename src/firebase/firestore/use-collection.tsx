@@ -76,18 +76,22 @@ export function useCollection<T = any>(
             ? (memoizedTargetRefOrQuery as CollectionReference).path
             : (memoizedTargetRefOrQuery as unknown as InternalQuery)._query.path.canonicalString();
 
-        const contextualError = new FirestorePermissionError({
-          operation: 'list',
-          path,
-        });
+        // ONLY emit permission-error if it's actually a permission issue.
+        // Other errors like missing indexes should be logged but not trigger the toast.
+        if (err.code === 'permission-denied') {
+          const contextualError = new FirestorePermissionError({
+            operation: 'list',
+            path,
+          });
+          errorEmitter.emit('permission-error', contextualError);
+          setError(contextualError);
+        } else {
+          console.warn(`[FIRESTORE_QUERY_FAILED] ${err.code}: ${err.message}. This might require a Firestore index.`);
+          setError(err);
+        }
 
-        // Set local state so UI can show error
-        setError(contextualError);
         setData([]); 
         setIsLoading(false);
-
-        // Emit for the global listener (e.g. for logging/toasts)
-        errorEmitter.emit('permission-error', contextualError);
       }
     );
 
