@@ -113,3 +113,27 @@ body {
     background-position-x: -220%;
   }
 }
+
+.glass-dark {
+  border-radius: var(--surface-radius);
+  border: 1px solid rgba(148, 163, 184, 0.22);
+  background: linear-gradient(140deg, rgba(15, 23, 42, 0.82), rgba(30, 41, 59, 0.72));
+  backdrop-filter: blur(14px);
+  box-shadow: 0 14px 30px rgba(2, 6, 23, 0.35);
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .ambient-float {
+    animation: ambientFloat 6s ease-in-out infinite;
+  }
+}
+
+@keyframes ambientFloat {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-4px);
+  }
+}
