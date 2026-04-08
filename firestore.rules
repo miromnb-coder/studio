@@ -1,0 +1,43 @@
+
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    /**
+     * AI LIFE OPERATOR - TIETOTURVASÄÄNNÖT
+     * Sallii pääsyn omiin tietoihin auth.uid:n perusteella.
+     */
+
+    // --- Globaalit apufunktiot ---
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isOwner(userId) {
+      return isSignedIn() && request.auth.uid == userId;
+    }
+
+    // --- Kokoelmien säännöt ---
+
+    match /users/{userId} {
+      // Käyttäjäprofiili
+      // Salli luku ja kirjoitus (mukaan lukien luonti), jos käyttäjä on dokumentin omistaja
+      allow read, write: if isOwner(userId);
+      
+      /**
+       * @description Kaikki käyttäjän subkokoelmat.
+       */
+      match /{collectionName}/{docId} {
+        allow read, write: if isOwner(userId);
+      }
+
+      /**
+       * @description Rekursiivinen sääntö syville polulle.
+       */
+      match /{document=**} {
+        allow read, write: if isOwner(userId);
+      }
+    }
+  }
+}
