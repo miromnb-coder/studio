@@ -1,48 +1,63 @@
 'use client';
 
-import Link from 'next/link';
-import { ArrowLeft, MessageSquare, Send } from 'lucide-react';
-import { useAppStore, useSetPageOnMount } from '../lib/app-store';
+import { useState } from 'react';
+import { ArrowUp, MessageSquare } from 'lucide-react';
+
+const seedMessages = [
+  { role: 'agent', text: 'Ready to help you with analysis, automation, and summaries.' },
+  { role: 'user', text: 'Show me the most important financial alerts from this week.' },
+];
 
 export default function ChatPage() {
-  useSetPageOnMount('chat');
-  const { state, actions, selectors } = useAppStore();
+  const [messages, setMessages] = useState(seedMessages);
+  const [draft, setDraft] = useState('');
+  const [typing, setTyping] = useState(false);
+
+  const send = () => {
+    const text = draft.trim();
+    if (!text) return;
+    setMessages((prev) => [...prev, { role: 'user', text }]);
+    setDraft('');
+    setTyping(true);
+
+    window.setTimeout(() => {
+      setMessages((prev) => [...prev, { role: 'agent', text: 'Working on it now. I will summarize key actions next.' }]);
+      setTyping(false);
+    }, 900);
+  };
 
   return (
-    <main className="mx-auto min-h-screen w-full max-w-md bg-[#f8fafc] px-5 py-6 text-slate-900">
-      <div className="mb-6 flex items-center justify-between">
-        <Link href="/" className="inline-flex items-center gap-2 rounded-full bg-white px-4 py-2 text-sm font-medium text-slate-600 shadow-[0_4px_14px_rgba(15,23,42,0.04)] transition hover:bg-slate-50"><ArrowLeft className="h-4 w-4" />Back</Link>
-        <div className="rounded-full bg-indigo-50 p-2.5 text-indigo-500"><MessageSquare className="h-5 w-5" /></div>
-      </div>
-
-      <section className="rounded-[22px] border border-black/[0.04] bg-white p-6 shadow-[0_4px_14px_rgba(15,23,42,0.04)]">
-        <h1 className="text-[2rem] font-semibold tracking-tight text-slate-900">Chat</h1>
-        <p className="mt-2 text-[1rem] leading-relaxed text-slate-500">Continue conversations with your AI operator and review recent prompts.</p>
-
-        <div className="mt-6 space-y-3">
-          {selectors.messages.slice(-8).map((message) => (
-            <div key={message.id} className={`rounded-2xl px-4 py-3 text-sm ${message.role === 'user' ? 'bg-indigo-50 text-indigo-700' : 'bg-slate-50 text-slate-600'}`}>
-              {message.role === 'assistant' ? 'Agent' : message.role === 'user' ? 'You' : 'System'}: {message.content}
-            </div>
-          ))}
+    <main className="screen relative bg-[#f8fafc] pb-44">
+      <header className="surface-card mb-4 flex items-center gap-3 p-4">
+        <div className="rounded-xl bg-indigo-50 p-2 text-indigo-500"><MessageSquare className="h-5 w-5" /></div>
+        <div>
+          <h1 className="text-xl font-semibold">Chat</h1>
+          <p className="text-sm text-slate-500">Live thread with your operator agents.</p>
         </div>
+      </header>
 
-        <div className="mt-4 rounded-2xl bg-slate-50 p-3">
-          <textarea value={state.ui.promptInput} onChange={(e) => actions.setPromptInput(e.target.value)} rows={3} placeholder="Ask the operator..." className="w-full resize-none bg-transparent text-sm text-slate-700 outline-none placeholder:text-slate-400" />
-          <div className="mt-2 flex justify-end">
-            <button
-              type="button"
-              onClick={() => {
-                actions.sendMessage(state.ui.promptInput, 'chat');
-                actions.runAgentsForIntent(state.ui.promptInput);
-              }}
-              className="inline-flex items-center gap-2 rounded-full bg-indigo-500 px-4 py-2 text-sm font-semibold text-white"
-            >
-              <Send className="h-4 w-4" />Send
-            </button>
+      <section className="space-y-3">
+        {messages.map((message, idx) => (
+          <div key={`${message.text}-${idx}`} className={`message-appear max-w-[88%] rounded-2xl px-4 py-3 text-sm ${message.role === 'user' ? 'ml-auto bg-indigo-500 text-white' : 'bg-white text-slate-700 surface-card'}`}>
+            {message.text}
           </div>
-        </div>
+        ))}
+
+        {typing ? (
+          <div className="inline-flex items-center gap-2 rounded-2xl bg-indigo-50 px-4 py-3 text-sm text-indigo-600">
+            <span className="agent-pulse inline-flex h-2 w-2 rounded-full bg-indigo-500" /> Agent is typing...
+          </div>
+        ) : null}
       </section>
+
+      <div className="glass fixed bottom-[calc(74px+env(safe-area-inset-bottom))] left-1/2 z-30 w-full max-w-md -translate-x-1/2 px-5 pb-2 pt-2">
+        <div className="surface-card flex items-end gap-2 p-2">
+          <textarea value={draft} onChange={(e) => setDraft(e.target.value)} rows={1} placeholder="Message agents..." className="max-h-28 flex-1 resize-none rounded-xl bg-slate-50 px-3 py-2 text-sm" />
+          <button type="button" onClick={send} className="tap-feedback rounded-xl bg-indigo-500 p-2 text-white disabled:bg-slate-300" disabled={!draft.trim()} aria-label="Send message">
+            <ArrowUp className="h-4 w-4" />
+          </button>
+        </div>
+      </div>
     </main>
   );
 }

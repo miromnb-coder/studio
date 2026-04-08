@@ -1,40 +1,49 @@
 'use client';
 
-import Link from 'next/link';
-import { ArrowLeft, Bot, Gauge, Layers, Play, Search } from 'lucide-react';
-import { useAppStore, useSetPageOnMount } from '../lib/app-store';
+import { useEffect, useState } from 'react';
+import { Bot, Gauge, Layers, Search } from 'lucide-react';
+
+const agents = [
+  { title: 'Research Agent', subtitle: 'Finds relevant information and trends.', icon: Search },
+  { title: 'Analysis Agent', subtitle: 'Processes patterns and insights.', icon: Gauge },
+  { title: 'Memory Agent', subtitle: 'Stores and recalls important context.', icon: Layers },
+];
 
 export default function AgentsPage() {
-  useSetPageOnMount('agents');
-  const { selectors, actions } = useAppStore();
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    const timer = window.setTimeout(() => setLoading(false), 700);
+    return () => window.clearTimeout(timer);
+  }, []);
 
   return (
-    <main className="mx-auto min-h-screen w-full max-w-md bg-[#f8fafc] px-5 py-6 text-slate-900">
-      <div className="mb-6 flex items-center justify-between">
-        <Link href="/" className="inline-flex items-center gap-2 rounded-full bg-white px-4 py-2 text-sm font-medium text-slate-600 shadow-[0_4px_14px_rgba(15,23,42,0.04)] hover:bg-slate-50"><ArrowLeft className="h-4 w-4" />Back</Link>
-        <div className="rounded-full bg-indigo-50 p-2.5 text-indigo-500"><Bot className="h-5 w-5" /></div>
-      </div>
+    <main className="screen bg-[#f8fafc]">
+      <section className="surface-card p-5">
+        <div className="mb-4 flex items-center gap-3">
+          <div className="rounded-xl bg-indigo-50 p-2.5 text-indigo-500"><Bot className="h-5 w-5" /></div>
+          <div>
+            <h1 className="text-2xl font-semibold">Active Agents</h1>
+            <p className="text-sm text-slate-500">Systems currently assisting behind the scenes.</p>
+          </div>
+        </div>
 
-      <section className="rounded-[22px] border border-black/[0.04] bg-white p-6 shadow-[0_4px_14px_rgba(15,23,42,0.04)]">
-        <h1 className="text-[1.9rem] font-semibold tracking-tight text-slate-900">Active Agents</h1>
-        <p className="mt-2 text-[1rem] leading-relaxed text-slate-500">These AI systems are currently assisting you behind the scenes.</p>
-
-        <div className="mt-6 space-y-4">
-          {selectors.agents.map((agent) => {
-            const Icon = agent.iconKey === 'analysis' ? Gauge : agent.iconKey === 'memory' ? Layers : Search;
-            return (
-              <div key={agent.id} className="flex items-start gap-3 rounded-2xl bg-slate-50 p-4">
-                <div className={`rounded-2xl p-3 ${agent.accent}`}><Icon className="h-5 w-5 stroke-[1.8]" /></div>
-                <div className="min-w-0 flex-1">
-                  <p className="text-[1.1rem] font-medium tracking-tight text-slate-800">{agent.name}</p>
-                  <p className="text-[0.95rem] leading-relaxed text-slate-500">{agent.subtitle}</p>
+        <div className="space-y-3">
+          {loading
+            ? Array.from({ length: 3 }).map((_, i) => <div key={i} className="skeleton h-20 rounded-2xl" />)
+            : agents.map(({ title, subtitle, icon: Icon }) => (
+                <div key={title} className="message-appear flex items-start gap-3 rounded-2xl bg-slate-50 p-4">
+                  <div className="rounded-xl bg-indigo-50 p-2.5 text-indigo-500"><Icon className="h-5 w-5" /></div>
+                  <div>
+                    <p className="font-semibold text-slate-800">{title}</p>
+                    <p className="text-sm text-slate-500">{subtitle}</p>
+                  </div>
                 </div>
-                <button type="button" onClick={() => actions.runAgentsForIntent(agent.name)} className="rounded-full bg-white p-2 text-slate-500"><Play className="h-4 w-4" /></button>
-              </div>
-            );
-          })}
+              ))}
         </div>
       </section>
+
+      <BottomNav />
     </main>
   );
 }
