@@ -23,6 +23,8 @@ import {
   WandSparkles,
 } from 'lucide-react';
 
+import { emitHistoryEvent } from './lib/history-store';
+import { transitionAgentRuntime } from './lib/chat-store';
 type PromptAction = {
   label: 'Research' | 'Analyze' | 'Create' | 'Automate';
   icon: typeof Search;
@@ -139,16 +141,52 @@ export default function HomePage() {
     const value = prompt.trim();
     if (!value) return;
 
+    transitionAgentRuntime(
+      { status: 'running', activeAgent: 'Analysis Agent' },
+      `Started processing: ${value}`,
+    );
+
+    const response = `Agent: Working on "${value}" now.`;
+
     setMessages((prev) => [
       ...prev,
       `You: ${value}`,
-      `Agent: Working on "${value}" now.`,
+      response,
     ]);
+
+    emitHistoryEvent({
+      title: 'Chat prompt sent',
+      description: value,
+      type: 'chat',
+      prompt: value,
+      context: 'Sent from dashboard composer.',
+    });
+
+    emitHistoryEvent({
+      title: 'Chat response generated',
+      description: response,
+      type: 'chat',
+      prompt: value,
+      context: response,
+    });
+
+    transitionAgentRuntime(
+      { status: 'idle', activeAgent: null },
+      `Completed processing: ${value}`,
+    );
+
     setPrompt('');
   };
 
   const applyQuickAction = (starter: string) => {
     setPrompt(starter);
+    emitHistoryEvent({
+      title: 'Starter action selected',
+      description: starter,
+      type: 'memory',
+      prompt: starter,
+      context: 'Starter action queued from dashboard.',
+    });
   };
 
   const cycleTryPrompt = () => {

@@ -1,15 +1,63 @@
 'use client';
 
 import Link from 'next/link';
+import { useMemo } from 'react';
+import { useRouter } from 'next/navigation';
 import { ArrowLeft, Clock3 } from 'lucide-react';
+import { readHistoryEvents, restoreHistoryToChat, type HistoryEvent } from '../lib/history-store';
 
-const historyItems = [
-  'Generated weekly operator summary',
-  'Stored memory update from billing analysis',
-  'Ran subscription leak review',
-];
+type GroupLabel = 'Today' | 'Yesterday' | 'Earlier';
+
+function toDayStart(date: Date) {
+  return new Date(date.getFullYear(), date.getMonth(), date.getDate()).getTime();
+}
+
+function groupLabel(createdAt: string): GroupLabel {
+  const eventDay = toDayStart(new Date(createdAt));
+  const now = new Date();
+  const today = toDayStart(now);
+  const yesterday = today - 24 * 60 * 60 * 1000;
+
+  if (eventDay === today) return 'Today';
+  if (eventDay === yesterday) return 'Yesterday';
+  return 'Earlier';
+}
+
+function formatEventTime(createdAt: string) {
+  return new Date(createdAt).toLocaleString([], {
+    month: 'short',
+    day: 'numeric',
+    hour: 'numeric',
+    minute: '2-digit',
+  });
+}
 
 export default function HistoryPage() {
+  const router = useRouter();
+
+  const groupedEvents = useMemo(() => {
+    const events = readHistoryEvents().sort(
+      (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
+    );
+
+    const groups: Record<GroupLabel, HistoryEvent[]> = {
+      Today: [],
+      Yesterday: [],
+      Earlier: [],
+    };
+
+    events.forEach((event) => {
+      groups[groupLabel(event.createdAt)].push(event);
+    });
+
+    return groups;
+  }, []);
+
+  const openHistoryEvent = (event: HistoryEvent) => {
+    restoreHistoryToChat(event);
+    router.push('/chat');
+  };
+
   return (
     <main className="mx-auto min-h-screen w-full max-w-md bg-[#f8fafc] px-5 py-6 text-slate-900">
       <div className="mb-6 flex items-center justify-between">
@@ -34,15 +82,38 @@ export default function HistoryPage() {
           Review recent actions, runs, summaries, and saved outputs.
         </p>
 
-        <div className="mt-6 space-y-3">
-          {historyItems.map((item, index) => (
-            <div
-              key={item}
-              className="rounded-2xl bg-slate-50 px-4 py-4 text-sm leading-relaxed text-slate-700"
-            >
-              {index + 1}. {item}
-            </div>
-          ))}
+        <div className="mt-6 space-y-5">
+          {(['Today', 'Yesterday', 'Earlier'] as GroupLabel[]).map((label) => {
+            const items = groupedEvents[label];
+            if (!items.length) return null;
+
+            return (
+              <div key={label}>
+                <h2 className="mb-2 text-xs font-semibold uppercase tracking-[0.14em] text-slate-400">
+                  {label}
+                </h2>
+                <div className="space-y-2">
+                  {items.map((item) => (
+                    <button
+                      key={item.id}
+                      type="button"
+                      onClick={() => openHistoryEvent(item)}
+                      className="w-full rounded-2xl bg-slate-50 px-4 py-3 text-left transition hover:bg-slate-100"
+                    >
+                      <div className="flex items-center justify-between gap-2">
+                        <p className="text-sm font-medium text-slate-800">{item.title}</p>
+                        <span className="rounded-full bg-white px-2 py-0.5 text-[11px] font-semibold uppercase tracking-wide text-slate-500">
+                          {item.type}
+                        </span>
+                      </div>
+                      <p className="mt-1 text-sm leading-relaxed text-slate-600">{item.description}</p>
+                      <p className="mt-2 text-xs text-slate-400">{formatEventTime(item.createdAt)}</p>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            );
+          })}
         </div>
 
         <Link

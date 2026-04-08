@@ -6,6 +6,7 @@ import { AlertTriangle, CircleDollarSign } from 'lucide-react';
 import { BottomNav } from '../components/bottom-nav';
 import { makeMessage, writeChatMessages, readChatMessages, CHAT_DRAFT_KEY } from '../lib/chat-store';
 import { monthlySavingsEstimate, moneyAlerts, subscriptions } from '../lib/money-data';
+import { emitHistoryEvent } from '../lib/history-store';
 
 export default function MoneyPage() {
   const router = useRouter();
@@ -17,6 +18,15 @@ export default function MoneyPage() {
     const messages = readChatMessages();
     writeChatMessages([...messages, makeMessage('user', text, 'money')]);
     window.localStorage.setItem(CHAT_DRAFT_KEY, text);
+
+    emitHistoryEvent({
+      title: 'Chat prompt sent',
+      description: text,
+      type: 'chat',
+      prompt: text,
+      context: 'Sent from Money Intelligence.',
+    });
+
     router.push('/chat');
   };
 
@@ -52,7 +62,15 @@ export default function MoneyPage() {
                 </div>
                 <div className="mt-2 flex items-center justify-between">
                   <p className="text-xs text-slate-500">Renews {item.renewalDate}</p>
-                  <button type="button" onClick={() => setReviewed((prev) => ({ ...prev, [item.id]: true }))} className="rounded-full bg-white px-3 py-1 text-xs font-semibold text-slate-700 transition hover:bg-slate-200">
+                  <button type="button" onClick={() => {
+                      setReviewed((prev) => ({ ...prev, [item.id]: true }));
+                      emitHistoryEvent({
+                        title: 'Subscription reviewed',
+                        description: `${item.name} marked as reviewed.`,
+                        type: 'alert',
+                        context: `Renewal ${item.renewalDate} · ${item.status}` ,
+                      });
+                    }} className="rounded-full bg-white px-3 py-1 text-xs font-semibold text-slate-700 transition hover:bg-slate-200">
                     {reviewed[item.id] ? 'Reviewed' : 'Review'}
                   </button>
                 </div>
@@ -72,8 +90,26 @@ export default function MoneyPage() {
             ))}
           </div>
           <div className="mt-4 flex gap-2">
-            <button type="button" onClick={() => pushToChat('Cancel risky subscriptions and draft confirmation messages.')} className="rounded-full bg-indigo-500 px-4 py-2 text-sm font-semibold text-white transition hover:bg-indigo-600">Cancel</button>
-            <button type="button" onClick={() => pushToChat('Review all suspicious charges from this month in detail.')} className="rounded-full bg-white px-4 py-2 text-sm font-semibold text-slate-700 transition hover:bg-slate-100">Review</button>
+            <button type="button" onClick={() => {
+              emitHistoryEvent({
+                title: 'Alert action executed',
+                description: 'Cancel risky subscriptions',
+                type: 'alert',
+                context: 'Money alert action: cancel',
+                prompt: 'Cancel risky subscriptions and draft confirmation messages.',
+              });
+              pushToChat('Cancel risky subscriptions and draft confirmation messages.');
+            }} className="rounded-full bg-indigo-500 px-4 py-2 text-sm font-semibold text-white transition hover:bg-indigo-600">Cancel</button>
+            <button type="button" onClick={() => {
+              emitHistoryEvent({
+                title: 'Alert action executed',
+                description: 'Review suspicious charges',
+                type: 'alert',
+                context: 'Money alert action: review',
+                prompt: 'Review all suspicious charges from this month in detail.',
+              });
+              pushToChat('Review all suspicious charges from this month in detail.');
+            }} className="rounded-full bg-white px-4 py-2 text-sm font-semibold text-slate-700 transition hover:bg-slate-100">Review</button>
           </div>
         </article>
 
