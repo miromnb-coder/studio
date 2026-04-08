@@ -2,13 +2,13 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { Bot, CircleDollarSign, Clock3, Home, MessageSquare } from 'lucide-react';
+import { Bell, Bot, Clock3, Home, MessageSquare } from 'lucide-react';
 
 const tabs = [
   { label: 'Home', href: '/', icon: Home },
   { label: 'Chat', href: '/chat', icon: MessageSquare },
   { label: 'Agents', href: '/agents', icon: Bot },
-  { label: 'Money', href: '/money', icon: CircleDollarSign },
+  { label: 'Alerts', href: '/alerts', icon: Bell },
   { label: 'History', href: '/history', icon: Clock3 },
 ];
 
