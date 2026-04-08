@@ -1,7 +1,7 @@
 'use client';
 
-import Link from 'next/link';
-import { ArrowLeft, Clock3 } from 'lucide-react';
+import { Clock3 } from 'lucide-react';
+import { BottomNav } from '../components/bottom-nav';
 
 const historyItems = [
   'Generated weekly operator summary',
@@ -11,15 +11,9 @@ const historyItems = [
 
 export default function HistoryPage() {
   return (
-    <main className="mx-auto min-h-screen w-full max-w-md bg-[#f8fafc] px-5 py-6 text-slate-900">
+    <main className="mx-auto min-h-screen w-full max-w-md bg-[#f8fafc] px-5 py-6 pb-32 text-slate-900">
       <div className="mb-6 flex items-center justify-between">
-        <Link
-          href="/"
-          className="inline-flex items-center gap-2 rounded-full bg-white px-4 py-2 text-sm font-medium text-slate-600 shadow-[0_4px_14px_rgba(15,23,42,0.04)] transition hover:bg-slate-50"
-        >
-          <ArrowLeft className="h-4 w-4" />
-          Back
-        </Link>
+        <h1 className="text-[2rem] font-semibold tracking-tight text-slate-900">History</h1>
 
         <div className="rounded-full bg-slate-100 p-2.5 text-slate-500">
           <Clock3 className="h-5 w-5" />
@@ -27,10 +21,7 @@ export default function HistoryPage() {
       </div>
 
       <section className="rounded-[22px] border border-black/[0.04] bg-white p-6 shadow-[0_4px_14px_rgba(15,23,42,0.04)]">
-        <h1 className="text-[2rem] font-semibold tracking-tight text-slate-900">
-          History
-        </h1>
-        <p className="mt-2 text-[1rem] leading-relaxed text-slate-500">
+        <p className="text-[1rem] leading-relaxed text-slate-500">
           Review recent actions, runs, summaries, and saved outputs.
         </p>
 
@@ -44,14 +35,9 @@ export default function HistoryPage() {
             </div>
           ))}
         </div>
-
-        <Link
-          href="/"
-          className="mt-6 inline-flex items-center gap-2 text-sm font-medium text-indigo-500 transition hover:text-indigo-600"
-        >
-          Return to dashboard
-        </Link>
       </section>
+
+      <BottomNav />
     </main>
   );
 }

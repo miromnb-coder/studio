@@ -21,7 +21,7 @@ export default function MoneyPage() {
   };
 
   return (
-    <main className="mx-auto min-h-screen w-full max-w-md bg-[#f8f9fc] pb-28 shadow-[0_10px_32px_rgba(15,23,42,0.06)]">
+    <main className="mx-auto min-h-screen w-full max-w-md bg-[#f8f9fc] pb-32 shadow-[0_10px_32px_rgba(15,23,42,0.06)]">
       <header className="border-b border-black/[0.04] px-6 pt-8 pb-4">
         <h1 className="text-[2rem] font-semibold tracking-tight text-slate-900">Money Intelligence</h1>
         <p className="text-sm text-slate-500">Detect leaks, reduce waste, and optimize recurring spend.</p>

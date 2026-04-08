@@ -1,7 +1,7 @@
 'use client';
 
-import Link from 'next/link';
-import { ArrowLeft, Bot, Gauge, Layers, Search } from 'lucide-react';
+import { Bot, Gauge, Layers, Search } from 'lucide-react';
+import { BottomNav } from '../components/bottom-nav';
 
 const agents = [
   {
@@ -26,30 +26,17 @@ const agents = [
 
 export default function AgentsPage() {
   return (
-    <main className="mx-auto min-h-screen w-full max-w-md bg-[#f8fafc] px-5 py-6 text-slate-900">
-      
-      {/* Header */}
+    <main className="mx-auto min-h-screen w-full max-w-md bg-[#f8fafc] px-5 py-6 pb-32 text-slate-900">
       <div className="mb-6 flex items-center justify-between">
-        <Link
-          href="/"
-          className="inline-flex items-center gap-2 rounded-full bg-white px-4 py-2 text-sm font-medium text-slate-600 shadow-[0_4px_14px_rgba(15,23,42,0.04)] hover:bg-slate-50"
-        >
-          <ArrowLeft className="h-4 w-4" />
-          Back
-        </Link>
+        <h1 className="text-[1.9rem] font-semibold tracking-tight text-slate-900">Active Agents</h1>
 
         <div className="rounded-full bg-indigo-50 p-2.5 text-indigo-500">
           <Bot className="h-5 w-5" />
         </div>
       </div>
 
-      {/* Content */}
       <section className="rounded-[22px] border border-black/[0.04] bg-white p-6 shadow-[0_4px_14px_rgba(15,23,42,0.04)]">
-        <h1 className="text-[1.9rem] font-semibold tracking-tight text-slate-900">
-          Active Agents
-        </h1>
-
-        <p className="mt-2 text-[1rem] leading-relaxed text-slate-500">
+        <p className="text-[1rem] leading-relaxed text-slate-500">
           These AI systems are currently assisting you behind the scenes.
         </p>
 
@@ -74,14 +61,9 @@ export default function AgentsPage() {
             </div>
           ))}
         </div>
-
-        <Link
-          href="/"
-          className="mt-6 inline-block text-sm font-medium text-indigo-500 hover:text-indigo-600"
-        >
-          Return to dashboard
-        </Link>
       </section>
+
+      <BottomNav />
     </main>
   );
 }
