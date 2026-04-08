@@ -1,3 +1,4 @@
+import { emitHistoryEvent } from './history-store';
 export type ChatMessage = {
   id: string;
   role: 'user' | 'assistant' | 'system';
@@ -20,6 +21,23 @@ export type AgentEntity = {
   lastRun: string | null;
   lastTask: string | null;
 };
+
+type ChatStoreListener = () => void;
+
+const listeners = new Set<ChatStoreListener>();
+
+function notifyChatStoreListeners() {
+  for (const listener of listeners) {
+    listener();
+  }
+}
+
+export function subscribeChatStore(listener: ChatStoreListener) {
+  listeners.add(listener);
+  return () => {
+    listeners.delete(listener);
+  };
+}
 
 export type AgentRuntimeState = {
   status: AgentLifecycleStatus;
@@ -60,6 +78,30 @@ export function readChatMessages(): ChatMessage[] {
 export function writeChatMessages(messages: ChatMessage[]) {
   if (typeof window === 'undefined') return;
   window.localStorage.setItem(CHAT_STORAGE_KEY, JSON.stringify(messages));
+  notifyChatStoreListeners();
+}
+
+export function appendChatMessage(message: ChatMessage) {
+  const messages = readChatMessages();
+  writeChatMessages([...messages, message]);
+}
+
+export function updateChatMessage(messageId: string, updates: Partial<ChatMessage>) {
+  const updated = readChatMessages().map((message) => (
+    message.id === messageId ? { ...message, ...updates } : message
+  ));
+  writeChatMessages(updated);
+}
+
+export function readChatDraft(): string {
+  if (typeof window === 'undefined') return '';
+  return window.localStorage.getItem(CHAT_DRAFT_KEY) || '';
+}
+
+export function writeChatDraft(draft: string) {
+  if (typeof window === 'undefined') return;
+  window.localStorage.setItem(CHAT_DRAFT_KEY, draft);
+  notifyChatStoreListeners();
 }
 
 export function makeMessage(role: ChatMessage['role'], content: string, source: ChatMessage['source']): ChatMessage {
@@ -109,4 +151,15 @@ export function writeAgentRuntime(state: AgentRuntimeState) {
   if (typeof window === 'undefined') return;
   window.localStorage.setItem(AGENT_RUNTIME_KEY, JSON.stringify(state));
   window.dispatchEvent(new Event(AGENT_RUNTIME_EVENT));
+}
+
+
+export function transitionAgentRuntime(state: AgentRuntimeState, reason: string) {
+  writeAgentRuntime(state);
+  emitHistoryEvent({
+    title: `Agent state: ${state.status}`,
+    description: reason,
+    type: 'analysis',
+    context: `${state.activeAgent ?? 'No active agent'} · ${state.status}`,
+  });
 }
