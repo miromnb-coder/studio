@@ -186,17 +186,19 @@ export default function HomePage() {
               <span className="absolute right-1.5 top-1.5 h-2.5 w-2.5 rounded-full bg-rose-500" />
             </Link>
 
-            <button
-              type="button"
-              onClick={() => setMessages((prev) => [
-                ...prev,
-                'System: Profile action opened.',
-              ])}
-              className="rounded-full bg-slate-100 p-2 text-slate-600 transition hover:bg-slate-200"
-              aria-label="Profile"
-            >
-              <User className="h-5 w-5" />
-            </Link>
+<button
+  type="button"
+  onClick={() =>
+    setMessages((prev) => [
+      ...prev,
+      'System: Profile action opened.',
+    ])
+  }
+  className="rounded-full bg-slate-100 p-2 text-slate-600 transition hover:bg-slate-200"
+  aria-label="Profile"
+>
+  <User className="h-5 w-5" />
+</button>
           </div>
         </div>
       </section>
