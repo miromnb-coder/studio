@@ -1,3 +1,4 @@
+import { emitHistoryEvent } from './history-store';
 export type ChatMessage = {
   id: string;
   role: 'user' | 'assistant' | 'system';
@@ -58,4 +59,15 @@ export function readAgentRuntime(): AgentRuntimeState {
 export function writeAgentRuntime(state: AgentRuntimeState) {
   if (typeof window === 'undefined') return;
   window.localStorage.setItem(AGENT_RUNTIME_KEY, JSON.stringify(state));
+}
+
+
+export function transitionAgentRuntime(state: AgentRuntimeState, reason: string) {
+  writeAgentRuntime(state);
+  emitHistoryEvent({
+    title: `Agent state: ${state.status}`,
+    description: reason,
+    type: 'analysis',
+    context: `${state.activeAgent ?? 'No active agent'} · ${state.status}`,
+  });
 }
