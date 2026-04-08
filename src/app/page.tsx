@@ -2,10 +2,13 @@
 
 import Link from 'next/link';
 import { useMemo, useState } from 'react';
-import { Bell, Bot, Gauge, Layers, Send, Sparkles } from 'lucide-react';
+import { useRouter } from 'next/navigation';
+import { Bell, Bot, Gauge, Layers, LogOut, Pencil, Send, Sparkles } from 'lucide-react';
 import { PRODUCT_NAME, PRODUCT_SHORT } from './config/product';
+import { useAuthSlice } from './store/useAuthSlice'; // muuta polku jos eri
 
 type ActivityFilter = 'all' | 'research' | 'memory';
+type AgentName = 'Research Agent' | 'Analysis Agent' | 'Memory Agent';
 
 const quickActions = [
   'Research unusual spending patterns from the last 30 days.',
@@ -19,20 +22,15 @@ const recentActivity = [
   { title: 'Generated weekly report', type: 'all' as const, time: '1h ago' },
 ];
 
-const activeSystems = [
+const activeSystems: Array<{ title: AgentName; subtitle: string; icon: typeof Bot }> = [
   { title: 'Research Agent', subtitle: 'Gathering latest information', icon: Bot },
-  { title: 'Analysis Agent', subtitle: 'Processing your data', icon: Gauge },
-  { title: 'Memory Agent', subtitle: 'Updating knowledge base', icon: Layers },
+  { title: 'Analysis Agent', subtitle: 'Processing your data', icon: Gauge as typeof Bot },
+  { title: 'Memory Agent', subtitle: 'Updating knowledge base', icon: Layers as typeof Bot },
 ];
-
-const AGENT_DELAY_MS: Record<AgentName, number> = {
-  'Research Agent': 1800,
-  'Analysis Agent': 1400,
-  'Memory Agent': 1200,
-};
 
 function routeAgentForIntent(input: string): AgentName {
   const value = input.toLowerCase();
+
   const memorySignals = ['summarize', 'summary', 'recap', 'recall', 'remember', 'context', 'history'];
   const analysisSignals = [
     'compare',
@@ -55,11 +53,14 @@ function routeAgentForIntent(input: string): AgentName {
   if (memorySignals.some((signal) => value.includes(signal))) return 'Memory Agent';
   if (analysisSignals.some((signal) => value.includes(signal)) || /\d/.test(value)) return 'Analysis Agent';
   if (researchSignals.some((signal) => value.includes(signal))) return 'Research Agent';
+
   return 'Research Agent';
 }
 
 export default function HomePage() {
+  const router = useRouter();
   const { currentUser, logout, updateProfileName } = useAuthSlice();
+
   const [prompt, setPrompt] = useState('');
   const [messages, setMessages] = useState<string[]>([
     'System: All agents are online and ready.',
@@ -68,12 +69,12 @@ export default function HomePage() {
   const [activityFilter, setActivityFilter] = useState<ActivityFilter>('all');
   const [isTyping, setIsTyping] = useState(false);
 
-  const prompt = state.ui.promptInput;
   const canSend = prompt.trim().length > 0;
   const userName = currentUser?.name || 'Operator';
+
   const initials = userName
     .split(' ')
-    .map((part) => part[0])
+    .map((part) => part[0] ?? '')
     .join('')
     .slice(0, 2)
     .toUpperCase();
@@ -83,48 +84,58 @@ export default function HomePage() {
     return recentActivity.filter((item) => item.type === activityFilter || item.type === 'all');
   }, [activityFilter]);
 
-  const sendMessage = () => {
+  const openChatWithPrompt = (value: string) => {
+    const trimmed = value.trim();
+    if (!trimmed) return;
+
+    const agent = routeAgentForIntent(trimmed);
+
+    try {
+      sessionStorage.setItem(
+        'nova-operator-chat-draft',
+        JSON.stringify({
+          prompt: trimmed,
+          agent,
+          createdAt: Date.now(),
+        }),
+      );
+    } catch {
+      // ignore storage issues
+    }
+
+    router.push('/chat');
+  };
+
+  const sendPrompt = () => {
     const value = prompt.trim();
     if (!value) return;
+
     const agent = routeAgentForIntent(value);
-    const token = requestTokenRef.current[agent] + 1;
-    requestTokenRef.current[agent] = token;
-
-    const now = new Date().toISOString();
-    const runningRuntime = readAgentRuntime();
-    const runningAgents = Object.fromEntries(
-      (Object.keys(runningRuntime.agents) as AgentName[]).map((name) => [
-        name,
-        {
-          ...runningRuntime.agents[name],
-          status: name === agent ? 'running' : 'idle',
-          lastRun: name === agent ? now : runningRuntime.agents[name].lastRun,
-          lastTask: name === agent ? value : runningRuntime.agents[name].lastTask,
-        },
-      ]),
-    ) as typeof runningRuntime.agents;
-
-    writeAgentRuntime({
-      status: 'running',
-      activeAgent: agent,
-      agents: runningAgents,
-    });
 
     setMessages((prev) => [...prev, `You: ${value}`]);
-    setPrompt('');
     setIsTyping(true);
 
     window.setTimeout(() => {
-      setMessages((prev) => [...prev, `Agent: Working on "${value}" now.`]);
+      setMessages((prev) => [...prev, `${agent}: Working on "${value}" now.`]);
       setIsTyping(false);
-    }, 800);
+      openChatWithPrompt(value);
+    }, 500);
+  };
+
+  const handleQuickAction = (starter: string) => {
+    setPrompt(starter);
+    openChatWithPrompt(starter);
   };
 
   const handleEditName = () => {
     const value = window.prompt('Update your profile name', userName);
-    if (!value) return;
-    updateProfileName(value);
-    setProfileMenuOpen(false);
+    if (!value?.trim()) return;
+    updateProfileName(value.trim());
+  };
+
+  const handleLogout = () => {
+    logout();
+    router.push('/login');
   };
 
   return (
@@ -135,6 +146,7 @@ export default function HomePage() {
             <div className="rounded-2xl bg-indigo-50 p-2.5 text-indigo-500">
               <Sparkles className="h-4 w-4 stroke-[1.9]" />
             </div>
+
             <div className="flex items-center gap-2">
               <p className="text-2xl font-semibold tracking-tight text-slate-900">{PRODUCT_NAME}</p>
               <span className="rounded-xl bg-indigo-50 px-2.5 py-1 text-[0.65rem] font-semibold uppercase tracking-[0.14em] text-indigo-500">
@@ -143,38 +155,81 @@ export default function HomePage() {
             </div>
           </div>
 
-          <Link href="/alerts" className="tap-feedback rounded-full p-2 text-slate-400 hover:bg-slate-100 hover:text-slate-600" aria-label="Alerts">
-            <Bell className="h-5 w-5" />
-          </Link>
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={handleEditName}
+              className="tap-feedback flex h-10 w-10 items-center justify-center rounded-full bg-slate-100 text-xs font-semibold text-slate-700 hover:bg-slate-200"
+              aria-label="Edit profile name"
+              title={`Signed in as ${userName}`}
+            >
+              {initials}
+            </button>
+
+            <Link
+              href="/alerts"
+              className="tap-feedback rounded-full p-2 text-slate-400 hover:bg-slate-100 hover:text-slate-600"
+              aria-label="Alerts"
+            >
+              <Bell className="h-5 w-5" />
+            </Link>
+
+            <button
+              type="button"
+              onClick={handleLogout}
+              className="tap-feedback rounded-full p-2 text-slate-400 hover:bg-slate-100 hover:text-slate-600"
+              aria-label="Logout"
+            >
+              <LogOut className="h-5 w-5" />
+            </button>
+          </div>
         </div>
       </section>
 
       <section className="space-y-4 pb-6">
         <header className="space-y-1 px-1">
-          <h1 className="text-[2rem] font-semibold tracking-tight text-slate-900">Good morning, {PRODUCT_SHORT} 👋</h1>
+          <h1 className="text-[2rem] font-semibold tracking-tight text-slate-900">
+            Good morning, {userName || PRODUCT_SHORT} 👋
+          </h1>
           <p className="text-base text-slate-500">Your AI agents are ready to help you today.</p>
         </header>
 
         <article className="surface-card p-4">
           <p className="mb-3 text-base text-slate-600">What would you like to accomplish today?</p>
+
           <div className="mb-3 grid grid-cols-1 gap-2">
             {quickActions.map((starter) => (
-              <button key={starter} type="button" onClick={() => setPrompt(starter)} className="tap-feedback rounded-2xl bg-slate-50 px-4 py-3 text-left text-sm text-slate-700 hover:bg-slate-100">
+              <button
+                key={starter}
+                type="button"
+                onClick={() => handleQuickAction(starter)}
+                className="tap-feedback rounded-2xl bg-slate-50 px-4 py-3 text-left text-sm text-slate-700 hover:bg-slate-100"
+              >
                 {starter}
               </button>
             ))}
           </div>
+
           <div className="rounded-2xl bg-slate-50 p-3">
             <textarea
               value={prompt}
               onChange={(e) => setPrompt(e.target.value)}
               placeholder="Type your next task for the agents..."
               rows={3}
-              className="w-full resize-none bg-transparent text-sm text-slate-700 placeholder:text-slate-400"
+              className="w-full resize-none bg-transparent text-sm text-slate-700 placeholder:text-slate-400 outline-none"
             />
+
             <div className="mt-2 flex justify-end">
-              <button type="button" onClick={sendPrompt} disabled={!canSend} className="tap-feedback rounded-full bg-indigo-500 px-4 py-2 text-sm font-semibold text-white disabled:bg-slate-300">
-                <span className="inline-flex items-center gap-2"><Send className="h-4 w-4" />Send</span>
+              <button
+                type="button"
+                onClick={sendPrompt}
+                disabled={!canSend}
+                className="tap-feedback rounded-full bg-indigo-500 px-4 py-2 text-sm font-semibold text-white disabled:bg-slate-300"
+              >
+                <span className="inline-flex items-center gap-2">
+                  <Send className="h-4 w-4" />
+                  Send
+                </span>
               </button>
             </div>
           </div>
@@ -182,48 +237,102 @@ export default function HomePage() {
 
         <article className="surface-card p-4">
           <h2 className="mb-3 text-lg font-semibold">Recent Activity</h2>
+
           <div className="mb-3 flex gap-2">
             {(['all', 'research', 'memory'] as ActivityFilter[]).map((filter) => (
-              <button key={filter} type="button" onClick={() => setActivityFilter(filter)} className={`tap-feedback rounded-full px-3 py-1 text-xs font-semibold capitalize ${activityFilter === filter ? 'bg-slate-900 text-white' : 'bg-slate-100 text-slate-500'}`}>
+              <button
+                key={filter}
+                type="button"
+                onClick={() => setActivityFilter(filter)}
+                className={`tap-feedback rounded-full px-3 py-1 text-xs font-semibold capitalize ${
+                  activityFilter === filter ? 'bg-slate-900 text-white' : 'bg-slate-100 text-slate-500'
+                }`}
+              >
                 {filter}
               </button>
             ))}
           </div>
+
           <div className="space-y-2">
             {filteredActivity.map((item) => (
-              <p key={item.title} className="rounded-xl bg-slate-50 px-3 py-2 text-sm text-slate-700">{item.title} · {item.time}</p>
+              <button
+                key={item.title}
+                type="button"
+                onClick={() => openChatWithPrompt(item.title)}
+                className="tap-feedback block w-full rounded-xl bg-slate-50 px-3 py-2 text-left text-sm text-slate-700 hover:bg-slate-100"
+              >
+                {item.title} · {item.time}
+              </button>
             ))}
           </div>
         </article>
 
         <article className="surface-card p-4">
           <h3 className="mb-3 text-lg font-semibold">Active Agents</h3>
+
           <div className="space-y-3">
             {activeSystems.map(({ title, subtitle, icon: Icon }) => (
-              <div key={title} className="flex items-center gap-3 rounded-2xl bg-slate-50 p-3">
+              <button
+                key={title}
+                type="button"
+                onClick={() => openChatWithPrompt(`Ask ${title} to help with my next task.`)}
+                className="tap-feedback flex w-full items-center gap-3 rounded-2xl bg-slate-50 p-3 text-left hover:bg-slate-100"
+              >
                 <div className="rounded-xl bg-indigo-50 p-2 text-indigo-500">
                   <Icon className="h-4 w-4" />
                 </div>
+
                 <div>
                   <p className="text-sm font-semibold text-slate-800">{title}</p>
                   <p className="text-xs text-slate-500">{subtitle}</p>
                 </div>
-              </div>
+              </button>
             ))}
           </div>
         </article>
 
         <article className="surface-card p-4">
-          <h3 className="mb-3 text-base font-semibold text-slate-800">Conversation</h3>
+          <div className="mb-3 flex items-center justify-between">
+            <h3 className="text-base font-semibold text-slate-800">Conversation</h3>
+            <Link href="/chat" className="text-sm font-medium text-indigo-600 hover:text-indigo-500">
+              Open chat
+            </Link>
+          </div>
+
           <div className="space-y-2">
             {messages.slice(-4).map((message, index) => (
-              <p key={`${message}-${index}`} className="message-appear rounded-xl bg-slate-50 px-3 py-2 text-sm text-slate-600">{message}</p>
+              <button
+                key={`${message}-${index}`}
+                type="button"
+                onClick={() => openChatWithPrompt(message.replace(/^You:\s|^[A-Za-z ]+:\s/, ''))}
+                className="message-appear block w-full rounded-xl bg-slate-50 px-3 py-2 text-left text-sm text-slate-600 hover:bg-slate-100"
+              >
+                {message}
+              </button>
             ))}
+
             {isTyping ? (
               <p className="inline-flex items-center gap-2 rounded-xl bg-indigo-50 px-3 py-2 text-sm text-indigo-600">
-                <span className="agent-pulse inline-flex h-2 w-2 rounded-full bg-indigo-500" /> Agent is typing...
+                <span className="agent-pulse inline-flex h-2 w-2 rounded-full bg-indigo-500" />
+                Agent is typing...
               </p>
             ) : null}
+          </div>
+        </article>
+
+        <article className="surface-card p-4">
+          <div className="flex items-center justify-between gap-3">
+            <div>
+              <p className="text-sm font-semibold text-slate-800">Need deeper analysis?</p>
+              <p className="text-xs text-slate-500">Jump into the full conversation workspace.</p>
+            </div>
+
+            <Link
+              href="/chat"
+              className="tap-feedback inline-flex items-center rounded-full bg-slate-900 px-4 py-2 text-sm font-semibold text-white"
+            >
+              Open Chat
+            </Link>
           </div>
         </article>
       </section>
