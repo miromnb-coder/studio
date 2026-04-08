@@ -9,11 +9,41 @@ export type ChatMessage = {
 export const CHAT_STORAGE_KEY = 'operator_chat_thread_v1';
 export const CHAT_DRAFT_KEY = 'operator_chat_draft_v1';
 export const AGENT_RUNTIME_KEY = 'operator_agent_runtime_v1';
+export const AGENT_RUNTIME_EVENT = 'operator-agent-runtime-updated';
+
+export type AgentName = 'Research Agent' | 'Analysis Agent' | 'Memory Agent';
+export type AgentLifecycleStatus = 'idle' | 'running' | 'completed';
+
+export type AgentEntity = {
+  name: AgentName;
+  status: AgentLifecycleStatus;
+  lastRun: string | null;
+  lastTask: string | null;
+};
 
 export type AgentRuntimeState = {
-  status: 'idle' | 'running' | 'updating';
-  activeAgent: 'Research Agent' | 'Analysis Agent' | 'Memory Agent' | 'Money Agent' | null;
+  status: AgentLifecycleStatus;
+  activeAgent: AgentName | null;
+  agents: Record<AgentName, AgentEntity>;
 };
+
+const AGENT_NAMES: AgentName[] = ['Research Agent', 'Analysis Agent', 'Memory Agent'];
+
+function createDefaultRuntime(): AgentRuntimeState {
+  const agents = AGENT_NAMES.reduce(
+    (acc, name) => {
+      acc[name] = { name, status: 'idle', lastRun: null, lastTask: null };
+      return acc;
+    },
+    {} as Record<AgentName, AgentEntity>,
+  );
+
+  return {
+    status: 'idle',
+    activeAgent: null,
+    agents,
+  };
+}
 
 export function readChatMessages(): ChatMessage[] {
   if (typeof window === 'undefined') return [];
@@ -43,19 +73,40 @@ export function makeMessage(role: ChatMessage['role'], content: string, source: 
 }
 
 export function readAgentRuntime(): AgentRuntimeState {
-  if (typeof window === 'undefined') return { status: 'idle', activeAgent: null };
+  if (typeof window === 'undefined') return createDefaultRuntime();
   const raw = window.localStorage.getItem(AGENT_RUNTIME_KEY);
-  if (!raw) return { status: 'idle', activeAgent: null };
+  if (!raw) return createDefaultRuntime();
   try {
-    const parsed = JSON.parse(raw) as AgentRuntimeState;
-    if (!parsed.status) return { status: 'idle', activeAgent: null };
-    return parsed;
+    const parsed = JSON.parse(raw) as Partial<AgentRuntimeState>;
+    const fallback = createDefaultRuntime();
+    if (!parsed || !parsed.status) return fallback;
+
+    const normalizedAgents = AGENT_NAMES.reduce(
+      (acc, name) => {
+        const existing = parsed.agents?.[name];
+        acc[name] = {
+          name,
+          status: existing?.status ?? (name === parsed.activeAgent ? 'running' : 'idle'),
+          lastRun: existing?.lastRun ?? null,
+          lastTask: existing?.lastTask ?? null,
+        };
+        return acc;
+      },
+      {} as Record<AgentName, AgentEntity>,
+    );
+
+    return {
+      status: parsed.status ?? 'idle',
+      activeAgent: parsed.activeAgent ?? null,
+      agents: normalizedAgents,
+    };
   } catch {
-    return { status: 'idle', activeAgent: null };
+    return createDefaultRuntime();
   }
 }
 
 export function writeAgentRuntime(state: AgentRuntimeState) {
   if (typeof window === 'undefined') return;
   window.localStorage.setItem(AGENT_RUNTIME_KEY, JSON.stringify(state));
+  window.dispatchEvent(new Event(AGENT_RUNTIME_EVENT));
 }

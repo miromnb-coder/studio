@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { useMemo, useState } from 'react';
+import { useMemo, useRef, useState } from 'react';
 import {
   Bell,
   Bot,
@@ -22,6 +22,11 @@ import {
   User,
   WandSparkles,
 } from 'lucide-react';
+import {
+  type AgentName,
+  readAgentRuntime,
+  writeAgentRuntime,
+} from './lib/chat-store';
 
 type PromptAction = {
   label: 'Research' | 'Analyze' | 'Create' | 'Automate';
@@ -110,6 +115,39 @@ const tabs = [
   { label: 'History', href: '/history', icon: Clock3, active: false },
 ];
 
+const AGENT_DELAY_MS: Record<AgentName, number> = {
+  'Research Agent': 1800,
+  'Analysis Agent': 1400,
+  'Memory Agent': 1200,
+};
+
+function routeAgentForIntent(input: string): AgentName {
+  const value = input.toLowerCase();
+  const memorySignals = ['summarize', 'summary', 'recap', 'recall', 'remember', 'context', 'history'];
+  const analysisSignals = [
+    'compare',
+    'comparison',
+    'versus',
+    ' vs ',
+    'difference',
+    'percent',
+    'ratio',
+    'average',
+    'total',
+    'sum',
+    'more than',
+    'less than',
+    'greater',
+    'fewer',
+  ];
+  const researchSignals = ['research', 'find', 'latest', 'news', 'trend', 'lookup', 'look up', 'investigate'];
+
+  if (memorySignals.some((signal) => value.includes(signal))) return 'Memory Agent';
+  if (analysisSignals.some((signal) => value.includes(signal)) || /\d/.test(value)) return 'Analysis Agent';
+  if (researchSignals.some((signal) => value.includes(signal))) return 'Research Agent';
+  return 'Research Agent';
+}
+
 export default function HomePage() {
   const [prompt, setPrompt] = useState('');
   const [messages, setMessages] = useState<string[]>([
@@ -119,6 +157,11 @@ export default function HomePage() {
   const [activityFilter, setActivityFilter] = useState<ActivityFilter>('all');
   const [systemExpanded, setSystemExpanded] = useState(true);
   const [tryIndex, setTryIndex] = useState(0);
+  const requestTokenRef = useRef<Record<AgentName, number>>({
+    'Research Agent': 0,
+    'Analysis Agent': 0,
+    'Memory Agent': 0,
+  });
 
   const tryPrompts = [
     'Audit upcoming renewals',
@@ -135,16 +178,57 @@ export default function HomePage() {
     );
   }, [activityFilter]);
 
-  const sendPrompt = () => {
+  const sendMessage = () => {
     const value = prompt.trim();
     if (!value) return;
+    const agent = routeAgentForIntent(value);
+    const token = requestTokenRef.current[agent] + 1;
+    requestTokenRef.current[agent] = token;
+
+    const now = new Date().toISOString();
+    const runningRuntime = readAgentRuntime();
+    const runningAgents = Object.fromEntries(
+      (Object.keys(runningRuntime.agents) as AgentName[]).map((name) => [
+        name,
+        {
+          ...runningRuntime.agents[name],
+          status: name === agent ? 'running' : 'idle',
+          lastRun: name === agent ? now : runningRuntime.agents[name].lastRun,
+          lastTask: name === agent ? value : runningRuntime.agents[name].lastTask,
+        },
+      ]),
+    ) as typeof runningRuntime.agents;
+
+    writeAgentRuntime({
+      status: 'running',
+      activeAgent: agent,
+      agents: runningAgents,
+    });
 
     setMessages((prev) => [
       ...prev,
       `You: ${value}`,
-      `Agent: Working on "${value}" now.`,
+      `${agent}: Working on "${value}" now.`,
     ]);
     setPrompt('');
+
+    window.setTimeout(() => {
+      if (requestTokenRef.current[agent] !== token) return;
+      const latestRuntime = readAgentRuntime();
+      writeAgentRuntime({
+        status: 'completed',
+        activeAgent: null,
+        agents: {
+          ...latestRuntime.agents,
+          [agent]: {
+            ...latestRuntime.agents[agent],
+            status: 'completed',
+            lastRun: new Date().toISOString(),
+            lastTask: value,
+          },
+        },
+      });
+    }, AGENT_DELAY_MS[agent]);
   };
 
   const applyQuickAction = (starter: string) => {
@@ -252,7 +336,7 @@ export default function HomePage() {
 
                 <button
                   type="button"
-                  onClick={sendPrompt}
+                  onClick={sendMessage}
                   disabled={!canSend}
                   className="inline-flex items-center gap-2 rounded-full bg-indigo-500 px-4 py-2.5 text-sm font-semibold text-white shadow-[0_8px_18px_rgba(99,102,241,0.22)] transition hover:bg-indigo-600 disabled:cursor-not-allowed disabled:bg-slate-300 disabled:shadow-none"
                 >
