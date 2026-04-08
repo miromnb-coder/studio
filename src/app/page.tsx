@@ -1,172 +1,157 @@
-import Link from 'next/link';
-import {
-  Bell,
-  Bot,
-  ChartNoAxesColumnIncreasing,
-  Clock3,
-  Compass,
-  Ellipsis,
-  Gauge,
-  Home,
-  Layers,
-  Library,
-  MessageSquare,
-  Search,
-  Sparkles,
-  TriangleAlert,
-  User,
-  WandSparkles,
-} from 'lucide-react';
+'use client';
+
+import { useEffect, useMemo, useState } from 'react';
+import { useRouter } from 'next/navigation';
+import { Bell, Bot, ChartNoAxesColumnIncreasing, Ellipsis, Gauge, Layers, Library, Search, Send, Sparkles, WandSparkles } from 'lucide-react';
+import { BottomNav } from './components/bottom-nav';
+import { CHAT_DRAFT_KEY, makeMessage, readChatMessages, writeChatMessages } from './lib/chat-store';
+import { monthlySavingsEstimate, subscriptions } from './lib/money-data';
 
 const quickActions = [
-  { label: 'Analyze spend', icon: Search },
-  { label: 'Run orchestrator', icon: Compass },
-  { label: 'Update memory', icon: Library },
-  { label: 'Forge tool', icon: WandSparkles },
+  { label: 'Research', icon: Search, starter: 'Research unusual subscription increases over the last 30 days.' },
+  { label: 'Analyze', icon: Gauge, starter: 'Analyze my monthly spend and identify the top avoidable costs.' },
+  { label: 'Create', icon: Library, starter: 'Create a weekly money and productivity briefing with action steps.' },
+  { label: 'Automate', icon: WandSparkles, starter: 'Automate triage for billing and renewal alerts in my inbox.' },
+] as const;
+
+const suggestionPool = [
+  'Analyze my weekly productivity',
+  'Summarize recent billing anomalies',
+  'Find duplicate tools and subscriptions',
+  'Create a cancellation action plan',
+  'Review pending renewals for next 14 days',
 ];
 
 const recentActivity = [
-  {
-    title: 'Completed subscription leak analysis',
-    time: '2 min ago',
-    context: 'Agent V6 · finance intent',
-    icon: ChartNoAxesColumnIncreasing,
-    status: 'bg-emerald-400',
-  },
-  {
-    title: 'Stored episodic memory summary',
-    time: '12 min ago',
-    context: 'Memory service · user profile',
-    icon: Library,
-    status: 'bg-emerald-400',
-  },
-  {
-    title: 'Generated actionable negotiation script',
-    time: '1 hr ago',
-    context: 'Action engine · ready to send',
-    icon: Sparkles,
-    status: 'bg-indigo-500',
-  },
-];
+  { title: 'Analyzed market trends', time: '2 minutes ago', context: 'Research Agent', icon: ChartNoAxesColumnIncreasing, prompt: 'Continue the market trend analysis and summarize opportunities.' },
+  { title: 'Updated project memory', time: '15 minutes ago', context: 'Memory Agent', icon: Library, prompt: 'Show the latest memory updates and unresolved action items.' },
+  { title: 'Generated weekly report', time: '1 hour ago', context: 'Analysis Agent', icon: Sparkles, prompt: 'Open the weekly report and highlight the most important risks.' },
+] as const;
 
-const activeSystems = [
-  {
-    title: 'Orchestrator',
-    subtitle: 'Reasoning across tools and intents',
-    icon: Bot,
-    accent: 'bg-indigo-100 text-indigo-600',
-  },
-  {
-    title: 'Financial Forensics',
-    subtitle: 'Detecting fees, renewals, and waste',
-    icon: Gauge,
-    accent: 'bg-sky-100 text-sky-600',
-  },
-  {
-    title: 'Memory Core',
-    subtitle: 'Syncing semantic + episodic context',
-    icon: Layers,
-    accent: 'bg-amber-100 text-amber-600',
-  },
-];
+const activeAgents = [
+  { title: 'Research Agent', subtitle: 'Gathering latest information', icon: Bot, accent: 'bg-indigo-50 text-indigo-500' },
+  { title: 'Analysis Agent', subtitle: 'Processing your data', icon: Gauge, accent: 'bg-sky-50 text-sky-500' },
+  { title: 'Memory Agent', subtitle: 'Updating knowledge base', icon: Layers, accent: 'bg-amber-50 text-amber-500' },
+  { title: 'Money Agent', subtitle: 'Scanning subscriptions and leakage', icon: Library, accent: 'bg-emerald-50 text-emerald-500' },
+] as const;
 
 export default function HomePage() {
+  const router = useRouter();
+  const [prompt, setPrompt] = useState('');
+  const [expanded, setExpanded] = useState(true);
+  const [suggestionIndex, setSuggestionIndex] = useState(0);
+
+  useEffect(() => {
+    const usage = readChatMessages().length;
+    setSuggestionIndex(usage % suggestionPool.length);
+  }, []);
+
+  const suggestions = useMemo(
+    () => [suggestionPool[suggestionIndex], suggestionPool[(suggestionIndex + 1) % suggestionPool.length]],
+    [suggestionIndex],
+  );
+
+  const monthlySavings = useMemo(() => monthlySavingsEstimate(), []);
+  const wasteCount = useMemo(() => subscriptions.filter((item) => item.waste).length, []);
+
+  const sendToChat = (value: string, sourcePrompt?: string) => {
+    const trimmed = value.trim();
+    if (!trimmed) return;
+
+    const messages = readChatMessages();
+    const updated = [...messages, makeMessage('user', trimmed, sourcePrompt ? 'money' : 'home')];
+    writeChatMessages(updated);
+    window.localStorage.setItem(CHAT_DRAFT_KEY, trimmed);
+    setPrompt('');
+    router.push('/chat');
+  };
+
   return (
-    <main className="mx-auto min-h-screen w-full max-w-md bg-white/70 shadow-[0_8px_40px_rgba(15,23,42,0.08)] backdrop-blur-xl">
-      <section className="border-b border-slate-100 px-5 pt-8 pb-5">
+    <main className="mx-auto min-h-screen w-full max-w-md bg-[#f8f9fc] pb-28 shadow-[0_10px_32px_rgba(15,23,42,0.06)]">
+      <section className="border-b border-black/[0.04] px-6 pt-8 pb-5">
         <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2.5">
-            <div className="rounded-xl bg-indigo-100 p-2 text-indigo-600">
-              <Sparkles className="h-4 w-4" />
-            </div>
-            <div className="flex items-center gap-2">
-              <p className="text-[1.8rem] font-semibold tracking-tight text-slate-900">AI Life Operator</p>
-              <span className="rounded-lg bg-indigo-100 px-2 py-0.5 text-xs font-semibold uppercase tracking-wide text-indigo-600">
-                v6
-              </span>
-            </div>
-          </div>
           <div className="flex items-center gap-3">
-            <button className="relative rounded-full p-2 text-slate-500 transition hover:bg-slate-100 hover:text-slate-700">
-              <Bell className="h-5 w-5" />
-              <span className="absolute right-1.5 top-1.5 h-2 w-2 rounded-full bg-rose-500" />
-            </button>
-            <button className="rounded-full bg-slate-200 p-2 text-slate-700 transition hover:bg-slate-300">
-              <User className="h-5 w-5" />
-            </button>
+            <div className="rounded-2xl bg-indigo-50 p-2.5 text-indigo-500"><Sparkles className="h-4 w-4 stroke-[1.75]" /></div>
+            <div className="flex items-center gap-2">
+              <p className="text-[1.7rem] font-semibold tracking-tight text-slate-900">Operator</p>
+              <span className="rounded-lg bg-indigo-50 px-2 py-0.5 text-xs font-semibold uppercase tracking-wide text-indigo-500">PRO</span>
+            </div>
           </div>
+          <button type="button" onClick={() => router.push('/money')} className="relative rounded-full p-2 text-slate-400 transition hover:bg-slate-100 hover:text-slate-600">
+            <Bell className="h-5 w-5" />
+            <span className="absolute right-1.5 top-1.5 h-2 w-2 rounded-full bg-rose-500" />
+          </button>
         </div>
       </section>
 
-      <section className="space-y-5 px-5 py-6">
-        <header>
-          <h1 className="text-4xl font-semibold tracking-tight text-slate-900">Good morning, Operator 👋</h1>
-          <p className="mt-2 text-xl text-slate-500">Your financial intelligence stack is online.</p>
+      <section className="space-y-6 px-6 py-7">
+        <header className="space-y-2">
+          <h1 className="text-[2.45rem] font-semibold tracking-tight text-slate-900">Good morning 👋</h1>
+          <p className="text-[1.24rem] leading-relaxed text-slate-500">Your AI agents are ready to help today.</p>
         </header>
 
-        <article className="overflow-hidden rounded-3xl border border-slate-100 bg-white shadow-[0_8px_24px_rgba(15,23,42,0.06)]">
-          <div className="space-y-5 p-5">
-            <p className="text-[1.75rem] leading-tight text-slate-500">What should the agent system accomplish next?</p>
-            <div className="grid grid-cols-2 gap-2.5">
-              {quickActions.map(({ label, icon: Icon }) => (
-                <button
-                  key={label}
-                  className="flex items-center justify-center gap-2 rounded-2xl border border-slate-200 bg-white px-3 py-2.5 text-base font-medium text-slate-700 transition hover:border-slate-300 hover:bg-slate-50"
-                >
-                  <Icon className="h-4 w-4" />
-                  {label}
+        <article className="overflow-hidden rounded-[20px] border border-black/[0.04] bg-white shadow-[0_2px_8px_rgba(0,0,0,0.04)]">
+          <div className="space-y-5 p-6">
+            <p className="text-[1.64rem] leading-[1.35] text-slate-500">What would you like to accomplish today?</p>
+            <textarea value={prompt} onChange={(event) => setPrompt(event.target.value)} rows={3} placeholder="Ask Operator to analyze, summarize, or automate…" className="w-full resize-none rounded-2xl border border-black/[0.05] bg-slate-50 px-4 py-3 text-[15px] text-slate-700 outline-none placeholder:text-slate-400 focus:border-indigo-200 focus:bg-white" />
+            <div className="grid grid-cols-2 gap-3">
+              {quickActions.map(({ label, icon: Icon, starter }) => (
+                <button key={label} onClick={() => setPrompt(starter)} className="flex items-center justify-center gap-2 rounded-full border border-black/[0.04] bg-slate-50 px-4 py-3 text-base font-medium text-slate-600 transition hover:bg-slate-100">
+                  <Icon className="h-4 w-4 stroke-[1.75]" />{label}
                 </button>
               ))}
             </div>
+            <button type="button" onClick={() => sendToChat(prompt)} disabled={!prompt.trim()} className="flex w-full items-center justify-center gap-2 rounded-full bg-indigo-500 px-4 py-3 text-sm font-semibold text-white disabled:bg-slate-300">
+              <Send className="h-4 w-4" />Send
+            </button>
           </div>
-          <div className="flex items-center gap-2 border-t border-slate-100 px-5 py-4 text-base text-slate-500">
+          <div className="flex items-center gap-2 border-t border-black/[0.04] px-6 py-4 text-sm text-slate-500">
             <span className="font-semibold text-slate-700">Try:</span>
-            <span>Audit upcoming renewals</span>
+            <button type="button" onClick={() => setPrompt(suggestions[0])} className="hover:text-slate-700">{suggestions[0]}</button>
             <span>·</span>
-            <span>Summarize latest alert digest</span>
+            <button type="button" onClick={() => setPrompt(suggestions[1])} className="hover:text-slate-700">{suggestions[1]}</button>
           </div>
         </article>
 
-        <article className="rounded-3xl border border-slate-100 bg-white p-5 shadow-[0_8px_24px_rgba(15,23,42,0.06)]">
+        <article className="rounded-[20px] border border-emerald-100 bg-emerald-50/70 p-5 shadow-[0_2px_8px_rgba(0,0,0,0.03)]">
+          <p className="text-xs font-semibold uppercase tracking-wide text-emerald-600">AI Insight</p>
+          <p className="mt-2 text-2xl font-semibold leading-snug text-emerald-900">€{monthlySavings.toFixed(0)} / month potential savings</p>
+          <p className="mt-1 text-sm text-emerald-800">Detected from {wasteCount} flagged subscriptions.</p>
+          <button type="button" onClick={() => sendToChat(`Show me the cancellation steps for the ${wasteCount} waste subscriptions.`, 'money')} className="mt-4 rounded-full bg-white px-4 py-2 text-sm font-semibold text-emerald-700">Open in chat</button>
+        </article>
+
+        <article className="rounded-[20px] border border-black/[0.04] bg-white p-6 shadow-[0_2px_8px_rgba(0,0,0,0.04)]">
           <div className="mb-4 flex items-center justify-between">
-            <h2 className="text-3xl font-semibold tracking-tight text-slate-900">Recent Activity</h2>
-            <Link href="/history" className="text-lg font-medium text-slate-500 transition hover:text-slate-700">
-              View all
-            </Link>
+            <h2 className="text-[2rem] font-semibold tracking-tight text-slate-900">Recent Activity</h2>
+            <button type="button" onClick={() => router.push('/history')} className="text-lg font-medium text-slate-400">View all</button>
           </div>
-          <div className="space-y-4">
-            {recentActivity.map(({ title, time, context, icon: Icon, status }) => (
-              <div key={title} className="flex items-start gap-3">
-                <div className="rounded-2xl bg-indigo-50 p-3 text-indigo-600">
-                  <Icon className="h-5 w-5" />
-                </div>
+          <div className="space-y-5">
+            {recentActivity.map(({ title, time, context, icon: Icon, prompt: activityPrompt }) => (
+              <button key={title} onClick={() => sendToChat(activityPrompt)} className="flex w-full items-start gap-3 text-left transition hover:opacity-95">
+                <div className="rounded-2xl bg-indigo-50/70 p-3 text-indigo-500"><Icon className="h-5 w-5 stroke-[1.8]" /></div>
                 <div className="min-w-0 flex-1">
-                  <p className="text-[1.85rem] font-medium leading-tight tracking-tight text-slate-800">{title}</p>
-                  <p className="text-base text-slate-500">{time} · {context}</p>
+                  <p className="text-[1.65rem] font-medium leading-tight text-slate-800">{title}</p>
+                  <p className="text-sm leading-relaxed text-slate-400">{time} · {context}</p>
                 </div>
-                <span className={`mt-2 h-2.5 w-2.5 rounded-full ${status}`} />
-              </div>
+                <span className="mt-2 h-2.5 w-2.5 rounded-full bg-emerald-300" />
+              </button>
             ))}
           </div>
         </article>
 
         <section className="grid grid-cols-5 gap-3">
-          <article className="col-span-3 rounded-3xl border border-slate-100 bg-white p-4 shadow-[0_8px_24px_rgba(15,23,42,0.06)]">
-            <div className="mb-3 flex items-center justify-between">
-              <h3 className="text-3xl font-semibold tracking-tight text-slate-900">Active Systems</h3>
-              <button className="rounded-full p-1 text-slate-400 hover:bg-slate-100">
-                <Ellipsis className="h-5 w-5" />
-              </button>
+          <article className="col-span-3 rounded-[20px] border border-black/[0.04] bg-white p-5 shadow-[0_2px_8px_rgba(0,0,0,0.04)]">
+            <div className="mb-4 flex items-center justify-between">
+              <h3 className="text-[1.8rem] font-semibold tracking-tight text-slate-900">Active Agents</h3>
+              <button type="button" onClick={() => setExpanded((prev) => !prev)} className="rounded-full p-1 text-slate-400 hover:bg-slate-100"><Ellipsis className="h-5 w-5" /></button>
             </div>
-            <div className="space-y-3.5">
-              {activeSystems.map(({ title, subtitle, icon: Icon, accent }) => (
+            <div className="space-y-4">
+              {activeAgents.map(({ title, subtitle, icon: Icon, accent }) => (
                 <div key={title} className="flex gap-3">
-                  <div className={`rounded-2xl p-2.5 ${accent}`}>
-                    <Icon className="h-5 w-5" />
-                  </div>
+                  <div className={`rounded-2xl p-2.5 ${accent}`}><Icon className="h-5 w-5 stroke-[1.8]" /></div>
                   <div>
-                    <p className="text-2xl font-medium tracking-tight text-slate-800">{title}</p>
-                    <p className="text-sm text-slate-500">{subtitle}</p>
+                    <p className="text-2xl font-medium text-slate-800">{title}</p>
+                    {expanded && <p className="text-sm text-slate-400">{subtitle}</p>}
                   </div>
                 </div>
               ))}
@@ -174,62 +159,18 @@ export default function HomePage() {
           </article>
 
           <div className="col-span-2 space-y-3">
-            <article className="rounded-3xl border border-slate-100 bg-white p-4 shadow-[0_8px_24px_rgba(15,23,42,0.06)]">
-              <div className="mb-2 flex items-center gap-2 text-indigo-600">
-                <div className="rounded-xl bg-indigo-100 p-2">
-                  <Library className="h-4 w-4" />
-                </div>
-                <span className="text-xl font-semibold tracking-tight text-slate-900">Memory Usage</span>
-              </div>
-              <p className="text-base text-slate-500">1.8 GB / 5 GB</p>
-              <div className="mt-3 h-2 rounded-full bg-slate-100">
-                <div className="h-2 w-[36%] rounded-full bg-indigo-500" />
-              </div>
+            <article className="rounded-[20px] border border-black/[0.04] bg-white p-5 shadow-[0_2px_8px_rgba(0,0,0,0.04)]">
+              <p className="text-xl font-semibold tracking-tight text-slate-900">Memory Usage</p>
+              <p className="text-base text-slate-400">2.2 GB / 5 GB</p>
             </article>
-
-            <article className="rounded-3xl border border-slate-100 bg-white p-4 shadow-[0_8px_24px_rgba(15,23,42,0.06)]">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-xl font-semibold tracking-tight text-slate-900">Alert Digest</p>
-                  <p className="text-sm text-slate-500">3 pending items</p>
-                </div>
-                <TriangleAlert className="h-5 w-5 text-amber-500" />
-              </div>
-            </article>
-
-            <article className="rounded-3xl border border-slate-100 bg-white p-4 shadow-[0_8px_24px_rgba(15,23,42,0.06)]">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-xl font-semibold tracking-tight text-slate-900">Tool Registry</p>
-                  <p className="text-sm text-slate-500">12 active protocols</p>
-                </div>
-                <WandSparkles className="h-5 w-5 text-emerald-500" />
-              </div>
+            <article className="rounded-[20px] border border-black/[0.04] bg-white p-5 shadow-[0_2px_8px_rgba(0,0,0,0.04)]">
+              <p className="text-xl font-semibold tracking-tight text-slate-900">Money Risk</p>
+              <p className="text-base text-slate-400">{wasteCount} active leaks</p>
             </article>
           </div>
         </section>
       </section>
-
-      <nav className="sticky bottom-0 grid grid-cols-5 border-t border-slate-200 bg-white/90 px-3 py-3 backdrop-blur">
-        {[
-          { label: 'Home', href: '/', icon: Home, active: true },
-          { label: 'Copilot', href: '/chat', icon: MessageSquare },
-          { label: 'Agents', href: '/agents', icon: Bot },
-          { label: 'Alerts', href: '/alerts', icon: Bell },
-          { label: 'History', href: '/history', icon: Clock3 },
-        ].map(({ label, href, icon: Icon, active }) => (
-          <Link
-            key={label}
-            href={href}
-            className={`flex flex-col items-center gap-1 rounded-xl py-1 text-xs font-medium transition ${
-              active ? 'text-indigo-600' : 'text-slate-500 hover:text-slate-700'
-            }`}
-          >
-            <Icon className="h-5 w-5" />
-            {label}
-          </Link>
-        ))}
-      </nav>
+      <BottomNav />
     </main>
   );
 }
