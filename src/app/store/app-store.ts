@@ -14,6 +14,8 @@ export type Message = {
   content: string;
   createdAt: string;
   agent?: AgentName;
+  isStreaming?: boolean;
+  error?: string;
 };
 
 export type Agent = {
@@ -48,6 +50,12 @@ export type UserProfile = {
   name: string;
 };
 
+export type AgentStep = {
+  id: string;
+  label: string;
+  status: 'running' | 'completed';
+};
+
 type AppState = {
   hydrated: boolean;
   user: UserProfile | null;
@@ -58,12 +66,16 @@ type AppState = {
   draftPrompt: string;
   activeAgent: AgentName | null;
   isAgentResponding: boolean;
+  activeRequestId: string | null;
+  streamError: string | null;
+  activeSteps: AgentStep[];
 };
 
 type AppActions = {
   hydrate: () => void;
   setDraftPrompt: (prompt: string) => void;
-  sendMessage: (prompt: string) => void;
+  sendMessage: (prompt: string) => Promise<void>;
+  retryLastPrompt: () => Promise<void>;
   enqueuePromptAndGoToChat: (prompt: string) => void;
   addAlert: (alert: Omit<Alert, 'id' | 'createdAt' | 'resolved' | 'snoozedUntil'>) => void;
   resolveAlert: (alertId: string) => void;
@@ -75,34 +87,17 @@ type AppActions = {
   logout: () => void;
 };
 
-const STORAGE_KEY = 'nova_operator_store_v2';
+const STORAGE_KEY = 'nova_operator_store_v3';
 const SESSION_DRAFT_KEY = 'nova-operator-chat-draft';
 
 const AGENT_ORDER: AgentName[] = ['Research Agent', 'Analysis Agent', 'Memory Agent'];
-
 const createId = () => `${Date.now()}-${Math.random().toString(16).slice(2)}`;
-
 const nowIso = () => new Date().toISOString();
 
 const defaultAgents = (): Record<AgentName, Agent> => ({
-  'Research Agent': {
-    name: 'Research Agent',
-    status: 'idle',
-    lastRun: null,
-    lastTask: null,
-  },
-  'Analysis Agent': {
-    name: 'Analysis Agent',
-    status: 'idle',
-    lastRun: null,
-    lastTask: null,
-  },
-  'Memory Agent': {
-    name: 'Memory Agent',
-    status: 'idle',
-    lastRun: null,
-    lastTask: null,
-  },
+  'Research Agent': { name: 'Research Agent', status: 'idle', lastRun: null, lastTask: null },
+  'Analysis Agent': { name: 'Analysis Agent', status: 'idle', lastRun: null, lastTask: null },
+  'Memory Agent': { name: 'Memory Agent', status: 'idle', lastRun: null, lastTask: null },
 });
 
 const initialState: AppState = {
@@ -134,6 +129,9 @@ const initialState: AppState = {
   draftPrompt: '',
   activeAgent: null,
   isAgentResponding: false,
+  activeRequestId: null,
+  streamError: null,
+  activeSteps: [],
 };
 
 let state: AppState = initialState;
@@ -164,39 +162,99 @@ const setState = (updater: (prev: AppState) => AppState) => {
   emit();
 };
 
-const detectAgent = (input: string): AgentName => {
-  const value = input.toLowerCase();
-  if (['summarize', 'remember', 'context', 'history', 'recap'].some((term) => value.includes(term))) {
-    return 'Memory Agent';
-  }
-  if (['compare', 'numbers', 'percent', 'ratio', 'analysis', 'difference'].some((term) => value.includes(term))) {
-    return 'Analysis Agent';
-  }
-  if (['research', 'find', 'latest', 'news', 'trend', 'look up'].some((term) => value.includes(term))) {
-    return 'Research Agent';
-  }
-  return 'Research Agent';
-};
-
-const assistantTemplate = (agent: AgentName): string => {
-  if (agent === 'Research Agent') return `I’m reviewing recent patterns and relevant signals.`;
-  if (agent === 'Analysis Agent') return `I’m comparing the data and identifying meaningful differences.`;
-  return `I’m summarizing prior context and storing the key points.`;
-};
-
 const addHistory = (entry: Omit<HistoryEntry, 'id' | 'createdAt'>) => {
   state = {
     ...state,
-    history: [
-      {
-        id: createId(),
-        createdAt: nowIso(),
-        ...entry,
-      },
-      ...state.history,
-    ].slice(0, 200),
+    history: [{ id: createId(), createdAt: nowIso(), ...entry }, ...state.history].slice(0, 200),
   };
 };
+
+const detectAgent = (input: string): AgentName => {
+  const value = input.toLowerCase();
+  if (['summarize', 'remember', 'context', 'history', 'recap'].some((term) => value.includes(term))) return 'Memory Agent';
+  if (['compare', 'numbers', 'percent', 'ratio', 'analysis', 'difference'].some((term) => value.includes(term))) return 'Analysis Agent';
+  if (['research', 'find', 'latest', 'news', 'trend', 'look up'].some((term) => value.includes(term))) return 'Research Agent';
+  return 'Research Agent';
+};
+
+const getConversationWindow = (messages: Message[]) =>
+  messages.slice(-10).map((message) => ({ role: message.role, content: message.content }));
+
+async function streamAssistantResponse(requestId: string, assistantMessageId: string, agent: AgentName) {
+  const payload = {
+    messages: getConversationWindow(state.messages).filter((message) => message.content.trim()),
+    agent,
+  };
+
+  const response = await fetch('/api/chat', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  });
+
+  if (!response.ok || !response.body) {
+    const reason = await response.text();
+    throw new Error(reason || `Request failed (${response.status})`);
+  }
+
+  const reader = response.body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = '';
+
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    buffer += decoder.decode(value, { stream: true });
+
+    const lines = buffer.split('\n');
+    buffer = lines.pop() ?? '';
+
+    for (const line of lines) {
+      const chunk = line.trim();
+      if (!chunk) continue;
+
+      let event: Record<string, unknown>;
+      try {
+        event = JSON.parse(chunk) as Record<string, unknown>;
+      } catch {
+        continue;
+      }
+
+      if (state.activeRequestId !== requestId) return;
+
+      if (event.type === 'step') {
+        const label = String(event.label ?? 'Processing…');
+        const status: AgentStep['status'] = event.status === 'completed' ? 'completed' : 'running';
+        setState((prev) => {
+          const existing = prev.activeSteps.find((item) => item.label === label);
+          const next = existing
+            ? prev.activeSteps.map((item) => (item.label === label ? { ...item, status } : item))
+            : [...prev.activeSteps, { id: createId(), label, status }];
+          return { ...prev, activeSteps: next };
+        });
+      }
+
+      if (event.type === 'text-delta') {
+        const delta = typeof event.delta === 'string' ? event.delta : '';
+        if (!delta) continue;
+
+        setState((prev) => ({
+          ...prev,
+          messages: prev.messages.map((message) =>
+            message.id === assistantMessageId
+              ? { ...message, content: `${message.content}${delta}` }
+              : message,
+          ),
+        }));
+      }
+
+      if (event.type === 'error') {
+        const message = typeof event.message === 'string' ? event.message : 'Streaming failed.';
+        throw new Error(message);
+      }
+    }
+  }
+}
 
 const actions: AppActions = {
   hydrate: () => {
@@ -211,7 +269,7 @@ const actions: AppActions = {
           ...initialState,
           ...parsed,
           hydrated: true,
-          draftPrompt: sessionDraft || state.draftPrompt,
+          draftPrompt: sessionDraft,
           agents: parsed.agents ?? defaultAgents(),
           alerts: parsed.alerts ?? initialState.alerts,
         };
@@ -232,17 +290,20 @@ const actions: AppActions = {
     }
   },
 
-  sendMessage: (prompt) => {
+  sendMessage: async (prompt) => {
     const cleanPrompt = prompt.trim();
     if (!cleanPrompt) return;
 
     const agent = detectAgent(cleanPrompt);
-    const userMessage: Message = {
+    const requestId = createId();
+    const userMessage: Message = { id: createId(), role: 'user', content: cleanPrompt, createdAt: nowIso(), agent };
+    const assistantMessage: Message = {
       id: createId(),
-      role: 'user',
-      content: cleanPrompt,
+      role: 'assistant',
+      content: '',
       createdAt: nowIso(),
       agent,
+      isStreaming: true,
     };
 
     setState((prev) => {
@@ -258,55 +319,78 @@ const actions: AppActions = {
       return {
         ...prev,
         draftPrompt: '',
-        messages: [...prev.messages, userMessage],
+        messages: [...prev.messages, userMessage, assistantMessage],
         activeAgent: agent,
         isAgentResponding: true,
+        activeRequestId: requestId,
+        streamError: null,
+        activeSteps: [],
         agents: nextAgents,
       };
     });
 
-    addHistory({
-      title: 'Message sent',
-      description: cleanPrompt,
-      type: 'message',
-      prompt: cleanPrompt,
-    });
+    addHistory({ title: 'User message sent', description: cleanPrompt, type: 'message', prompt: cleanPrompt });
+    addHistory({ title: `${agent} task started`, description: cleanPrompt, type: 'agent', prompt: cleanPrompt });
     persist();
     emit();
 
-    window.setTimeout(() => {
-      const assistantMessage: Message = {
-        id: createId(),
-        role: 'assistant',
-        content: `${assistantTemplate(agent)}\n\nTask: ${cleanPrompt}`,
-        createdAt: nowIso(),
-        agent,
-      };
+    try {
+      await streamAssistantResponse(requestId, assistantMessage.id, agent);
 
       setState((prev) => ({
         ...prev,
-        messages: [...prev.messages, assistantMessage],
-        activeAgent: agent,
+        activeRequestId: null,
         isAgentResponding: false,
+        activeSteps: prev.activeSteps.map((step) => ({ ...step, status: 'completed' })),
+        messages: prev.messages.map((message) =>
+          message.id === assistantMessage.id
+            ? { ...message, isStreaming: false, content: message.content || 'I could not generate a response.' }
+            : message,
+        ),
         agents: {
           ...prev.agents,
-          [agent]: {
-            ...prev.agents[agent],
-            status: 'completed',
-            lastRun: nowIso(),
-          },
+          [agent]: { ...prev.agents[agent], status: 'completed', lastRun: nowIso() },
         },
       }));
 
-      addHistory({
-        title: `${agent} completed task`,
-        description: cleanPrompt,
-        type: agent === 'Memory Agent' ? 'memory' : 'agent',
-        prompt: cleanPrompt,
-      });
+      addHistory({ title: `${agent} task completed`, description: cleanPrompt, type: agent === 'Memory Agent' ? 'memory' : 'agent', prompt: cleanPrompt });
       persist();
       emit();
-    }, 950);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Unknown streaming error.';
+
+      setState((prev) => ({
+        ...prev,
+        activeRequestId: null,
+        isAgentResponding: false,
+        streamError: message,
+        activeSteps: prev.activeSteps.map((step) => ({ ...step, status: 'completed' })),
+        messages: prev.messages.map((entry) =>
+          entry.id === assistantMessage.id
+            ? {
+                ...entry,
+                isStreaming: false,
+                error: message,
+                content: entry.content || 'I hit an error while streaming. Please retry.',
+              }
+            : entry,
+        ),
+        agents: {
+          ...prev.agents,
+          [agent]: { ...prev.agents[agent], status: 'idle', lastRun: nowIso() },
+        },
+      }));
+
+      addHistory({ title: `${agent} task failed`, description: message, type: 'agent', prompt: cleanPrompt });
+      persist();
+      emit();
+    }
+  },
+
+  retryLastPrompt: async () => {
+    const lastPrompt = [...state.messages].reverse().find((msg) => msg.role === 'user')?.content;
+    if (!lastPrompt) return;
+    await actions.sendMessage(lastPrompt);
   },
 
   enqueuePromptAndGoToChat: (prompt) => {
@@ -319,16 +403,7 @@ const actions: AppActions = {
   addAlert: (alert) => {
     setState((prev) => ({
       ...prev,
-      alerts: [
-        {
-          id: createId(),
-          createdAt: nowIso(),
-          resolved: false,
-          snoozedUntil: null,
-          ...alert,
-        },
-        ...prev.alerts,
-      ],
+      alerts: [{ id: createId(), createdAt: nowIso(), resolved: false, snoozedUntil: null, ...alert }, ...prev.alerts],
     }));
     addHistory({ title: 'Alert created', description: alert.title, type: 'alert' });
     persist();
@@ -336,10 +411,7 @@ const actions: AppActions = {
   },
 
   resolveAlert: (alertId) => {
-    setState((prev) => ({
-      ...prev,
-      alerts: prev.alerts.map((item) => (item.id === alertId ? { ...item, resolved: true } : item)),
-    }));
+    setState((prev) => ({ ...prev, alerts: prev.alerts.map((item) => (item.id === alertId ? { ...item, resolved: true } : item)) }));
     addHistory({ title: 'Alert resolved', description: alertId, type: 'alert' });
     persist();
     emit();
@@ -347,10 +419,7 @@ const actions: AppActions = {
 
   snoozeAlert: (alertId, minutes = 60) => {
     const until = new Date(Date.now() + minutes * 60 * 1000).toISOString();
-    setState((prev) => ({
-      ...prev,
-      alerts: prev.alerts.map((item) => (item.id === alertId ? { ...item, snoozedUntil: until } : item)),
-    }));
+    setState((prev) => ({ ...prev, alerts: prev.alerts.map((item) => (item.id === alertId ? { ...item, snoozedUntil: until } : item)) }));
     addHistory({ title: 'Alert snoozed', description: `${alertId} until ${until}`, type: 'alert' });
     persist();
     emit();
@@ -359,9 +428,7 @@ const actions: AppActions = {
   markAlertFalsePositive: (alertId) => {
     setState((prev) => ({
       ...prev,
-      alerts: prev.alerts.map((item) =>
-        item.id === alertId ? { ...item, resolved: true, description: `${item.description} (marked false positive)` } : item,
-      ),
+      alerts: prev.alerts.map((item) => item.id === alertId ? { ...item, resolved: true, description: `${item.description} (marked false positive)` } : item),
     }));
     addHistory({ title: 'Alert marked false positive', description: alertId, type: 'alert' });
     persist();
@@ -387,10 +454,7 @@ const actions: AppActions = {
   updateUserName: (name) => {
     const nextName = name.trim();
     if (!nextName) return;
-    setState((prev) => ({
-      ...prev,
-      user: prev.user ? { ...prev.user, name: nextName } : prev.user,
-    }));
+    setState((prev) => ({ ...prev, user: prev.user ? { ...prev.user, name: nextName } : prev.user }));
   },
 
   logout: () => {
@@ -401,10 +465,5 @@ const actions: AppActions = {
   },
 };
 
-export const useAppStore = <T,>(selector: (state: AppState & AppActions) => T): T => {
-  return useSyncExternalStore(
-    subscribe,
-    () => selector({ ...state, ...actions }),
-    () => selector({ ...state, ...actions }),
-  );
-};
+export const useAppStore = <T,>(selector: (state: AppState & AppActions) => T): T =>
+  useSyncExternalStore(subscribe, () => selector({ ...state, ...actions }), () => selector({ ...state, ...actions }));
