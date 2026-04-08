@@ -1,15 +1,17 @@
 'use client';
 
 import Link from 'next/link';
+import { useEffect, useState } from 'react';
 import { ArrowLeft, Clock3 } from 'lucide-react';
-
-const historyItems = [
-  'Generated weekly operator summary',
-  'Stored memory update from billing analysis',
-  'Ran subscription leak review',
-];
+import { AlertHistoryEvent, readAlertHistory } from '../lib/alert-store';
 
 export default function HistoryPage() {
+  const [historyItems, setHistoryItems] = useState<AlertHistoryEvent[]>([]);
+
+  useEffect(() => {
+    setHistoryItems(readAlertHistory());
+  }, []);
+
   return (
     <main className="mx-auto min-h-screen w-full max-w-md bg-[#f8fafc] px-5 py-6 text-slate-900">
       <div className="mb-6 flex items-center justify-between">
@@ -27,22 +29,24 @@ export default function HistoryPage() {
       </div>
 
       <section className="rounded-[22px] border border-black/[0.04] bg-white p-6 shadow-[0_4px_14px_rgba(15,23,42,0.04)]">
-        <h1 className="text-[2rem] font-semibold tracking-tight text-slate-900">
-          History
-        </h1>
+        <h1 className="text-[2rem] font-semibold tracking-tight text-slate-900">History</h1>
         <p className="mt-2 text-[1rem] leading-relaxed text-slate-500">
           Review recent actions, runs, summaries, and saved outputs.
         </p>
 
         <div className="mt-6 space-y-3">
-          {historyItems.map((item, index) => (
+          {historyItems.length > 0 ? historyItems.map((item, index) => (
             <div
-              key={item}
+              key={item.id}
               className="rounded-2xl bg-slate-50 px-4 py-4 text-sm leading-relaxed text-slate-700"
             >
-              {index + 1}. {item}
+              {index + 1}. {item.label}
             </div>
-          ))}
+          )) : (
+            <div className="rounded-2xl bg-slate-50 px-4 py-4 text-sm leading-relaxed text-slate-600">
+              No history events yet. Alert actions will appear here.
+            </div>
+          )}
         </div>
 
         <Link

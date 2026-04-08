@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import {
   Bell,
   Bot,
@@ -22,6 +22,7 @@ import {
   User,
   WandSparkles,
 } from 'lucide-react';
+import { readHomeMetrics } from './lib/alert-store';
 
 type PromptAction = {
   label: 'Research' | 'Analyze' | 'Create' | 'Automate';
@@ -119,6 +120,11 @@ export default function HomePage() {
   const [activityFilter, setActivityFilter] = useState<ActivityFilter>('all');
   const [systemExpanded, setSystemExpanded] = useState(true);
   const [tryIndex, setTryIndex] = useState(0);
+  const [activeAlertCount, setActiveAlertCount] = useState(0);
+
+  useEffect(() => {
+    setActiveAlertCount(readHomeMetrics().activeAlerts);
+  }, []);
 
   const tryPrompts = [
     'Audit upcoming renewals',
@@ -183,7 +189,11 @@ export default function HomePage() {
               aria-label="Alerts"
             >
               <Bell className="h-5 w-5" />
-              <span className="absolute right-1.5 top-1.5 h-2.5 w-2.5 rounded-full bg-rose-500" />
+              {activeAlertCount > 0 ? (
+                <span className="absolute -right-1 -top-1 inline-flex min-h-4 min-w-4 items-center justify-center rounded-full bg-rose-500 px-1 text-[10px] font-semibold text-white">
+                  {activeAlertCount}
+                </span>
+              ) : null}
             </Link>
 
 <button
