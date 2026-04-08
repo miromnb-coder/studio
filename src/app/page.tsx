@@ -114,7 +114,7 @@ export default function HomePage() {
   };
 
   return (
-    <main className="mx-auto min-h-screen w-full max-w-md bg-slate-50/75 shadow-[0_10px_40px_rgba(15,23,42,0.06)] backdrop-blur-xl">
+    <main className="mx-auto min-h-screen w-full max-w-md bg-slate-50/70 shadow-[0_10px_40px_rgba(15,23,42,0.06)] backdrop-blur-xl">
       <section className="border-b border-black/[0.04] px-6 pt-8 pb-5">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-3">
@@ -122,51 +122,37 @@ export default function HomePage() {
               <Sparkles className="h-4 w-4 stroke-[1.75]" />
             </div>
             <div className="flex items-center gap-2">
-              <p className="text-[1.8rem] font-semibold tracking-tight text-slate-900">MiroAI</p>
-              <span className="rounded-lg bg-indigo-50 px-2 py-0.5 text-xs font-semibold uppercase tracking-wide text-indigo-500">PRO</span>
+              <p className="text-[1.8rem] font-semibold tracking-tight text-slate-900">AI Life Operator</p>
+              <span className="rounded-lg bg-indigo-50 px-2 py-0.5 text-xs font-semibold uppercase tracking-wide text-indigo-500">
+                v6
+              </span>
             </div>
           </div>
           <div className="flex items-center gap-2.5">
-            <Link href="/alerts" className="relative rounded-full p-2 text-slate-400 transition hover:bg-slate-100 hover:text-slate-600">
+            <button className="relative rounded-full p-2 text-slate-400 transition hover:bg-slate-100 hover:text-slate-600">
               <Bell className="h-5 w-5" />
               <span className="absolute right-1.5 top-1.5 h-2 w-2 rounded-full bg-rose-500" />
-            </Link>
-            <button
-              type="button"
-              onClick={() => setMessages((prev) => [...prev, 'System: Profile panel opened.'])}
-              className="rounded-full bg-slate-100 p-2 text-slate-600 transition hover:bg-slate-200"
-              aria-label="Open profile actions"
-            >
+            </button>
+            <button className="rounded-full bg-slate-100 p-2 text-slate-600 transition hover:bg-slate-200">
               <User className="h-5 w-5" />
             </button>
           </div>
         </div>
       </section>
 
-      <section className="space-y-6 px-6 py-7 pb-28">
+      <section className="space-y-6 px-6 py-7">
         <header className="space-y-2.5">
           <h1 className="text-[2.6rem] font-semibold tracking-tight text-slate-900">Good morning, Operator 👋</h1>
-          <p className="text-[1.3rem] leading-relaxed font-normal text-slate-500">Your AI agents are ready to help you today.</p>
+          <p className="text-[1.3rem] leading-relaxed font-normal text-slate-500">Your financial intelligence stack is online.</p>
         </header>
 
         <article className="overflow-hidden rounded-[20px] border border-black/[0.04] bg-white shadow-[0_2px_8px_rgba(0,0,0,0.04)]">
-          <div className="space-y-5 p-6">
-            <label htmlFor="operator-prompt" className="text-[1.72rem] leading-[1.35] text-slate-500">
-              What would you like to accomplish today?
-            </label>
-            <textarea
-              id="operator-prompt"
-              value={prompt}
-              onChange={(event) => setPrompt(event.target.value)}
-              rows={3}
-              placeholder="Type your request for the agent system..."
-              className="w-full resize-none rounded-2xl border border-black/[0.05] bg-slate-50 px-4 py-3 text-[15px] text-slate-700 outline-none placeholder:text-slate-400 focus:border-indigo-200 focus:bg-white"
-            />
+          <div className="space-y-6 p-6">
+            <p className="text-[1.72rem] leading-[1.35] text-slate-500">What should the agent system accomplish next?</p>
             <div className="grid grid-cols-2 gap-3">
-              {quickActions.map(({ label, icon: Icon, starter }) => (
+              {quickActions.map(({ label, icon: Icon }) => (
                 <button
                   key={label}
-                  onClick={() => setPrompt(starter)}
                   className="flex items-center justify-center gap-2 rounded-full border border-black/[0.04] bg-slate-50 px-4 py-3 text-base font-medium text-slate-600 transition hover:bg-slate-100"
                 >
                   <Icon className="h-4 w-4 stroke-[1.75]" />
@@ -184,49 +170,24 @@ export default function HomePage() {
               Send to agents
             </button>
           </div>
-          <div className="flex items-center justify-between gap-2 border-t border-black/[0.04] px-6 py-4 text-base leading-relaxed text-slate-500">
-            <div className="flex items-center gap-2">
-              <span className="font-semibold text-slate-700">Try:</span>
-              <button type="button" onClick={() => setPrompt('Analyze my weekly productivity and summarize recent news updates.')} className="text-left hover:text-slate-700">
-                Analyze my weekly productivity
-              </button>
-              <span>·</span>
-              <button type="button" onClick={() => setPrompt('Summarize recent finance and operations news for this week.')} className="text-left hover:text-slate-700">
-                Summarize recent news
-              </button>
-            </div>
-            <button
-              type="button"
-              onClick={() => setMessages((prev) => [...prev, 'System: Showing next recommendation set.'])}
-              className="rounded-full p-1 text-slate-400 transition hover:bg-slate-100 hover:text-slate-600"
-              aria-label="Show more suggestions"
-            >
-              <ChevronRight className="h-4 w-4" />
-            </button>
+          <div className="flex items-center gap-2 border-t border-black/[0.04] px-6 py-4 text-base leading-relaxed text-slate-500">
+            <span className="font-semibold text-slate-700">Try:</span>
+            <span>Audit upcoming renewals</span>
+            <span>·</span>
+            <span>Summarize latest alert digest</span>
           </div>
         </article>
 
         <article className="rounded-[20px] border border-black/[0.04] bg-white p-6 shadow-[0_2px_8px_rgba(0,0,0,0.04)]">
-          <div className="mb-4 flex items-center justify-between">
+          <div className="mb-5 flex items-center justify-between">
             <h2 className="text-[2rem] font-semibold tracking-tight text-slate-900">Recent Activity</h2>
-            <Link href="/history" className="inline-flex items-center gap-1 text-lg font-medium text-slate-400 transition hover:text-slate-600">
+            <Link href="/history" className="text-lg font-medium text-slate-400 transition hover:text-slate-600">
               View all
               <ChevronRight className="h-4 w-4" />
             </Link>
           </div>
-          <div className="mb-4 flex gap-2">
-            <button onClick={() => setActivityFilter('all')} className={`rounded-full px-3 py-1 text-xs ${activityFilter === 'all' ? 'bg-slate-100 text-slate-700' : 'text-slate-400'}`}>
-              All
-            </button>
-            <button onClick={() => setActivityFilter('research')} className={`rounded-full px-3 py-1 text-xs ${activityFilter === 'research' ? 'bg-slate-100 text-slate-700' : 'text-slate-400'}`}>
-              Research
-            </button>
-            <button onClick={() => setActivityFilter('memory')} className={`rounded-full px-3 py-1 text-xs ${activityFilter === 'memory' ? 'bg-slate-100 text-slate-700' : 'text-slate-400'}`}>
-              Memory
-            </button>
-          </div>
           <div className="space-y-5">
-            {filteredActivity.map(({ title, time, context, icon: Icon, status }) => (
+            {recentActivity.map(({ title, time, context, icon: Icon, status }) => (
               <div key={title} className="flex items-start gap-3">
                 <div className="rounded-2xl bg-indigo-50/60 p-3 text-indigo-500">
                   <Icon className="h-5 w-5 stroke-[1.8]" />
@@ -244,13 +205,8 @@ export default function HomePage() {
         <section className="grid grid-cols-5 gap-3">
           <article className="col-span-3 rounded-[20px] border border-black/[0.04] bg-white p-5 shadow-[0_2px_8px_rgba(0,0,0,0.04)]">
             <div className="mb-4 flex items-center justify-between">
-              <h3 className="text-[1.9rem] font-semibold tracking-tight text-slate-900">Active Agents</h3>
-              <button
-                type="button"
-                onClick={() => setSystemExpanded((prev) => !prev)}
-                className="rounded-full p-1 text-slate-400 transition hover:bg-slate-100"
-                aria-label="Toggle agents details"
-              >
+              <h3 className="text-[1.9rem] font-semibold tracking-tight text-slate-900">Active Systems</h3>
+              <button className="rounded-full p-1 text-slate-400 hover:bg-slate-100">
                 <Ellipsis className="h-5 w-5" />
               </button>
             </div>
@@ -262,7 +218,7 @@ export default function HomePage() {
                   </div>
                   <div>
                     <p className="text-2xl font-medium tracking-tight text-slate-800">{title}</p>
-                    {systemExpanded ? <p className="text-sm leading-relaxed font-normal text-slate-400">{subtitle}</p> : null}
+                    <p className="text-sm leading-relaxed font-normal text-slate-400">{subtitle}</p>
                   </div>
                 </div>
               ))}
@@ -277,31 +233,29 @@ export default function HomePage() {
                 </div>
                 <span className="text-xl font-semibold tracking-tight text-slate-900">Memory Usage</span>
               </div>
-              <p className="text-base leading-relaxed font-normal text-slate-400">2.2 GB / 5 GB</p>
+              <p className="text-base leading-relaxed font-normal text-slate-400">1.8 GB / 5 GB</p>
               <div className="mt-4 h-2 rounded-full bg-slate-100">
-                <div className="h-2 w-[44%] rounded-full bg-indigo-400" />
+                <div className="h-2 w-[36%] rounded-full bg-indigo-400" />
               </div>
             </article>
 
             <article className="rounded-[20px] border border-black/[0.04] bg-white p-5 shadow-[0_2px_8px_rgba(0,0,0,0.04)]">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-xl font-semibold tracking-tight text-slate-900">Alerts</p>
+                  <p className="text-xl font-semibold tracking-tight text-slate-900">Alert Digest</p>
                   <p className="text-sm leading-relaxed font-normal text-slate-400">3 pending items</p>
                 </div>
-                <Link href="/alerts" className="rounded-full bg-amber-50 p-2 text-amber-400 hover:bg-amber-100">
-                  <TriangleAlert className="h-5 w-5" />
-                </Link>
+                <TriangleAlert className="h-5 w-5 text-amber-400" />
               </div>
             </article>
 
             <article className="rounded-[20px] border border-black/[0.04] bg-white p-5 shadow-[0_2px_8px_rgba(0,0,0,0.04)]">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-xl font-semibold tracking-tight text-slate-900">Conversation</p>
-                  <p className="text-sm leading-relaxed font-normal text-slate-400">{messages.length} updates</p>
+                  <p className="text-xl font-semibold tracking-tight text-slate-900">Tool Registry</p>
+                  <p className="text-sm leading-relaxed font-normal text-slate-400">12 active protocols</p>
                 </div>
-                <Circle className="h-5 w-5 fill-emerald-300 text-emerald-300" />
+                <WandSparkles className="h-5 w-5 text-emerald-400" />
               </div>
             </article>
           </div>
@@ -319,22 +273,25 @@ export default function HomePage() {
         </article>
       </section>
 
-      <nav className="fixed bottom-0 left-1/2 grid w-full max-w-md -translate-x-1/2 grid-cols-5 border-t border-black/[0.05] bg-white/95 px-4 py-3 backdrop-blur">
-        {tabs.map(({ label, href, icon: Icon }) => {
-          const active = href === '/';
-          return (
-            <Link
-              key={label}
-              href={href}
-              className={`flex flex-col items-center gap-1.5 rounded-xl py-1.5 text-xs font-medium transition ${
-                active ? 'text-indigo-500' : 'text-slate-400 hover:text-slate-600'
-              }`}
-            >
-              <Icon className="h-[18px] w-[18px] stroke-[1.8]" />
-              {label}
-            </Link>
-          );
-        })}
+      <nav className="sticky bottom-0 grid grid-cols-5 border-t border-black/[0.05] bg-white/95 px-4 py-3 backdrop-blur">
+        {[
+          { label: 'Home', href: '/', icon: Home, active: true },
+          { label: 'Copilot', href: '/chat', icon: MessageSquare },
+          { label: 'Agents', href: '/agents', icon: Bot },
+          { label: 'Alerts', href: '/alerts', icon: Bell },
+          { label: 'History', href: '/history', icon: Clock3 },
+        ].map(({ label, href, icon: Icon, active }) => (
+          <Link
+            key={label}
+            href={href}
+            className={`flex flex-col items-center gap-1.5 rounded-xl py-1.5 text-xs font-medium transition ${
+              active ? 'text-indigo-500' : 'text-slate-400 hover:text-slate-600'
+            }`}
+          >
+            <Icon className="h-[18px] w-[18px] stroke-[1.8]" />
+            {label}
+          </Link>
+        ))}
       </nav>
     </main>
   );
