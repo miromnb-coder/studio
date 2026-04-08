@@ -25,6 +25,39 @@ const activeSystems = [
   { title: 'Memory Agent', subtitle: 'Updating knowledge base', icon: Layers },
 ];
 
+const AGENT_DELAY_MS: Record<AgentName, number> = {
+  'Research Agent': 1800,
+  'Analysis Agent': 1400,
+  'Memory Agent': 1200,
+};
+
+function routeAgentForIntent(input: string): AgentName {
+  const value = input.toLowerCase();
+  const memorySignals = ['summarize', 'summary', 'recap', 'recall', 'remember', 'context', 'history'];
+  const analysisSignals = [
+    'compare',
+    'comparison',
+    'versus',
+    ' vs ',
+    'difference',
+    'percent',
+    'ratio',
+    'average',
+    'total',
+    'sum',
+    'more than',
+    'less than',
+    'greater',
+    'fewer',
+  ];
+  const researchSignals = ['research', 'find', 'latest', 'news', 'trend', 'lookup', 'look up', 'investigate'];
+
+  if (memorySignals.some((signal) => value.includes(signal))) return 'Memory Agent';
+  if (analysisSignals.some((signal) => value.includes(signal)) || /\d/.test(value)) return 'Analysis Agent';
+  if (researchSignals.some((signal) => value.includes(signal))) return 'Research Agent';
+  return 'Research Agent';
+}
+
 export default function HomePage() {
   const { currentUser, logout, updateProfileName } = useAuthSlice();
   const [prompt, setPrompt] = useState('');
@@ -50,9 +83,32 @@ export default function HomePage() {
     return recentActivity.filter((item) => item.type === activityFilter || item.type === 'all');
   }, [activityFilter]);
 
-  const sendPrompt = () => {
+  const sendMessage = () => {
     const value = prompt.trim();
     if (!value) return;
+    const agent = routeAgentForIntent(value);
+    const token = requestTokenRef.current[agent] + 1;
+    requestTokenRef.current[agent] = token;
+
+    const now = new Date().toISOString();
+    const runningRuntime = readAgentRuntime();
+    const runningAgents = Object.fromEntries(
+      (Object.keys(runningRuntime.agents) as AgentName[]).map((name) => [
+        name,
+        {
+          ...runningRuntime.agents[name],
+          status: name === agent ? 'running' : 'idle',
+          lastRun: name === agent ? now : runningRuntime.agents[name].lastRun,
+          lastTask: name === agent ? value : runningRuntime.agents[name].lastTask,
+        },
+      ]),
+    ) as typeof runningRuntime.agents;
+
+    writeAgentRuntime({
+      status: 'running',
+      activeAgent: agent,
+      agents: runningAgents,
+    });
 
     setMessages((prev) => [...prev, `You: ${value}`]);
     setPrompt('');
