@@ -1,71 +1,57 @@
 'use client';
 
-import { useMemo, useState } from 'react';
-import { BottomNav } from '../components/bottom-nav';
-import { readChatMessages } from '../lib/chat-store';
+import Link from 'next/link';
+import { ArrowLeft, Clock3 } from 'lucide-react';
 
-const filters = ['All', 'Chat', 'Money', 'Agents'] as const;
+const historyItems = [
+  'Generated weekly operator summary',
+  'Stored memory update from billing analysis',
+  'Ran subscription leak review',
+];
 
 export default function HistoryPage() {
-  const [activeFilter, setActiveFilter] = useState<(typeof filters)[number]>('All');
-  const messages = readChatMessages();
-
-  const timeline = useMemo(() => {
-    return messages.filter((message) => {
-      if (activeFilter === 'All') return true;
-      return message.source === activeFilter.toLowerCase();
-    });
-  }, [activeFilter, messages]);
-
-  const today = timeline.filter((item) => new Date(item.createdAt).toDateString() === new Date().toDateString());
-  const yesterday = timeline.filter((item) => new Date(item.createdAt).toDateString() !== new Date().toDateString());
-
   return (
-    <main className="mx-auto min-h-screen w-full max-w-md bg-[#f8f9fc] pb-28 shadow-[0_10px_32px_rgba(15,23,42,0.06)]">
-      <header className="border-b border-black/[0.04] px-6 pt-8 pb-4">
-        <h1 className="text-[2rem] font-semibold tracking-tight text-slate-900">History</h1>
-        <p className="text-sm text-slate-500">Timeline of agent actions and conversation events.</p>
-      </header>
+    <main className="mx-auto min-h-screen w-full max-w-md bg-[#f8fafc] px-5 py-6 text-slate-900">
+      <div className="mb-6 flex items-center justify-between">
+        <Link
+          href="/"
+          className="inline-flex items-center gap-2 rounded-full bg-white px-4 py-2 text-sm font-medium text-slate-600 shadow-[0_4px_14px_rgba(15,23,42,0.04)] transition hover:bg-slate-50"
+        >
+          <ArrowLeft className="h-4 w-4" />
+          Back
+        </Link>
 
-      <section className="px-5 py-5">
-        <div className="mb-4 flex gap-2">
-          {filters.map((filter) => (
-            <button key={filter} onClick={() => setActiveFilter(filter)} className={`rounded-full px-3 py-1 text-xs font-semibold ${activeFilter === filter ? 'bg-slate-900 text-white' : 'bg-slate-100 text-slate-500'}`}>
-              {filter}
-            </button>
+        <div className="rounded-full bg-slate-100 p-2.5 text-slate-500">
+          <Clock3 className="h-5 w-5" />
+        </div>
+      </div>
+
+      <section className="rounded-[22px] border border-black/[0.04] bg-white p-6 shadow-[0_4px_14px_rgba(15,23,42,0.04)]">
+        <h1 className="text-[2rem] font-semibold tracking-tight text-slate-900">
+          History
+        </h1>
+        <p className="mt-2 text-[1rem] leading-relaxed text-slate-500">
+          Review recent actions, runs, summaries, and saved outputs.
+        </p>
+
+        <div className="mt-6 space-y-3">
+          {historyItems.map((item, index) => (
+            <div
+              key={item}
+              className="rounded-2xl bg-slate-50 px-4 py-4 text-sm leading-relaxed text-slate-700"
+            >
+              {index + 1}. {item}
+            </div>
           ))}
         </div>
 
-        <div className="space-y-4">
-          <section>
-            <h2 className="mb-2 text-sm font-semibold uppercase tracking-wide text-slate-500">Today</h2>
-            <div className="space-y-2">
-              {today.map((item) => (
-                <article key={item.id} className="rounded-2xl border border-black/[0.04] bg-white px-4 py-3">
-                  <p className="text-sm font-medium text-slate-800">{item.content.slice(0, 90)}</p>
-                  <p className="mt-1 text-xs text-slate-400">{item.source} · {new Date(item.createdAt).toLocaleTimeString()}</p>
-                </article>
-              ))}
-              {today.length === 0 ? <p className="text-sm text-slate-400">No items today.</p> : null}
-            </div>
-          </section>
-
-          <section>
-            <h2 className="mb-2 text-sm font-semibold uppercase tracking-wide text-slate-500">Yesterday</h2>
-            <div className="space-y-2">
-              {yesterday.map((item) => (
-                <article key={item.id} className="rounded-2xl border border-black/[0.04] bg-white px-4 py-3">
-                  <p className="text-sm font-medium text-slate-800">{item.content.slice(0, 90)}</p>
-                  <p className="mt-1 text-xs text-slate-400">{item.source} · {new Date(item.createdAt).toLocaleTimeString()}</p>
-                </article>
-              ))}
-              {yesterday.length === 0 ? <p className="text-sm text-slate-400">No older items.</p> : null}
-            </div>
-          </section>
-        </div>
+        <Link
+          href="/"
+          className="mt-6 inline-flex items-center gap-2 text-sm font-medium text-indigo-500 transition hover:text-indigo-600"
+        >
+          Return to dashboard
+        </Link>
       </section>
-
-      <BottomNav />
     </main>
   );
 }
