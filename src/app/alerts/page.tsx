@@ -9,6 +9,9 @@ const alerts = [
 ];
 
 export default function AlertsPage() {
+  useSetPageOnMount('alerts');
+  const { selectors, actions } = useAppStore();
+
   return (
     <main className="screen bg-[#f8fafc]">
       <section className="surface-card p-5">

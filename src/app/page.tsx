@@ -34,6 +34,7 @@ export default function HomePage() {
   const [activityFilter, setActivityFilter] = useState<ActivityFilter>('all');
   const [isTyping, setIsTyping] = useState(false);
 
+  const prompt = state.ui.promptInput;
   const canSend = prompt.trim().length > 0;
 
   const filteredActivity = useMemo(() => {
