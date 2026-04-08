@@ -1,8 +1,13 @@
+'use client';
+
 import Link from 'next/link';
+import { useMemo, useState } from 'react';
 import {
   Bell,
   Bot,
   ChartNoAxesColumnIncreasing,
+  ChevronRight,
+  Circle,
   Clock3,
   Compass,
   Ellipsis,
@@ -12,38 +17,45 @@ import {
   Library,
   MessageSquare,
   Search,
+  Send,
   Sparkles,
   TriangleAlert,
   User,
   WandSparkles,
 } from 'lucide-react';
 
-const quickActions = [
-  { label: 'Analyze spend', icon: Search },
-  { label: 'Run orchestrator', icon: Compass },
-  { label: 'Update memory', icon: Library },
-  { label: 'Forge tool', icon: WandSparkles },
+type PromptAction = {
+  label: 'Research' | 'Analyze' | 'Create' | 'Automate';
+  icon: typeof Search;
+  starter: string;
+};
+
+const quickActions: PromptAction[] = [
+  { label: 'Research', icon: Search, starter: 'Research unusual spending patterns from the last 30 days.' },
+  { label: 'Analyze', icon: Compass, starter: 'Analyze recurring subscriptions and rank cancellation opportunities.' },
+  { label: 'Create', icon: Library, starter: 'Create a weekly operator summary with risks and next steps.' },
+  { label: 'Automate', icon: WandSparkles, starter: 'Automate alert triage and memory updates for new billing emails.' },
 ];
 
 const recentActivity = [
   {
-    title: 'Completed subscription leak analysis',
-    time: '2 min ago',
-    context: 'Agent V6 · finance intent',
+    title: 'Analyzed market trends',
+    time: '2 minutes ago',
+    context: 'Research agent',
     icon: ChartNoAxesColumnIncreasing,
     status: 'bg-emerald-300/90',
   },
   {
-    title: 'Stored episodic memory summary',
-    time: '12 min ago',
-    context: 'Memory service · user profile',
+    title: 'Updated project memory',
+    time: '15 minutes ago',
+    context: 'Memory core',
     icon: Library,
     status: 'bg-emerald-300/90',
   },
   {
-    title: 'Generated actionable negotiation script',
-    time: '1 hr ago',
-    context: 'Action engine · ready to send',
+    title: 'Generated weekly report',
+    time: '1 hour ago',
+    context: 'Action engine',
     icon: Sparkles,
     status: 'bg-indigo-400/90',
   },
@@ -51,26 +63,56 @@ const recentActivity = [
 
 const activeSystems = [
   {
-    title: 'Orchestrator',
-    subtitle: 'Reasoning across tools and intents',
+    title: 'Research Agent',
+    subtitle: 'Gathering latest information',
     icon: Bot,
     accent: 'bg-indigo-50 text-indigo-500',
   },
   {
-    title: 'Financial Forensics',
-    subtitle: 'Detecting fees, renewals, and waste',
+    title: 'Analysis Agent',
+    subtitle: 'Processing your data',
     icon: Gauge,
     accent: 'bg-sky-50 text-sky-500',
   },
   {
-    title: 'Memory Core',
-    subtitle: 'Syncing semantic + episodic context',
+    title: 'Memory Agent',
+    subtitle: 'Updating knowledge base',
     icon: Layers,
     accent: 'bg-amber-50 text-amber-500',
   },
 ];
 
+const tabs = [
+  { label: 'Home', href: '/', icon: Home },
+  { label: 'Chat', href: '/chat', icon: MessageSquare },
+  { label: 'Agents', href: '/agents', icon: Bot },
+  { label: 'Alerts', href: '/alerts', icon: Bell },
+  { label: 'History', href: '/history', icon: Clock3 },
+];
+
 export default function HomePage() {
+  const [prompt, setPrompt] = useState('');
+  const [messages, setMessages] = useState<string[]>([
+    'System: All agents are online and ready.',
+    'Tip: Start with Analyze for a weekly optimization pass.',
+  ]);
+  const [activityFilter, setActivityFilter] = useState<'all' | 'research' | 'memory'>('all');
+  const [systemExpanded, setSystemExpanded] = useState(true);
+
+  const canSend = prompt.trim().length > 0;
+
+  const filteredActivity = useMemo(() => {
+    if (activityFilter === 'research') return recentActivity.filter((item) => item.context.includes('Research'));
+    if (activityFilter === 'memory') return recentActivity.filter((item) => item.context.includes('Memory'));
+    return recentActivity;
+  }, [activityFilter]);
+
+  const sendPrompt = () => {
+    if (!canSend) return;
+    setMessages((prev) => [...prev, `You: ${prompt.trim()}`, `Agent: Working on "${prompt.trim()}" now.`]);
+    setPrompt('');
+  };
+
   return (
     <main className="mx-auto min-h-screen w-full max-w-md bg-slate-50/70 shadow-[0_10px_40px_rgba(15,23,42,0.06)] backdrop-blur-xl">
       <section className="border-b border-black/[0.04] px-6 pt-8 pb-5">
@@ -118,6 +160,15 @@ export default function HomePage() {
                 </button>
               ))}
             </div>
+            <button
+              type="button"
+              onClick={sendPrompt}
+              disabled={!canSend}
+              className="flex w-full items-center justify-center gap-2 rounded-full bg-indigo-500 px-4 py-3 text-sm font-semibold text-white shadow-[0_8px_18px_rgba(99,102,241,0.25)] transition hover:bg-indigo-600 disabled:cursor-not-allowed disabled:bg-slate-300 disabled:shadow-none"
+            >
+              <Send className="h-4 w-4" />
+              Send to agents
+            </button>
           </div>
           <div className="flex items-center gap-2 border-t border-black/[0.04] px-6 py-4 text-base leading-relaxed text-slate-500">
             <span className="font-semibold text-slate-700">Try:</span>
@@ -132,6 +183,7 @@ export default function HomePage() {
             <h2 className="text-[2rem] font-semibold tracking-tight text-slate-900">Recent Activity</h2>
             <Link href="/history" className="text-lg font-medium text-slate-400 transition hover:text-slate-600">
               View all
+              <ChevronRight className="h-4 w-4" />
             </Link>
           </div>
           <div className="space-y-5">
@@ -208,6 +260,17 @@ export default function HomePage() {
             </article>
           </div>
         </section>
+
+        <article className="rounded-[20px] border border-black/[0.04] bg-white p-5 shadow-[0_2px_8px_rgba(0,0,0,0.04)]">
+          <h3 className="mb-3 text-lg font-semibold text-slate-800">Conversation</h3>
+          <div className="space-y-2">
+            {messages.slice(-5).map((message, index) => (
+              <p key={`${message}-${index}`} className="rounded-xl bg-slate-50 px-3 py-2 text-sm leading-relaxed text-slate-600">
+                {message}
+              </p>
+            ))}
+          </div>
+        </article>
       </section>
 
       <nav className="sticky bottom-0 grid grid-cols-5 border-t border-black/[0.05] bg-white/95 px-4 py-3 backdrop-blur">
