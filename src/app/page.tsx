@@ -26,6 +26,7 @@ const activeSystems = [
 ];
 
 export default function HomePage() {
+  const { currentUser, logout, updateProfileName } = useAuthSlice();
   const [prompt, setPrompt] = useState('');
   const [messages, setMessages] = useState<string[]>([
     'System: All agents are online and ready.',
@@ -36,6 +37,13 @@ export default function HomePage() {
 
   const prompt = state.ui.promptInput;
   const canSend = prompt.trim().length > 0;
+  const userName = currentUser?.name || 'Operator';
+  const initials = userName
+    .split(' ')
+    .map((part) => part[0])
+    .join('')
+    .slice(0, 2)
+    .toUpperCase();
 
   const filteredActivity = useMemo(() => {
     if (activityFilter === 'all') return recentActivity;
@@ -54,6 +62,13 @@ export default function HomePage() {
       setMessages((prev) => [...prev, `Agent: Working on "${value}" now.`]);
       setIsTyping(false);
     }, 800);
+  };
+
+  const handleEditName = () => {
+    const value = window.prompt('Update your profile name', userName);
+    if (!value) return;
+    updateProfileName(value);
+    setProfileMenuOpen(false);
   };
 
   return (
