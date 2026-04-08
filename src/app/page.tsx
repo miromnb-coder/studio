@@ -196,7 +196,7 @@ export default function HomePage() {
               aria-label="Profile"
             >
               <User className="h-5 w-5" />
-            </button>
+            </Link>
           </div>
         </div>
       </section>
