@@ -42,6 +42,8 @@ export default function AgentsPage() {
               ))}
         </div>
       </section>
+
+      <BottomNav />
     </main>
   );
 }

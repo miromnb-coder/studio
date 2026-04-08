@@ -29,6 +29,8 @@ export default function AlertsPage() {
           ))}
         </div>
       </section>
+
+      <BottomNav />
     </main>
   );
 }

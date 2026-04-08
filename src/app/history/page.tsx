@@ -26,6 +26,8 @@ export default function HistoryPage() {
           ))}
         </div>
       </section>
+
+      <BottomNav />
     </main>
   );
 }
