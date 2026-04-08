@@ -3,6 +3,7 @@
 import Link from 'next/link';
 import { useMemo, useState } from 'react';
 import {
+  BadgeCheck,
   Bell,
   Bot,
   ChartNoAxesColumnIncreasing,
@@ -19,9 +20,9 @@ import {
   Send,
   Sparkles,
   TriangleAlert,
-  User,
   WandSparkles,
 } from 'lucide-react';
+import { useAuthSlice } from '@/app/lib/global-store';
 
 type PromptAction = {
   label: 'Research' | 'Analyze' | 'Create' | 'Automate';
@@ -111,6 +112,7 @@ const tabs = [
 ];
 
 export default function HomePage() {
+  const { currentUser, logout, updateProfileName } = useAuthSlice();
   const [prompt, setPrompt] = useState('');
   const [messages, setMessages] = useState<string[]>([
     'System: All agents are online and ready.',
@@ -119,6 +121,7 @@ export default function HomePage() {
   const [activityFilter, setActivityFilter] = useState<ActivityFilter>('all');
   const [systemExpanded, setSystemExpanded] = useState(true);
   const [tryIndex, setTryIndex] = useState(0);
+  const [profileMenuOpen, setProfileMenuOpen] = useState(false);
 
   const tryPrompts = [
     'Audit upcoming renewals',
@@ -127,6 +130,13 @@ export default function HomePage() {
   ];
 
   const canSend = prompt.trim().length > 0;
+  const userName = currentUser?.name || 'Operator';
+  const initials = userName
+    .split(' ')
+    .map((part) => part[0])
+    .join('')
+    .slice(0, 2)
+    .toUpperCase();
 
   const filteredActivity = useMemo(() => {
     if (activityFilter === 'all') return recentActivity;
@@ -155,6 +165,13 @@ export default function HomePage() {
     const next = (tryIndex + 1) % tryPrompts.length;
     setTryIndex(next);
     setPrompt(tryPrompts[next]);
+  };
+
+  const handleEditName = () => {
+    const value = window.prompt('Update your profile name', userName);
+    if (!value) return;
+    updateProfileName(value);
+    setProfileMenuOpen(false);
   };
 
   return (
@@ -186,27 +203,52 @@ export default function HomePage() {
               <span className="absolute right-1.5 top-1.5 h-2.5 w-2.5 rounded-full bg-rose-500" />
             </Link>
 
-<button
-  type="button"
-  onClick={() =>
-    setMessages((prev) => [
-      ...prev,
-      'System: Profile action opened.',
-    ])
-  }
-  className="rounded-full bg-slate-100 p-2 text-slate-600 transition hover:bg-slate-200"
-  aria-label="Profile"
->
-  <User className="h-5 w-5" />
-</button>
+            <div className="relative">
+              <button
+                type="button"
+                onClick={() => setProfileMenuOpen((prev) => !prev)}
+                className="flex items-center gap-2 rounded-full border border-slate-200 bg-white px-2 py-1.5 text-slate-600 transition hover:bg-slate-50"
+                aria-label="Profile"
+              >
+                <span className="inline-flex h-8 w-8 items-center justify-center rounded-full bg-indigo-100 text-xs font-semibold text-indigo-700">
+                  {initials}
+                </span>
+                <span className="max-w-24 truncate text-sm font-medium text-slate-700">
+                  {userName}
+                </span>
+              </button>
+
+              {profileMenuOpen && (
+                <div className="absolute right-0 top-12 z-30 w-48 rounded-2xl border border-slate-200 bg-white p-2 shadow-lg">
+                  <button
+                    type="button"
+                    onClick={handleEditName}
+                    className="w-full rounded-xl px-3 py-2 text-left text-sm font-medium text-slate-700 transition hover:bg-slate-100"
+                  >
+                    Edit name
+                  </button>
+                  <button
+                    type="button"
+                    onClick={logout}
+                    className="mt-1 w-full rounded-xl px-3 py-2 text-left text-sm font-medium text-rose-500 transition hover:bg-rose-50"
+                  >
+                    Logout
+                  </button>
+                </div>
+              )}
+            </div>
           </div>
         </div>
       </section>
 
       <section className="space-y-6 px-5 py-6 pb-28">
         <header className="space-y-2">
+          <div className="inline-flex items-center gap-2 rounded-full bg-emerald-50 px-3 py-1 text-xs font-semibold uppercase tracking-[0.12em] text-emerald-600">
+            <BadgeCheck className="h-3.5 w-3.5" />
+            Profile active
+          </div>
           <h1 className="text-[2.35rem] font-semibold tracking-tight text-slate-900">
-            Good morning, Miro 👋
+            Good morning, {userName} 👋
           </h1>
           <p className="text-[1.15rem] leading-relaxed text-slate-500">
             Your AI agents are ready to help you today.
