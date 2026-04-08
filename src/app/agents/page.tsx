@@ -27,10 +27,12 @@ const agents = [
 export default function AgentsPage() {
   return (
     <main className="mx-auto min-h-screen w-full max-w-md bg-[#f8fafc] px-5 py-6 text-slate-900">
+      
+      {/* Header */}
       <div className="mb-6 flex items-center justify-between">
         <Link
           href="/"
-          className="inline-flex items-center gap-2 rounded-full bg-white px-4 py-2 text-sm font-medium text-slate-600 shadow"
+          className="inline-flex items-center gap-2 rounded-full bg-white px-4 py-2 text-sm font-medium text-slate-600 shadow-[0_4px_14px_rgba(15,23,42,0.04)] hover:bg-slate-50"
         >
           <ArrowLeft className="h-4 w-4" />
           Back
@@ -41,27 +43,42 @@ export default function AgentsPage() {
         </div>
       </div>
 
-      <section className="rounded-[22px] border border-black/[0.04] bg-white p-6 shadow">
-        <h1 className="text-2xl font-semibold">Agents</h1>
-        <p className="mt-2 text-slate-500">
-          Your active AI systems working in the background.
+      {/* Content */}
+      <section className="rounded-[22px] border border-black/[0.04] bg-white p-6 shadow-[0_4px_14px_rgba(15,23,42,0.04)]">
+        <h1 className="text-[1.9rem] font-semibold tracking-tight text-slate-900">
+          Active Agents
+        </h1>
+
+        <p className="mt-2 text-[1rem] leading-relaxed text-slate-500">
+          These AI systems are currently assisting you behind the scenes.
         </p>
 
         <div className="mt-6 space-y-4">
           {agents.map(({ title, subtitle, icon: Icon, accent }) => (
-            <div key={title} className="flex items-start gap-3 rounded-2xl bg-slate-50 p-4">
+            <div
+              key={title}
+              className="flex items-start gap-3 rounded-2xl bg-slate-50 p-4"
+            >
               <div className={`rounded-2xl p-3 ${accent}`}>
-                <Icon className="h-5 w-5" />
+                <Icon className="h-5 w-5 stroke-[1.8]" />
               </div>
-              <div>
-                <p className="font-medium text-slate-800">{title}</p>
-                <p className="text-sm text-slate-500">{subtitle}</p>
+
+              <div className="min-w-0">
+                <p className="text-[1.1rem] font-medium tracking-tight text-slate-800">
+                  {title}
+                </p>
+                <p className="text-[0.95rem] leading-relaxed text-slate-500">
+                  {subtitle}
+                </p>
               </div>
             </div>
           ))}
         </div>
 
-        <Link href="/" className="mt-6 inline-block text-indigo-500">
+        <Link
+          href="/"
+          className="mt-6 inline-block text-sm font-medium text-indigo-500 hover:text-indigo-600"
+        >
           Return to dashboard
         </Link>
       </section>
