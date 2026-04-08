@@ -2,13 +2,58 @@
 
 import { Clock3 } from 'lucide-react';
 
-const historyItems = [
-  'Generated weekly operator summary',
-  'Stored memory update from billing analysis',
-  'Ran subscription leak review',
-];
+type GroupLabel = 'Today' | 'Yesterday' | 'Earlier';
+
+function toDayStart(date: Date) {
+  return new Date(date.getFullYear(), date.getMonth(), date.getDate()).getTime();
+}
+
+function groupLabel(createdAt: string): GroupLabel {
+  const eventDay = toDayStart(new Date(createdAt));
+  const now = new Date();
+  const today = toDayStart(now);
+  const yesterday = today - 24 * 60 * 60 * 1000;
+
+  if (eventDay === today) return 'Today';
+  if (eventDay === yesterday) return 'Yesterday';
+  return 'Earlier';
+}
+
+function formatEventTime(createdAt: string) {
+  return new Date(createdAt).toLocaleString([], {
+    month: 'short',
+    day: 'numeric',
+    hour: 'numeric',
+    minute: '2-digit',
+  });
+}
 
 export default function HistoryPage() {
+  const router = useRouter();
+
+  const groupedEvents = useMemo(() => {
+    const events = readHistoryEvents().sort(
+      (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
+    );
+
+    const groups: Record<GroupLabel, HistoryEvent[]> = {
+      Today: [],
+      Yesterday: [],
+      Earlier: [],
+    };
+
+    events.forEach((event) => {
+      groups[groupLabel(event.createdAt)].push(event);
+    });
+
+    return groups;
+  }, []);
+
+  const openHistoryEvent = (event: HistoryEvent) => {
+    restoreHistoryToChat(event);
+    router.push('/chat');
+  };
+
   return (
     <main className="screen bg-[#f8fafc]">
       <section className="surface-card p-5">

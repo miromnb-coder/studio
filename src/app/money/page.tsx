@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import { AlertTriangle, CircleDollarSign } from 'lucide-react';
 import { makeMessage, writeChatMessages, readChatMessages, CHAT_DRAFT_KEY } from '../lib/chat-store';
 import { monthlySavingsEstimate, moneyAlerts, subscriptions } from '../lib/money-data';
+import { emitHistoryEvent } from '../lib/history-store';
 
 export default function MoneyPage() {
   const router = useRouter();
@@ -16,6 +17,15 @@ export default function MoneyPage() {
     const messages = readChatMessages();
     writeChatMessages([...messages, makeMessage('user', text, 'money')]);
     window.localStorage.setItem(CHAT_DRAFT_KEY, text);
+
+    emitHistoryEvent({
+      title: 'Chat prompt sent',
+      description: text,
+      type: 'chat',
+      prompt: text,
+      context: 'Sent from Money Intelligence.',
+    });
+
     router.push('/chat');
   };
 
