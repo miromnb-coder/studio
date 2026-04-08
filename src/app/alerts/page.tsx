@@ -30,6 +30,9 @@ export default function AlertsPage() {
               <p className="text-sm text-slate-700">{alert}</p>
             </div>
           ))}
+          {activeAlerts.length === 0 ? (
+            <div className="rounded-2xl bg-emerald-50 px-4 py-4 text-sm text-emerald-800">No active alerts. Everything is resolved or snoozed.</div>
+          ) : null}
         </div>
       </section>
 
