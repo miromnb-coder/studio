@@ -1,58 +1,37 @@
 'use client';
 
+import { useEffect, useMemo } from 'react';
 import { Clock3 } from 'lucide-react';
+import { useAppStore, type HistoryEntry } from '../store/app-store';
 
 type GroupLabel = 'Today' | 'Yesterday' | 'Earlier';
 
-function toDayStart(date: Date) {
-  return new Date(date.getFullYear(), date.getMonth(), date.getDate()).getTime();
-}
+const toDayStart = (date: Date) => new Date(date.getFullYear(), date.getMonth(), date.getDate()).getTime();
 
-function groupLabel(createdAt: string): GroupLabel {
+const getGroupLabel = (createdAt: string): GroupLabel => {
   const eventDay = toDayStart(new Date(createdAt));
-  const now = new Date();
-  const today = toDayStart(now);
+  const today = toDayStart(new Date());
   const yesterday = today - 24 * 60 * 60 * 1000;
-
   if (eventDay === today) return 'Today';
   if (eventDay === yesterday) return 'Yesterday';
   return 'Earlier';
-}
-
-function formatEventTime(createdAt: string) {
-  return new Date(createdAt).toLocaleString([], {
-    month: 'short',
-    day: 'numeric',
-    hour: 'numeric',
-    minute: '2-digit',
-  });
-}
+};
 
 export default function HistoryPage() {
-  const router = useRouter();
+  const hydrated = useAppStore((s) => s.hydrated);
+  const hydrate = useAppStore((s) => s.hydrate);
+  const history = useAppStore((s) => s.history);
+  const enqueuePromptAndGoToChat = useAppStore((s) => s.enqueuePromptAndGoToChat);
 
-  const groupedEvents = useMemo(() => {
-    const events = readHistoryEvents().sort(
-      (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
-    );
+  useEffect(() => {
+    if (!hydrated) hydrate();
+  }, [hydrate, hydrated]);
 
-    const groups: Record<GroupLabel, HistoryEvent[]> = {
-      Today: [],
-      Yesterday: [],
-      Earlier: [],
-    };
-
-    events.forEach((event) => {
-      groups[groupLabel(event.createdAt)].push(event);
-    });
-
+  const grouped = useMemo(() => {
+    const groups: Record<GroupLabel, HistoryEntry[]> = { Today: [], Yesterday: [], Earlier: [] };
+    history.forEach((entry) => groups[getGroupLabel(entry.createdAt)].push(entry));
     return groups;
-  }, []);
-
-  const openHistoryEvent = (event: HistoryEvent) => {
-    restoreHistoryToChat(event);
-    router.push('/chat');
-  };
+  }, [history]);
 
   return (
     <main className="screen bg-[#f8fafc]">
@@ -61,18 +40,35 @@ export default function HistoryPage() {
           <div className="rounded-xl bg-slate-100 p-2.5 text-slate-500"><Clock3 className="h-5 w-5" /></div>
           <div>
             <h1 className="text-2xl font-semibold">History</h1>
-            <p className="text-sm text-slate-500">Recent runs, summaries, and saved outputs.</p>
+            <p className="text-sm text-slate-500">Today, yesterday, and earlier timeline of operator actions.</p>
           </div>
         </div>
 
-        <div className="space-y-3">
-          {historyItems.map((item, index) => (
-            <div key={item} className="rounded-2xl bg-slate-50 px-4 py-4 text-sm text-slate-700">{index + 1}. {item}</div>
-          ))}
-        </div>
+        {history.length === 0 ? (
+          <div className="rounded-2xl bg-slate-50 px-4 py-4 text-sm text-slate-500">No timeline yet. Chat, alerts, and agents will appear here.</div>
+        ) : (
+          <div className="space-y-4">
+            {(['Today', 'Yesterday', 'Earlier'] as GroupLabel[]).map((label) => (
+              <div key={label}>
+                <h2 className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-500">{label}</h2>
+                <div className="space-y-2">
+                  {grouped[label].length === 0 ? (
+                    <p className="rounded-xl bg-slate-50 px-3 py-3 text-xs text-slate-400">No entries</p>
+                  ) : (
+                    grouped[label].map((entry) => (
+                      <button key={entry.id} onClick={() => enqueuePromptAndGoToChat(entry.prompt ?? `Continue this context: ${entry.title}. ${entry.description}`)} type="button" className="tap-feedback w-full rounded-xl bg-slate-50 px-3 py-3 text-left">
+                        <p className="text-sm font-medium text-slate-800">{entry.title}</p>
+                        <p className="text-xs text-slate-500">{entry.description}</p>
+                        <p className="mt-1 text-[11px] text-slate-400">{new Date(entry.createdAt).toLocaleString()}</p>
+                      </button>
+                    ))
+                  )}
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
       </section>
-
-      <BottomNav />
     </main>
   );
 }
