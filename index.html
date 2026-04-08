@@ -1,0 +1,89 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Signal Operator</title>
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <div class="app-shell">
+      <header class="top-bar card">
+        <div>
+          <p class="eyebrow">Signal Operator</p>
+          <h1>Financial Operations AI</h1>
+        </div>
+        <button id="notificationsBtn" class="icon-btn" aria-label="Open notifications">🔔</button>
+      </header>
+
+      <section class="greeting card">
+        <p>Good evening</p>
+        <h2>Ready to review your financial activity?</h2>
+      </section>
+
+      <main class="main-grid">
+        <section class="chat-card card" aria-label="Main AI conversation">
+          <div class="chat-header">
+            <h3>Operator Console</h3>
+            <button class="ghost-btn" id="viewAllBtn">View all</button>
+          </div>
+
+          <div class="quick-actions" role="group" aria-label="Quick actions">
+            <button class="pill-btn" data-prompt="Research all active subscriptions and suspicious merchants.">Research</button>
+            <button class="pill-btn" data-prompt="Analyze this month for duplicate charges and trial conversions.">Analyze</button>
+            <button class="pill-btn" data-prompt="Create a weekly savings and bill optimization plan.">Create</button>
+            <button class="pill-btn" data-prompt="Automate alerts for price increases and unusual recurring spend.">Automate</button>
+          </div>
+
+          <div id="chatMessages" class="chat-messages"></div>
+
+          <form id="chatForm" class="chat-input-wrap">
+            <textarea id="chatInput" placeholder="Ask Signal Operator to analyze receipts, invoices, or hidden charges…" rows="1"></textarea>
+            <button type="submit" class="send-btn">Send</button>
+          </form>
+        </section>
+
+        <aside class="support-grid">
+          <section class="card support-card" id="activitySection">
+            <div class="support-header">
+              <h4>Recent Activity</h4>
+              <button class="ghost-btn" id="activityAllBtn">View all</button>
+            </div>
+            <ul>
+              <li>Price increase detected: Cloud storage (+$3.00)</li>
+              <li>Duplicate transaction flagged: Utilities payment</li>
+              <li>Trial ending soon: Project tool in 3 days</li>
+            </ul>
+          </section>
+
+          <section class="card support-card">
+            <h4>Agents</h4>
+            <ul>
+              <li>Receipt Analyst — active</li>
+              <li>Subscription Sentinel — monitoring</li>
+              <li>Anomaly Detector — active</li>
+            </ul>
+          </section>
+
+          <section class="card support-card">
+            <h4>Stats</h4>
+            <div class="stats">
+              <p><strong>12</strong><span>Subscriptions</span></p>
+              <p><strong>$184</strong><span>Monthly recurring</span></p>
+              <p><strong>4</strong><span>Actionable alerts</span></p>
+            </div>
+          </section>
+        </aside>
+      </main>
+
+      <nav class="bottom-nav card" aria-label="Bottom navigation">
+        <button class="nav-btn active" data-route="#home">Home</button>
+        <button class="nav-btn" data-route="#activity">Activity</button>
+        <button class="nav-btn" data-route="#agents">Agents</button>
+        <button class="nav-btn" data-route="#settings">Settings</button>
+      </nav>
+    </div>
+
+    <script src="app.js" type="module"></script>
+  </body>
+</html>
