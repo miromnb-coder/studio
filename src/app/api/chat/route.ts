@@ -13,20 +13,6 @@ function streamLine(payload: Record<string, unknown>) {
   return encoder.encode(`${JSON.stringify(payload)}\n`);
 }
 
-function normalizeProviderError(providerName: string, error: unknown): string {
-  const raw = error instanceof Error ? error.message : 'Unexpected provider failure.';
-
-  if (providerName === 'groq' && /GROQ_API_KEY/i.test(raw)) {
-    return 'Groq is selected but not configured. Set AI_PROVIDER=groq and add a valid GROQ_API_KEY (and optional GROQ_MODEL) on the server.';
-  }
-
-  if (providerName === 'openai' && /OPENAI_API_KEY/i.test(raw)) {
-    return 'OpenAI is selected but not configured. Add OPENAI_API_KEY on the server or switch AI_PROVIDER=groq.';
-  }
-
-  return raw;
-}
-
 function buildSessionId(request: NextRequest): string {
   const forwardedFor = request.headers.get('x-forwarded-for') ?? 'local';
   const userAgent = request.headers.get('user-agent') ?? 'unknown';
@@ -57,8 +43,8 @@ export async function POST(request: NextRequest) {
   try {
     provider = getAIProvider();
   } catch (error) {
-    const message = error instanceof Error ? error.message : 'Provider configuration error.';
-    return new Response(JSON.stringify({ error: message }), {
+    console.error('Provider configuration error:', error);
+    return new Response(JSON.stringify({ error: 'Something went wrong. Please try again.' }), {
       status: 500,
       headers: { 'Content-Type': 'application/json' },
     });
@@ -69,12 +55,14 @@ export async function POST(request: NextRequest) {
   const stream = new ReadableStream<Uint8Array>({
     async start(controller) {
       try {
-        controller.enqueue(streamLine({ type: 'meta', provider: provider.name, agent: 'Supervisor Agent' }));
+        controller.enqueue(streamLine({ type: 'typing' }));
+        controller.enqueue(streamLine({ type: 'thinking-start' }));
 
-        const result = await runOperatorPipeline(provider, parsed.messages, sessionId, ({ label, status, agent }) => {
-          controller.enqueue(streamLine({ type: 'step', status, label, agent }));
+        const result = await runOperatorPipeline(provider, parsed.messages, sessionId, ({ label, status }) => {
+          controller.enqueue(streamLine({ type: 'step', status, label }));
         });
 
+        controller.enqueue(streamLine({ type: 'thinking-end' }));
         streamAsDeltas(controller, result.final || 'I could not generate a response.');
         controller.enqueue(streamLine({
           type: 'final',
@@ -86,8 +74,8 @@ export async function POST(request: NextRequest) {
         controller.enqueue(streamLine({ type: 'done' }));
         controller.close();
       } catch (error) {
-        const message = normalizeProviderError(provider.name, error);
-        controller.enqueue(streamLine({ type: 'error', message }));
+        console.error('Chat streaming error:', error);
+        controller.enqueue(streamLine({ type: 'error', message: 'Something went wrong. Please try again.' }));
         controller.close();
       }
     },

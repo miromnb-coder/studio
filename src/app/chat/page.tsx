@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { ArrowUp, LoaderCircle, MessageSquare, RefreshCw } from 'lucide-react';
+import { ArrowUp, Plus, RefreshCw, Mic } from 'lucide-react';
 import { useAppStore } from '../store/app-store';
 
 export default function ChatPage() {
@@ -13,8 +13,6 @@ export default function ChatPage() {
   const sendMessage = useAppStore((s) => s.sendMessage);
   const retryLastPrompt = useAppStore((s) => s.retryLastPrompt);
   const isAgentResponding = useAppStore((s) => s.isAgentResponding);
-  const activeAgent = useAppStore((s) => s.activeAgent);
-  const activeSteps = useAppStore((s) => s.activeSteps);
   const streamError = useAppStore((s) => s.streamError);
 
   const [draft, setDraft] = useState('');
@@ -31,7 +29,7 @@ export default function ChatPage() {
   useEffect(() => {
     if (!listRef.current) return;
     listRef.current.scrollTop = listRef.current.scrollHeight;
-  }, [messages, isAgentResponding, activeSteps]);
+  }, [messages, isAgentResponding]);
 
   useEffect(() => {
     if (!hydrated) return;
@@ -53,102 +51,48 @@ export default function ChatPage() {
     await sendMessage(draft);
     setDraftPrompt('');
     setDraft('');
-    if (typeof window !== 'undefined') {
-      window.sessionStorage.removeItem('nova-operator-chat-draft');
-    }
+    if (typeof window !== 'undefined') window.sessionStorage.removeItem('nova-operator-chat-draft');
   };
 
   const empty = useMemo(() => messages.length === 0, [messages]);
+  const activeAssistantMessage = [...messages].reverse().find((m) => m.role === 'assistant');
+  const showTyping = isAgentResponding && !!activeAssistantMessage && !activeAssistantMessage.content;
 
   return (
     <main className="screen app-bg pb-44">
-      <header className="card-surface mb-3 flex items-center justify-between gap-3 px-4 py-3">
-        <div className="flex items-center gap-3">
-          <div className="rounded-xl bg-white/5 p-2 text-[#c9ced6]">
-            <MessageSquare className="h-5 w-5" />
-          </div>
-          <div>
-            <h1 className="text-base font-semibold text-primary">Chat</h1>
-            <p className="text-xs text-secondary">System conversation + live agent orchestration</p>
-          </div>
-        </div>
-        <span className="badge badge-accent">{isAgentResponding ? 'Live' : 'Standby'}</span>
+      <header className="mb-4 px-1 pt-1">
+        <h1 className="text-xl font-semibold text-primary">Kivo</h1>
+        <p className="text-sm text-secondary">Your personal AI assistant</p>
       </header>
 
-      <div className="card-surface mb-3 flex items-center justify-between gap-2 px-3 py-2 text-xs">
-        <span className="inline-flex items-center gap-2 text-secondary">
-          <span className={`h-2 w-2 rounded-full ${isAgentResponding ? 'agent-pulse bg-[#b6bcc7]' : 'bg-white/40'}`} />
-          Agent status
-        </span>
-        <span className="badge">{activeAgent ?? 'No active agent'}</span>
-      </div>
-
-      <section
-        ref={listRef}
-        className="relative z-10 max-h-[calc(100vh-290px)] space-y-3 overflow-y-auto pb-2"
-      >
+      <section ref={listRef} className="relative z-10 max-h-[calc(100vh-250px)] space-y-4 overflow-y-auto pb-2">
         {empty ? (
-          <div className="card-surface px-4 py-4 text-sm text-secondary">
-            No conversation yet. Start from Home quick actions or type your first task below.
-          </div>
+          <div className="px-1 py-6 text-sm text-secondary">Ask anything. Kivo will think and help you move forward.</div>
         ) : (
           messages.map((message) => (
-            <div
-              key={message.id}
-              className={`message-appear max-w-[96%] px-4 py-3 text-sm ${
-                message.role === 'user' ? 'card-elevated ml-auto border-white/10' : 'card-surface'
-              }`}
-            >
-              <p className="whitespace-pre-wrap text-primary">{message.content || (message.isStreaming ? '…' : '')}</p>
-              {message.isStreaming ? (
-                <div className="mt-2 inline-flex items-center gap-2 text-[11px] text-[#c9ced6]">
-                  <LoaderCircle className="h-3.5 w-3.5 animate-spin" /> streaming
-                </div>
-              ) : null}
-              {message.error ? <p className="mt-2 text-[11px] text-rose-200">{message.error}</p> : null}
-              <p className="mt-1 text-[10px] text-secondary">
-                {new Date(message.createdAt).toLocaleTimeString([], {
-                  hour: '2-digit',
-                  minute: '2-digit',
-                })}
-              </p>
+            <div key={message.id} className={`message-appear max-w-[95%] ${message.role === 'user' ? 'ml-auto' : ''}`}>
+              <div className={message.role === 'user' ? 'ml-auto max-w-[90%] rounded-2xl bg-[#ececec] px-3.5 py-2.5 text-sm text-[#1c1c1c]' : 'px-1 py-1 text-[15px] leading-7 text-primary'}>
+                {message.content || (message.isStreaming ? ' ' : '')}
+              </div>
             </div>
           ))
         )}
 
-        {isAgentResponding ? (
-          <div className="card-surface space-y-2 px-4 py-3 text-sm">
-            <div className="inline-flex items-center gap-2 text-primary">
-              <span className="agent-pulse inline-flex h-2 w-2 rounded-full bg-[#b6bcc7]" />
-              {activeAgent ?? 'Agent'} is running...
+        {showTyping ? (
+          <div className="px-1 pt-2 text-sm text-secondary">
+            <div className="mb-1 inline-flex items-center gap-1.5">
+              <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-[#777]" />
+              <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-[#777] [animation-delay:120ms]" />
+              <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-[#777] [animation-delay:240ms]" />
             </div>
-            <div className="space-y-1 text-xs text-secondary">
-              {activeSteps.length === 0 ? (
-                <p>Preparing staged workflow…</p>
-              ) : (
-                activeSteps.map((step) => (
-                  <p key={step.id} className="flex items-center gap-2">
-                    <span
-                      className={`h-1.5 w-1.5 rounded-full ${
-                        step.status === 'completed' ? 'bg-[#8b919d]' : 'animate-pulse bg-[#b6bcc7]'
-                      }`}
-                    />
-                    {step.label}
-                  </p>
-                ))
-              )}
-            </div>
+            <p className="animate-pulse text-xs">Thinking…</p>
           </div>
         ) : null}
 
         {streamError ? (
-          <div className="card-surface rounded-[14px] border border-rose-300/30 px-3 py-3 text-xs text-rose-200">
-            {streamError}
-            <button
-              type="button"
-              onClick={() => void retryLastPrompt()}
-              className="btn-secondary ml-2 inline-flex items-center gap-1 px-2 py-1 text-rose-100"
-            >
+          <div className="rounded-xl border border-black/10 bg-[#f7f7f7] px-3 py-3 text-sm text-[#222]">
+            Something went wrong. Please try again.
+            <button type="button" onClick={() => void retryLastPrompt()} className="btn-secondary ml-2 inline-flex items-center gap-1 px-2 py-1 text-xs">
               <RefreshCw className="h-3 w-3" /> Retry
             </button>
           </div>
@@ -156,7 +100,10 @@ export default function ChatPage() {
       </section>
 
       <div className="fixed bottom-[calc(74px+env(safe-area-inset-bottom))] left-1/2 z-30 w-full max-w-md -translate-x-1/2 px-4 pb-2 pt-2">
-        <div className="card-elevated flex items-end gap-2 p-2">
+        <div className="flex items-end gap-2 rounded-[22px] border border-black/10 bg-[#f7f7f7] p-2 shadow-sm">
+          <button type="button" className="tap-feedback rounded-full p-2 text-secondary" aria-label="Add attachment">
+            <Plus className="h-4 w-4" />
+          </button>
           <textarea
             value={draft}
             onChange={(e) => {
@@ -164,16 +111,13 @@ export default function ChatPage() {
               setDraftPrompt(e.target.value);
             }}
             rows={1}
-            placeholder="Enter command for agents..."
-            className="system-input max-h-28 flex-1 resize-none px-3 py-2 text-sm"
+            placeholder="Message Kivo"
+            className="system-input max-h-28 flex-1 resize-none border-none bg-transparent px-2 py-2 text-sm"
           />
-          <button
-            type="button"
-            onClick={() => void send()}
-            className="btn-primary tap-feedback p-2.5 disabled:opacity-50"
-            disabled={!draft.trim() || isAgentResponding}
-            aria-label="Send message"
-          >
+          <button type="button" className="tap-feedback rounded-full p-2 text-secondary" aria-label="Voice input">
+            <Mic className="h-4 w-4" />
+          </button>
+          <button type="button" onClick={() => void send()} className="btn-primary tap-feedback rounded-full p-2.5 disabled:opacity-50" disabled={!draft.trim() || isAgentResponding} aria-label="Send message">
             <ArrowUp className="h-4 w-4" />
           </button>
         </div>

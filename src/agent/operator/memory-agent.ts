@@ -1,6 +1,6 @@
 import type { StoredMemory } from './types';
 
-const MAX_ITEMS = 60;
+const MAX_ITEMS = 80;
 const memoryStore = new Map<string, StoredMemory[]>();
 
 function tokenize(input: string): string[] {
@@ -13,7 +13,8 @@ function tokenize(input: string): string[] {
 function scoreRelevance(queryTokens: string[], candidate: StoredMemory): number {
   const text = `${candidate.key} ${candidate.value}`.toLowerCase();
   const overlap = queryTokens.reduce((sum, token) => (text.includes(token) ? sum + 1 : sum), 0);
-  return overlap + candidate.score * 0.25;
+  const freshnessBoost = Math.max(0, 14 - (Date.now() - new Date(candidate.updatedAt).getTime()) / (1000 * 60 * 60 * 24));
+  return overlap + candidate.score * 0.3 + freshnessBoost * 0.1;
 }
 
 export function retrieveMemory(sessionId: string, input: string): StoredMemory[] {
@@ -21,64 +22,61 @@ export function retrieveMemory(sessionId: string, input: string): StoredMemory[]
   if (!items.length) return [];
 
   const queryTokens = tokenize(input);
-  if (!queryTokens.length) return items.slice(-3);
+  if (!queryTokens.length) return items.slice(0, 4);
 
   return [...items]
     .map((item) => ({ item, relevance: scoreRelevance(queryTokens, item) }))
-    .filter((row) => row.relevance > 0)
+    .filter((row) => row.relevance > 0.2)
     .sort((a, b) => b.relevance - a.relevance)
-    .slice(0, 4)
+    .slice(0, 5)
     .map((row) => row.item);
+}
+
+function makeMemory(key: StoredMemory['key'], value: string, score: number, source: StoredMemory['source']): StoredMemory {
+  return {
+    key,
+    value: value.slice(0, 220),
+    score,
+    source,
+    updatedAt: new Date().toISOString(),
+  };
 }
 
 export function storeMemory(sessionId: string, input: string, result: string): StoredMemory[] {
   const normalizedInput = input.toLowerCase();
   const nextEntries: StoredMemory[] = [];
 
-  if (/prefer|preference|always|never/.test(normalizedInput)) {
-    nextEntries.push({
-      key: 'user_preference',
-      value: input.slice(0, 180),
-      score: 3,
-      source: 'preference',
-      updatedAt: new Date().toISOString(),
-    });
+  if (/prefer|preference|always|never|tone|style/.test(normalizedInput)) {
+    nextEntries.push(makeMemory('user_preference', input, 3.2, 'preference'));
   }
 
-  if (/choose|decision|pick|selected/.test(normalizedInput)) {
-    nextEntries.push({
-      key: 'important_decision',
-      value: input.slice(0, 180),
-      score: 2,
-      source: 'decision',
-      updatedAt: new Date().toISOString(),
-    });
+  if (/choose|decision|pick|selected|going with|we decided/.test(normalizedInput)) {
+    nextEntries.push(makeMemory('important_decision', input, 2.8, 'decision'));
   }
 
-  if (/again|repeat|every time|usually/.test(normalizedInput)) {
-    nextEntries.push({
-      key: 'repeated_pattern',
-      value: input.slice(0, 180),
-      score: 2,
-      source: 'pattern',
-      updatedAt: new Date().toISOString(),
-    });
+  if (/project|app|roadmap|release|launch|deadline/.test(normalizedInput)) {
+    nextEntries.push(makeMemory('project_context', input, 2.4, 'project'));
   }
 
-  if (result.length > 500) {
-    nextEntries.push({
-      key: 'long_form_topic',
-      value: result.slice(0, 200),
-      score: 1,
-      source: 'pattern',
-      updatedAt: new Date().toISOString(),
-    });
+  if (/again|repeat|every time|usually|habit/.test(normalizedInput)) {
+    nextEntries.push(makeMemory('repeated_pattern', input, 2.2, 'pattern'));
+  }
+
+  if (/goal|trying to|i want to/.test(normalizedInput)) {
+    nextEntries.push(makeMemory('user_goal', input, 2.6, 'project'));
+  }
+
+  if (result.length > 650) {
+    nextEntries.push(makeMemory('long_form_topic', result, 1.3, 'pattern'));
   }
 
   if (!nextEntries.length) return [];
 
   const existing = memoryStore.get(sessionId) ?? [];
-  const merged = [...nextEntries, ...existing].slice(0, MAX_ITEMS);
+  const deduped = [...nextEntries, ...existing].filter(
+    (item, index, arr) => arr.findIndex((candidate) => candidate.key === item.key && candidate.value === item.value) === index,
+  );
+  const merged = deduped.slice(0, MAX_ITEMS);
   memoryStore.set(sessionId, merged);
   return nextEntries;
 }
