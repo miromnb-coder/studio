@@ -275,9 +275,10 @@ function normalizeAgentResponse(result: Partial<AgentResponse>): AgentResponse {
 }
 
 function providerSafeErrorMessage(raw: string): string {
-  if (raw) {
-    console.error('Kivo chat error:', raw);
-  }
+  if (!raw) return 'Something went wrong. Please try again.';
+  if (raw.startsWith('LIMIT_REACHED:')) return raw;
+  if (raw.startsWith('AUTH_REQUIRED:')) return raw;
+  console.error('Kivo chat error:', raw);
   return 'Something went wrong. Please try again.';
 }
 
@@ -296,8 +297,15 @@ async function streamAssistantResponse(requestId: string, assistantMessageId: st
   });
 
   if (!response.ok) {
-    const reason = await response.text();
-    throw new Error(providerSafeErrorMessage(reason || `Request failed (${response.status})`));
+    const reason = await response.json().catch(() => null);
+    const errorCode = reason?.error;
+    if (errorCode === 'LIMIT_REACHED') {
+      throw new Error(`LIMIT_REACHED:${JSON.stringify(reason?.usage ?? {})}`);
+    }
+    if (errorCode === 'AUTH_REQUIRED') {
+      throw new Error('AUTH_REQUIRED:Please sign in to use chat.');
+    }
+    throw new Error(providerSafeErrorMessage(reason?.message || `Request failed (${response.status})`));
   }
 
   const raw = (await response.json()) as Partial<AgentResponse>;
@@ -450,6 +458,10 @@ const actions: AppActions = {
   sendMessage: async (prompt) => {
     const cleanPrompt = prompt.trim();
     if (!cleanPrompt) return;
+    if (!state.user?.id) {
+      setState((prev) => ({ ...prev, streamError: 'AUTH_REQUIRED:Please sign in to continue.' }));
+      return;
+    }
 
     const conversationId = state.activeConversationId;
     const agent: AgentName = DEFAULT_ACTIVE_AGENT;
@@ -574,7 +586,8 @@ const actions: AppActions = {
       persist();
       emit();
     } catch (error) {
-      const message = providerSafeErrorMessage(error instanceof Error ? error.message : 'Unknown streaming error.');
+      const rawMessage = error instanceof Error ? error.message : 'Unknown streaming error.';
+      const message = providerSafeErrorMessage(rawMessage);
 
       setState((prev) => {
         const conversationMessages = prev.messageState[conversationId] ?? [];
