@@ -1,10 +1,12 @@
 'use client';
 
 import { FormEvent, useEffect, useMemo, useState } from 'react';
+import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { createClient } from '@/lib/supabase/client';
 import { toFriendlyAuthMessage } from '@/lib/auth/messages';
 import { useAppStore } from '../store/app-store';
+import { useUserEntitlements } from '../hooks/use-user-entitlements';
 
 export default function ProfilePage() {
   const router = useRouter();
@@ -20,6 +22,7 @@ export default function ProfilePage() {
   const [error, setError] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
   const [isSigningOut, setIsSigningOut] = useState(false);
+  const { plan, usage } = useUserEntitlements();
 
   useEffect(() => {
     const loadProfile = async () => {
@@ -154,6 +157,15 @@ export default function ProfilePage() {
             {isSaving ? 'Saving…' : 'Save profile'}
           </button>
         </form>
+
+        <div className="mt-4 rounded-xl border border-black/10 bg-[#f2f2f2] p-4 text-sm">
+          <p className="font-medium text-primary">Subscription</p>
+          <p className="mt-1 text-secondary">Current plan: {plan}</p>
+          <p className="text-secondary">Usage today: {usage.current} / {usage.limit}</p>
+          <Link href="/upgrade" className="btn-secondary tap-feedback mt-3 inline-flex px-3 py-1.5 text-xs">
+            Upgrade
+          </Link>
+        </div>
 
         <button type="button" className="btn-secondary tap-feedback mt-3 w-full px-4 py-2 text-sm" onClick={logout} disabled={isSigningOut}>
           {isSigningOut ? 'Signing out…' : 'Sign out'}

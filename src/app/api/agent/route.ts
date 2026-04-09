@@ -27,11 +27,18 @@ export async function POST(req: Request) {
     const body = await req.json();
     const { input, history, imageUri, userId } = body ?? {};
 
-    if (!process.env.GROQ_API_KEY) {
+    if (!userId || userId === 'system_anonymous') {
       return NextResponse.json(
-        { error: 'GROQ_API_KEY is not configured.' },
-        { status: 500 }
+        {
+          error: 'AUTH_REQUIRED',
+          message: 'Please sign in to use chat.',
+        },
+        { status: 401 },
       );
+    }
+
+    if (!process.env.GROQ_API_KEY) {
+      return NextResponse.json({ error: 'GROQ_API_KEY is not configured.' }, { status: 500 });
     }
 
     const safeHistory = (history || [])
@@ -41,62 +48,63 @@ export async function POST(req: Request) {
         content: m.content.trim(),
       }));
 
-    const safeInput =
-      typeof input === 'string' && input.trim().length > 0
-        ? input.trim()
-        : imageUri
-          ? '[Analyze visual data]'
-          : null;
+    const safeInput = typeof input === 'string' && input.trim().length > 0 ? input.trim() : imageUri ? '[Analyze visual data]' : null;
 
     if (!safeInput && safeHistory.length === 0) {
-      return NextResponse.json(
-        { error: 'No valid content provided.' },
-        { status: 400 }
-      );
+      return NextResponse.json({ error: 'No valid content provided.' }, { status: 400 });
     }
 
     const { firestore } = initializeFirebase();
-
-    if (userId && userId !== 'system_anonymous' && firestore) {
-      const { plan, usage } = await SubscriptionService.getUserStatus(firestore, userId);
-
-      const planKey = (plan || 'FREE').toUpperCase() as keyof typeof PLAN_LIMITS;
-      const limits = PLAN_LIMITS[planKey] || PLAN_LIMITS.FREE;
-      const limit = limits.dailyAgentRuns;
-
-      if (usage.agentRuns >= limit) {
-        return NextResponse.json(
-          {
-            error: 'LIMIT_REACHED',
-            message: 'Daily intelligence quota exceeded.',
-            usage: { ...usage, limit },
-          },
-          { status: 403 }
-        );
-      }
-
-      await SubscriptionService.incrementUsage(firestore, userId);
+    if (!firestore) {
+      return NextResponse.json({ error: 'FIRESTORE_UNAVAILABLE' }, { status: 500 });
     }
 
-    const { stream, metadata, steps, structuredData } = await runAgentV7(
-      safeInput || 'Continue',
-      userId || 'system_anonymous',
-      safeHistory,
-      imageUri
-    );
+    const { plan, usage } = await SubscriptionService.getUserStatus(firestore, userId);
+
+    const planKey = (plan || 'FREE').toUpperCase() as keyof typeof PLAN_LIMITS;
+    const limits = PLAN_LIMITS[planKey] || PLAN_LIMITS.FREE;
+    const limit = limits.dailyAgentRuns;
+
+    if (usage.agentRuns >= limit) {
+      return NextResponse.json(
+        {
+          error: 'LIMIT_REACHED',
+          message: 'Daily limit reached',
+          usage: { current: usage.agentRuns, limit, remaining: 0 },
+          plan,
+        },
+        { status: 403 },
+      );
+    }
+
+    const { stream, metadata, steps, structuredData } = await runAgentV7(safeInput || 'Continue', userId, safeHistory, imageUri);
 
     const reply = await collectStreamToText(stream);
+    const updatedUsage = await SubscriptionService.incrementUsage(firestore, userId);
 
-    const payload: AgentResponse = {
+    const payload: AgentResponse & { usage: { current: number; limit: number; remaining: number }; plan: string } = {
       reply: reply || 'Analysis finalized.',
       metadata: {
         intent: metadata?.intent || 'general',
         plan: metadata?.planSummary || 'No plan available.',
-        steps: Array.isArray(steps) ? steps : [],
-        structuredData: structuredData ?? null,
+        steps: Array.isArray(steps)
+          ? steps.map((step) => ({
+              action: `${step.tool}: ${step.reason}`,
+              status: step.status === 'error' ? 'failed' : 'completed',
+              summary: step.reason,
+              error: step.error,
+            }))
+          : [],
+        structuredData: structuredData ?? undefined,
         memoryUsed: !!metadata?.memoryUsed,
         iterationCount: Array.isArray(steps) ? steps.length : 0,
       },
+      usage: {
+        current: updatedUsage.agentRuns,
+        limit,
+        remaining: Math.max(limit - updatedUsage.agentRuns, 0),
+      },
+      plan,
     };
 
     return NextResponse.json(payload);
@@ -109,7 +117,7 @@ export async function POST(req: Request) {
         intent: 'general',
         plan: 'Fallback response',
         steps: [],
-        structuredData: null,
+        structuredData: undefined,
         memoryUsed: false,
         iterationCount: 0,
       },
