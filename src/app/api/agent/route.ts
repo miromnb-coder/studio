@@ -2,14 +2,25 @@ import { NextResponse } from 'next/server';
 import { runAgentV7 } from '@/agent/v7/orchestrator';
 import { initializeFirebase } from '@/firebase';
 import { SubscriptionService, PLAN_LIMITS } from '@/services/subscription-service';
+import type { AgentResponse } from '@/types/agent-response';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
 
-/**
- * @fileOverview Streaming API Entry Point for Agent Engine v7.
- * Includes mandatory message sanitization and metadata-first streaming.
- */
+async function collectStreamToText(stream: AsyncIterable<any> | null | undefined): Promise<string> {
+  if (!stream) return '';
+
+  let finalText = '';
+
+  for await (const chunk of stream as any) {
+    const content = chunk?.choices?.[0]?.delta?.content || '';
+    if (content) {
+      finalText += content;
+    }
+  }
+
+  return finalText.trim();
+}
 
 export async function POST(req: Request) {
   try {
@@ -17,7 +28,10 @@ export async function POST(req: Request) {
     const { input, history, imageUri, userId } = body ?? {};
 
     if (!process.env.GROQ_API_KEY) {
-      throw new Error('GROQ_API_KEY is not configured.');
+      return NextResponse.json(
+        { error: 'GROQ_API_KEY is not configured.' },
+        { status: 500 }
+      );
     }
 
     const safeHistory = (history || [])
@@ -35,7 +49,10 @@ export async function POST(req: Request) {
           : null;
 
     if (!safeInput && safeHistory.length === 0) {
-      return NextResponse.json({ error: 'No valid content provided.' }, { status: 400 });
+      return NextResponse.json(
+        { error: 'No valid content provided.' },
+        { status: 400 }
+      );
     }
 
     const { firestore } = initializeFirebase();
@@ -54,14 +71,13 @@ export async function POST(req: Request) {
             message: 'Daily intelligence quota exceeded.',
             usage: { ...usage, limit },
           },
-          { status: 403 },
+          { status: 403 }
         );
       }
 
       await SubscriptionService.incrementUsage(firestore, userId);
     }
 
-    console.log('Initializing Agent V7 Orchestrator...');
     const { stream, metadata, steps, structuredData } = await runAgentV7(
       safeInput || 'Continue',
       userId || 'system_anonymous',
@@ -69,64 +85,36 @@ export async function POST(req: Request) {
       imageUri
     );
 
-    const encoder = new TextEncoder();
+    const reply = await collectStreamToText(stream);
 
-    const readableStream = new ReadableStream({
-      async start(controller) {
-        const safeMetadata = {
-          intent: metadata?.intent || 'general',
-          plan: metadata?.planSummary || 'No plan available.',
-          steps: Array.isArray(steps) ? steps : [],
-          structuredData: structuredData ?? null,
-          memoryUsed: !!metadata?.memoryUsed,
-          iterationCount: Array.isArray(steps) ? steps.length : 0,
-          version: metadata?.version || 'v7',
-          debug: metadata?.debug ?? null,
-        };
-
-        controller.enqueue(
-          encoder.encode(`__METADATA__:${JSON.stringify(safeMetadata)}\n`)
-        );
-
-        try {
-          if (!stream) {
-            controller.enqueue(encoder.encode('No streaming response available.'));
-            return;
-          }
-
-          for await (const chunk of stream as any) {
-            const content = chunk?.choices?.[0]?.delta?.content || '';
-            if (content) {
-              controller.enqueue(encoder.encode(content));
-            }
-          }
-        } catch (e: any) {
-          console.error('STREAM_ITERATION_ERROR:', e?.message || e);
-          controller.enqueue(
-            encoder.encode('\nSomething went wrong while generating the response.')
-          );
-        } finally {
-          controller.close();
-        }
+    const payload: AgentResponse = {
+      reply: reply || 'Analysis finalized.',
+      metadata: {
+        intent: metadata?.intent || 'general',
+        plan: metadata?.planSummary || 'No plan available.',
+        steps: Array.isArray(steps) ? steps : [],
+        structuredData: structuredData ?? null,
+        memoryUsed: !!metadata?.memoryUsed,
+        iterationCount: Array.isArray(steps) ? steps.length : 0,
       },
-    });
+    };
 
-    return new Response(readableStream, {
-      headers: {
-        'Content-Type': 'text/plain; charset=utf-8',
-        'Cache-Control': 'no-cache, no-transform',
-        Connection: 'keep-alive',
-      },
-    });
+    return NextResponse.json(payload);
   } catch (error: any) {
     console.error('AGENT_ROUTE_ERROR:', error);
 
-    return NextResponse.json(
-      {
-        error: 'AGENT_ROUTE_ERROR',
-        message: error?.message || 'Unknown server error',
+    const fallback: AgentResponse = {
+      reply: 'Something went wrong while processing your request.',
+      metadata: {
+        intent: 'general',
+        plan: 'Fallback response',
+        steps: [],
+        structuredData: null,
+        memoryUsed: false,
+        iterationCount: 0,
       },
-      { status: 500 }
-    );
+    };
+
+    return NextResponse.json(fallback, { status: 200 });
   }
 }
