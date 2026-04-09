@@ -1,50 +1,16 @@
 import { NextRequest } from 'next/server';
 import { z } from 'zod';
 import { getAIProvider } from '@/lib/ai/provider';
-import type { AgentName } from '@/app/store/app-store';
+import { runOperatorPipeline } from '@/agent/operator/operator';
 
 const requestSchema = z.object({
   messages: z.array(z.object({ role: z.enum(['user', 'assistant', 'system']), content: z.string().min(1) })).min(1),
-  agent: z.custom<AgentName>().optional(),
 });
 
 const encoder = new TextEncoder();
 
 function streamLine(payload: Record<string, unknown>) {
   return encoder.encode(`${JSON.stringify(payload)}\n`);
-}
-
-function buildSystemInstructions(agent?: AgentName) {
-  const base = [
-    'You are Nova Operator, a premium AI copilot.',
-    'Primary goal: deliver actionable, high-confidence answers with clear structure.',
-    'Always: (1) briefly restate objective, (2) show key findings, (3) provide concrete next actions.',
-    'When information is uncertain, call out assumptions explicitly.',
-    'Format cleanly with concise headers and bullets.',
-    'Never expose secrets, API keys, or internal environment values.',
-  ];
-
-  if (agent === 'Analysis Agent') {
-    return [
-      ...base,
-      'You are in Analysis mode: prioritize quantitative comparisons, percentages, tradeoffs, and risk levels.',
-      'If user data is incomplete, ask one focused follow-up after providing a best-effort draft.',
-    ].join(' ');
-  }
-
-  if (agent === 'Memory Agent') {
-    return [
-      ...base,
-      'You are in Memory mode: synthesize context, preserve durable facts, and suggest what to store for future tasks.',
-      'End with a short “Memory to retain” bullet list when relevant.',
-    ].join(' ');
-  }
-
-  return [
-    ...base,
-    'You are in Research mode: identify signal vs noise, summarize current patterns, and translate findings into practical plans.',
-    'Keep the final answer concise but specific.',
-  ].join(' ');
 }
 
 function normalizeProviderError(providerName: string, error: unknown): string {
@@ -61,13 +27,17 @@ function normalizeProviderError(providerName: string, error: unknown): string {
   return raw;
 }
 
-function pickAgent(messages: z.infer<typeof requestSchema>['messages'], providedAgent?: AgentName): AgentName {
-  if (providedAgent) return providedAgent;
-  const latestUser = [...messages].reverse().find((m) => m.role === 'user')?.content.toLowerCase() ?? '';
+function buildSessionId(request: NextRequest): string {
+  const forwardedFor = request.headers.get('x-forwarded-for') ?? 'local';
+  const userAgent = request.headers.get('user-agent') ?? 'unknown';
+  return `${forwardedFor.split(',')[0]?.trim()}:${userAgent.slice(0, 48)}`;
+}
 
-  if (/(summarize|recap|remember|memory|context)/.test(latestUser)) return 'Memory Agent';
-  if (/(compare|analysis|analy|percent|ratio|difference|forecast)/.test(latestUser)) return 'Analysis Agent';
-  return 'Research Agent';
+function streamAsDeltas(controller: ReadableStreamDefaultController<Uint8Array>, text: string) {
+  const chunks = text.match(/.{1,120}/g) ?? [];
+  for (const chunk of chunks) {
+    controller.enqueue(streamLine({ type: 'text-delta', delta: chunk }));
+  }
 }
 
 export async function POST(request: NextRequest) {
@@ -94,33 +64,25 @@ export async function POST(request: NextRequest) {
     });
   }
 
-  const activeAgent = pickAgent(parsed.messages, parsed.agent);
-  const stageSteps = ['Researching…', 'Analyzing…', 'Storing memory…', 'Final answer'];
+  const sessionId = buildSessionId(request);
 
   const stream = new ReadableStream<Uint8Array>({
     async start(controller) {
       try {
-        controller.enqueue(streamLine({ type: 'meta', provider: provider.name, agent: activeAgent }));
+        controller.enqueue(streamLine({ type: 'meta', provider: provider.name, agent: 'Supervisor Agent' }));
 
-        for (const step of stageSteps.slice(0, -1)) {
-          controller.enqueue(streamLine({ type: 'step', status: 'running', label: step }));
-          await new Promise((resolve) => setTimeout(resolve, 200));
-          controller.enqueue(streamLine({ type: 'step', status: 'completed', label: step }));
-        }
+        const result = await runOperatorPipeline(provider, parsed.messages, sessionId, ({ label, status, agent }) => {
+          controller.enqueue(streamLine({ type: 'step', status, label, agent }));
+        });
 
-        controller.enqueue(streamLine({ type: 'step', status: 'running', label: stageSteps[3] }));
-
-        await provider.streamChat(
-          {
-            messages: parsed.messages,
-            systemPrompt: buildSystemInstructions(activeAgent),
-          },
-          (event) => {
-            controller.enqueue(streamLine(event as unknown as Record<string, unknown>));
-          },
-        );
-
-        controller.enqueue(streamLine({ type: 'step', status: 'completed', label: stageSteps[3] }));
+        streamAsDeltas(controller, result.final || 'I could not generate a response.');
+        controller.enqueue(streamLine({
+          type: 'final',
+          content: result.final,
+          route: result.route,
+          memoryUsed: result.memoryUsed.map((item) => ({ source: item.source, key: item.key })),
+          memoryStored: result.memoryStored.map((item) => ({ source: item.source, key: item.key })),
+        }));
         controller.enqueue(streamLine({ type: 'done' }));
         controller.close();
       } catch (error) {

@@ -1,10 +1,14 @@
 'use client';
 
 import { useEffect } from 'react';
-import { Bot, Gauge, Layers, Search } from 'lucide-react';
+import { Bot, Gauge, Layers, Search, Sparkles, Wand2 } from 'lucide-react';
 import { useAppStore, type AgentName } from '../store/app-store';
 
 const meta: Record<AgentName, { subtitle: string; icon: typeof Search }> = {
+  'Supervisor Agent': {
+    subtitle: 'Routes intent and orchestrates the full execution plan.',
+    icon: Sparkles,
+  },
   'Research Agent': {
     subtitle: 'Finds relevant information and trends.',
     icon: Search,
@@ -16,6 +20,10 @@ const meta: Record<AgentName, { subtitle: string; icon: typeof Search }> = {
   'Memory Agent': {
     subtitle: 'Recalls and summarizes prior context.',
     icon: Layers,
+  },
+  'Response Agent': {
+    subtitle: 'Formats polished final answers for users.',
+    icon: Wand2,
   },
 };
 
