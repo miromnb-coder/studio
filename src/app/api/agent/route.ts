@@ -1,9 +1,11 @@
 import { NextResponse } from 'next/server';
 import { runAgentV7 } from '@/agent/v7/orchestrator';
-import { initializeFirebase } from '@/firebase';
-import { SubscriptionService, PLAN_LIMITS } from '@/services/subscription-service';
 import type { AgentResponse } from '@/types/agent-response';
-import { normalizeFinanceAnalysis, runFinanceAction, safeFinanceActionFallback } from '@/lib/finance/normalize';
+import {
+  normalizeFinanceAnalysis,
+  runFinanceAction,
+  safeFinanceActionFallback,
+} from '@/lib/finance/normalize';
 import type { FinanceActionType } from '@/lib/finance/types';
 import { createClient as createSupabaseServerClient } from '@/lib/supabase/server';
 import {
@@ -17,6 +19,19 @@ import {
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
 
+type UserPlan = 'FREE' | 'PREMIUM';
+
+type UsageSnapshot = {
+  agentRuns: number;
+  premiumActionRuns: number;
+  usageDate: string;
+};
+
+const PLAN_LIMITS: Record<UserPlan, { dailyAgentRuns: number }> = {
+  FREE: { dailyAgentRuns: 10 },
+  PREMIUM: { dailyAgentRuns: 1000 },
+};
+
 const SAFE_AGENT_FALLBACK: AgentResponse = {
   reply: 'I ran into an issue, but here’s what I could analyze so far.',
   metadata: {
@@ -29,7 +44,13 @@ const SAFE_AGENT_FALLBACK: AgentResponse = {
   },
 };
 
-async function collectStreamToText(stream: AsyncIterable<any> | null | undefined): Promise<string> {
+function todayKey() {
+  return new Date().toISOString().slice(0, 10);
+}
+
+async function collectStreamToText(
+  stream: AsyncIterable<any> | null | undefined,
+): Promise<string> {
   if (!stream) return '';
 
   let finalText = '';
@@ -53,10 +74,95 @@ function safeJsonResponse(payload: unknown, status = 200) {
 }
 
 function parseActionType(raw: unknown): FinanceActionType | null {
-  if (raw === 'create_savings_plan' || raw === 'find_alternatives' || raw === 'draft_cancellation') {
+  if (
+    raw === 'create_savings_plan' ||
+    raw === 'find_alternatives' ||
+    raw === 'draft_cancellation'
+  ) {
     return raw;
   }
   return null;
+}
+
+function normalizePlan(value: unknown): UserPlan {
+  const upper = String(value || 'FREE').toUpperCase();
+  return upper === 'PREMIUM' || upper === 'PRO' ? 'PREMIUM' : 'FREE';
+}
+
+async function getUserPlanAndUsage(supabase: any, userId: string): Promise<{
+  plan: UserPlan;
+  usage: UsageSnapshot;
+}> {
+  const usageDate = todayKey();
+
+  const [profileResult, usageResult] = await Promise.all([
+    supabase.from('profiles').select('plan').eq('id', userId).maybeSingle(),
+    supabase
+      .from('usage_daily')
+      .select('agent_runs,premium_action_runs,usage_date')
+      .eq('user_id', userId)
+      .eq('usage_date', usageDate)
+      .maybeSingle(),
+  ]);
+
+  if (profileResult.error) {
+    console.error('SUPABASE_PROFILE_READ_ERROR:', profileResult.error);
+  }
+
+  if (usageResult.error) {
+    console.error('SUPABASE_USAGE_READ_ERROR:', usageResult.error);
+  }
+
+  const plan = normalizePlan(profileResult.data?.plan);
+
+  return {
+    plan,
+    usage: {
+      agentRuns: typeof usageResult.data?.agent_runs === 'number' ? usageResult.data.agent_runs : 0,
+      premiumActionRuns:
+        typeof usageResult.data?.premium_action_runs === 'number'
+          ? usageResult.data.premium_action_runs
+          : 0,
+      usageDate,
+    },
+  };
+}
+
+async function incrementUsage(
+  supabase: any,
+  userId: string,
+  currentUsage: UsageSnapshot,
+  kind: 'agent' | 'premium_action' = 'agent',
+): Promise<UsageSnapshot> {
+  const nextUsage: UsageSnapshot = {
+    usageDate: currentUsage.usageDate || todayKey(),
+    agentRuns: currentUsage.agentRuns,
+    premiumActionRuns: currentUsage.premiumActionRuns,
+  };
+
+  if (kind === 'premium_action') {
+    nextUsage.premiumActionRuns += 1;
+  } else {
+    nextUsage.agentRuns += 1;
+  }
+
+  const { error } = await supabase.from('usage_daily').upsert(
+    {
+      user_id: userId,
+      usage_date: nextUsage.usageDate,
+      agent_runs: nextUsage.agentRuns,
+      premium_action_runs: nextUsage.premiumActionRuns,
+      updated_at: new Date().toISOString(),
+    },
+    { onConflict: 'user_id,usage_date' },
+  );
+
+  if (error) {
+    console.error('SUPABASE_USAGE_UPSERT_ERROR:', error);
+    return currentUsage;
+  }
+
+  return nextUsage;
 }
 
 export async function POST(req: Request) {
@@ -64,6 +170,7 @@ export async function POST(req: Request) {
     console.info('AGENT_ROUTE_PARSE_START');
     const body = await req.json().catch(() => ({}));
     console.info('AGENT_ROUTE_PARSE_DONE');
+
     const { input, history, imageUri, userId } = body ?? {};
     const actionType = parseActionType(body?.actionType);
 
@@ -77,13 +184,35 @@ export async function POST(req: Request) {
       );
     }
 
-    const { firestore } = initializeFirebase();
-    if (!firestore) {
-      console.error('AGENT_ROUTE_FIRESTORE_UNAVAILABLE');
+    const safeHistory = (history || [])
+      .filter((m: any) => m && typeof m.content === 'string' && m.content.trim().length > 0)
+      .map((m: any) => ({
+        role: m.role || 'user',
+        content: m.content.trim(),
+      }));
+
+    const safeInput =
+      typeof input === 'string' && input.trim().length > 0
+        ? input.trim()
+        : imageUri
+          ? '[Analyze visual data]'
+          : null;
+
+    if (!safeInput && safeHistory.length === 0) {
+      return safeJsonResponse({ error: 'No valid content provided.' }, 400);
+    }
+
+    const supabase = await createSupabaseServerClient().catch((error) => {
+      console.error('SUPABASE_SERVER_CLIENT_ERROR:', error);
+      return null;
+    });
+
+    if (!supabase) {
+      console.error('SUPABASE_UNAVAILABLE');
       return safeJsonResponse(SAFE_AGENT_FALLBACK);
     }
 
-    const { plan, usage } = await SubscriptionService.getUserStatus(firestore, userId);
+    const { plan, usage } = await getUserPlanAndUsage(supabase, userId);
 
     if (actionType && plan !== 'PREMIUM') {
       return safeJsonResponse(
@@ -96,9 +225,7 @@ export async function POST(req: Request) {
       );
     }
 
-    const planKey = (plan || 'FREE').toUpperCase() as keyof typeof PLAN_LIMITS;
-    const limits = PLAN_LIMITS[planKey] || PLAN_LIMITS.FREE;
-    const limit = limits.dailyAgentRuns;
+    const limit = PLAN_LIMITS[plan].dailyAgentRuns;
 
     if (usage.agentRuns >= limit) {
       return safeJsonResponse(
@@ -112,71 +239,87 @@ export async function POST(req: Request) {
       );
     }
 
-    const safeHistory = (history || [])
-      .filter((m: any) => m && typeof m.content === 'string' && m.content.trim().length > 0)
-      .map((m: any) => ({
-        role: m.role || 'user',
-        content: m.content.trim(),
-      }));
-
-    const safeInput = typeof input === 'string' && input.trim().length > 0 ? input.trim() : imageUri ? '[Analyze visual data]' : null;
-
-    if (!safeInput && safeHistory.length === 0) {
-      return safeJsonResponse({ error: 'No valid content provided.' }, 400);
-    }
-
-    const supabase = await createSupabaseServerClient().catch((error) => {
-      console.error('SUPABASE_SERVER_CLIENT_ERROR:', error);
-      return null;
+    const memoryIntent = await detectMemoryIntent(safeInput || 'Continue').catch((error) => {
+      console.error('MEMORY_INTENT_ERROR:', error);
+      return 'general' as const;
     });
 
-    const memoryIntent = await detectMemoryIntent(safeInput || 'Continue');
     const fallbackMemory: RetrievedMemoryContext = {
       userId,
       summaryType: memoryIntent,
       summary: 'No prior context available.',
     };
 
-    const retrievedMemory: RetrievedMemoryContext =
-      supabase && userId
-        ? await retrieveRelevantMemory(supabase, userId, memoryIntent).catch((error) => {
-            console.error('MEMORY_RETRIEVAL_ERROR:', error);
-            return fallbackMemory;
-          })
-        : fallbackMemory;
+    const retrievedMemory: RetrievedMemoryContext = await retrieveRelevantMemory(
+      supabase,
+      userId,
+      memoryIntent,
+    ).catch((error) => {
+      console.error('MEMORY_RETRIEVAL_ERROR:', error);
+      return fallbackMemory;
+    });
 
-    console.info('AGENT_ROUTE_ORCHESTRATOR_START', { userId, hasImage: Boolean(imageUri), historyCount: safeHistory.length });
-    const agentResult = await runAgentV7(safeInput || 'Continue', userId, safeHistory, imageUri, retrievedMemory).catch((error) => {
+    console.info('AGENT_ROUTE_ORCHESTRATOR_START', {
+      userId,
+      hasImage: Boolean(imageUri),
+      historyCount: safeHistory.length,
+    });
+
+    const agentResult = await runAgentV7(
+      safeInput || 'Continue',
+      userId,
+      safeHistory,
+      imageUri,
+      retrievedMemory,
+    ).catch((error) => {
       console.error('AGENT_V7_EXECUTION_ERROR:', error);
       return null;
     });
+
     console.info('AGENT_ROUTE_ORCHESTRATOR_DONE', {
       ok: Boolean(agentResult),
       intent: agentResult?.metadata?.intent || 'unknown',
       stepCount: agentResult?.steps?.length || 0,
     });
 
-    const normalizedFinance = normalizeFinanceAnalysis(agentResult?.structuredData);
+    if (!agentResult) {
+      return safeJsonResponse(SAFE_AGENT_FALLBACK);
+    }
+
+    const normalizedFinance = normalizeFinanceAnalysis(agentResult.structuredData);
     const shouldAttachFinance =
-      agentResult?.metadata?.intent === 'finance' ||
-      Boolean((agentResult?.structuredData || {}).detect_leaks) ||
+      agentResult.metadata?.intent === 'finance' ||
+      Boolean((agentResult.structuredData || {}).detect_leaks) ||
       Boolean(actionType);
-    const updatedUsage = await SubscriptionService.incrementUsage(firestore, userId).catch((error) => {
-      console.error('USAGE_INCREMENT_ERROR:', error);
-      return usage;
-    });
 
     if (actionType) {
       const actionResult = runFinanceAction(actionType, normalizedFinance);
-      if (supabase) {
-        const extracted = await extractImportantMemory({
-          intent: memoryIntent,
-          userInput: safeInput || '',
-          assistantReply: actionResult.summary,
-          finance: normalizedFinance,
-          actionType,
+
+      if (actionResult.type !== 'error') {
+        await incrementUsage(supabase, userId, usage, 'premium_action').catch((error) => {
+          console.error('PREMIUM_ACTION_USAGE_INCREMENT_ERROR:', error);
+          return usage;
         });
-        await persistSmartMemory(supabase, userId, extracted, retrievedMemory.financeProfile).catch((error) => {
+      }
+
+      const extracted = await extractImportantMemory({
+        intent: memoryIntent,
+        userInput: safeInput || '',
+        assistantReply: actionResult.summary,
+        finance: normalizedFinance,
+        actionType,
+      }).catch((error) => {
+        console.error('SMART_MEMORY_EXTRACT_ACTION_ERROR:', error);
+        return null;
+      });
+
+      if (extracted) {
+        await persistSmartMemory(
+          supabase,
+          userId,
+          extracted,
+          retrievedMemory.financeProfile,
+        ).catch((error) => {
           console.error('SMART_MEMORY_PERSIST_ACTION_ERROR:', error);
         });
       }
@@ -195,46 +338,67 @@ export async function POST(req: Request) {
           ],
           structuredData: {
             finance: normalizedFinance,
-            actionResult: actionResult.type === 'error' ? safeFinanceActionFallback() : actionResult,
+            actionResult:
+              actionResult.type === 'error' ? safeFinanceActionFallback() : actionResult,
           },
-          memoryUsed: false,
+          memoryUsed: !!retrievedMemory.summary,
           iterationCount: 1,
         },
         usage: {
-          current: updatedUsage.agentRuns,
+          current: usage.agentRuns,
           limit,
-          remaining: Math.max(limit - updatedUsage.agentRuns, 0),
+          remaining: Math.max(limit - usage.agentRuns, 0),
         },
         plan,
       });
     }
 
     console.info('AGENT_ROUTE_RESPONSE_SYNTHESIS_START');
-    const streamedReply = await collectStreamToText(agentResult?.stream);
-    const reply = streamedReply || agentResult?.finalText || '';
-    console.info('AGENT_ROUTE_RESPONSE_SYNTHESIS_DONE', { hasReply: reply.trim().length > 0 });
+    const streamedReply = await collectStreamToText(agentResult.stream);
+    const reply = streamedReply || agentResult.finalText || '';
+    console.info('AGENT_ROUTE_RESPONSE_SYNTHESIS_DONE', {
+      hasReply: reply.trim().length > 0,
+    });
 
-    if (supabase && reply.trim().length > 0) {
+    const updatedUsage = await incrementUsage(supabase, userId, usage, 'agent').catch((error) => {
+      console.error('USAGE_INCREMENT_ERROR:', error);
+      return usage;
+    });
+
+    if (reply.trim().length > 0) {
       const extracted = await extractImportantMemory({
         intent: memoryIntent,
         userInput: safeInput || '',
         assistantReply: reply,
         finance: normalizedFinance,
         actionType: null,
+      }).catch((error) => {
+        console.error('SMART_MEMORY_EXTRACT_ERROR:', error);
+        return null;
       });
 
-      await persistSmartMemory(supabase, userId, extracted, retrievedMemory.financeProfile).catch((error) => {
-        console.error('SMART_MEMORY_PERSIST_ERROR:', error);
-      });
+      if (extracted) {
+        await persistSmartMemory(
+          supabase,
+          userId,
+          extracted,
+          retrievedMemory.financeProfile,
+        ).catch((error) => {
+          console.error('SMART_MEMORY_PERSIST_ERROR:', error);
+        });
+      }
     }
 
-    const payload: AgentResponse & { usage: { current: number; limit: number; remaining: number }; plan: string } = {
-      reply: reply || 'I ran into an issue, but here’s what I could analyze so far.',
+    const payload: AgentResponse & {
+      usage: { current: number; limit: number; remaining: number };
+      plan: string;
+    } = {
+      reply: reply || SAFE_AGENT_FALLBACK.reply,
       metadata: {
-        intent: agentResult?.metadata?.intent || 'general',
-        plan: agentResult?.metadata?.planSummary || 'Partial fallback',
-        steps: Array.isArray(agentResult?.steps)
-          ? agentResult!.steps.map((step) => ({
+        intent: agentResult.metadata?.intent || 'general',
+        plan: agentResult.metadata?.planSummary || 'Partial fallback',
+        steps: Array.isArray(agentResult.steps)
+          ? agentResult.steps.map((step) => ({
               action: `${step.tool}: ${step.reason}`,
               status: step.status === 'error' ? 'failed' : 'completed',
               summary: step.reason,
@@ -242,11 +406,11 @@ export async function POST(req: Request) {
             }))
           : [],
         structuredData: {
-          ...(agentResult?.structuredData || {}),
+          ...(agentResult.structuredData || {}),
           ...(shouldAttachFinance ? { finance: normalizedFinance } : {}),
         },
-        memoryUsed: !!agentResult?.metadata?.memoryUsed,
-        iterationCount: Array.isArray(agentResult?.steps) ? agentResult.steps.length : 0,
+        memoryUsed: !!agentResult.metadata?.memoryUsed,
+        iterationCount: Array.isArray(agentResult.steps) ? agentResult.steps.length : 0,
       },
       usage: {
         current: updatedUsage.agentRuns,
