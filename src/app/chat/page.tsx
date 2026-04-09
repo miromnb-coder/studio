@@ -229,7 +229,7 @@ export default function ChatPage() {
           </div>
         ) : null}
 
-        <div className="composer-shell flex items-end gap-2 rounded-[32px] border border-black/[0.045] bg-[#f6f6f6] px-2.5 py-3 shadow-[0_6px_16px_rgba(0,0,0,0.025)]">
+        <div className="composer-shell rounded-[32px] border border-black/[0.04] bg-[#f6f6f6] px-3 py-3 shadow-[0_4px_12px_rgba(0,0,0,0.02)]">
           <input
             ref={fileInputRef}
             type="file"
@@ -241,12 +241,6 @@ export default function ChatPage() {
             }}
           />
 
-          <button type="button" className="composer-icon-btn" aria-label="Open add menu" onClick={() => setOpenPanel((prev) => (prev === 'add' ? null : 'add'))}>
-            <Plus className="h-[18px] w-[18px]" />
-          </button>
-          <button type="button" className="composer-icon-btn" aria-label="Open tools menu" onClick={() => setOpenPanel((prev) => (prev === 'tools' ? null : 'tools'))}>
-            <Wrench className="h-[18px] w-[18px]" />
-          </button>
           <textarea
             ref={textareaRef}
             value={draft}
@@ -262,17 +256,37 @@ export default function ChatPage() {
             }}
             rows={1}
             placeholder="Assign a task or ask anything"
-            className="composer-textarea max-h-36 min-h-[46px] flex-1 resize-none border-none bg-transparent px-2.5 py-2.5 text-[15px]"
+            className="composer-textarea max-h-36 min-h-[44px] w-full resize-none border-none bg-transparent px-2 py-1.5 text-[15px]"
           />
-          <button type="button" className={`composer-icon-btn ${isVoiceMode ? 'composer-icon-btn-active' : ''}`} aria-label="Toggle voice mode" onClick={toggleVoiceMode}>
-            <AudioLines className="h-[18px] w-[18px]" />
-          </button>
-          <button type="button" className="composer-icon-btn" aria-label="Start speech to text" onClick={startSpeechToText}>
-            <Mic className="h-[18px] w-[18px]" />
-          </button>
-          <button type="button" onClick={() => void send()} className="composer-send-btn disabled:opacity-45" disabled={!draft.trim() || isAgentResponding} aria-label="Send message">
-            <ArrowUp className="h-[18px] w-[18px]" />
-          </button>
+
+          <div className="mt-1.5 flex items-center justify-between px-0.5">
+            <div className="flex items-center gap-2.5">
+              <button type="button" className="composer-icon-btn" aria-label="Open add menu" onClick={() => setOpenPanel((prev) => (prev === 'add' ? null : 'add'))}>
+                <Plus className="h-[19px] w-[19px]" />
+              </button>
+              <button type="button" className="composer-icon-btn" aria-label="Open tools menu" onClick={() => setOpenPanel((prev) => (prev === 'tools' ? null : 'tools'))}>
+                <Wrench className="h-[19px] w-[19px]" />
+              </button>
+            </div>
+
+            <div className="flex items-center gap-2.5">
+              <button type="button" className={`composer-icon-btn ${isVoiceMode ? 'composer-icon-btn-active' : ''}`} aria-label="Toggle voice mode" onClick={toggleVoiceMode}>
+                <AudioLines className="h-[19px] w-[19px]" />
+              </button>
+              <button type="button" className="composer-icon-btn" aria-label="Start speech to text" onClick={startSpeechToText}>
+                <Mic className="h-[19px] w-[19px]" />
+              </button>
+              <button
+                type="button"
+                onClick={() => void send()}
+                className={`composer-send-btn ${draft.trim() && !isAgentResponding ? 'composer-send-btn-ready' : ''} disabled:opacity-55`}
+                disabled={!draft.trim() || isAgentResponding}
+                aria-label="Send message"
+              >
+                <ArrowUp className="h-[19px] w-[19px]" />
+              </button>
+            </div>
+          </div>
         </div>
       </div>
     </main>
