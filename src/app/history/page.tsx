@@ -34,32 +34,32 @@ export default function HistoryPage() {
   }, [history]);
 
   return (
-    <main className="screen bg-[#f8fafc]">
-      <section className="surface-card p-5">
+    <main className="screen app-bg">
+      <section className="card-surface p-5">
         <div className="mb-4 flex items-center gap-3">
-          <div className="rounded-xl bg-slate-100 p-2.5 text-slate-500"><Clock3 className="h-5 w-5" /></div>
+          <div className="rounded-xl bg-white/5 p-2.5 text-[#cde4ff]"><Clock3 className="h-5 w-5" /></div>
           <div>
-            <h1 className="text-2xl font-semibold">History</h1>
-            <p className="text-sm text-slate-500">Today, yesterday, and earlier timeline of operator actions.</p>
+            <h1 className="text-2xl font-semibold text-primary">History</h1>
+            <p className="text-sm text-secondary">Today, yesterday, and earlier timeline of operator actions.</p>
           </div>
         </div>
 
         {history.length === 0 ? (
-          <div className="rounded-2xl bg-slate-50 px-4 py-4 text-sm text-slate-500">No timeline yet. Chat, alerts, and agents will appear here.</div>
+          <div className="card-elevated px-4 py-4 text-sm text-secondary">No timeline yet. Chat, alerts, and agents will appear here.</div>
         ) : (
           <div className="space-y-4">
             {(['Today', 'Yesterday', 'Earlier'] as GroupLabel[]).map((label) => (
               <div key={label}>
-                <h2 className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-500">{label}</h2>
+                <h2 className="mb-2 text-xs font-semibold uppercase tracking-wide text-secondary">{label}</h2>
                 <div className="space-y-2">
                   {grouped[label].length === 0 ? (
-                    <p className="rounded-xl bg-slate-50 px-3 py-3 text-xs text-slate-400">No entries</p>
+                    <p className="card-elevated px-3 py-3 text-xs text-secondary">No entries</p>
                   ) : (
                     grouped[label].map((entry) => (
-                      <button key={entry.id} onClick={() => enqueuePromptAndGoToChat(entry.prompt ?? `Continue this context: ${entry.title}. ${entry.description}`)} type="button" className="tap-feedback w-full rounded-xl bg-slate-50 px-3 py-3 text-left">
-                        <p className="text-sm font-medium text-slate-800">{entry.title}</p>
-                        <p className="text-xs text-slate-500">{entry.description}</p>
-                        <p className="mt-1 text-[11px] text-slate-400">{new Date(entry.createdAt).toLocaleString()}</p>
+                      <button key={entry.id} onClick={() => enqueuePromptAndGoToChat(entry.prompt ?? `Continue this context: ${entry.title}. ${entry.description}`)} type="button" className="card-interactive w-full rounded-[14px] px-3 py-3 text-left">
+                        <p className="text-sm font-medium text-primary">{entry.title}</p>
+                        <p className="text-xs text-secondary">{entry.description}</p>
+                        <p className="mt-1 text-[11px] text-secondary">{new Date(entry.createdAt).toLocaleString()}</p>
                       </button>
                     ))
                   )}

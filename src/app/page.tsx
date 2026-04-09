@@ -39,7 +39,10 @@ export default function HomePage() {
   const recentMessages = useMemo(() => messages.slice(-3).reverse(), [messages]);
   const recentHistory = useMemo(() => history.slice(0, 4), [history]);
   const activeAlerts = useMemo(
-    () => alerts.filter((item) => !item.resolved && (!item.snoozedUntil || new Date(item.snoozedUntil).getTime() < Date.now())),
+    () =>
+      alerts.filter(
+        (item) => !item.resolved && (!item.snoozedUntil || new Date(item.snoozedUntil).getTime() < Date.now()),
+      ),
     [alerts],
   );
 
@@ -72,85 +75,170 @@ export default function HomePage() {
   };
 
   return (
-    <main className="screen bg-[#f8fafc]">
-      <section className="surface-card mb-5 bg-white/90 px-5 py-5">
+    <main className="screen app-bg">
+      <section className="card-surface mb-4 px-4 py-4">
         <div className="flex items-center justify-between gap-3">
           <div className="flex items-center gap-3">
-            <div className="rounded-2xl bg-indigo-50 p-2.5 text-indigo-500">
+            <div className="rounded-2xl bg-white/5 p-2.5 text-[#cde4ff]">
               <Sparkles className="h-4 w-4 stroke-[1.9]" />
             </div>
             <div>
-              <p className="text-xl font-semibold tracking-tight text-slate-900">{PRODUCT_NAME}</p>
-              <p className="text-xs text-slate-500">Mobile AI operator workspace</p>
+              <p className="text-lg font-semibold tracking-tight text-primary">{PRODUCT_NAME}</p>
+              <p className="text-xs text-secondary">Mobile AI operator workspace</p>
             </div>
           </div>
 
           <div className="flex items-center gap-2">
-            <button type="button" onClick={editName} className="tap-feedback flex h-10 w-10 items-center justify-center rounded-full bg-slate-100 text-xs font-semibold text-slate-700">
+            <button
+              type="button"
+              onClick={editName}
+              className="tap-feedback inline-flex h-10 w-10 items-center justify-center rounded-full border border-white/10 bg-white/5 text-xs font-semibold text-primary"
+            >
               {initials}
             </button>
-            <Link href="/alerts" className="tap-feedback rounded-full p-2 text-slate-500 hover:bg-slate-100"><Bell className="h-5 w-5" /></Link>
-            <button type="button" onClick={logout} className="tap-feedback rounded-full p-2 text-slate-500 hover:bg-slate-100"><LogOut className="h-5 w-5" /></button>
+            <Link href="/alerts" className="tap-feedback rounded-full p-2 text-secondary hover:bg-white/5">
+              <Bell className="h-5 w-5" />
+            </Link>
+            <button type="button" onClick={logout} className="tap-feedback rounded-full p-2 text-secondary hover:bg-white/5">
+              <LogOut className="h-5 w-5" />
+            </button>
           </div>
         </div>
       </section>
 
-      <section className="space-y-4 pb-4">
-        <header>
-          <h1 className="text-[1.9rem] font-semibold tracking-tight text-slate-900">Hi {userName || PRODUCT_SHORT} 👋</h1>
-          <p className="text-sm text-slate-500">Start work fast, then continue in chat with live agents.</p>
+      <section className="space-y-3 pb-3">
+        <header className="px-1">
+          <h1 className="text-[1.8rem] font-semibold tracking-tight text-primary">Hi {userName || PRODUCT_SHORT} 👋</h1>
+          <p className="text-sm text-secondary">Start work fast, then continue in chat with live agents.</p>
         </header>
 
-        <article className="surface-card p-4">
-          <p className="mb-2 text-sm text-slate-500">Quick actions</p>
+        <article className="card-surface px-4 py-4">
+          <p className="mb-2 text-sm text-secondary">Quick actions</p>
           <div className="space-y-2">
             {quickActions.map((starter) => (
-              <button key={starter} onClick={() => enqueuePromptAndGoToChat(starter)} className="tap-feedback w-full rounded-2xl bg-slate-50 px-4 py-3 text-left text-sm text-slate-700" type="button">
+              <button
+                key={starter}
+                onClick={() => enqueuePromptAndGoToChat(starter)}
+                className="card-interactive w-full rounded-[14px] px-4 py-3 text-left text-sm text-primary"
+                type="button"
+              >
                 {starter}
               </button>
             ))}
           </div>
-          <div className="mt-3 rounded-2xl bg-slate-50 p-3">
-            <textarea value={prompt} onChange={(e) => setPrompt(e.target.value)} rows={3} className="w-full resize-none bg-transparent text-sm outline-none" placeholder="Type a task to start in chat..." />
-            <div className="mt-2 flex justify-end"><button onClick={submitPrompt} type="button" className="tap-feedback inline-flex items-center gap-2 rounded-full bg-indigo-500 px-4 py-2 text-sm font-semibold text-white disabled:bg-slate-300" disabled={!prompt.trim()}><Send className="h-4 w-4" />Start</button></div>
+          <div className="card-elevated mt-3 p-3">
+            <textarea
+              value={prompt}
+              onChange={(e) => setPrompt(e.target.value)}
+              rows={3}
+              className="system-input w-full resize-none bg-transparent px-3 py-2 text-sm"
+              placeholder="Type a task to start in chat..."
+            />
+            <div className="mt-2 flex justify-end">
+              <button
+                onClick={submitPrompt}
+                type="button"
+                className="btn-primary tap-feedback inline-flex items-center gap-2 px-4 py-2 text-sm disabled:opacity-50"
+                disabled={!prompt.trim()}
+              >
+                <Send className="h-4 w-4" />
+                Start
+              </button>
+            </div>
           </div>
         </article>
 
-        <article className="surface-card p-4">
-          <div className="mb-2 flex items-center justify-between"><h2 className="text-base font-semibold">Agents</h2><Link href="/agents" className="text-xs font-semibold text-indigo-600">View</Link></div>
+        <article className="card-surface p-4">
+          <div className="mb-2 flex items-center justify-between">
+            <h2 className="text-base font-semibold">Agents</h2>
+            <Link href="/agents" className="text-xs font-semibold text-[#cde4ff]">
+              View
+            </Link>
+          </div>
           <div className="space-y-2">
             {Object.values(agents).map((agent) => {
               const Icon = iconMap[agent.name];
               return (
-                <button key={agent.name} type="button" onClick={() => enqueuePromptAndGoToChat(`Continue work with ${agent.name}. Last task: ${agent.lastTask ?? 'none yet'}.`)} className="tap-feedback flex w-full items-center justify-between rounded-xl bg-slate-50 px-3 py-3 text-left">
-                  <div className="flex items-center gap-2"><div className="rounded-xl bg-indigo-50 p-2 text-indigo-500"><Icon className="h-4 w-4" /></div><div><p className="text-sm font-semibold text-slate-800">{agent.name}</p><p className="text-xs text-slate-500">{agent.lastTask ?? 'No task run yet'}</p></div></div>
-                  <span className={`rounded-full px-2 py-1 text-xs font-semibold ${agent.status === 'running' ? 'animate-pulse bg-emerald-100 text-emerald-700' : agent.status === 'completed' ? 'bg-indigo-100 text-indigo-700' : 'bg-slate-200 text-slate-600'}`}>{agent.status}</span>
+                <button
+                  key={agent.name}
+                  type="button"
+                  onClick={() =>
+                    enqueuePromptAndGoToChat(
+                      `Continue work with ${agent.name}. Last task: ${agent.lastTask ?? 'none yet'}.`,
+                    )
+                  }
+                  className="card-interactive flex w-full items-center justify-between rounded-[14px] px-3 py-3 text-left"
+                >
+                  <div className="flex items-center gap-2">
+                    <div className="rounded-xl bg-white/5 p-2 text-[#cde4ff]">
+                      <Icon className="h-4 w-4" />
+                    </div>
+                    <div>
+                      <p className="text-sm font-semibold text-primary">{agent.name}</p>
+                      <p className="text-xs text-secondary">{agent.lastTask ?? 'No task run yet'}</p>
+                    </div>
+                  </div>
+                  <span className={`badge ${agent.status === 'running' ? 'badge-accent agent-pulse' : ''}`}>{agent.status}</span>
                 </button>
               );
             })}
           </div>
         </article>
 
-        <article className="surface-card p-4">
-          <div className="mb-2 flex items-center justify-between"><h2 className="text-base font-semibold">Recent activity</h2><Link href="/history" className="text-xs font-semibold text-indigo-600">All</Link></div>
+        <article className="card-surface p-4">
+          <div className="mb-2 flex items-center justify-between">
+            <h2 className="text-base font-semibold">Recent activity</h2>
+            <Link href="/history" className="text-xs font-semibold text-[#cde4ff]">
+              All
+            </Link>
+          </div>
           <div className="space-y-2">
-            {recentHistory.length === 0 ? <p className="rounded-xl bg-slate-50 px-3 py-3 text-sm text-slate-500">No activity yet. Start a task to build your timeline.</p> : recentHistory.map((item) => (
-              <button key={item.id} type="button" onClick={() => openHistoryItem(item)} className="tap-feedback w-full rounded-xl bg-slate-50 px-3 py-3 text-left">
-                <p className="text-sm font-medium text-slate-800">{item.title}</p>
-                <p className="text-xs text-slate-500">{item.description}</p>
-              </button>
-            ))}
+            {recentHistory.length === 0 ? (
+              <p className="card-elevated rounded-[14px] px-3 py-3 text-sm text-secondary">
+                No activity yet. Start a task to build your timeline.
+              </p>
+            ) : (
+              recentHistory.map((item) => (
+                <button
+                  key={item.id}
+                  type="button"
+                  onClick={() => openHistoryItem(item)}
+                  className="card-interactive w-full rounded-[14px] px-3 py-3 text-left"
+                >
+                  <p className="text-sm font-medium text-primary">{item.title}</p>
+                  <p className="text-xs text-secondary">{item.description}</p>
+                </button>
+              ))
+            )}
           </div>
         </article>
 
-        <article className="surface-card p-4">
-          <div className="mb-2 flex items-center justify-between"><h2 className="text-base font-semibold">Conversation preview</h2><Link href="/chat" className="text-xs font-semibold text-indigo-600">Open chat</Link></div>
-          <div className="space-y-2">
-            {recentMessages.length === 0 ? <p className="rounded-xl bg-slate-50 px-3 py-3 text-sm text-slate-500">No messages yet.</p> : recentMessages.map((message) => (
-              <button key={message.id} onClick={() => enqueuePromptAndGoToChat(message.content)} type="button" className="tap-feedback w-full rounded-xl bg-slate-50 px-3 py-3 text-left text-sm text-slate-700">{message.role === 'user' ? 'You' : message.agent ?? 'Assistant'}: {message.content}</button>
-            ))}
+        <article className="card-surface p-4">
+          <div className="mb-2 flex items-center justify-between">
+            <h2 className="text-base font-semibold">Conversation preview</h2>
+            <Link href="/chat" className="text-xs font-semibold text-[#cde4ff]">
+              Open chat
+            </Link>
           </div>
-          <div className="mt-3 rounded-xl bg-indigo-50 px-3 py-2 text-xs text-indigo-700">{activeAlerts.length} active alert(s) require review.</div>
+          <div className="space-y-2">
+            {recentMessages.length === 0 ? (
+              <p className="card-elevated rounded-[14px] px-3 py-3 text-sm text-secondary">No messages yet.</p>
+            ) : (
+              recentMessages.map((message) => (
+                <button
+                  key={message.id}
+                  onClick={() => enqueuePromptAndGoToChat(message.content)}
+                  type="button"
+                  className="card-interactive w-full rounded-[14px] px-3 py-3 text-left text-sm text-primary"
+                >
+                  {message.role === 'user' ? 'You' : message.agent ?? 'Assistant'}: {message.content}
+                </button>
+              ))
+            )}
+          </div>
+          <div className="card-elevated mt-3 rounded-[14px] px-3 py-2 text-xs text-[#cde4ff]">
+            {activeAlerts.length} active alert(s) require review.
+          </div>
         </article>
       </section>
     </main>
