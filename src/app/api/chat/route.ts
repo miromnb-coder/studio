@@ -14,18 +14,60 @@ function streamLine(payload: Record<string, unknown>) {
   return encoder.encode(`${JSON.stringify(payload)}\n`);
 }
 
-function systemInstructions(agent?: AgentName) {
-  const base = 'You are Nova Operator, a concise, high-utility AI assistant for mobile users.';
+function buildSystemInstructions(agent?: AgentName) {
+  const base = [
+    'You are Nova Operator, a premium AI copilot.',
+    'Primary goal: deliver actionable, high-confidence answers with clear structure.',
+    'Always: (1) briefly restate objective, (2) show key findings, (3) provide concrete next actions.',
+    'When information is uncertain, call out assumptions explicitly.',
+    'Format cleanly with concise headers and bullets.',
+    'Never expose secrets, API keys, or internal environment values.',
+  ];
 
   if (agent === 'Analysis Agent') {
-    return `${base} Focus on quantitative reasoning, comparisons, and percentage changes. Use clear bullets.`;
+    return [
+      ...base,
+      'You are in Analysis mode: prioritize quantitative comparisons, percentages, tradeoffs, and risk levels.',
+      'If user data is incomplete, ask one focused follow-up after providing a best-effort draft.',
+    ].join(' ');
   }
 
   if (agent === 'Memory Agent') {
-    return `${base} Focus on summaries, preserving important context, and recommending next steps.`;
+    return [
+      ...base,
+      'You are in Memory mode: synthesize context, preserve durable facts, and suggest what to store for future tasks.',
+      'End with a short “Memory to retain” bullet list when relevant.',
+    ].join(' ');
   }
 
-  return `${base} Focus on research framing, trend analysis, and practical action plans.`;
+  return [
+    ...base,
+    'You are in Research mode: identify signal vs noise, summarize current patterns, and translate findings into practical plans.',
+    'Keep the final answer concise but specific.',
+  ].join(' ');
+}
+
+function normalizeProviderError(providerName: string, error: unknown): string {
+  const raw = error instanceof Error ? error.message : 'Unexpected provider failure.';
+
+  if (providerName === 'groq' && /GROQ_API_KEY/i.test(raw)) {
+    return 'Groq is selected but not configured. Set AI_PROVIDER=groq and add a valid GROQ_API_KEY (and optional GROQ_MODEL) on the server.';
+  }
+
+  if (providerName === 'openai' && /OPENAI_API_KEY/i.test(raw)) {
+    return 'OpenAI is selected but not configured. Add OPENAI_API_KEY on the server or switch AI_PROVIDER=groq.';
+  }
+
+  return raw;
+}
+
+function pickAgent(messages: z.infer<typeof requestSchema>['messages'], providedAgent?: AgentName): AgentName {
+  if (providedAgent) return providedAgent;
+  const latestUser = [...messages].reverse().find((m) => m.role === 'user')?.content.toLowerCase() ?? '';
+
+  if (/(summarize|recap|remember|memory|context)/.test(latestUser)) return 'Memory Agent';
+  if (/(compare|analysis|analy|percent|ratio|difference|forecast)/.test(latestUser)) return 'Analysis Agent';
+  return 'Research Agent';
 }
 
 export async function POST(request: NextRequest) {
@@ -41,38 +83,48 @@ export async function POST(request: NextRequest) {
     });
   }
 
-  const provider = getAIProvider();
-  const stageSteps = [
-    'Researching relevant patterns…',
-    'Analyzing important signals…',
-    'Storing useful context…',
-  ];
+  let provider;
+  try {
+    provider = getAIProvider();
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'Provider configuration error.';
+    return new Response(JSON.stringify({ error: message }), {
+      status: 500,
+      headers: { 'Content-Type': 'application/json' },
+    });
+  }
+
+  const activeAgent = pickAgent(parsed.messages, parsed.agent);
+  const stageSteps = ['Researching…', 'Analyzing…', 'Storing memory…', 'Final answer'];
 
   const stream = new ReadableStream<Uint8Array>({
     async start(controller) {
       try {
-        controller.enqueue(streamLine({ type: 'meta', provider: provider.name }));
+        controller.enqueue(streamLine({ type: 'meta', provider: provider.name, agent: activeAgent }));
 
-        for (const step of stageSteps) {
+        for (const step of stageSteps.slice(0, -1)) {
           controller.enqueue(streamLine({ type: 'step', status: 'running', label: step }));
-          await new Promise((resolve) => setTimeout(resolve, 220));
+          await new Promise((resolve) => setTimeout(resolve, 200));
           controller.enqueue(streamLine({ type: 'step', status: 'completed', label: step }));
         }
+
+        controller.enqueue(streamLine({ type: 'step', status: 'running', label: stageSteps[3] }));
 
         await provider.streamChat(
           {
             messages: parsed.messages,
-            systemPrompt: systemInstructions(parsed.agent),
+            systemPrompt: buildSystemInstructions(activeAgent),
           },
           (event) => {
             controller.enqueue(streamLine(event as unknown as Record<string, unknown>));
           },
         );
 
+        controller.enqueue(streamLine({ type: 'step', status: 'completed', label: stageSteps[3] }));
         controller.enqueue(streamLine({ type: 'done' }));
         controller.close();
       } catch (error) {
-        const message = error instanceof Error ? error.message : 'Unexpected provider failure.';
+        const message = normalizeProviderError(provider.name, error);
         controller.enqueue(streamLine({ type: 'error', message }));
         controller.close();
       }

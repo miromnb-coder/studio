@@ -79,7 +79,7 @@ export default function HomePage() {
       <section className="card-surface mb-4 px-4 py-4">
         <div className="flex items-center justify-between gap-3">
           <div className="flex items-center gap-3">
-            <div className="rounded-2xl bg-white/5 p-2.5 text-[#cde4ff]">
+            <div className="rounded-2xl bg-white/5 p-2.5 text-[#c9ced6]">
               <Sparkles className="h-4 w-4 stroke-[1.9]" />
             </div>
             <div>
@@ -151,7 +151,7 @@ export default function HomePage() {
         <article className="card-surface p-4">
           <div className="mb-2 flex items-center justify-between">
             <h2 className="text-base font-semibold">Agents</h2>
-            <Link href="/agents" className="text-xs font-semibold text-[#cde4ff]">
+            <Link href="/agents" className="text-xs font-semibold text-[#c9ced6]">
               View
             </Link>
           </div>
@@ -170,7 +170,7 @@ export default function HomePage() {
                   className="card-interactive flex w-full items-center justify-between rounded-[14px] px-3 py-3 text-left"
                 >
                   <div className="flex items-center gap-2">
-                    <div className="rounded-xl bg-white/5 p-2 text-[#cde4ff]">
+                    <div className="rounded-xl bg-white/5 p-2 text-[#c9ced6]">
                       <Icon className="h-4 w-4" />
                     </div>
                     <div>
@@ -188,7 +188,7 @@ export default function HomePage() {
         <article className="card-surface p-4">
           <div className="mb-2 flex items-center justify-between">
             <h2 className="text-base font-semibold">Recent activity</h2>
-            <Link href="/history" className="text-xs font-semibold text-[#cde4ff]">
+            <Link href="/history" className="text-xs font-semibold text-[#c9ced6]">
               All
             </Link>
           </div>
@@ -216,7 +216,7 @@ export default function HomePage() {
         <article className="card-surface p-4">
           <div className="mb-2 flex items-center justify-between">
             <h2 className="text-base font-semibold">Conversation preview</h2>
-            <Link href="/chat" className="text-xs font-semibold text-[#cde4ff]">
+            <Link href="/chat" className="text-xs font-semibold text-[#c9ced6]">
               Open chat
             </Link>
           </div>
@@ -236,7 +236,7 @@ export default function HomePage() {
               ))
             )}
           </div>
-          <div className="card-elevated mt-3 rounded-[14px] px-3 py-2 text-xs text-[#cde4ff]">
+          <div className="card-elevated mt-3 rounded-[14px] px-3 py-2 text-xs text-[#c9ced6]">
             {activeAlerts.length} active alert(s) require review.
           </div>
         </article>

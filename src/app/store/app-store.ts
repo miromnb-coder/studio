@@ -87,7 +87,7 @@ type AppActions = {
   logout: () => void;
 };
 
-const STORAGE_KEY = 'nova_operator_store_v3';
+const STORAGE_KEY = 'nova_operator_store_v4';
 const SESSION_DRAFT_KEY = 'nova-operator-chat-draft';
 
 const AGENT_ORDER: AgentName[] = ['Research Agent', 'Analysis Agent', 'Memory Agent'];
@@ -169,16 +169,37 @@ const addHistory = (entry: Omit<HistoryEntry, 'id' | 'createdAt'>) => {
   };
 };
 
+const AGENT_TERMS: Record<AgentName, string[]> = {
+  'Research Agent': ['research', 'find', 'latest', 'news', 'trend', 'look up', 'investigate', 'discover'],
+  'Analysis Agent': ['compare', 'numbers', 'percent', 'ratio', 'analysis', 'difference', 'forecast', 'optimize'],
+  'Memory Agent': ['summarize', 'remember', 'context', 'history', 'recap', 'retain', 'store'],
+};
+
 const detectAgent = (input: string): AgentName => {
   const value = input.toLowerCase();
-  if (['summarize', 'remember', 'context', 'history', 'recap'].some((term) => value.includes(term))) return 'Memory Agent';
-  if (['compare', 'numbers', 'percent', 'ratio', 'analysis', 'difference'].some((term) => value.includes(term))) return 'Analysis Agent';
-  if (['research', 'find', 'latest', 'news', 'trend', 'look up'].some((term) => value.includes(term))) return 'Research Agent';
-  return 'Research Agent';
+  const scores = AGENT_ORDER.map((name) => ({
+    name,
+    score: AGENT_TERMS[name].reduce((acc, term) => acc + (value.includes(term) ? 1 : 0), 0),
+  }));
+
+  const best = scores.sort((a, b) => b.score - a.score)[0];
+  return best.score > 0 ? best.name : 'Research Agent';
 };
 
 const getConversationWindow = (messages: Message[]) =>
   messages.slice(-10).map((message) => ({ role: message.role, content: message.content }));
+
+function providerSafeErrorMessage(raw: string): string {
+  if (/Groq is selected but not configured/i.test(raw) || /GROQ_API_KEY/i.test(raw)) {
+    return 'Groq is not configured yet. Add AI_PROVIDER=groq, GROQ_API_KEY, and optionally GROQ_MODEL on the server, then retry.';
+  }
+
+  if (/OPENAI_API_KEY/i.test(raw)) {
+    return 'OpenAI key is missing, but this chat can run with Groq. Set AI_PROVIDER=groq with GROQ_API_KEY on the server.';
+  }
+
+  return raw;
+}
 
 async function streamAssistantResponse(requestId: string, assistantMessageId: string, agent: AgentName) {
   const payload = {
@@ -194,7 +215,7 @@ async function streamAssistantResponse(requestId: string, assistantMessageId: st
 
   if (!response.ok || !response.body) {
     const reason = await response.text();
-    throw new Error(reason || `Request failed (${response.status})`);
+    throw new Error(providerSafeErrorMessage(reason || `Request failed (${response.status})`));
   }
 
   const reader = response.body.getReader();
@@ -250,7 +271,7 @@ async function streamAssistantResponse(requestId: string, assistantMessageId: st
 
       if (event.type === 'error') {
         const message = typeof event.message === 'string' ? event.message : 'Streaming failed.';
-        throw new Error(message);
+        throw new Error(providerSafeErrorMessage(message));
       }
     }
   }
@@ -335,7 +356,18 @@ const actions: AppActions = {
     emit();
 
     try {
-      await streamAssistantResponse(requestId, assistantMessage.id, agent);
+      let attempts = 0;
+      while (attempts < 2) {
+        try {
+          await streamAssistantResponse(requestId, assistantMessage.id, agent);
+          break;
+        } catch (error) {
+          attempts += 1;
+          const errorMessage = error instanceof Error ? error.message : 'Unknown streaming error.';
+          const isConfigError = /GROQ_API_KEY|OPENAI_API_KEY|Unsupported AI_PROVIDER/i.test(errorMessage);
+          if (isConfigError || attempts >= 2) throw error;
+        }
+      }
 
       setState((prev) => ({
         ...prev,
@@ -354,10 +386,16 @@ const actions: AppActions = {
       }));
 
       addHistory({ title: `${agent} task completed`, description: cleanPrompt, type: agent === 'Memory Agent' ? 'memory' : 'agent', prompt: cleanPrompt });
+      addHistory({
+        title: 'Final answer delivered',
+        description: `Completed with ${agent}.`,
+        type: 'message',
+        prompt: cleanPrompt,
+      });
       persist();
       emit();
     } catch (error) {
-      const message = error instanceof Error ? error.message : 'Unknown streaming error.';
+      const message = providerSafeErrorMessage(error instanceof Error ? error.message : 'Unknown streaming error.');
 
       setState((prev) => ({
         ...prev,
@@ -382,6 +420,11 @@ const actions: AppActions = {
       }));
 
       addHistory({ title: `${agent} task failed`, description: message, type: 'agent', prompt: cleanPrompt });
+      actions.addAlert({
+        title: `${agent} needs attention`,
+        description: message,
+        type: 'risk',
+      });
       persist();
       emit();
     }

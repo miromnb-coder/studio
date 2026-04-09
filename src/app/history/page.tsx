@@ -37,7 +37,7 @@ export default function HistoryPage() {
     <main className="screen app-bg">
       <section className="card-surface p-5">
         <div className="mb-4 flex items-center gap-3">
-          <div className="rounded-xl bg-white/5 p-2.5 text-[#cde4ff]"><Clock3 className="h-5 w-5" /></div>
+          <div className="rounded-xl bg-white/5 p-2.5 text-[#c9ced6]"><Clock3 className="h-5 w-5" /></div>
           <div>
             <h1 className="text-2xl font-semibold text-primary">History</h1>
             <p className="text-sm text-secondary">Today, yesterday, and earlier timeline of operator actions.</p>
