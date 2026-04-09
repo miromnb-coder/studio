@@ -214,6 +214,10 @@ body {
   background: rgba(0, 0, 0, 0.03);
 }
 
+.composer-icon-btn:disabled {
+  opacity: 0.45;
+}
+
 .composer-icon-btn-active {
   background: #e8edf8;
   color: #4f6cab;
