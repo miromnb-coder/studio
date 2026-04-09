@@ -20,6 +20,15 @@ export type Message = {
   agentMetadata?: AgentResponseMetadata;
 };
 
+export type Conversation = {
+  id: string;
+  title: string;
+  createdAt: string;
+  updatedAt: string;
+  lastMessagePreview: string;
+  messageCount: number;
+};
+
 export type Agent = {
   name: AgentName;
   status: AgentStatus;
@@ -61,11 +70,15 @@ export type AgentStep = {
 type AppState = {
   hydrated: boolean;
   user: UserProfile | null;
+  conversationList: Conversation[];
+  activeConversationId: string;
+  messageState: Record<string, Message[]>;
+  draftState: Record<string, string>;
   messages: Message[];
+  draftPrompt: string;
   agents: Record<AgentName, Agent>;
   alerts: Alert[];
   history: HistoryEntry[];
-  draftPrompt: string;
   activeAgent: AgentName | null;
   isAgentResponding: boolean;
   activeRequestId: string | null;
@@ -88,14 +101,20 @@ type AppActions = {
   clearUser: () => void;
   updateUserName: (name: string) => void;
   logout: () => void;
+  createConversation: () => string;
+  openConversation: (conversationId: string) => void;
+  deleteConversation: (conversationId: string) => void;
+  renameConversation: (conversationId: string, title: string) => void;
 };
 
-const STORAGE_KEY = 'nova_operator_store_v4';
+const STORAGE_KEY = 'nova_operator_store_v5';
+const LEGACY_STORAGE_KEY = 'nova_operator_store_v4';
 const SESSION_DRAFT_KEY = 'nova-operator-chat-draft';
 
 const AGENT_ORDER: AgentName[] = ['Supervisor Agent', 'Research Agent', 'Analysis Agent', 'Memory Agent', 'Response Agent'];
 const createId = () => `${Date.now()}-${Math.random().toString(16).slice(2)}`;
 const nowIso = () => new Date().toISOString();
+const DEFAULT_NEW_CHAT_TITLE = 'New chat';
 
 const defaultAgents = (): Record<AgentName, Agent> => ({
   'Supervisor Agent': { name: 'Supervisor Agent', status: 'idle', lastRun: null, lastTask: null },
@@ -105,10 +124,68 @@ const defaultAgents = (): Record<AgentName, Agent> => ({
   'Response Agent': { name: 'Response Agent', status: 'idle', lastRun: null, lastTask: null },
 });
 
+const createConversation = (title = DEFAULT_NEW_CHAT_TITLE): Conversation => {
+  const now = nowIso();
+  return {
+    id: createId(),
+    title,
+    createdAt: now,
+    updatedAt: now,
+    lastMessagePreview: '',
+    messageCount: 0,
+  };
+};
+
+const summarizePreview = (messages: Message[]) => {
+  const latest = [...messages].reverse().find((message) => message.content.trim());
+  if (!latest) return '';
+  return latest.content.trim().slice(0, 120);
+};
+
+const deriveTitleFromPrompt = (prompt: string) => {
+  const clean = prompt.replace(/\s+/g, ' ').trim();
+  if (!clean) return DEFAULT_NEW_CHAT_TITLE;
+  const stripped = clean.replace(/^[^a-zA-Z0-9]+/, '');
+  const firstSentence = stripped.split(/[.!?]\s/)[0] || stripped;
+  const trimmed = firstSentence.trim();
+  if (!trimmed) return DEFAULT_NEW_CHAT_TITLE;
+  if (trimmed.length <= 52) return trimmed;
+  return `${trimmed.slice(0, 49).trimEnd()}…`;
+};
+
+const sortConversations = (conversations: Conversation[]) =>
+  [...conversations].sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime());
+
+const syncActiveConversationView = (next: AppState): AppState => {
+  const messages = next.messageState[next.activeConversationId] ?? [];
+  const draftPrompt = next.draftState[next.activeConversationId] ?? '';
+  return { ...next, messages, draftPrompt };
+};
+
+const ensureConversationInState = (prev: AppState): AppState => {
+  if (prev.conversationList.length > 0 && prev.activeConversationId) return prev;
+
+  const fallbackConversation = createConversation();
+  return {
+    ...prev,
+    conversationList: [fallbackConversation],
+    activeConversationId: fallbackConversation.id,
+    messageState: { ...prev.messageState, [fallbackConversation.id]: [] },
+    draftState: { ...prev.draftState, [fallbackConversation.id]: '' },
+  };
+};
+
+const initialConversation = createConversation();
+
 const initialState: AppState = {
   hydrated: false,
   user: null,
+  conversationList: [initialConversation],
+  activeConversationId: initialConversation.id,
+  messageState: { [initialConversation.id]: [] },
+  draftState: { [initialConversation.id]: '' },
   messages: [],
+  draftPrompt: '',
   agents: defaultAgents(),
   alerts: [
     {
@@ -131,7 +208,6 @@ const initialState: AppState = {
     },
   ],
   history: [],
-  draftPrompt: '',
   activeAgent: null,
   isAgentResponding: false,
   activeRequestId: null,
@@ -153,7 +229,10 @@ const persist = () => {
   if (typeof window === 'undefined') return;
   const persistable = {
     user: state.user,
-    messages: state.messages,
+    conversationList: state.conversationList,
+    activeConversationId: state.activeConversationId,
+    messageState: state.messageState,
+    draftState: state.draftState,
     history: state.history,
     alerts: state.alerts,
     agents: state.agents,
@@ -162,7 +241,8 @@ const persist = () => {
 };
 
 const setState = (updater: (prev: AppState) => AppState) => {
-  state = updater(state);
+  const next = ensureConversationInState(updater(state));
+  state = syncActiveConversationView(next);
   persist();
   emit();
 };
@@ -178,8 +258,6 @@ const DEFAULT_ACTIVE_AGENT: AgentName = 'Supervisor Agent';
 
 const getConversationWindow = (messages: Message[]) =>
   messages.slice(-10).map((message) => ({ role: message.role, content: message.content }));
-
-
 
 function normalizeAgentResponse(result: Partial<AgentResponse>): AgentResponse {
   const metadata = result.metadata;
@@ -203,10 +281,11 @@ function providerSafeErrorMessage(raw: string): string {
   return 'Something went wrong. Please try again.';
 }
 
-async function streamAssistantResponse(requestId: string, assistantMessageId: string) {
+async function streamAssistantResponse(requestId: string, assistantMessageId: string, conversationId: string) {
+  const conversationMessages = state.messageState[conversationId] ?? [];
   const payload = {
-    input: [...state.messages].reverse().find((message) => message.role === 'user')?.content || '',
-    history: getConversationWindow(state.messages).filter((message) => message.content.trim()),
+    input: [...conversationMessages].reverse().find((message) => message.role === 'user')?.content || '',
+    history: getConversationWindow(conversationMessages).filter((message) => message.content.trim()),
     userId: state.user?.id || 'system_anonymous',
   };
 
@@ -226,15 +305,9 @@ async function streamAssistantResponse(requestId: string, assistantMessageId: st
 
   if (state.activeRequestId !== requestId) return;
 
-  setState((prev) => ({
-    ...prev,
-    activeAgent: DEFAULT_ACTIVE_AGENT,
-    activeSteps: (result.metadata?.steps || []).map((step) => ({
-      id: createId(),
-      label: step.action,
-      status: step.status === 'failed' ? 'completed' : step.status === 'running' ? 'running' : 'completed',
-    })),
-    messages: prev.messages.map((message) =>
+  setState((prev) => {
+    const messages = prev.messageState[conversationId] ?? [];
+    const nextConversationMessages = messages.map((message) =>
       message.id === assistantMessageId
         ? {
             ...message,
@@ -242,39 +315,133 @@ async function streamAssistantResponse(requestId: string, assistantMessageId: st
             agentMetadata: result.metadata,
           }
         : message,
-    ),
-  }));
+    );
+
+    return {
+      ...prev,
+      activeAgent: DEFAULT_ACTIVE_AGENT,
+      activeSteps: (result.metadata?.steps || []).map((step) => ({
+        id: createId(),
+        label: step.action,
+        status: step.status === 'failed' ? 'completed' : step.status === 'running' ? 'running' : 'completed',
+      })),
+      messageState: {
+        ...prev.messageState,
+        [conversationId]: nextConversationMessages,
+      },
+      conversationList: sortConversations(
+        prev.conversationList.map((conversation) =>
+          conversation.id === conversationId
+            ? {
+                ...conversation,
+                updatedAt: nowIso(),
+                lastMessagePreview: summarizePreview(nextConversationMessages),
+                messageCount: nextConversationMessages.length,
+              }
+            : conversation,
+        ),
+      ),
+    };
+  });
+}
+
+function migrateState(parsed: Partial<AppState>, sessionDraft: string): AppState {
+  const legacyMessages = Array.isArray(parsed.messages) ? parsed.messages : [];
+  const hasV5State = Array.isArray(parsed.conversationList) && parsed.messageState && typeof parsed.messageState === 'object';
+
+  if (hasV5State) {
+    const conversationList = parsed.conversationList!.map((conversation) => ({
+      ...conversation,
+      title: conversation.title?.trim() || DEFAULT_NEW_CHAT_TITLE,
+      lastMessagePreview: conversation.lastMessagePreview ?? '',
+      messageCount: typeof conversation.messageCount === 'number' ? conversation.messageCount : 0,
+    }));
+
+    const activeConversationId = parsed.activeConversationId && conversationList.some((item) => item.id === parsed.activeConversationId)
+      ? parsed.activeConversationId
+      : conversationList[0]?.id;
+
+    const next: AppState = {
+      ...initialState,
+      ...parsed,
+      hydrated: true,
+      agents: parsed.agents ?? defaultAgents(),
+      alerts: parsed.alerts ?? initialState.alerts,
+      conversationList: conversationList.length ? sortConversations(conversationList) : [createConversation()],
+      activeConversationId: activeConversationId ?? createConversation().id,
+      messageState: parsed.messageState ?? {},
+      draftState: parsed.draftState ?? {},
+      messages: [],
+      draftPrompt: '',
+    };
+
+    if (sessionDraft.trim()) {
+      next.draftState[next.activeConversationId] = sessionDraft;
+    }
+
+    return syncActiveConversationView(ensureConversationInState(next));
+  }
+
+  const migratedConversation = createConversation(legacyMessages.length ? deriveTitleFromPrompt(legacyMessages[0]?.content ?? '') : DEFAULT_NEW_CHAT_TITLE);
+  const migratedConversations = [
+    {
+      ...migratedConversation,
+      messageCount: legacyMessages.length,
+      lastMessagePreview: summarizePreview(legacyMessages),
+      updatedAt: legacyMessages.at(-1)?.createdAt ?? migratedConversation.updatedAt,
+    },
+  ];
+
+  const migrated: AppState = {
+    ...initialState,
+    ...parsed,
+    hydrated: true,
+    agents: parsed.agents ?? defaultAgents(),
+    alerts: parsed.alerts ?? initialState.alerts,
+    conversationList: migratedConversations,
+    activeConversationId: migratedConversation.id,
+    messageState: { [migratedConversation.id]: legacyMessages },
+    draftState: { [migratedConversation.id]: sessionDraft },
+    messages: [],
+    draftPrompt: '',
+  };
+
+  return syncActiveConversationView(ensureConversationInState(migrated));
 }
 
 const actions: AppActions = {
   hydrate: () => {
     if (typeof window === 'undefined') return;
-    const raw = window.localStorage.getItem(STORAGE_KEY);
+    const raw = window.localStorage.getItem(STORAGE_KEY) || window.localStorage.getItem(LEGACY_STORAGE_KEY);
     const sessionDraft = window.sessionStorage.getItem(SESSION_DRAFT_KEY) ?? '';
 
     if (raw) {
       try {
         const parsed = JSON.parse(raw) as Partial<AppState>;
-        state = {
-          ...initialState,
-          ...parsed,
-          hydrated: true,
-          draftPrompt: sessionDraft,
-          agents: parsed.agents ?? defaultAgents(),
-          alerts: parsed.alerts ?? initialState.alerts,
-        };
+        state = migrateState(parsed, sessionDraft);
       } catch {
-        state = { ...initialState, hydrated: true, draftPrompt: sessionDraft };
+        state = syncActiveConversationView({ ...initialState, hydrated: true });
       }
     } else {
-      state = { ...initialState, hydrated: true, draftPrompt: sessionDraft };
+      state = syncActiveConversationView({ ...initialState, hydrated: true });
+      if (sessionDraft.trim()) {
+        state.draftState[state.activeConversationId] = sessionDraft;
+        state = syncActiveConversationView(state);
+      }
     }
 
+    persist();
     emit();
   },
 
   setDraftPrompt: (prompt) => {
-    setState((prev) => ({ ...prev, draftPrompt: prompt }));
+    setState((prev) => ({
+      ...prev,
+      draftState: {
+        ...prev.draftState,
+        [prev.activeConversationId]: prompt,
+      },
+    }));
     if (typeof window !== 'undefined') {
       window.sessionStorage.setItem(SESSION_DRAFT_KEY, prompt);
     }
@@ -284,6 +451,7 @@ const actions: AppActions = {
     const cleanPrompt = prompt.trim();
     if (!cleanPrompt) return;
 
+    const conversationId = state.activeConversationId;
     const agent: AgentName = DEFAULT_ACTIVE_AGENT;
     const requestId = createId();
     const userMessage: Message = { id: createId(), role: 'user', content: cleanPrompt, createdAt: nowIso(), agent };
@@ -297,7 +465,10 @@ const actions: AppActions = {
     };
 
     setState((prev) => {
+      const currentMessages = prev.messageState[conversationId] ?? [];
+      const nextConversationMessages = [...currentMessages, userMessage, assistantMessage];
       const nextAgents = { ...prev.agents };
+
       AGENT_ORDER.forEach((name) => {
         nextAgents[name] = {
           ...nextAgents[name],
@@ -308,8 +479,27 @@ const actions: AppActions = {
 
       return {
         ...prev,
-        draftPrompt: '',
-        messages: [...prev.messages, userMessage, assistantMessage],
+        draftState: {
+          ...prev.draftState,
+          [conversationId]: '',
+        },
+        messageState: {
+          ...prev.messageState,
+          [conversationId]: nextConversationMessages,
+        },
+        conversationList: sortConversations(
+          prev.conversationList.map((conversation) => {
+            if (conversation.id !== conversationId) return conversation;
+            const shouldRetitle = conversation.messageCount === 0 || conversation.title === DEFAULT_NEW_CHAT_TITLE;
+            return {
+              ...conversation,
+              title: shouldRetitle ? deriveTitleFromPrompt(cleanPrompt) : conversation.title,
+              updatedAt: nowIso(),
+              lastMessagePreview: summarizePreview(nextConversationMessages),
+              messageCount: nextConversationMessages.length,
+            };
+          }),
+        ),
         activeAgent: agent,
         isAgentResponding: true,
         activeRequestId: requestId,
@@ -328,7 +518,7 @@ const actions: AppActions = {
       let attempts = 0;
       while (attempts < 2) {
         try {
-          await streamAssistantResponse(requestId, assistantMessage.id);
+          await streamAssistantResponse(requestId, assistantMessage.id, conversationId);
           break;
         } catch (error) {
           attempts += 1;
@@ -338,21 +528,41 @@ const actions: AppActions = {
         }
       }
 
-      setState((prev) => ({
-        ...prev,
-        activeRequestId: null,
-        isAgentResponding: false,
-        activeSteps: prev.activeSteps.map((step) => ({ ...step, status: 'completed' })),
-        messages: prev.messages.map((message) =>
+      setState((prev) => {
+        const conversationMessages = prev.messageState[conversationId] ?? [];
+        const nextConversationMessages = conversationMessages.map((message) =>
           message.id === assistantMessage.id
             ? { ...message, isStreaming: false, content: message.content || 'I could not generate a response.' }
             : message,
-        ),
-        agents: {
-          ...prev.agents,
-          [agent]: { ...prev.agents[agent], status: 'completed', lastRun: nowIso() },
-        },
-      }));
+        );
+
+        return {
+          ...prev,
+          activeRequestId: null,
+          isAgentResponding: false,
+          activeSteps: prev.activeSteps.map((step) => ({ ...step, status: 'completed' })),
+          messageState: {
+            ...prev.messageState,
+            [conversationId]: nextConversationMessages,
+          },
+          conversationList: sortConversations(
+            prev.conversationList.map((conversation) =>
+              conversation.id === conversationId
+                ? {
+                    ...conversation,
+                    updatedAt: nowIso(),
+                    lastMessagePreview: summarizePreview(nextConversationMessages),
+                    messageCount: nextConversationMessages.length,
+                  }
+                : conversation,
+            ),
+          ),
+          agents: {
+            ...prev.agents,
+            [agent]: { ...prev.agents[agent], status: 'completed', lastRun: nowIso() },
+          },
+        };
+      });
 
       addHistory({ title: `${agent} task completed`, description: cleanPrompt, type: 'agent', prompt: cleanPrompt });
       addHistory({
@@ -366,13 +576,9 @@ const actions: AppActions = {
     } catch (error) {
       const message = providerSafeErrorMessage(error instanceof Error ? error.message : 'Unknown streaming error.');
 
-      setState((prev) => ({
-        ...prev,
-        activeRequestId: null,
-        isAgentResponding: false,
-        streamError: message,
-        activeSteps: prev.activeSteps.map((step) => ({ ...step, status: 'completed' })),
-        messages: prev.messages.map((entry) =>
+      setState((prev) => {
+        const conversationMessages = prev.messageState[conversationId] ?? [];
+        const nextConversationMessages = conversationMessages.map((entry) =>
           entry.id === assistantMessage.id
             ? {
                 ...entry,
@@ -381,12 +587,36 @@ const actions: AppActions = {
                 content: entry.content || '',
               }
             : entry,
-        ),
-        agents: {
-          ...prev.agents,
-          [agent]: { ...prev.agents[agent], status: 'idle', lastRun: nowIso() },
-        },
-      }));
+        );
+
+        return {
+          ...prev,
+          activeRequestId: null,
+          isAgentResponding: false,
+          streamError: message,
+          activeSteps: prev.activeSteps.map((step) => ({ ...step, status: 'completed' })),
+          messageState: {
+            ...prev.messageState,
+            [conversationId]: nextConversationMessages,
+          },
+          conversationList: sortConversations(
+            prev.conversationList.map((conversation) =>
+              conversation.id === conversationId
+                ? {
+                    ...conversation,
+                    updatedAt: nowIso(),
+                    lastMessagePreview: summarizePreview(nextConversationMessages),
+                    messageCount: nextConversationMessages.length,
+                  }
+                : conversation,
+            ),
+          ),
+          agents: {
+            ...prev.agents,
+            [agent]: { ...prev.agents[agent], status: 'idle', lastRun: nowIso() },
+          },
+        };
+      });
 
       addHistory({ title: `${agent} task failed`, description: message, type: 'agent', prompt: cleanPrompt });
       actions.addAlert({
@@ -478,6 +708,92 @@ const actions: AppActions = {
   logout: () => {
     actions.clearUser();
     addHistory({ title: 'User logged out', description: 'Session ended on this device', type: 'account' });
+  },
+
+  createConversation: () => {
+    const conversation = createConversation();
+    setState((prev) => ({
+      ...prev,
+      activeConversationId: conversation.id,
+      conversationList: sortConversations([conversation, ...prev.conversationList]),
+      messageState: {
+        ...prev.messageState,
+        [conversation.id]: [],
+      },
+      draftState: {
+        ...prev.draftState,
+        [conversation.id]: '',
+      },
+      streamError: null,
+      activeRequestId: null,
+      isAgentResponding: false,
+    }));
+    return conversation.id;
+  },
+
+  openConversation: (conversationId) => {
+    setState((prev) => {
+      if (!prev.conversationList.some((conversation) => conversation.id === conversationId)) {
+        return prev;
+      }
+      return {
+        ...prev,
+        activeConversationId: conversationId,
+        streamError: null,
+      };
+    });
+  },
+
+  deleteConversation: (conversationId) => {
+    setState((prev) => {
+      const remaining = prev.conversationList.filter((conversation) => conversation.id !== conversationId);
+      const nextConversationList = remaining.length ? remaining : [createConversation()];
+      const nextActiveConversationId =
+        prev.activeConversationId === conversationId
+          ? sortConversations(nextConversationList)[0].id
+          : prev.activeConversationId;
+
+      const nextMessageState = { ...prev.messageState };
+      const nextDraftState = { ...prev.draftState };
+      delete nextMessageState[conversationId];
+      delete nextDraftState[conversationId];
+
+      if (!nextMessageState[nextActiveConversationId]) {
+        nextMessageState[nextActiveConversationId] = [];
+      }
+      if (!nextDraftState[nextActiveConversationId]) {
+        nextDraftState[nextActiveConversationId] = '';
+      }
+
+      return {
+        ...prev,
+        conversationList: sortConversations(nextConversationList),
+        activeConversationId: nextActiveConversationId,
+        messageState: nextMessageState,
+        draftState: nextDraftState,
+        streamError: null,
+        activeRequestId: null,
+        isAgentResponding: prev.activeConversationId === conversationId ? false : prev.isAgentResponding,
+      };
+    });
+  },
+
+  renameConversation: (conversationId, title) => {
+    const nextTitle = title.trim();
+    if (!nextTitle) return;
+
+    setState((prev) => ({
+      ...prev,
+      conversationList: prev.conversationList.map((conversation) =>
+        conversation.id === conversationId
+          ? {
+              ...conversation,
+              title: nextTitle,
+              updatedAt: nowIso(),
+            }
+          : conversation,
+      ),
+    }));
   },
 };
 
