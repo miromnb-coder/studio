@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { Bell, LogOut, Send, Sparkles } from 'lucide-react';
 import { useAppStore, type HistoryEntry } from './store/app-store';
+import { createClient } from '@/lib/supabase/client';
 
 const smartSuggestions = [
   'Help me plan my week with clear priorities.',
@@ -20,7 +21,8 @@ export default function HomePage() {
   const alerts = useAppStore((s) => s.alerts);
   const enqueuePromptAndGoToChat = useAppStore((s) => s.enqueuePromptAndGoToChat);
   const updateUserName = useAppStore((s) => s.updateUserName);
-  const logout = useAppStore((s) => s.logout);
+  const clearUser = useAppStore((s) => s.clearUser);
+  const supabase = useMemo(() => createClient(), []);
 
   const [prompt, setPrompt] = useState('');
 
@@ -40,7 +42,26 @@ export default function HomePage() {
 
   const editName = () => {
     const nextName = window.prompt('Edit name', user?.name || '');
-    if (nextName?.trim()) updateUserName(nextName.trim());
+    if (nextName?.trim()) {
+      updateUserName(nextName.trim());
+      if (user?.id) {
+        void supabase.from('profiles').upsert(
+          {
+            id: user.id,
+            full_name: nextName.trim(),
+            updated_at: new Date().toISOString(),
+          },
+          { onConflict: 'id' },
+        );
+      }
+      void supabase.auth.updateUser({ data: { full_name: nextName.trim() } });
+    }
+  };
+
+  const logout = async () => {
+    await supabase.auth.signOut();
+    clearUser();
+    window.location.href = '/login';
   };
 
   const openHistoryItem = (item: HistoryEntry) => {
