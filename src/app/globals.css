@@ -3,7 +3,7 @@
 @tailwind utilities;
 
 :root {
-  --bg-base: #f2f2f2;
+  --bg-base: #efefef;
   --bg-surface: #f7f7f7;
   --bg-card: #f7f7f7;
   --border-subtle: rgba(0, 0, 0, 0.08);
@@ -93,8 +93,8 @@ body {
 
 .system-input {
   border-radius: 14px;
-  border: 1px solid var(--border-subtle);
-  background: #fff;
+  border: 1px solid rgba(0, 0, 0, 0.05);
+  background: #f8f8f8;
   color: var(--text-primary);
   transition: border-color 0.18s ease, box-shadow 0.18s ease;
 }
@@ -105,8 +105,8 @@ body {
 
 .system-input:focus {
   outline: none;
-  border-color: rgba(0, 0, 0, 0.25);
-  box-shadow: 0 0 0 3px rgba(0, 0, 0, 0.06);
+  border-color: rgba(0, 0, 0, 0.12);
+  box-shadow: 0 0 0 3px rgba(255, 255, 255, 0.65);
 }
 
 .btn-primary,
@@ -193,6 +193,137 @@ body {
 
 .agent-pulse {
   animation: pulse 1.2s ease-in-out infinite;
+}
+
+.composer-icon-btn {
+  display: inline-flex;
+  height: 42px;
+  width: 42px;
+  align-items: center;
+  justify-content: center;
+  border-radius: 999px;
+  color: #6e6e6e;
+  opacity: 0.92;
+  transition: background-color 0.18s ease, transform 0.16s ease, color 0.18s ease, opacity 0.18s ease;
+}
+
+.composer-shell {
+  transition: border-color 0.18s ease, box-shadow 0.2s ease;
+}
+
+.composer-shell:focus-within {
+  border-color: rgba(0, 0, 0, 0.085);
+  box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.48), 0 8px 18px rgba(0, 0, 0, 0.03);
+}
+
+.composer-textarea {
+  color: #1f1f1f;
+  line-height: 1.42;
+  letter-spacing: 0.005em;
+}
+
+.composer-textarea::placeholder {
+  color: #9a9a9a;
+}
+
+.composer-textarea:focus {
+  outline: none;
+}
+
+.composer-icon-btn:active {
+  transform: scale(0.96);
+}
+
+.composer-icon-btn:hover {
+  background: rgba(0, 0, 0, 0.02);
+  opacity: 1;
+}
+
+.composer-icon-btn-active {
+  background: #e8edf8;
+  color: #4f6cab;
+}
+
+.composer-send-btn {
+  display: inline-flex;
+  height: 38px;
+  width: 38px;
+  align-items: center;
+  justify-content: center;
+  border-radius: 999px;
+  border: 1px solid rgba(0, 0, 0, 0.06);
+  background: #8f8f8f;
+  color: #efefef;
+  transition: transform 0.16s ease, background-color 0.16s ease, border-color 0.16s ease;
+}
+
+.composer-send-btn:active {
+  transform: scale(0.97);
+}
+
+.composer-send-btn:disabled {
+  background: #d8d8d8;
+  border-color: rgba(0, 0, 0, 0.03);
+  color: #ededed;
+}
+
+.composer-menu-btn {
+  display: flex;
+  width: 100%;
+  align-items: center;
+  gap: 0.6rem;
+  border-radius: 12px;
+  padding: 0.62rem 0.7rem;
+  color: #292929;
+  font-size: 13px;
+  transition: background-color 0.16s ease;
+}
+
+.composer-menu-btn:hover {
+  background: rgba(0, 0, 0, 0.03);
+}
+
+.kivo-thinking-orb {
+  position: relative;
+  width: 12px;
+  height: 12px;
+  border-radius: 999px;
+  border: 1px solid rgba(90, 138, 234, 0.5);
+  background: radial-gradient(circle at 35% 35%, #8cc1ff, #6a93dd 60%, #5474b8 100%);
+  box-shadow: 0 0 0 3px rgba(106, 147, 221, 0.12);
+  animation: thinkingBreathe 1.8s ease-in-out infinite;
+}
+
+.kivo-thinking-orb::after {
+  content: '';
+  position: absolute;
+  inset: -2px;
+  border-radius: 999px;
+  border: 1px solid rgba(86, 127, 210, 0.28);
+  animation: thinkingOrbit 2.4s linear infinite;
+}
+
+@keyframes thinkingOrbit {
+  from {
+    transform: rotate(0deg) scale(0.94);
+    opacity: 0.65;
+  }
+  to {
+    transform: rotate(360deg) scale(1.06);
+    opacity: 0.25;
+  }
+}
+
+@keyframes thinkingBreathe {
+  0%,
+  100% {
+    transform: scale(0.95);
+    filter: saturate(0.95);
+  }
+  50% {
+    transform: scale(1.05);
+    filter: saturate(1.08);
+  }
 }
 
 @keyframes pulse {
