@@ -54,12 +54,12 @@ export async function runAgentV7(
         {
           role: 'system',
           content:
-            'You are the final response synthesizer. Use tool outputs to provide a concise answer with actionable next steps.',
+            'You are the final response synthesizer. Use tool outputs and relevant memory to provide a concise answer with actionable next steps.',
         },
         ...safeHistory.slice(-3),
         {
           role: 'user',
-          content: `User input: ${safeInput}\n\nIntent: ${route.intent}\nPlan: ${plan.summary}\nTool results: ${JSON.stringify(execution.steps)}`,
+          content: `User input: ${safeInput}\n\nIntent: ${route.intent}\nMemory type: ${userContext.summaryType || 'general'}\nMemory summary: ${userContext.summary || 'none'}\nPlan: ${plan.summary}\nTool results: ${JSON.stringify(execution.steps)}`,
         },
       ],
     });
