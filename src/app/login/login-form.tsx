@@ -7,7 +7,7 @@ import { PRODUCT_NAME } from '../config/product';
 import { createClient } from '@/lib/supabase/client';
 import { toFriendlyAuthMessage } from '@/lib/auth/messages';
 
-export default function LoginPage() {
+export function LoginForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const supabase = useMemo(() => createClient(), []);
