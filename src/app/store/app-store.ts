@@ -2,6 +2,7 @@
 
 import { useSyncExternalStore } from 'react';
 import type { AgentResponse, AgentResponseMetadata } from '@/types/agent-response';
+import type { FinanceActionType } from '@/lib/finance/types';
 
 export type AgentName = 'Supervisor Agent' | 'Research Agent' | 'Analysis Agent' | 'Memory Agent' | 'Response Agent';
 export type AgentStatus = 'idle' | 'running' | 'completed';
@@ -105,6 +106,7 @@ type AppActions = {
   openConversation: (conversationId: string) => void;
   deleteConversation: (conversationId: string) => void;
   renameConversation: (conversationId: string, title: string) => void;
+  runFinanceAction: (sourceMessageId: string, actionType: FinanceActionType) => Promise<{ ok: boolean; errorCode?: string }>;
 };
 
 const STORAGE_KEY = 'nova_operator_store_v5';
@@ -278,8 +280,9 @@ function providerSafeErrorMessage(raw: string): string {
   if (!raw) return 'Something went wrong. Please try again.';
   if (raw.startsWith('LIMIT_REACHED:')) return raw;
   if (raw.startsWith('AUTH_REQUIRED:')) return raw;
+  if (raw.startsWith('PREMIUM_REQUIRED:')) return raw;
   console.error('Kivo chat error:', raw);
-  return 'Something went wrong. Please try again.';
+  return 'I ran into an issue, but here’s what I could analyze so far.';
 }
 
 async function streamAssistantResponse(requestId: string, assistantMessageId: string, conversationId: string) {
@@ -646,6 +649,144 @@ const actions: AppActions = {
     const lastPrompt = [...state.messages].reverse().find((msg) => msg.role === 'user')?.content;
     if (!lastPrompt) return;
     await actions.sendMessage(lastPrompt);
+  },
+
+  runFinanceAction: async (sourceMessageId, actionType) => {
+    if (!state.user?.id) {
+      setState((prev) => ({ ...prev, streamError: 'AUTH_REQUIRED:Please sign in to continue.' }));
+      return { ok: false, errorCode: 'AUTH_REQUIRED' };
+    }
+
+    const conversationId = state.activeConversationId;
+    const conversationMessages = state.messageState[conversationId] ?? [];
+    const sourceMessage = conversationMessages.find((message) => message.id === sourceMessageId);
+    const history = getConversationWindow(conversationMessages).filter((message) => message.content.trim());
+
+    const pendingMessage: Message = {
+      id: createId(),
+      role: 'assistant',
+      content: '',
+      createdAt: nowIso(),
+      agent: DEFAULT_ACTIVE_AGENT,
+      isStreaming: true,
+    };
+
+    setState((prev) => ({
+      ...prev,
+      isAgentResponding: true,
+      activeRequestId: pendingMessage.id,
+      streamError: null,
+      messageState: {
+        ...prev.messageState,
+        [conversationId]: [...(prev.messageState[conversationId] ?? []), pendingMessage],
+      },
+    }));
+
+    try {
+      const response = await fetch('/api/agent', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          input: sourceMessage?.content || `Run finance action: ${actionType}`,
+          history,
+          userId: state.user.id,
+          actionType,
+          contextMessageId: sourceMessageId,
+        }),
+      });
+
+      const reason = await response.json().catch(() => null);
+      if (!response.ok) {
+        const errorCode = reason?.error;
+        if (errorCode === 'PREMIUM_REQUIRED') {
+          throw new Error('PREMIUM_REQUIRED:Upgrade required to run finance actions.');
+        }
+        throw new Error(reason?.message || `Action request failed (${response.status})`);
+      }
+
+      const result = normalizeAgentResponse(reason as Partial<AgentResponse>);
+
+      setState((prev) => {
+        const nextConversationMessages = (prev.messageState[conversationId] ?? []).map((message) =>
+          message.id === pendingMessage.id
+            ? {
+                ...message,
+                isStreaming: false,
+                content: result.reply || 'Action completed with partial result.',
+                agentMetadata: result.metadata,
+              }
+            : message,
+        );
+
+        return {
+          ...prev,
+          activeRequestId: null,
+          isAgentResponding: false,
+          messageState: {
+            ...prev.messageState,
+            [conversationId]: nextConversationMessages,
+          },
+          conversationList: sortConversations(
+            prev.conversationList.map((conversation) =>
+              conversation.id === conversationId
+                ? {
+                    ...conversation,
+                    updatedAt: nowIso(),
+                    lastMessagePreview: summarizePreview(nextConversationMessages),
+                    messageCount: nextConversationMessages.length,
+                  }
+                : conversation,
+            ),
+          ),
+        };
+      });
+
+      return { ok: true };
+    } catch (error) {
+      const message = providerSafeErrorMessage(error instanceof Error ? error.message : 'Unknown action error.');
+
+      setState((prev) => {
+        const nextConversationMessages = (prev.messageState[conversationId] ?? []).map((entry) =>
+          entry.id === pendingMessage.id
+            ? {
+                ...entry,
+                isStreaming: false,
+                error: message,
+                content: message.startsWith('PREMIUM_REQUIRED:')
+                  ? 'Upgrade to Premium to run this finance action.'
+                  : 'We couldn’t complete everything, but here’s what we found.',
+                agentMetadata: {
+                  intent: 'finance',
+                  plan: 'Partial fallback',
+                  steps: [],
+                  structuredData: {
+                    actionResult: {
+                      type: 'error',
+                      title: 'Partial result',
+                      summary: 'We couldn’t complete everything, but here’s what we found.',
+                      data: {},
+                    },
+                  },
+                } as AgentResponseMetadata,
+              }
+            : entry,
+        );
+
+        return {
+          ...prev,
+          activeRequestId: null,
+          isAgentResponding: false,
+          streamError: message,
+          messageState: {
+            ...prev.messageState,
+            [conversationId]: nextConversationMessages,
+          },
+        };
+      });
+
+      if (message.startsWith('PREMIUM_REQUIRED:')) return { ok: false, errorCode: 'PREMIUM_REQUIRED' };
+      return { ok: false, errorCode: 'ACTION_FAILED' };
+    }
   },
 
   enqueuePromptAndGoToChat: (prompt) => {

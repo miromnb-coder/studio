@@ -3,42 +3,103 @@ import { runAgentV7 } from '@/agent/v7/orchestrator';
 import { initializeFirebase } from '@/firebase';
 import { SubscriptionService, PLAN_LIMITS } from '@/services/subscription-service';
 import type { AgentResponse } from '@/types/agent-response';
+import { normalizeFinanceAnalysis, runFinanceAction, safeFinanceActionFallback } from '@/lib/finance/normalize';
+import type { FinanceActionType } from '@/lib/finance/types';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
+
+const SAFE_AGENT_FALLBACK: AgentResponse = {
+  reply: 'I ran into an issue, but here’s what I could analyze so far.',
+  metadata: {
+    intent: 'general',
+    plan: 'Partial fallback',
+    steps: [],
+    structuredData: null,
+    memoryUsed: false,
+    iterationCount: 0,
+  },
+};
 
 async function collectStreamToText(stream: AsyncIterable<any> | null | undefined): Promise<string> {
   if (!stream) return '';
 
   let finalText = '';
 
-  for await (const chunk of stream as any) {
-    const content = chunk?.choices?.[0]?.delta?.content || '';
-    if (content) {
-      finalText += content;
+  try {
+    for await (const chunk of stream as any) {
+      const content = chunk?.choices?.[0]?.delta?.content || '';
+      if (content) {
+        finalText += content;
+      }
     }
+  } catch (error) {
+    console.error('AGENT_STREAM_COLLECT_ERROR:', error);
   }
 
   return finalText.trim();
 }
 
+function safeJsonResponse(payload: unknown, status = 200) {
+  return NextResponse.json(payload, { status });
+}
+
+function parseActionType(raw: unknown): FinanceActionType | null {
+  if (raw === 'create_savings_plan' || raw === 'find_alternatives' || raw === 'draft_cancellation') {
+    return raw;
+  }
+  return null;
+}
+
 export async function POST(req: Request) {
   try {
-    const body = await req.json();
+    const body = await req.json().catch(() => ({}));
     const { input, history, imageUri, userId } = body ?? {};
+    const actionType = parseActionType(body?.actionType);
 
     if (!userId || userId === 'system_anonymous') {
-      return NextResponse.json(
+      return safeJsonResponse(
         {
           error: 'AUTH_REQUIRED',
           message: 'Please sign in to use chat.',
         },
-        { status: 401 },
+        401,
       );
     }
 
-    if (!process.env.GROQ_API_KEY) {
-      return NextResponse.json({ error: 'GROQ_API_KEY is not configured.' }, { status: 500 });
+    const { firestore } = initializeFirebase();
+    if (!firestore) {
+      console.error('AGENT_ROUTE_FIRESTORE_UNAVAILABLE');
+      return safeJsonResponse(SAFE_AGENT_FALLBACK);
+    }
+
+    const { plan, usage } = await SubscriptionService.getUserStatus(firestore, userId);
+
+    if (actionType && plan !== 'PREMIUM') {
+      return safeJsonResponse(
+        {
+          error: 'PREMIUM_REQUIRED',
+          message: 'Finance actions require Premium plan.',
+          plan,
+        },
+        403,
+      );
+    }
+
+    const planKey = (plan || 'FREE').toUpperCase() as keyof typeof PLAN_LIMITS;
+    const limits = PLAN_LIMITS[planKey] || PLAN_LIMITS.FREE;
+    const limit = limits.dailyAgentRuns;
+
+    if (usage.agentRuns >= limit) {
+      return safeJsonResponse(
+        {
+          error: 'LIMIT_REACHED',
+          message: 'Daily limit reached',
+          usage: { current: usage.agentRuns, limit, remaining: 0 },
+          plan,
+        },
+        403,
+      );
     }
 
     const safeHistory = (history || [])
@@ -51,53 +112,75 @@ export async function POST(req: Request) {
     const safeInput = typeof input === 'string' && input.trim().length > 0 ? input.trim() : imageUri ? '[Analyze visual data]' : null;
 
     if (!safeInput && safeHistory.length === 0) {
-      return NextResponse.json({ error: 'No valid content provided.' }, { status: 400 });
+      return safeJsonResponse({ error: 'No valid content provided.' }, 400);
     }
 
-    const { firestore } = initializeFirebase();
-    if (!firestore) {
-      return NextResponse.json({ error: 'FIRESTORE_UNAVAILABLE' }, { status: 500 });
-    }
+    const agentResult = await runAgentV7(safeInput || 'Continue', userId, safeHistory, imageUri).catch((error) => {
+      console.error('AGENT_V7_EXECUTION_ERROR:', error);
+      return null;
+    });
 
-    const { plan, usage } = await SubscriptionService.getUserStatus(firestore, userId);
+    const normalizedFinance = normalizeFinanceAnalysis(agentResult?.structuredData);
+    const shouldAttachFinance =
+      agentResult?.metadata?.intent === 'finance' ||
+      Boolean((agentResult?.structuredData || {}).detect_leaks) ||
+      Boolean(actionType);
+    const updatedUsage = await SubscriptionService.incrementUsage(firestore, userId).catch((error) => {
+      console.error('USAGE_INCREMENT_ERROR:', error);
+      return usage;
+    });
 
-    const planKey = (plan || 'FREE').toUpperCase() as keyof typeof PLAN_LIMITS;
-    const limits = PLAN_LIMITS[planKey] || PLAN_LIMITS.FREE;
-    const limit = limits.dailyAgentRuns;
-
-    if (usage.agentRuns >= limit) {
-      return NextResponse.json(
-        {
-          error: 'LIMIT_REACHED',
-          message: 'Daily limit reached',
-          usage: { current: usage.agentRuns, limit, remaining: 0 },
-          plan,
+    if (actionType) {
+      const actionResult = runFinanceAction(actionType, normalizedFinance);
+      return safeJsonResponse({
+        reply: actionResult.summary,
+        metadata: {
+          intent: 'finance',
+          plan: 'Finance follow-up action execution',
+          steps: [
+            {
+              action: actionType,
+              status: actionResult.type === 'error' ? 'failed' : 'completed',
+              summary: actionResult.summary,
+            },
+          ],
+          structuredData: {
+            finance: normalizedFinance,
+            actionResult: actionResult.type === 'error' ? safeFinanceActionFallback() : actionResult,
+          },
+          memoryUsed: false,
+          iterationCount: 1,
         },
-        { status: 403 },
-      );
+        usage: {
+          current: updatedUsage.agentRuns,
+          limit,
+          remaining: Math.max(limit - updatedUsage.agentRuns, 0),
+        },
+        plan,
+      });
     }
 
-    const { stream, metadata, steps, structuredData } = await runAgentV7(safeInput || 'Continue', userId, safeHistory, imageUri);
-
-    const reply = await collectStreamToText(stream);
-    const updatedUsage = await SubscriptionService.incrementUsage(firestore, userId);
+    const reply = await collectStreamToText(agentResult?.stream);
 
     const payload: AgentResponse & { usage: { current: number; limit: number; remaining: number }; plan: string } = {
-      reply: reply || 'Analysis finalized.',
+      reply: reply || 'I ran into an issue, but here’s what I could analyze so far.',
       metadata: {
-        intent: metadata?.intent || 'general',
-        plan: metadata?.planSummary || 'No plan available.',
-        steps: Array.isArray(steps)
-          ? steps.map((step) => ({
+        intent: agentResult?.metadata?.intent || 'general',
+        plan: agentResult?.metadata?.planSummary || 'Partial fallback',
+        steps: Array.isArray(agentResult?.steps)
+          ? agentResult!.steps.map((step) => ({
               action: `${step.tool}: ${step.reason}`,
               status: step.status === 'error' ? 'failed' : 'completed',
               summary: step.reason,
               error: step.error,
             }))
           : [],
-        structuredData: structuredData ?? undefined,
-        memoryUsed: !!metadata?.memoryUsed,
-        iterationCount: Array.isArray(steps) ? steps.length : 0,
+        structuredData: {
+          ...(agentResult?.structuredData || {}),
+          ...(shouldAttachFinance ? { finance: normalizedFinance } : {}),
+        },
+        memoryUsed: !!agentResult?.metadata?.memoryUsed,
+        iterationCount: Array.isArray(agentResult?.steps) ? agentResult.steps.length : 0,
       },
       usage: {
         current: updatedUsage.agentRuns,
@@ -107,22 +190,9 @@ export async function POST(req: Request) {
       plan,
     };
 
-    return NextResponse.json(payload);
-  } catch (error: any) {
+    return safeJsonResponse(payload);
+  } catch (error) {
     console.error('AGENT_ROUTE_ERROR:', error);
-
-    const fallback: AgentResponse = {
-      reply: 'Something went wrong while processing your request.',
-      metadata: {
-        intent: 'general',
-        plan: 'Fallback response',
-        steps: [],
-        structuredData: undefined,
-        memoryUsed: false,
-        iterationCount: 0,
-      },
-    };
-
-    return NextResponse.json(fallback, { status: 200 });
+    return safeJsonResponse(SAFE_AGENT_FALLBACK);
   }
 }
