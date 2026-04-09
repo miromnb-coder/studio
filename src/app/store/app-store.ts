@@ -2,7 +2,7 @@
 
 import { useSyncExternalStore } from 'react';
 
-export type AgentName = 'Research Agent' | 'Analysis Agent' | 'Memory Agent';
+export type AgentName = 'Supervisor Agent' | 'Research Agent' | 'Analysis Agent' | 'Memory Agent' | 'Response Agent';
 export type AgentStatus = 'idle' | 'running' | 'completed';
 export type MessageRole = 'user' | 'assistant' | 'system';
 export type HistoryType = 'message' | 'agent' | 'alert' | 'memory' | 'account';
@@ -90,14 +90,16 @@ type AppActions = {
 const STORAGE_KEY = 'nova_operator_store_v4';
 const SESSION_DRAFT_KEY = 'nova-operator-chat-draft';
 
-const AGENT_ORDER: AgentName[] = ['Research Agent', 'Analysis Agent', 'Memory Agent'];
+const AGENT_ORDER: AgentName[] = ['Supervisor Agent', 'Research Agent', 'Analysis Agent', 'Memory Agent', 'Response Agent'];
 const createId = () => `${Date.now()}-${Math.random().toString(16).slice(2)}`;
 const nowIso = () => new Date().toISOString();
 
 const defaultAgents = (): Record<AgentName, Agent> => ({
+  'Supervisor Agent': { name: 'Supervisor Agent', status: 'idle', lastRun: null, lastTask: null },
   'Research Agent': { name: 'Research Agent', status: 'idle', lastRun: null, lastTask: null },
   'Analysis Agent': { name: 'Analysis Agent', status: 'idle', lastRun: null, lastTask: null },
   'Memory Agent': { name: 'Memory Agent', status: 'idle', lastRun: null, lastTask: null },
+  'Response Agent': { name: 'Response Agent', status: 'idle', lastRun: null, lastTask: null },
 });
 
 const initialState: AppState = {
@@ -169,22 +171,7 @@ const addHistory = (entry: Omit<HistoryEntry, 'id' | 'createdAt'>) => {
   };
 };
 
-const AGENT_TERMS: Record<AgentName, string[]> = {
-  'Research Agent': ['research', 'find', 'latest', 'news', 'trend', 'look up', 'investigate', 'discover'],
-  'Analysis Agent': ['compare', 'numbers', 'percent', 'ratio', 'analysis', 'difference', 'forecast', 'optimize'],
-  'Memory Agent': ['summarize', 'remember', 'context', 'history', 'recap', 'retain', 'store'],
-};
-
-const detectAgent = (input: string): AgentName => {
-  const value = input.toLowerCase();
-  const scores = AGENT_ORDER.map((name) => ({
-    name,
-    score: AGENT_TERMS[name].reduce((acc, term) => acc + (value.includes(term) ? 1 : 0), 0),
-  }));
-
-  const best = scores.sort((a, b) => b.score - a.score)[0];
-  return best.score > 0 ? best.name : 'Research Agent';
-};
+const DEFAULT_ACTIVE_AGENT: AgentName = 'Supervisor Agent';
 
 const getConversationWindow = (messages: Message[]) =>
   messages.slice(-10).map((message) => ({ role: message.role, content: message.content }));
@@ -201,10 +188,9 @@ function providerSafeErrorMessage(raw: string): string {
   return raw;
 }
 
-async function streamAssistantResponse(requestId: string, assistantMessageId: string, agent: AgentName) {
+async function streamAssistantResponse(requestId: string, assistantMessageId: string) {
   const payload = {
     messages: getConversationWindow(state.messages).filter((message) => message.content.trim()),
-    agent,
   };
 
   const response = await fetch('/api/chat', {
@@ -243,15 +229,32 @@ async function streamAssistantResponse(requestId: string, assistantMessageId: st
 
       if (state.activeRequestId !== requestId) return;
 
+      if (event.type === 'meta') {
+        const eventAgent = typeof event.agent === 'string' ? (event.agent as AgentName) : DEFAULT_ACTIVE_AGENT;
+        setState((prev) => ({ ...prev, activeAgent: eventAgent }));
+      }
+
       if (event.type === 'step') {
         const label = String(event.label ?? 'Processing…');
         const status: AgentStep['status'] = event.status === 'completed' ? 'completed' : 'running';
+        const stepAgent = typeof event.agent === 'string' ? (event.agent as AgentName) : null;
         setState((prev) => {
           const existing = prev.activeSteps.find((item) => item.label === label);
           const next = existing
             ? prev.activeSteps.map((item) => (item.label === label ? { ...item, status } : item))
             : [...prev.activeSteps, { id: createId(), label, status }];
-          return { ...prev, activeSteps: next };
+          const nextAgents = { ...prev.agents };
+
+          if (stepAgent) {
+            nextAgents[stepAgent] = {
+              ...nextAgents[stepAgent],
+              status: status === 'running' ? 'running' : 'completed',
+              lastRun: nowIso(),
+              ...(status === 'running' ? { lastTask: label } : {}),
+            };
+          }
+
+          return { ...prev, activeSteps: next, agents: nextAgents, activeAgent: stepAgent ?? prev.activeAgent };
         });
       }
 
@@ -315,7 +318,7 @@ const actions: AppActions = {
     const cleanPrompt = prompt.trim();
     if (!cleanPrompt) return;
 
-    const agent = detectAgent(cleanPrompt);
+    const agent: AgentName = DEFAULT_ACTIVE_AGENT;
     const requestId = createId();
     const userMessage: Message = { id: createId(), role: 'user', content: cleanPrompt, createdAt: nowIso(), agent };
     const assistantMessage: Message = {
@@ -359,7 +362,7 @@ const actions: AppActions = {
       let attempts = 0;
       while (attempts < 2) {
         try {
-          await streamAssistantResponse(requestId, assistantMessage.id, agent);
+          await streamAssistantResponse(requestId, assistantMessage.id);
           break;
         } catch (error) {
           attempts += 1;
@@ -385,7 +388,7 @@ const actions: AppActions = {
         },
       }));
 
-      addHistory({ title: `${agent} task completed`, description: cleanPrompt, type: agent === 'Memory Agent' ? 'memory' : 'agent', prompt: cleanPrompt });
+      addHistory({ title: `${agent} task completed`, description: cleanPrompt, type: 'agent', prompt: cleanPrompt });
       addHistory({
         title: 'Final answer delivered',
         description: `Completed with ${agent}.`,

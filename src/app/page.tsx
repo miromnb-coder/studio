@@ -13,9 +13,11 @@ const quickActions = [
 ];
 
 const iconMap: Record<AgentName, typeof Bot> = {
+  'Supervisor Agent': Sparkles,
   'Research Agent': Bot,
   'Analysis Agent': Gauge,
   'Memory Agent': Layers,
+  'Response Agent': Send,
 };
 
 export default function HomePage() {
