@@ -4,13 +4,13 @@ export const runtime = 'nodejs';
 import { NextRequest, NextResponse } from 'next/server';
 import { initializeFirebase } from '@/firebase';
 import { collection, query, where, getDocs, addDoc, serverTimestamp } from 'firebase/firestore';
-import { runAgentV6 } from '@/agent/v6/orchestrator';
+import { runAgentV7 } from '@/agent/v7/orchestrator';
 import { scanForSignals } from '@/services/proactive-service';
 
 /**
  * @fileOverview Inbound Email Webhook.
  * Maps incoming magic-forwarded emails to UserProfiles via inboundEmailAddress.
- * Now triggers Engine V6.1 for deep analysis.
+ * Now triggers Engine V7 for deep analysis.
  */
 
 export async function POST(req: NextRequest) {
@@ -50,8 +50,8 @@ export async function POST(req: NextRequest) {
       source: 'webhook'
     });
 
-    console.log(`[WEBHOOK] Initializing Agent v6.1 for User ${userId}...`);
-    const { stream, metadata } = await runAgentV6(
+    console.log(`[WEBHOOK] Initializing Agent v7 for User ${userId}...`);
+    const { stream, metadata, structuredData } = await runAgentV7(
       `Autonomous Inbound Audit: [Subject: ${subject}] [Content: ${body}]`,
       userId,
       [] // Static history for webhooks
@@ -59,8 +59,10 @@ export async function POST(req: NextRequest) {
 
     // Consume stream for database persistence
     let assistantContent = "";
-    for await (const chunk of stream) {
-      assistantContent += chunk.choices[0]?.delta?.content || "";
+    if (stream) {
+      for await (const chunk of stream) {
+        assistantContent += (chunk as any).choices?.[0]?.delta?.content || "";
+      }
     }
 
     const analysesRef = collection(firestore, 'users', userId, 'analyses');
@@ -69,7 +71,7 @@ export async function POST(req: NextRequest) {
       source: 'email',
       title: metadata.intent.toUpperCase() + ": " + subject,
       summary: assistantContent,
-      estimatedMonthlySavings: metadata.structuredData?.estimatedMonthlySavings || 0,
+      estimatedMonthlySavings: (structuredData.detect_leaks as any)?.estimatedMonthlySavings || 0,
       analysisDate: new Date().toISOString(),
       status: 'completed',
       inputMethod: 'email',

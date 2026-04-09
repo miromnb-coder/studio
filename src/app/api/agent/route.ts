@@ -1,6 +1,6 @@
 
 import { NextResponse } from 'next/server';
-import { runAgentV6 } from '@/agent/v6/orchestrator';
+import { runAgentV7 } from '@/agent/v7/orchestrator';
 import { initializeFirebase } from '@/firebase';
 import { SubscriptionService, PLAN_LIMITS } from '@/services/subscription-service';
 
@@ -8,7 +8,7 @@ export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
 
 /**
- * @fileOverview Streaming API Entry Point for Agent Engine v6.
+ * @fileOverview Streaming API Entry Point for Agent Engine v7.
  * Includes Mandatory Message Sanitization to prevent 'messages.content is missing' errors.
  */
 
@@ -66,18 +66,23 @@ export async function POST(req: Request) {
       await SubscriptionService.incrementUsage(firestore, userId);
     }
 
-    console.log("Initializing Agent V6 Orchestrator...");
-    const { stream, metadata } = await runAgentV6(safeInput || "Continue", userId || 'system_anonymous', safeHistory, imageUri);
+    console.log("Initializing Agent V7 Orchestrator...");
+    const { stream, metadata, steps, structuredData } = await runAgentV7(safeInput || "Continue", userId || 'system_anonymous', safeHistory, imageUri);
 
     const encoder = new TextEncoder();
     const readableStream = new ReadableStream({
       async start(controller) {
         // First chunk is always metadata for UI routing
-        controller.enqueue(encoder.encode(`__METADATA__:${JSON.stringify(metadata)}\n`));
+        controller.enqueue(encoder.encode(`__METADATA__:${JSON.stringify({ ...metadata, steps, structuredData })}\n`));
 
         try {
+          if (!stream) {
+            controller.enqueue(encoder.encode('No streaming response available.'));
+            return;
+          }
+
           for await (const chunk of stream) {
-            const content = chunk.choices[0]?.delta?.content || "";
+            const content = (chunk as any).choices?.[0]?.delta?.content || "";
             if (content) {
               controller.enqueue(encoder.encode(content));
             }
