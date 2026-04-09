@@ -5,6 +5,14 @@ import { SubscriptionService, PLAN_LIMITS } from '@/services/subscription-servic
 import type { AgentResponse } from '@/types/agent-response';
 import { normalizeFinanceAnalysis, runFinanceAction, safeFinanceActionFallback } from '@/lib/finance/normalize';
 import type { FinanceActionType } from '@/lib/finance/types';
+import { createClient as createSupabaseServerClient } from '@/lib/supabase/server';
+import {
+  detectMemoryIntent,
+  extractImportantMemory,
+  retrieveRelevantMemory,
+  persistSmartMemory,
+  type RetrievedMemoryContext,
+} from '@/lib/memory/smart-memory';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
@@ -115,7 +123,27 @@ export async function POST(req: Request) {
       return safeJsonResponse({ error: 'No valid content provided.' }, 400);
     }
 
-    const agentResult = await runAgentV7(safeInput || 'Continue', userId, safeHistory, imageUri).catch((error) => {
+    const supabase = await createSupabaseServerClient().catch((error) => {
+      console.error('SUPABASE_SERVER_CLIENT_ERROR:', error);
+      return null;
+    });
+
+    const memoryIntent = await detectMemoryIntent(safeInput || 'Continue');
+    const fallbackMemory: RetrievedMemoryContext = {
+      userId,
+      summaryType: memoryIntent,
+      summary: 'No prior context available.',
+    };
+
+    const retrievedMemory: RetrievedMemoryContext =
+      supabase && userId
+        ? await retrieveRelevantMemory(supabase, userId, memoryIntent).catch((error) => {
+            console.error('MEMORY_RETRIEVAL_ERROR:', error);
+            return fallbackMemory;
+          })
+        : fallbackMemory;
+
+    const agentResult = await runAgentV7(safeInput || 'Continue', userId, safeHistory, imageUri, retrievedMemory).catch((error) => {
       console.error('AGENT_V7_EXECUTION_ERROR:', error);
       return null;
     });
@@ -132,6 +160,19 @@ export async function POST(req: Request) {
 
     if (actionType) {
       const actionResult = runFinanceAction(actionType, normalizedFinance);
+      if (supabase) {
+        const extracted = await extractImportantMemory({
+          intent: memoryIntent,
+          userInput: safeInput || '',
+          assistantReply: actionResult.summary,
+          finance: normalizedFinance,
+          actionType,
+        });
+        await persistSmartMemory(supabase, userId, extracted, retrievedMemory.financeProfile).catch((error) => {
+          console.error('SMART_MEMORY_PERSIST_ACTION_ERROR:', error);
+        });
+      }
+
       return safeJsonResponse({
         reply: actionResult.summary,
         metadata: {
@@ -161,6 +202,20 @@ export async function POST(req: Request) {
     }
 
     const reply = await collectStreamToText(agentResult?.stream);
+
+    if (supabase && reply.trim().length > 0) {
+      const extracted = await extractImportantMemory({
+        intent: memoryIntent,
+        userInput: safeInput || '',
+        assistantReply: reply,
+        finance: normalizedFinance,
+        actionType: null,
+      });
+
+      await persistSmartMemory(supabase, userId, extracted, retrievedMemory.financeProfile).catch((error) => {
+        console.error('SMART_MEMORY_PERSIST_ERROR:', error);
+      });
+    }
 
     const payload: AgentResponse & { usage: { current: number; limit: number; remaining: number }; plan: string } = {
       reply: reply || 'I ran into an issue, but here’s what I could analyze so far.',

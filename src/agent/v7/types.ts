@@ -35,6 +35,10 @@ export interface UserContext {
   preferences: string[];
   goals: string[];
   summary?: string;
+  summaryType?: 'finance' | 'general';
+  financeProfile?: Record<string, unknown> | null;
+  financeEvents?: Array<Record<string, unknown>>;
+  summaries?: Array<Record<string, unknown>>;
 }
 
 export interface ToolContext {
