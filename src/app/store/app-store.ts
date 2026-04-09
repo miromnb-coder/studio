@@ -1,6 +1,7 @@
 'use client';
 
 import { useSyncExternalStore } from 'react';
+import type { AgentResponse, AgentResponseMetadata } from '@/types/agent-response';
 
 export type AgentName = 'Supervisor Agent' | 'Research Agent' | 'Analysis Agent' | 'Memory Agent' | 'Response Agent';
 export type AgentStatus = 'idle' | 'running' | 'completed';
@@ -16,6 +17,7 @@ export type Message = {
   agent?: AgentName;
   isStreaming?: boolean;
   error?: string;
+  agentMetadata?: AgentResponseMetadata;
 };
 
 export type Agent = {
@@ -177,6 +179,39 @@ const DEFAULT_ACTIVE_AGENT: AgentName = 'Supervisor Agent';
 const getConversationWindow = (messages: Message[]) =>
   messages.slice(-10).map((message) => ({ role: message.role, content: message.content }));
 
+
+
+function normalizeAgentResponse(result: Partial<AgentResponse>): AgentResponse {
+  const metadata = result.metadata;
+  return {
+    reply: typeof result.reply === 'string' && result.reply.trim().length > 0 ? result.reply : 'Something went wrong while processing your request.',
+    metadata: {
+      intent: metadata?.intent ?? 'general',
+      plan: metadata?.plan ?? 'No plan provided.',
+      steps: Array.isArray(metadata?.steps) ? metadata!.steps : [],
+      structuredData: metadata?.structuredData ?? null,
+      memoryUsed: metadata?.memoryUsed,
+      iterationCount: metadata?.iterationCount,
+    },
+  };
+}
+
+
+
+function fallbackAgentResponse(message = 'Something went wrong while processing your request.'): AgentResponse {
+  return {
+    reply: message,
+    metadata: {
+      intent: 'general',
+      plan: 'Fallback response',
+      steps: [],
+      structuredData: null,
+      memoryUsed: false,
+      iterationCount: 0,
+    },
+  };
+}
+
 function providerSafeErrorMessage(raw: string): string {
   if (raw) {
     console.error('Kivo chat error:', raw);
@@ -186,94 +221,64 @@ function providerSafeErrorMessage(raw: string): string {
 
 async function streamAssistantResponse(requestId: string, assistantMessageId: string) {
   const payload = {
-    messages: getConversationWindow(state.messages).filter((message) => message.content.trim()),
+    input: [...state.messages].reverse().find((message) => message.role === 'user')?.content || '',
+    history: getConversationWindow(state.messages).filter((message) => message.content.trim()),
+    userId: state.user?.id || 'system_anonymous',
   };
 
-  const response = await fetch('/api/chat', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(payload),
+  console.log('[CHAT] /api/agent request', {
+    userId: payload.userId,
+    inputPreview: payload.input.slice(0, 120),
+    historyCount: payload.history.length,
   });
 
-  if (!response.ok || !response.body) {
-    const reason = await response.text();
-    throw new Error(providerSafeErrorMessage(reason || `Request failed (${response.status})`));
-  }
+  let result: AgentResponse = fallbackAgentResponse();
 
-  const reader = response.body.getReader();
-  const decoder = new TextDecoder();
-  let buffer = '';
+  try {
+    const response = await fetch('/api/agent', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
 
-  while (true) {
-    const { done, value } = await reader.read();
-    if (done) break;
-    buffer += decoder.decode(value, { stream: true });
-
-    const lines = buffer.split('\n');
-    buffer = lines.pop() ?? '';
-
-    for (const line of lines) {
-      const chunk = line.trim();
-      if (!chunk) continue;
-
-      let event: Record<string, unknown>;
-      try {
-        event = JSON.parse(chunk) as Record<string, unknown>;
-      } catch {
-        continue;
-      }
-
-      if (state.activeRequestId !== requestId) return;
-
-      if (event.type === 'meta') {
-        const eventAgent = typeof event.agent === 'string' ? (event.agent as AgentName) : DEFAULT_ACTIVE_AGENT;
-        setState((prev) => ({ ...prev, activeAgent: eventAgent }));
-      }
-
-      if (event.type === 'step') {
-        const label = String(event.label ?? 'Processing…');
-        const status: AgentStep['status'] = event.status === 'completed' ? 'completed' : 'running';
-        const stepAgent = typeof event.agent === 'string' ? (event.agent as AgentName) : null;
-        setState((prev) => {
-          const existing = prev.activeSteps.find((item) => item.label === label);
-          const next = existing
-            ? prev.activeSteps.map((item) => (item.label === label ? { ...item, status } : item))
-            : [...prev.activeSteps, { id: createId(), label, status }];
-          const nextAgents = { ...prev.agents };
-
-          if (stepAgent) {
-            nextAgents[stepAgent] = {
-              ...nextAgents[stepAgent],
-              status: status === 'running' ? 'running' : 'completed',
-              lastRun: nowIso(),
-              ...(status === 'running' ? { lastTask: label } : {}),
-            };
-          }
-
-          return { ...prev, activeSteps: next, agents: nextAgents, activeAgent: stepAgent ?? prev.activeAgent };
-        });
-      }
-
-      if (event.type === 'text-delta') {
-        const delta = typeof event.delta === 'string' ? event.delta : '';
-        if (!delta) continue;
-
-        setState((prev) => ({
-          ...prev,
-          messages: prev.messages.map((message) =>
-            message.id === assistantMessageId
-              ? { ...message, content: `${message.content}${delta}` }
-              : message,
-          ),
-        }));
-      }
-
-      if (event.type === 'error') {
-        const message = typeof event.message === 'string' ? event.message : 'Streaming failed.';
-        throw new Error(providerSafeErrorMessage(message));
-      }
+    if (!response.ok) {
+      const reason = await response.text();
+      console.error('[CHAT] /api/agent non-OK response', { status: response.status, reason });
+    } else {
+      const raw = (await response.json()) as Partial<AgentResponse>;
+      result = normalizeAgentResponse(raw);
     }
+  } catch (error) {
+    console.error('[CHAT] /api/agent failed:', error);
+    result = fallbackAgentResponse();
   }
+
+  console.log('[CHAT] /api/agent normalized output', {
+    intent: result.metadata.intent,
+    steps: result.metadata.steps.length,
+    hasStructuredData: Boolean(result.metadata.structuredData),
+  });
+
+  if (state.activeRequestId !== requestId) return;
+
+  setState((prev) => ({
+    ...prev,
+    activeAgent: DEFAULT_ACTIVE_AGENT,
+    activeSteps: (result.metadata?.steps || []).map((step) => ({
+      id: createId(),
+      label: step.action,
+      status: step.status === 'running' ? 'running' : 'completed',
+    })),
+    messages: prev.messages.map((message) =>
+      message.id === assistantMessageId
+        ? {
+            ...message,
+            content: result.reply || message.content || 'Something went wrong while processing your request.',
+            agentMetadata: result.metadata,
+          }
+        : message,
+    ),
+  }));
 }
 
 const actions: AppActions = {
