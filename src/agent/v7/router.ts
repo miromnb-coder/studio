@@ -6,7 +6,11 @@ const INTENTS: AgentIntent[] = ['finance', 'analysis', 'technical', 'general'];
 function keywordRoute(input: string): RouteResult | null {
   const lower = input.toLowerCase();
 
-  if (/budget|expense|spend|subscription|savings|invoice|cost|bill/.test(lower)) {
+  if (
+    /budget|expense|spend|subscription|savings|invoice|cost|bill|spotify|netflix|\d+[\.,]\d{1,2}\s?€|€|eur|kuukausi|tilaus/.test(
+      lower,
+    )
+  ) {
     return { intent: 'finance', confidence: 0.82, reason: 'Keyword match for finance domain.' };
   }
 
@@ -41,28 +45,43 @@ function safeParseRoute(content: string | null | undefined): RouteResult {
 }
 
 export async function routeIntent(input: string, history: AgentMessage[] = []): Promise<RouteResult> {
+  console.info('AGENT_V7_INTENT_ROUTE_START', { inputLength: input.length, historyCount: history.length });
   const keyword = keywordRoute(input);
-  if (keyword) return keyword;
+  if (keyword) {
+    console.info('AGENT_V7_INTENT_ROUTE_DONE', { method: 'keyword', intent: keyword.intent, reason: keyword.reason });
+    return keyword;
+  }
 
   const safeHistory = history
     .filter((m) => typeof m?.content === 'string' && m.content.trim().length > 0)
     .slice(-2)
     .map((m) => ({ role: m.role, content: m.content.trim() }));
 
-  const response = await groq.chat.completions.create({
-    model: 'llama-3.3-70b-versatile',
-    temperature: 0,
-    response_format: { type: 'json_object' },
-    messages: [
-      {
-        role: 'system',
-        content:
-          'Classify intent into one of: finance, analysis, technical, general. Return JSON: {"intent":"...","confidence":0-1,"reason":"..."}.',
-      },
-      ...safeHistory,
-      { role: 'user', content: input || 'General request.' },
-    ],
-  });
+  try {
+    const response = await groq.chat.completions.create({
+      model: 'llama-3.3-70b-versatile',
+      temperature: 0,
+      response_format: { type: 'json_object' },
+      messages: [
+        {
+          role: 'system',
+          content:
+            'Classify intent into one of: finance, analysis, technical, general. Return JSON: {"intent":"...","confidence":0-1,"reason":"..."}.',
+        },
+        ...safeHistory,
+        { role: 'user', content: input || 'General request.' },
+      ],
+    });
 
-  return safeParseRoute(response.choices[0]?.message?.content);
+    const routed = safeParseRoute(response.choices[0]?.message?.content);
+    console.info('AGENT_V7_INTENT_ROUTE_DONE', { method: 'model', intent: routed.intent, reason: routed.reason });
+    return routed;
+  } catch (error) {
+    console.error('AGENT_V7_INTENT_ROUTE_ERROR:', error);
+    return {
+      intent: 'general',
+      confidence: 0.3,
+      reason: 'Model route failed. Fallback to general intent.',
+    };
+  }
 }

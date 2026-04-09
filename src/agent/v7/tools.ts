@@ -23,6 +23,7 @@ const analyzeTool: ToolDefinitionV7 = {
   name: 'analyze',
   description: 'Extract objective insights from user input (and image when provided).',
   run: async (input, context) => {
+    console.info('AGENT_V7_TOOL_ANALYZE_START');
     const text = String(input.text || context.input || 'Analyze this input.');
     const model = context.imageUri ? 'llama-3.2-11b-vision-preview' : 'llama-3.3-70b-versatile';
 
@@ -43,13 +44,15 @@ const analyzeTool: ToolDefinitionV7 = {
       ],
     });
 
-    return {
+    const result: ToolResult = {
       ok: true,
       tool: 'analyze',
       output: {
         insights: response.choices[0]?.message?.content || 'No analysis output generated.',
       },
     };
+    console.info('AGENT_V7_TOOL_ANALYZE_DONE');
+    return result;
   },
 };
 
@@ -57,6 +60,7 @@ const detectLeaksTool: ToolDefinitionV7 = {
   name: 'detect_leaks',
   description: 'Find likely financial waste patterns from text.',
   run: async (input, context) => {
+    console.info('AGENT_V7_TOOL_DETECT_LEAKS_START');
     const text = String(input.text || context.input || '');
     const response = await groq.chat.completions.create({
       model: 'llama-3.3-70b-versatile',
@@ -72,7 +76,7 @@ const detectLeaksTool: ToolDefinitionV7 = {
       ],
     });
 
-    return {
+    const result: ToolResult = {
       ok: true,
       tool: 'detect_leaks',
       output: safeJsonParse(response.choices[0]?.message?.content, {
@@ -81,6 +85,8 @@ const detectLeaksTool: ToolDefinitionV7 = {
         notes: 'No leak data returned.',
       }),
     };
+    console.info('AGENT_V7_TOOL_DETECT_LEAKS_DONE');
+    return result;
   },
 };
 
@@ -88,6 +94,7 @@ const generalReasonTool: ToolDefinitionV7 = {
   name: 'general_reason',
   description: 'Generate a pragmatic, user-facing response for broad requests.',
   run: async (input, context) => {
+    console.info('AGENT_V7_TOOL_GENERAL_REASON_START');
     const text = String(input.text || context.input || '');
     const response = await groq.chat.completions.create({
       model: 'llama-3.3-70b-versatile',
@@ -101,13 +108,15 @@ const generalReasonTool: ToolDefinitionV7 = {
       ],
     });
 
-    return {
+    const result: ToolResult = {
       ok: true,
       tool: 'general_reason',
       output: {
         response: response.choices[0]?.message?.content || 'No response generated.',
       },
     };
+    console.info('AGENT_V7_TOOL_GENERAL_REASON_DONE');
+    return result;
   },
 };
 

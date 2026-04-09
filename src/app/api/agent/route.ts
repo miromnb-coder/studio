@@ -61,7 +61,9 @@ function parseActionType(raw: unknown): FinanceActionType | null {
 
 export async function POST(req: Request) {
   try {
+    console.info('AGENT_ROUTE_PARSE_START');
     const body = await req.json().catch(() => ({}));
+    console.info('AGENT_ROUTE_PARSE_DONE');
     const { input, history, imageUri, userId } = body ?? {};
     const actionType = parseActionType(body?.actionType);
 
@@ -143,9 +145,15 @@ export async function POST(req: Request) {
           })
         : fallbackMemory;
 
+    console.info('AGENT_ROUTE_ORCHESTRATOR_START', { userId, hasImage: Boolean(imageUri), historyCount: safeHistory.length });
     const agentResult = await runAgentV7(safeInput || 'Continue', userId, safeHistory, imageUri, retrievedMemory).catch((error) => {
       console.error('AGENT_V7_EXECUTION_ERROR:', error);
       return null;
+    });
+    console.info('AGENT_ROUTE_ORCHESTRATOR_DONE', {
+      ok: Boolean(agentResult),
+      intent: agentResult?.metadata?.intent || 'unknown',
+      stepCount: agentResult?.steps?.length || 0,
     });
 
     const normalizedFinance = normalizeFinanceAnalysis(agentResult?.structuredData);
@@ -201,7 +209,10 @@ export async function POST(req: Request) {
       });
     }
 
-    const reply = await collectStreamToText(agentResult?.stream);
+    console.info('AGENT_ROUTE_RESPONSE_SYNTHESIS_START');
+    const streamedReply = await collectStreamToText(agentResult?.stream);
+    const reply = streamedReply || agentResult?.finalText || '';
+    console.info('AGENT_ROUTE_RESPONSE_SYNTHESIS_DONE', { hasReply: reply.trim().length > 0 });
 
     if (supabase && reply.trim().length > 0) {
       const extracted = await extractImportantMemory({
