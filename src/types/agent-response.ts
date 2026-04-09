@@ -13,7 +13,7 @@ export type AgentResponseMetadata = {
   intent: AgentIntent;
   plan: string;
   steps: AgentResponseStep[];
-  structuredData?: Record<string, unknown> | null;
+  structuredData?: Record<string, unknown>;
   memoryUsed?: boolean;
   iterationCount?: number;
 };

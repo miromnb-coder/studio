@@ -184,30 +184,14 @@ const getConversationWindow = (messages: Message[]) =>
 function normalizeAgentResponse(result: Partial<AgentResponse>): AgentResponse {
   const metadata = result.metadata;
   return {
-    reply: typeof result.reply === 'string' && result.reply.trim().length > 0 ? result.reply : 'Something went wrong while processing your request.',
+    reply: typeof result.reply === 'string' ? result.reply : '',
     metadata: {
       intent: metadata?.intent ?? 'general',
       plan: metadata?.plan ?? 'No plan provided.',
       steps: Array.isArray(metadata?.steps) ? metadata!.steps : [],
-      structuredData: metadata?.structuredData ?? null,
+      structuredData: metadata?.structuredData,
       memoryUsed: metadata?.memoryUsed,
       iterationCount: metadata?.iterationCount,
-    },
-  };
-}
-
-
-
-function fallbackAgentResponse(message = 'Something went wrong while processing your request.'): AgentResponse {
-  return {
-    reply: message,
-    metadata: {
-      intent: 'general',
-      plan: 'Fallback response',
-      steps: [],
-      structuredData: null,
-      memoryUsed: false,
-      iterationCount: 0,
     },
   };
 }
@@ -226,38 +210,19 @@ async function streamAssistantResponse(requestId: string, assistantMessageId: st
     userId: state.user?.id || 'system_anonymous',
   };
 
-  console.log('[CHAT] /api/agent request', {
-    userId: payload.userId,
-    inputPreview: payload.input.slice(0, 120),
-    historyCount: payload.history.length,
+  const response = await fetch('/api/agent', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
   });
 
-  let result: AgentResponse = fallbackAgentResponse();
-
-  try {
-    const response = await fetch('/api/agent', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload),
-    });
-
-    if (!response.ok) {
-      const reason = await response.text();
-      console.error('[CHAT] /api/agent non-OK response', { status: response.status, reason });
-    } else {
-      const raw = (await response.json()) as Partial<AgentResponse>;
-      result = normalizeAgentResponse(raw);
-    }
-  } catch (error) {
-    console.error('[CHAT] /api/agent failed:', error);
-    result = fallbackAgentResponse();
+  if (!response.ok) {
+    const reason = await response.text();
+    throw new Error(providerSafeErrorMessage(reason || `Request failed (${response.status})`));
   }
 
-  console.log('[CHAT] /api/agent normalized output', {
-    intent: result.metadata.intent,
-    steps: result.metadata.steps.length,
-    hasStructuredData: Boolean(result.metadata.structuredData),
-  });
+  const raw = (await response.json()) as Partial<AgentResponse>;
+  const result = normalizeAgentResponse(raw);
 
   if (state.activeRequestId !== requestId) return;
 
@@ -267,13 +232,13 @@ async function streamAssistantResponse(requestId: string, assistantMessageId: st
     activeSteps: (result.metadata?.steps || []).map((step) => ({
       id: createId(),
       label: step.action,
-      status: step.status === 'running' ? 'running' : 'completed',
+      status: step.status === 'failed' ? 'completed' : step.status === 'running' ? 'running' : 'completed',
     })),
     messages: prev.messages.map((message) =>
       message.id === assistantMessageId
         ? {
             ...message,
-            content: result.reply || message.content || 'Something went wrong while processing your request.',
+            content: result.reply || message.content,
             agentMetadata: result.metadata,
           }
         : message,

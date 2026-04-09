@@ -1,7 +1,7 @@
 'use client';
 
 type Props = {
-  data?: Record<string, unknown> | null;
+  data?: Record<string, unknown>;
 };
 
 function formatValue(value: unknown): string {
