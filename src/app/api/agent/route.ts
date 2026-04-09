@@ -22,7 +22,8 @@ function summarizeStepOutput(output: Record<string, unknown>): string | undefine
 
 export async function POST(req: Request) {
   try {
-    const { input, history, imageUri, userId } = await req.json();
+    const body = await req.json();
+    const { input, history, imageUri, userId } = body ?? {};
 
     if (!process.env.GROQ_API_KEY) {
       throw new Error('GROQ_API_KEY is not configured.');
