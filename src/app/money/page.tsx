@@ -38,7 +38,7 @@ export default function MoneyPage() {
 
       <section className="space-y-4">
         <article className="card-elevated p-5">
-          <p className="text-xs font-semibold uppercase tracking-wide text-[#cde4ff]">Savings Insight</p>
+          <p className="text-xs font-semibold uppercase tracking-wide text-[#c9ced6]">Savings Insight</p>
           <p className="mt-2 text-3xl font-bold text-primary">€{savings.toFixed(0)} / month</p>
           <p className="mt-1 text-sm text-secondary">Potential savings identified by Money Agent.</p>
           <button type="button" onClick={() => pushToChat('Generate the exact cancellation plan for every waste subscription.')} className="btn-secondary mt-3 px-4 py-2 text-sm">Review in chat</button>
@@ -75,7 +75,7 @@ export default function MoneyPage() {
           <div className="space-y-2">
             {moneyAlerts.map((alert) => (
               <div key={alert.id} className="card-elevated flex items-center gap-2 rounded-xl px-3 py-2 text-sm text-primary">
-                <AlertTriangle className="h-4 w-4 text-[#cde4ff]" />
+                <AlertTriangle className="h-4 w-4 text-[#c9ced6]" />
                 {alert.text}
               </div>
             ))}

@@ -33,7 +33,7 @@ export default function AgentsPage() {
     <main className="screen app-bg">
       <section className="card-surface p-5">
         <div className="mb-4 flex items-center gap-3">
-          <div className="rounded-full bg-white/5 p-2.5 text-[#cde4ff]"><Bot className="h-5 w-5" /></div>
+          <div className="rounded-full bg-white/5 p-2.5 text-[#c9ced6]"><Bot className="h-5 w-5" /></div>
           <div>
             <h1 className="text-2xl font-semibold tracking-tight text-primary">Live Agents</h1>
             <p className="text-sm text-secondary">Real-time status, latest task, and recent run details.</p>
@@ -46,7 +46,7 @@ export default function AgentsPage() {
             const Icon = details.icon;
             return (
               <button key={agent.name} onClick={() => enqueuePromptAndGoToChat(`Run ${agent.name} on this task: ${agent.lastTask ?? 'new task request'}`)} type="button" className="message-appear card-interactive flex w-full items-start gap-3 rounded-2xl p-4 text-left">
-                <div className="rounded-2xl bg-white/5 p-3 text-[#cde4ff]"><Icon className="h-5 w-5 stroke-[1.8]" /></div>
+                <div className="rounded-2xl bg-white/5 p-3 text-[#c9ced6]"><Icon className="h-5 w-5 stroke-[1.8]" /></div>
                 <div className="min-w-0 flex-1">
                   <p className="text-[1.02rem] font-semibold tracking-tight text-primary">{agent.name}</p>
                   <p className="text-sm text-secondary">{details.subtitle}</p>

@@ -16,7 +16,7 @@ export function BottomNav() {
   const pathname = usePathname();
 
   return (
-    <nav className="fixed bottom-0 left-1/2 z-40 grid w-full max-w-md -translate-x-1/2 grid-cols-5 border-t border-white/10 bg-[#171a20]/95 px-4 pt-3 pb-[calc(0.75rem+env(safe-area-inset-bottom))] backdrop-blur-sm">
+    <nav className="fixed bottom-0 left-1/2 z-40 grid w-full max-w-md -translate-x-1/2 grid-cols-5 border-t border-white/10 bg-[#17191d]/95 px-4 pt-3 pb-[calc(0.75rem+env(safe-area-inset-bottom))] backdrop-blur-sm">
       {tabs.map(({ label, href, icon: Icon }) => {
         const active = pathname === href;
         return (
@@ -24,7 +24,7 @@ export function BottomNav() {
             key={label}
             href={href}
             className={`nav-tab tap-feedback flex flex-col items-center gap-1.5 rounded-xl py-1.5 text-xs font-medium transition ${
-              active ? 'text-[#cde4ff]' : 'text-[#9aa3af] hover:text-[#e6e8eb]'
+              active ? 'text-[#c9ced6]' : 'text-[#a1a1aa] hover:text-[#f3f4f6]'
             }`}
             aria-current={active ? 'page' : undefined}
           >

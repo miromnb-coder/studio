@@ -24,7 +24,7 @@ export default function AlertsPage() {
     <main className="screen app-bg">
       <section className="card-surface p-5">
         <div className="mb-4 flex items-center gap-3">
-          <div className="rounded-xl bg-white/5 p-2.5 text-[#cde4ff]"><Bell className="h-5 w-5" /></div>
+          <div className="rounded-xl bg-white/5 p-2.5 text-[#c9ced6]"><Bell className="h-5 w-5" /></div>
           <div>
             <h1 className="text-2xl font-semibold text-primary">Alerts</h1>
             <p className="text-sm text-secondary">Review, run analysis in chat, and resolve alert workflows.</p>
@@ -36,7 +36,7 @@ export default function AlertsPage() {
           {active.length === 0 ? <div className="card-elevated px-4 py-4 text-sm text-secondary">No alerts right now.</div> : active.map((alert) => (
             <article key={alert.id} className="card-elevated px-4 py-4">
               <div className="mb-2 flex items-start gap-3">
-                <div className="rounded-xl bg-white/5 p-2 text-[#cde4ff]"><TriangleAlert className="h-4 w-4" /></div>
+                <div className="rounded-xl bg-white/5 p-2 text-[#c9ced6]"><TriangleAlert className="h-4 w-4" /></div>
                 <div>
                   <p className="text-sm font-semibold text-primary">{alert.title}</p>
                   <p className="text-sm text-secondary">{alert.description}</p>
@@ -44,11 +44,11 @@ export default function AlertsPage() {
                 </div>
               </div>
               <div className="grid grid-cols-2 gap-2 text-xs font-semibold">
-                <button onClick={() => openAlertInChat(alert.id, 'analyze')} type="button" className="btn-primary tap-feedback px-2 py-2 text-white">Analyze</button>
+                <button onClick={() => openAlertInChat(alert.id, 'analyze')} type="button" className="btn-primary tap-feedback px-2 py-2 text-[#f3f4f6]">Analyze</button>
                 <button onClick={() => openAlertInChat(alert.id, 'open')} type="button" className="btn-secondary tap-feedback px-2 py-2">Open in Chat</button>
                 <button onClick={() => snoozeAlert(alert.id, 90)} type="button" className="btn-secondary tap-feedback px-2 py-2">Snooze</button>
                 <button onClick={() => markAlertFalsePositive(alert.id)} type="button" className="btn-secondary tap-feedback px-2 py-2">False Positive</button>
-                <button onClick={() => resolveAlert(alert.id)} type="button" className="btn-primary tap-feedback col-span-2 px-2 py-2 text-white">Resolve</button>
+                <button onClick={() => resolveAlert(alert.id)} type="button" className="btn-primary tap-feedback col-span-2 px-2 py-2 text-[#f3f4f6]">Resolve</button>
               </div>
             </article>
           ))}

@@ -64,7 +64,7 @@ export default function ChatPage() {
     <main className="screen app-bg pb-44">
       <header className="card-surface mb-3 flex items-center justify-between gap-3 px-4 py-3">
         <div className="flex items-center gap-3">
-          <div className="rounded-xl bg-white/5 p-2 text-[#cde4ff]">
+          <div className="rounded-xl bg-white/5 p-2 text-[#c9ced6]">
             <MessageSquare className="h-5 w-5" />
           </div>
           <div>
@@ -77,7 +77,7 @@ export default function ChatPage() {
 
       <div className="card-surface mb-3 flex items-center justify-between gap-2 px-3 py-2 text-xs">
         <span className="inline-flex items-center gap-2 text-secondary">
-          <span className={`h-2 w-2 rounded-full ${isAgentResponding ? 'agent-pulse bg-[#5da9ff]' : 'bg-white/40'}`} />
+          <span className={`h-2 w-2 rounded-full ${isAgentResponding ? 'agent-pulse bg-[#b6bcc7]' : 'bg-white/40'}`} />
           Agent status
         </span>
         <span className="badge">{activeAgent ?? 'No active agent'}</span>
@@ -101,11 +101,11 @@ export default function ChatPage() {
             >
               <p className="whitespace-pre-wrap text-primary">{message.content || (message.isStreaming ? '…' : '')}</p>
               {message.isStreaming ? (
-                <div className="mt-2 inline-flex items-center gap-2 text-[11px] text-[#cde4ff]">
+                <div className="mt-2 inline-flex items-center gap-2 text-[11px] text-[#c9ced6]">
                   <LoaderCircle className="h-3.5 w-3.5 animate-spin" /> streaming
                 </div>
               ) : null}
-              {message.error ? <p className="mt-2 text-[11px] text-rose-300">{message.error}</p> : null}
+              {message.error ? <p className="mt-2 text-[11px] text-rose-200">{message.error}</p> : null}
               <p className="mt-1 text-[10px] text-secondary">
                 {new Date(message.createdAt).toLocaleTimeString([], {
                   hour: '2-digit',
@@ -119,7 +119,7 @@ export default function ChatPage() {
         {isAgentResponding ? (
           <div className="card-surface space-y-2 px-4 py-3 text-sm">
             <div className="inline-flex items-center gap-2 text-primary">
-              <span className="agent-pulse inline-flex h-2 w-2 rounded-full bg-[#5da9ff]" />
+              <span className="agent-pulse inline-flex h-2 w-2 rounded-full bg-[#b6bcc7]" />
               {activeAgent ?? 'Agent'} is running...
             </div>
             <div className="space-y-1 text-xs text-secondary">
@@ -130,7 +130,7 @@ export default function ChatPage() {
                   <p key={step.id} className="flex items-center gap-2">
                     <span
                       className={`h-1.5 w-1.5 rounded-full ${
-                        step.status === 'completed' ? 'bg-[#7c7cff]' : 'animate-pulse bg-[#5da9ff]'
+                        step.status === 'completed' ? 'bg-[#8b919d]' : 'animate-pulse bg-[#b6bcc7]'
                       }`}
                     />
                     {step.label}
