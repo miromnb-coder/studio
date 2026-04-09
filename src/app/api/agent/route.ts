@@ -93,8 +93,8 @@ export async function POST(req: Request) {
     const payload: AgentResponse = {
       reply: reply || 'Analysis finalized.',
       metadata: {
-        intent: metadata.intent,
-        plan: metadata.planSummary,
+        intent: metadata.intent || 'general',
+        plan: metadata.planSummary || 'No plan available.',
         steps: mappedSteps,
         structuredData,
         memoryUsed: metadata.memoryUsed,

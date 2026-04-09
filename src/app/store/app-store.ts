@@ -179,6 +179,23 @@ const DEFAULT_ACTIVE_AGENT: AgentName = 'Supervisor Agent';
 const getConversationWindow = (messages: Message[]) =>
   messages.slice(-10).map((message) => ({ role: message.role, content: message.content }));
 
+
+
+function normalizeAgentResponse(result: Partial<AgentResponse>): AgentResponse {
+  const metadata = result.metadata;
+  return {
+    reply: typeof result.reply === 'string' ? result.reply : '',
+    metadata: {
+      intent: metadata?.intent ?? 'general',
+      plan: metadata?.plan ?? 'No plan provided.',
+      steps: Array.isArray(metadata?.steps) ? metadata!.steps : [],
+      structuredData: metadata?.structuredData,
+      memoryUsed: metadata?.memoryUsed,
+      iterationCount: metadata?.iterationCount,
+    },
+  };
+}
+
 function providerSafeErrorMessage(raw: string): string {
   if (raw) {
     console.error('Kivo chat error:', raw);
@@ -204,7 +221,8 @@ async function streamAssistantResponse(requestId: string, assistantMessageId: st
     throw new Error(providerSafeErrorMessage(reason || `Request failed (${response.status})`));
   }
 
-  const result = (await response.json()) as AgentResponse;
+  const raw = (await response.json()) as Partial<AgentResponse>;
+  const result = normalizeAgentResponse(raw);
 
   if (state.activeRequestId !== requestId) return;
 
