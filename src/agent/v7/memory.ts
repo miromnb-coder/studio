@@ -32,5 +32,8 @@ export function readUserContext(input: MemoryInput): UserContext {
     financeProfile: (baseMemory.financeProfile as Record<string, unknown> | null) || null,
     financeEvents: Array.isArray(baseMemory.financeEvents) ? (baseMemory.financeEvents as Array<Record<string, unknown>>) : [],
     summaries: Array.isArray(baseMemory.summaries) ? (baseMemory.summaries as Array<Record<string, unknown>>) : [],
+    semanticMemories: Array.isArray(baseMemory.semanticMemories)
+      ? (baseMemory.semanticMemories as Array<Record<string, unknown>>)
+      : [],
   };
 }

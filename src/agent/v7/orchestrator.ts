@@ -74,7 +74,7 @@ export async function runAgentV7(
           ...safeHistory.slice(-3),
           {
             role: 'user',
-            content: `User input: ${safeInput}\n\nIntent: ${route.intent}\nMemory type: ${userContext.summaryType || 'general'}\nMemory summary: ${userContext.summary || 'none'}\nPlan: ${plan.summary}\nTool results: ${JSON.stringify(execution.steps)}`,
+            content: `User input: ${safeInput}\n\nIntent: ${route.intent}\nMemory type: ${userContext.summaryType || 'general'}\nMemory summary: ${userContext.summary || 'none'}\nFinance profile: ${JSON.stringify(userContext.financeProfile || {}, null, 0)}\nSemantic memory: ${JSON.stringify((userContext as any).semanticMemories || [], null, 0)}\nPlan: ${plan.summary}\nTool results: ${JSON.stringify(execution.steps)}`,
           },
         ],
       })

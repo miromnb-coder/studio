@@ -285,6 +285,18 @@ function providerSafeErrorMessage(raw: string): string {
   return 'I ran into an issue, but here’s what I could analyze so far.';
 }
 
+function emitUsageUpdate(payload: { usage?: { current: number; limit: number; remaining: number }; plan?: string }) {
+  if (typeof window === 'undefined') return;
+  window.dispatchEvent(
+    new CustomEvent('kivo-usage-updated', {
+      detail: {
+        usage: payload.usage,
+        plan: payload.plan === 'PREMIUM' ? 'PREMIUM' : 'FREE',
+      },
+    }),
+  );
+}
+
 async function streamAssistantResponse(requestId: string, assistantMessageId: string, conversationId: string) {
   const conversationMessages = state.messageState[conversationId] ?? [];
   const payload = {
@@ -312,6 +324,24 @@ async function streamAssistantResponse(requestId: string, assistantMessageId: st
   }
 
   const raw = (await response.json()) as Partial<AgentResponse>;
+  const rawWithUsage = raw as Partial<AgentResponse> & {
+    usage?: { current?: number; limit?: number; remaining?: number };
+    plan?: string;
+  };
+  if (
+    typeof rawWithUsage.usage?.current === 'number' &&
+    typeof rawWithUsage.usage?.limit === 'number' &&
+    typeof rawWithUsage.usage?.remaining === 'number'
+  ) {
+    emitUsageUpdate({
+      usage: {
+        current: rawWithUsage.usage.current,
+        limit: rawWithUsage.usage.limit,
+        remaining: rawWithUsage.usage.remaining,
+      },
+      plan: rawWithUsage.plan,
+    });
+  }
   const result = normalizeAgentResponse(raw);
 
   if (state.activeRequestId !== requestId) return;
@@ -705,6 +735,24 @@ const actions: AppActions = {
       }
 
       const result = normalizeAgentResponse(reason as Partial<AgentResponse>);
+      const reasonWithUsage = reason as Partial<AgentResponse> & {
+        usage?: { current?: number; limit?: number; remaining?: number };
+        plan?: string;
+      };
+      if (
+        typeof reasonWithUsage.usage?.current === 'number' &&
+        typeof reasonWithUsage.usage?.limit === 'number' &&
+        typeof reasonWithUsage.usage?.remaining === 'number'
+      ) {
+        emitUsageUpdate({
+          usage: {
+            current: reasonWithUsage.usage.current,
+            limit: reasonWithUsage.usage.limit,
+            remaining: reasonWithUsage.usage.remaining,
+          },
+          plan: reasonWithUsage.plan,
+        });
+      }
 
       setState((prev) => {
         const nextConversationMessages = (prev.messageState[conversationId] ?? []).map((message) =>
