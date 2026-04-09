@@ -1,6 +1,7 @@
 'use client';
 
 import { useSyncExternalStore } from 'react';
+import type { AgentResponse, AgentResponseMetadata } from '@/types/agent-response';
 
 export type AgentName = 'Supervisor Agent' | 'Research Agent' | 'Analysis Agent' | 'Memory Agent' | 'Response Agent';
 export type AgentStatus = 'idle' | 'running' | 'completed';
@@ -16,6 +17,7 @@ export type Message = {
   agent?: AgentName;
   isStreaming?: boolean;
   error?: string;
+  agentMetadata?: AgentResponseMetadata;
 };
 
 export type Agent = {
@@ -186,94 +188,44 @@ function providerSafeErrorMessage(raw: string): string {
 
 async function streamAssistantResponse(requestId: string, assistantMessageId: string) {
   const payload = {
-    messages: getConversationWindow(state.messages).filter((message) => message.content.trim()),
+    input: [...state.messages].reverse().find((message) => message.role === 'user')?.content || '',
+    history: getConversationWindow(state.messages).filter((message) => message.content.trim()),
+    userId: state.user?.id || 'system_anonymous',
   };
 
-  const response = await fetch('/api/chat', {
+  const response = await fetch('/api/agent', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(payload),
   });
 
-  if (!response.ok || !response.body) {
+  if (!response.ok) {
     const reason = await response.text();
     throw new Error(providerSafeErrorMessage(reason || `Request failed (${response.status})`));
   }
 
-  const reader = response.body.getReader();
-  const decoder = new TextDecoder();
-  let buffer = '';
+  const result = (await response.json()) as AgentResponse;
 
-  while (true) {
-    const { done, value } = await reader.read();
-    if (done) break;
-    buffer += decoder.decode(value, { stream: true });
+  if (state.activeRequestId !== requestId) return;
 
-    const lines = buffer.split('\n');
-    buffer = lines.pop() ?? '';
-
-    for (const line of lines) {
-      const chunk = line.trim();
-      if (!chunk) continue;
-
-      let event: Record<string, unknown>;
-      try {
-        event = JSON.parse(chunk) as Record<string, unknown>;
-      } catch {
-        continue;
-      }
-
-      if (state.activeRequestId !== requestId) return;
-
-      if (event.type === 'meta') {
-        const eventAgent = typeof event.agent === 'string' ? (event.agent as AgentName) : DEFAULT_ACTIVE_AGENT;
-        setState((prev) => ({ ...prev, activeAgent: eventAgent }));
-      }
-
-      if (event.type === 'step') {
-        const label = String(event.label ?? 'Processing…');
-        const status: AgentStep['status'] = event.status === 'completed' ? 'completed' : 'running';
-        const stepAgent = typeof event.agent === 'string' ? (event.agent as AgentName) : null;
-        setState((prev) => {
-          const existing = prev.activeSteps.find((item) => item.label === label);
-          const next = existing
-            ? prev.activeSteps.map((item) => (item.label === label ? { ...item, status } : item))
-            : [...prev.activeSteps, { id: createId(), label, status }];
-          const nextAgents = { ...prev.agents };
-
-          if (stepAgent) {
-            nextAgents[stepAgent] = {
-              ...nextAgents[stepAgent],
-              status: status === 'running' ? 'running' : 'completed',
-              lastRun: nowIso(),
-              ...(status === 'running' ? { lastTask: label } : {}),
-            };
+  setState((prev) => ({
+    ...prev,
+    activeAgent: DEFAULT_ACTIVE_AGENT,
+    activeSteps: (result.metadata?.steps || []).map((step) => ({
+      id: createId(),
+      label: step.action,
+      status: step.status === 'failed' ? 'completed' : step.status === 'running' ? 'running' : 'completed',
+    })),
+    messages: prev.messages.map((message) =>
+      message.id === assistantMessageId
+        ? {
+            ...message,
+            content: result.reply || message.content,
+            agentMetadata: result.metadata,
           }
-
-          return { ...prev, activeSteps: next, agents: nextAgents, activeAgent: stepAgent ?? prev.activeAgent };
-        });
-      }
-
-      if (event.type === 'text-delta') {
-        const delta = typeof event.delta === 'string' ? event.delta : '';
-        if (!delta) continue;
-
-        setState((prev) => ({
-          ...prev,
-          messages: prev.messages.map((message) =>
-            message.id === assistantMessageId
-              ? { ...message, content: `${message.content}${delta}` }
-              : message,
-          ),
-        }));
-      }
-
-      if (event.type === 'error') {
-        const message = typeof event.message === 'string' ? event.message : 'Streaming failed.';
-        throw new Error(providerSafeErrorMessage(message));
-      }
-    }
-  }
+        : message,
+    ),
+  }));
 }
 
 const actions: AppActions = {

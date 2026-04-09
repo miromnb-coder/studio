@@ -3,6 +3,8 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { ArrowUp, Plus, RefreshCw, Mic, AudioLines, Github, Paperclip, ImagePlus, NotebookPen, ClipboardPaste } from 'lucide-react';
 import { useAppStore } from '../store/app-store';
+import { AgentStrategyCard } from './components/AgentStrategyCard';
+import { StructuredResultCard } from './components/StructuredResultCard';
 
 export default function ChatPage() {
   const hydrated = useAppStore((s) => s.hydrated);
@@ -173,6 +175,13 @@ export default function ChatPage() {
               <div className={message.role === 'user' ? 'ml-auto max-w-[90%] rounded-[18px] border border-black/[0.04] bg-[#f3f3f3] px-3.5 py-2.5 text-[15px] leading-6 text-[#1f1f1f]' : 'px-1 py-1 text-[16px] leading-[1.82] text-[#1d1d1d]'}>
                 {message.content || (message.isStreaming ? ' ' : '')}
               </div>
+
+              {message.role === 'assistant' && message.agentMetadata ? (
+                <div className="px-1">
+                  <AgentStrategyCard metadata={message.agentMetadata} />
+                  <StructuredResultCard data={message.agentMetadata.structuredData} />
+                </div>
+              ) : null}
             </div>
           ))
         )}
