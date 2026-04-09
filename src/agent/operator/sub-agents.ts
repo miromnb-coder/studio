@@ -1,6 +1,6 @@
 import type { ChatMessage } from '@/lib/ai/types';
 import type { AIProviderClient } from '@/lib/ai/types';
-import type { StoredMemory } from './types';
+import type { IntentRoute, StoredMemory } from './types';
 
 async function completeText(provider: AIProviderClient, systemPrompt: string, messages: ChatMessage[]): Promise<string> {
   let content = '';
@@ -13,11 +13,33 @@ async function completeText(provider: AIProviderClient, systemPrompt: string, me
   return content.trim();
 }
 
+function formatMemory(memory: StoredMemory[]): string {
+  if (!memory.length) return 'No relevant memory found.';
+  return memory.map((item) => `- (${item.source}) ${item.value}`).join('\n');
+}
+
+export async function runPlanningStep(
+  provider: AIProviderClient,
+  userInput: string,
+  route: IntentRoute,
+  memory: StoredMemory[],
+): Promise<string> {
+  return completeText(
+    provider,
+    'You are Kivo Planner. Create a compact internal plan to maximize answer quality. Return only bullets under: Goal, Critical factors, Output approach. Do not include chain-of-thought.',
+    [
+      { role: 'user', content: `User request:\n${userInput}` },
+      { role: 'system', content: `Intent route:\n${JSON.stringify(route, null, 2)}` },
+      { role: 'system', content: `Memory:\n${formatMemory(memory)}` },
+    ],
+  );
+}
+
 export async function runResearchAgent(provider: AIProviderClient, userInput: string, conversation: ChatMessage[]): Promise<string> {
   return completeText(
     provider,
-    'You are Research Agent. Gather accurate, broad, practical knowledge. Use concise bullets. Separate facts from assumptions.',
-    [...conversation.slice(-6), { role: 'user', content: userInput }],
+    'You are Kivo Research. Provide concise, high-signal findings and practical facts. Label uncertain points clearly. Prefer relevance over breadth.',
+    [...conversation.slice(-8), { role: 'user', content: userInput }],
   );
 }
 
@@ -26,16 +48,16 @@ export async function runAnalysisAgent(
   userInput: string,
   research: string,
   memory: StoredMemory[],
+  plan: string,
 ): Promise<string> {
-  const memoryText = memory.map((item) => `- [${item.source}] ${item.value}`).join('\n') || 'No relevant memory';
-
   return completeText(
     provider,
-    'You are Analysis Agent. Perform structured reasoning, tradeoff analysis, and decision framing. Be explicit and numerate when possible.',
+    'You are Kivo Analysis. Synthesize evidence and reasoning into a decision-ready analysis. Highlight tradeoffs, risks, and best path. Avoid fluff.',
     [
       { role: 'user', content: `User request:\n${userInput}` },
-      { role: 'system', content: `Research notes:\n${research || 'N/A'}` },
-      { role: 'system', content: `Relevant memory:\n${memoryText}` },
+      { role: 'system', content: `Planning notes:\n${plan || 'No plan'}` },
+      { role: 'system', content: `Research notes:\n${research || 'No research run'}` },
+      { role: 'system', content: `Memory context:\n${formatMemory(memory)}` },
     ],
   );
 }
@@ -44,29 +66,47 @@ export async function runResponseAgent(
   provider: AIProviderClient,
   userInput: string,
   options: {
+    route: IntentRoute;
     research?: string;
     analysis?: string;
     memory?: StoredMemory[];
-    complexity: 'low' | 'medium' | 'high';
+    plan?: string;
   },
 ): Promise<string> {
-  const style =
-    options.complexity === 'low'
-      ? 'Give a direct short answer first, then one concise supporting note.'
-      : options.complexity === 'medium'
-      ? 'Use clear sections and bullets. Keep practical.'
-      : 'Provide structured response with summary, detailed reasoning, risks, and recommended next steps.';
+  const memoryText = formatMemory(options.memory ?? []);
+  const modeGuide: Record<IntentRoute['mode'], string> = {
+    direct: 'Start with the answer in 1-2 sentences. Add only one helpful follow-up insight.',
+    deep_explanation: 'Use clear teaching structure, simple language, and a short example if useful.',
+    analysis: 'Give recommendation + reasoning. Include tradeoffs and decision criteria.',
+    operator: 'Act like a proactive operator: give a practical plan, execution order, and immediate next step.',
+  };
 
-  const memoryText = (options.memory ?? []).map((item) => `- ${item.value}`).join('\n') || 'No relevant memory';
+  const structureGuide: Record<IntentRoute['outputShape'], string> = {
+    short: 'Keep concise paragraph format.',
+    sections: 'Use short section headers.',
+    steps: 'Use numbered steps with outcomes.',
+    decision: 'Use comparison table-style bullets and a final recommendation.',
+  };
 
   return completeText(
     provider,
-    `You are Response Agent. Produce the final user-facing response. ${style} Admit uncertainty where needed and avoid hallucinations.`,
+    [
+      'You are Kivo, a premium personal AI assistant.',
+      'Goal: understand the user\'s true objective and provide the most useful response.',
+      modeGuide[options.route.mode],
+      structureGuide[options.route.outputShape],
+      'Be clear, sharp, and practical. Avoid robotic filler.',
+      'Use memory only when it improves relevance, and reference it naturally.',
+      'If uncertain, state uncertainty briefly and continue with best guidance.',
+      'When useful, end with a concrete next step.',
+    ].join(' '),
     [
       { role: 'user', content: userInput },
-      { role: 'system', content: `Research output:\n${options.research || 'Not run'}` },
-      { role: 'system', content: `Analysis output:\n${options.analysis || 'Not run'}` },
-      { role: 'system', content: `Relevant memory:\n${memoryText}` },
+      { role: 'system', content: `Route:\n${JSON.stringify(options.route, null, 2)}` },
+      { role: 'system', content: `Planning:\n${options.plan || 'No plan generated'}` },
+      { role: 'system', content: `Research:\n${options.research || 'No external research used'}` },
+      { role: 'system', content: `Analysis:\n${options.analysis || 'No deep analysis needed'}` },
+      { role: 'system', content: `Memory:\n${memoryText}` },
     ],
   );
 }

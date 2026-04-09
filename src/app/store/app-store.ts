@@ -177,15 +177,10 @@ const getConversationWindow = (messages: Message[]) =>
   messages.slice(-10).map((message) => ({ role: message.role, content: message.content }));
 
 function providerSafeErrorMessage(raw: string): string {
-  if (/Groq is selected but not configured/i.test(raw) || /GROQ_API_KEY/i.test(raw)) {
-    return 'Groq is not configured yet. Add AI_PROVIDER=groq, GROQ_API_KEY, and optionally GROQ_MODEL on the server, then retry.';
+  if (raw) {
+    console.error('Kivo chat error:', raw);
   }
-
-  if (/OPENAI_API_KEY/i.test(raw)) {
-    return 'OpenAI key is missing, but this chat can run with Groq. Set AI_PROVIDER=groq with GROQ_API_KEY on the server.';
-  }
-
-  return raw;
+  return 'Something went wrong. Please try again.';
 }
 
 async function streamAssistantResponse(requestId: string, assistantMessageId: string) {
@@ -412,7 +407,7 @@ const actions: AppActions = {
                 ...entry,
                 isStreaming: false,
                 error: message,
-                content: entry.content || 'I hit an error while streaming. Please retry.',
+                content: entry.content || '',
               }
             : entry,
         ),

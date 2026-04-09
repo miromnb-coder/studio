@@ -3,17 +3,17 @@
 @tailwind utilities;
 
 :root {
-  --bg-base: #111315;
-  --bg-surface: #17191d;
-  --bg-card: #1d2127;
-  --border-subtle: rgba(255, 255, 255, 0.07);
-  --text-primary: #f3f4f6;
-  --text-secondary: #a1a1aa;
-  --accent-steel: #aab1bc;
-  --accent-steel-strong: #c4cad3;
+  --bg-base: #f2f2f2;
+  --bg-surface: #f7f7f7;
+  --bg-card: #f7f7f7;
+  --border-subtle: rgba(0, 0, 0, 0.08);
+  --text-primary: #171717;
+  --text-secondary: #666666;
+  --accent-steel: #525252;
+  --accent-steel-strong: #111111;
   --surface-radius: 18px;
-  --surface-shadow: 0 12px 28px rgba(0, 0, 0, 0.33);
-  --surface-elevated-shadow: 0 14px 34px rgba(0, 0, 0, 0.42);
+  --surface-shadow: 0 3px 10px rgba(0, 0, 0, 0.03);
+  --surface-elevated-shadow: 0 6px 14px rgba(0, 0, 0, 0.05);
   --screen-x: 1rem;
   --screen-y: 1.1rem;
 }
@@ -29,8 +29,7 @@ body {
 }
 
 body {
-  font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'SF Pro Display', Inter,
-    system-ui, sans-serif;
+  font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'SF Pro Display', Inter, system-ui, sans-serif;
   text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;
   background: var(--bg-base);
@@ -47,10 +46,7 @@ body {
 }
 
 .app-bg {
-  background:
-    radial-gradient(circle at 12% -10%, rgba(255, 255, 255, 0.05), transparent 40%),
-    radial-gradient(circle at 88% 0%, rgba(169, 176, 186, 0.08), transparent 36%),
-    var(--bg-base);
+  background: var(--bg-base);
 }
 
 .text-primary {
@@ -80,7 +76,7 @@ body {
 }
 
 .card-interactive:hover {
-  border-color: rgba(255, 255, 255, 0.18);
+  border-color: rgba(0, 0, 0, 0.18);
 }
 
 .card-interactive:active {
@@ -98,7 +94,7 @@ body {
 .system-input {
   border-radius: 14px;
   border: 1px solid var(--border-subtle);
-  background: rgba(255, 255, 255, 0.04);
+  background: #fff;
   color: var(--text-primary);
   transition: border-color 0.18s ease, box-shadow 0.18s ease;
 }
@@ -109,8 +105,8 @@ body {
 
 .system-input:focus {
   outline: none;
-  border-color: rgba(196, 202, 211, 0.5);
-  box-shadow: 0 0 0 3px rgba(196, 202, 211, 0.14);
+  border-color: rgba(0, 0, 0, 0.25);
+  box-shadow: 0 0 0 3px rgba(0, 0, 0, 0.06);
 }
 
 .btn-primary,
@@ -122,15 +118,14 @@ body {
 }
 
 .btn-primary {
-  background: linear-gradient(140deg, #8d949e, #727985);
-  color: #f4f6f8;
-  border: 1px solid rgba(255, 255, 255, 0.14);
-  box-shadow: 0 6px 22px rgba(0, 0, 0, 0.3);
+  background: #1f1f1f;
+  color: #f8f8f8;
+  border: 1px solid rgba(0, 0, 0, 0.2);
 }
 
 .btn-secondary {
   border: 1px solid var(--border-subtle);
-  background: rgba(255, 255, 255, 0.05);
+  background: #efefef;
   color: var(--text-primary);
 }
 
@@ -147,7 +142,7 @@ body {
 .badge {
   border-radius: 999px;
   border: 1px solid var(--border-subtle);
-  background: rgba(255, 255, 255, 0.05);
+  background: #efefef;
   padding: 0.2rem 0.55rem;
   font-size: 11px;
   line-height: 1.2;
@@ -156,8 +151,8 @@ body {
 
 .badge-accent {
   color: var(--text-primary);
-  border-color: rgba(196, 202, 211, 0.42);
-  background: rgba(196, 202, 211, 0.16);
+  border-color: rgba(0, 0, 0, 0.24);
+  background: #e8e8e8;
 }
 
 .nav-tab {
