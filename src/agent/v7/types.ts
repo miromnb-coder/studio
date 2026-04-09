@@ -39,6 +39,7 @@ export interface UserContext {
   financeProfile?: Record<string, unknown> | null;
   financeEvents?: Array<Record<string, unknown>>;
   summaries?: Array<Record<string, unknown>>;
+  semanticMemories?: Array<Record<string, unknown>>;
 }
 
 export interface ToolContext {

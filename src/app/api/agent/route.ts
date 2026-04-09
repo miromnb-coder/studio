@@ -254,6 +254,7 @@ export async function POST(req: Request) {
       supabase,
       userId,
       memoryIntent,
+      safeInput || '',
     ).catch((error) => {
       console.error('MEMORY_RETRIEVAL_ERROR:', error);
       return fallbackMemory;
@@ -270,7 +271,7 @@ export async function POST(req: Request) {
       userId,
       safeHistory,
       imageUri,
-      retrievedMemory,
+      retrievedMemory as unknown as Record<string, unknown>,
     ).catch((error) => {
       console.error('AGENT_V7_EXECUTION_ERROR:', error);
       return null;
@@ -294,11 +295,15 @@ export async function POST(req: Request) {
 
     if (actionType) {
       const actionResult = runFinanceAction(actionType, normalizedFinance);
+      let updatedUsage = await incrementUsage(supabase, userId, usage, 'agent').catch((error) => {
+        console.error('ACTION_AGENT_USAGE_INCREMENT_ERROR:', error);
+        return usage;
+      });
 
       if (actionResult.type !== 'error') {
-        await incrementUsage(supabase, userId, usage, 'premium_action').catch((error) => {
+        updatedUsage = await incrementUsage(supabase, userId, updatedUsage, 'premium_action').catch((error) => {
           console.error('PREMIUM_ACTION_USAGE_INCREMENT_ERROR:', error);
-          return usage;
+          return updatedUsage;
         });
       }
 
@@ -345,9 +350,9 @@ export async function POST(req: Request) {
           iterationCount: 1,
         },
         usage: {
-          current: usage.agentRuns,
+          current: updatedUsage.agentRuns,
           limit,
-          remaining: Math.max(limit - usage.agentRuns, 0),
+          remaining: Math.max(limit - updatedUsage.agentRuns, 0),
         },
         plan,
       });
