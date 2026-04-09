@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { ArrowUp, Plus, RefreshCw, Mic, AudioLines, Github, Paperclip, ImagePlus, NotebookPen, ClipboardPaste, Wrench } from 'lucide-react';
+import { ArrowUp, Plus, RefreshCw, Mic, AudioLines, Github, Paperclip, ImagePlus, NotebookPen, ClipboardPaste } from 'lucide-react';
 import { useAppStore } from '../store/app-store';
 
 export default function ChatPage() {
@@ -229,7 +229,7 @@ export default function ChatPage() {
           </div>
         ) : null}
 
-        <div className="composer-shell rounded-[32px] border border-black/[0.04] bg-[#f6f6f6] px-3 py-3 shadow-[0_4px_12px_rgba(0,0,0,0.02)]">
+        <div className="flex items-end gap-1.5 rounded-[28px] border border-black/[0.06] bg-[#f6f6f6] p-2 shadow-[0_10px_24px_rgba(0,0,0,0.04)]">
           <input
             ref={fileInputRef}
             type="file"
@@ -241,6 +241,12 @@ export default function ChatPage() {
             }}
           />
 
+          <button type="button" className="composer-icon-btn" aria-label="Open add menu" onClick={() => setOpenPanel((prev) => (prev === 'add' ? null : 'add'))}>
+            <Plus className="h-4 w-4" />
+          </button>
+          <button type="button" className="composer-icon-btn" aria-label="Open tools menu" onClick={() => setOpenPanel((prev) => (prev === 'tools' ? null : 'tools'))}>
+            <Github className="h-4 w-4" />
+          </button>
           <textarea
             ref={textareaRef}
             value={draft}
@@ -256,37 +262,17 @@ export default function ChatPage() {
             }}
             rows={1}
             placeholder="Assign a task or ask anything"
-            className="composer-textarea max-h-36 min-h-[44px] w-full resize-none border-none bg-transparent px-2 py-1.5 text-[15px]"
+            className="system-input max-h-36 min-h-[44px] flex-1 resize-none border-none bg-[#f8f8f8] px-3 py-2.5 text-[15px]"
           />
-
-          <div className="mt-1.5 flex items-center justify-between px-0.5">
-            <div className="flex items-center gap-2.5">
-              <button type="button" className="composer-icon-btn" aria-label="Open add menu" onClick={() => setOpenPanel((prev) => (prev === 'add' ? null : 'add'))}>
-                <Plus className="h-[19px] w-[19px]" />
-              </button>
-              <button type="button" className="composer-icon-btn" aria-label="Open tools menu" onClick={() => setOpenPanel((prev) => (prev === 'tools' ? null : 'tools'))}>
-                <Wrench className="h-[19px] w-[19px]" />
-              </button>
-            </div>
-
-            <div className="flex items-center gap-2.5">
-              <button type="button" className={`composer-icon-btn ${isVoiceMode ? 'composer-icon-btn-active' : ''}`} aria-label="Toggle voice mode" onClick={toggleVoiceMode}>
-                <AudioLines className="h-[19px] w-[19px]" />
-              </button>
-              <button type="button" className="composer-icon-btn" aria-label="Start speech to text" onClick={startSpeechToText}>
-                <Mic className="h-[19px] w-[19px]" />
-              </button>
-              <button
-                type="button"
-                onClick={() => void send()}
-                className={`composer-send-btn ${draft.trim() && !isAgentResponding ? 'composer-send-btn-ready' : ''} disabled:opacity-55`}
-                disabled={!draft.trim() || isAgentResponding}
-                aria-label="Send message"
-              >
-                <ArrowUp className="h-[19px] w-[19px]" />
-              </button>
-            </div>
-          </div>
+          <button type="button" className={`composer-icon-btn ${isVoiceMode ? 'composer-icon-btn-active' : ''}`} aria-label="Toggle voice mode" onClick={toggleVoiceMode}>
+            <AudioLines className="h-4 w-4" />
+          </button>
+          <button type="button" className="composer-icon-btn" aria-label="Start speech to text" onClick={startSpeechToText}>
+            <Mic className="h-4 w-4" />
+          </button>
+          <button type="button" onClick={() => void send()} className="composer-send-btn disabled:opacity-45" disabled={!draft.trim() || isAgentResponding} aria-label="Send message">
+            <ArrowUp className="h-4 w-4" />
+          </button>
         </div>
       </div>
     </main>
