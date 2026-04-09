@@ -8,8 +8,8 @@ export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
 
 /**
- * @fileOverview JSON API Entry Point for Agent Engine v7.
- * Returns a stable AgentResponse shape for chat rendering.
+ * @fileOverview Streaming API Entry Point for Agent Engine v7.
+ * Includes Mandatory Message Sanitization to prevent 'messages.content is missing' errors.
  */
 
 function summarizeStepOutput(output: Record<string, unknown>): string | undefined {
@@ -69,26 +69,35 @@ export async function POST(req: Request) {
       await SubscriptionService.incrementUsage(firestore, userId);
     }
 
-    const { stream, metadata, steps, structuredData } = await runAgentV7(
-      safeInput || 'Continue',
-      userId || 'system_anonymous',
-      safeHistory,
-      imageUri,
-    );
+    console.log("Initializing Agent V7 Orchestrator...");
+    const { stream, metadata, steps, structuredData } = await runAgentV7(safeInput || "Continue", userId || 'system_anonymous', safeHistory, imageUri);
 
-    let reply = '';
-    if (stream) {
-      for await (const chunk of stream) {
-        reply += (chunk as any).choices?.[0]?.delta?.content || '';
-      }
-    }
+    const encoder = new TextEncoder();
+    const readableStream = new ReadableStream({
+      async start(controller) {
+        // First chunk is always metadata for UI routing
+        controller.enqueue(encoder.encode(`__METADATA__:${JSON.stringify({ ...metadata, steps, structuredData })}\n`));
 
-    const mappedSteps: AgentResponseStep[] = steps.map((step) => ({
-      action: step.tool,
-      status: step.status === 'success' ? 'completed' : 'failed',
-      summary: summarizeStepOutput(step.output),
-      error: step.error,
-    }));
+        try {
+          if (!stream) {
+            controller.enqueue(encoder.encode('No streaming response available.'));
+            return;
+          }
+
+          for await (const chunk of stream) {
+            const content = (chunk as any).choices?.[0]?.delta?.content || "";
+            if (content) {
+              controller.enqueue(encoder.encode(content));
+            }
+          }
+        } catch (e: any) {
+          console.error("STREAM_ITERATION_ERROR:", e.message);
+          controller.enqueue(encoder.encode(`\n[ERROR: ${e.message}]`));
+        } finally {
+          controller.close();
+        }
+      },
+    });
 
     const payload: AgentResponse = {
       reply: reply || 'Analysis finalized.',
