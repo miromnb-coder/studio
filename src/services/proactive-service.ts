@@ -5,3 +5,7 @@ export async function processInboundEvent() {
 export async function triggerProactiveFlow() {
   return { ok: false, skipped: true, reason: 'proactive-service not configured' };
 }
+
+export async function scanForSignals(_userId: string, _content: string, _sourceId?: string) {
+  return triggerProactiveFlow();
+}

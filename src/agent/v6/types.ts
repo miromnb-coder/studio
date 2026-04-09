@@ -50,3 +50,9 @@ export interface Decision {
   input?: any;
   final?: string;
 }
+
+export interface ToolResult {
+  action: string;
+  output: any;
+  error?: string;
+}

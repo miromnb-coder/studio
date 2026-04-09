@@ -20,17 +20,18 @@ export async function POST(req: Request) {
       body.userMemory || null,
       body.imageDataUri
     );
+    const legacyData = (result.data ?? {}) as Record<string, any>;
 
     // Maintain backwards compatibility for the return format
     return NextResponse.json({
-      title: result.data?.title || "Audit Report",
+      title: legacyData.title || "Audit Report",
       summary: result.content,
-      strategy: result.data?.strategy || "Standard advisor protocol.",
+      strategy: legacyData.strategy || "Standard advisor protocol.",
       mode: result.mode,
       isActionable: result.isActionable,
-      detectedItems: result.data?.structuredData?.detectedItems || result.data?.detectedItems || [],
-      savingsEstimate: result.data?.structuredData?.estimatedMonthlySavings || result.data?.savingsEstimate || 0,
-      beforeAfterComparison: result.data?.beforeAfterComparison || null,
+      detectedItems: legacyData.structuredData?.detectedItems || legacyData.detectedItems || [],
+      savingsEstimate: legacyData.structuredData?.estimatedMonthlySavings || legacyData.savingsEstimate || 0,
+      beforeAfterComparison: legacyData.beforeAfterComparison || null,
       memoryUpdates: null
     });
   } catch (error: any) {
