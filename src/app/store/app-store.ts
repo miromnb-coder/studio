@@ -60,8 +60,6 @@ export type Conversation = {
   title: string;
   createdAt: string;
   updatedAt: string;
-  lastMessagePreview: string;
-  messageCount: number;
   messages: Message[];
   draftPrompt: string;
 };
@@ -96,9 +94,7 @@ type AppActions = {
   hydrate: () => void;
   setDraftPrompt: (prompt: string) => void;
   createConversation: (title?: string) => void;
-  openConversation: (conversationId: string) => void;
-  renameConversation: (conversationId: string, nextTitle: string) => void;
-  deleteConversation: (conversationId: string) => void;
+  switchConversation: (conversationId: string) => void;
   clearConversationDraft: () => void;
   sendMessage: (prompt: string) => Promise<void>;
   retryLastPrompt: () => Promise<void>;
@@ -218,14 +214,6 @@ const createConversationTitle = (messages: Message[], fallbackCount: number) => 
   return clipped.length < firstUserMessage.content.trim().length ? `${clipped}…` : clipped;
 };
 
-const getConversationMeta = (messages: Message[]) => {
-  const latestMessage = [...messages].reverse().find((message) => message.content.trim());
-  return {
-    lastMessagePreview: latestMessage?.content.slice(0, 120) ?? '',
-    messageCount: messages.length,
-  };
-};
-
 const getActiveConversation = (currentState: AppState): Conversation | undefined =>
   currentState.conversations.find((conversation) => conversation.id === currentState.activeConversationId);
 
@@ -310,17 +298,6 @@ async function streamAssistantResponse(requestId: string, assistantMessageId: st
                     }
                   : message,
               ),
-              ...getConversationMeta(
-                conversation.messages.map((message) =>
-                  message.id === assistantMessageId
-                    ? {
-                        ...message,
-                        content: result.reply || message.content,
-                        agentMetadata: result.metadata,
-                      }
-                    : message,
-                ),
-              ),
               updatedAt: nowIso(),
             }
           : conversation,
@@ -345,38 +322,10 @@ const actions: AppActions = {
           title: createConversationTitle(legacyMessages, 1),
           createdAt: nowIso(),
           updatedAt: nowIso(),
-          ...getConversationMeta(legacyMessages),
           messages: legacyMessages,
           draftPrompt: sessionDraft,
         };
-        baseConversation.messages = baseConversation.messages.map((message) => ({
-          ...message,
-          conversationId: message.conversationId ?? baseConversation.id,
-        }));
-        const conversations = parsedConversations.length > 0
-          ? parsedConversations.map((conversation, index) => {
-              const safeMessages = Array.isArray(conversation.messages)
-                ? conversation.messages.map((message) => ({
-                    ...message,
-                    conversationId: message.conversationId ?? conversation.id,
-                  }))
-                : [];
-              return {
-                ...conversation,
-                title: conversation.title?.trim() || `New chat ${index + 1}`,
-                lastMessagePreview:
-                  typeof conversation.lastMessagePreview === 'string'
-                    ? conversation.lastMessagePreview
-                    : getConversationMeta(safeMessages).lastMessagePreview,
-                messageCount:
-                  typeof conversation.messageCount === 'number'
-                    ? conversation.messageCount
-                    : getConversationMeta(safeMessages).messageCount,
-                messages: safeMessages,
-                draftPrompt: conversation.draftPrompt ?? '',
-              };
-            })
-          : [baseConversation];
+        const conversations = parsedConversations.length > 0 ? parsedConversations : [baseConversation];
         const activeConversationId = conversations.some((conversation) => conversation.id === parsed.activeConversationId)
           ? (parsed.activeConversationId as string)
           : conversations[0]?.id ?? null;
@@ -401,8 +350,6 @@ const actions: AppActions = {
           title: 'New chat 1',
           createdAt: nowIso(),
           updatedAt: nowIso(),
-          lastMessagePreview: '',
-          messageCount: 0,
           messages: [],
           draftPrompt: sessionDraft,
         };
@@ -419,8 +366,6 @@ const actions: AppActions = {
         title: 'New chat 1',
         createdAt: nowIso(),
         updatedAt: nowIso(),
-        lastMessagePreview: '',
-        messageCount: 0,
         messages: [],
         draftPrompt: sessionDraft,
       };
@@ -458,8 +403,6 @@ const actions: AppActions = {
         title: title?.trim() || `New chat ${prev.conversations.length + 1}`,
         createdAt: nowIso(),
         updatedAt: nowIso(),
-        lastMessagePreview: '',
-        messageCount: 0,
         messages: [],
         draftPrompt: '',
       };
@@ -472,49 +415,10 @@ const actions: AppActions = {
     if (typeof window !== 'undefined') window.sessionStorage.removeItem(SESSION_DRAFT_KEY);
   },
 
-  openConversation: (conversationId) => {
+  switchConversation: (conversationId) => {
     setState((prev) => {
       if (!prev.conversations.some((conversation) => conversation.id === conversationId)) return prev;
       return syncConversationDerivedState({ ...prev, activeConversationId: conversationId, streamError: null });
-    });
-  },
-
-  renameConversation: (conversationId, nextTitle) => {
-    const cleanTitle = nextTitle.trim();
-    if (!cleanTitle) return;
-    setState((prev) => ({
-      ...syncConversationDerivedState({
-        ...prev,
-        conversations: prev.conversations.map((conversation) =>
-          conversation.id === conversationId ? { ...conversation, title: cleanTitle, updatedAt: nowIso() } : conversation,
-        ),
-      }),
-    }));
-  },
-
-  deleteConversation: (conversationId) => {
-    setState((prev) => {
-      const remaining = prev.conversations.filter((conversation) => conversation.id !== conversationId);
-      const fallbackConversation: Conversation = {
-        id: createId(),
-        title: `New chat ${prev.conversations.length + 1}`,
-        createdAt: nowIso(),
-        updatedAt: nowIso(),
-        lastMessagePreview: '',
-        messageCount: 0,
-        messages: [],
-        draftPrompt: '',
-      };
-
-      const nextConversations = remaining.length > 0 ? remaining : [fallbackConversation];
-      const nextActiveConversationId =
-        prev.activeConversationId === conversationId ? nextConversations[0].id : prev.activeConversationId;
-
-      return syncConversationDerivedState({
-        ...prev,
-        conversations: nextConversations,
-        activeConversationId: nextActiveConversationId,
-      });
     });
   },
 
@@ -574,7 +478,6 @@ const actions: AppActions = {
                 ...conversation,
                 title: createConversationTitle([...conversation.messages, userMessage], prev.conversations.length),
                 messages: [...conversation.messages, userMessage, assistantMessage],
-                ...getConversationMeta([...conversation.messages, userMessage, assistantMessage]),
                 draftPrompt: '',
                 updatedAt: nowIso(),
               }
@@ -616,13 +519,6 @@ const actions: AppActions = {
                     message.id === assistantMessage.id
                       ? { ...message, isStreaming: false, content: message.content || 'I could not generate a response.' }
                       : message,
-                  ),
-                  ...getConversationMeta(
-                    conversation.messages.map((message) =>
-                      message.id === assistantMessage.id
-                        ? { ...message, isStreaming: false, content: message.content || 'I could not generate a response.' }
-                        : message,
-                    ),
                   ),
                   updatedAt: nowIso(),
                 }
@@ -667,18 +563,6 @@ const actions: AppActions = {
                           content: entry.content || '',
                         }
                       : entry,
-                  ),
-                  ...getConversationMeta(
-                    conversation.messages.map((entry) =>
-                      entry.id === assistantMessage.id
-                        ? {
-                            ...entry,
-                            isStreaming: false,
-                            error: message,
-                            content: entry.content || '',
-                          }
-                        : entry,
-                    ),
                   ),
                   updatedAt: nowIso(),
                 }

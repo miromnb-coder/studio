@@ -7,7 +7,6 @@ import {
   AudioLines,
   ClipboardPaste,
   Crown,
-  Edit3,
   FilePlus2,
   FolderOpen,
   Menu,
@@ -16,7 +15,6 @@ import {
   Plus,
   RefreshCw,
   Sparkles,
-  Trash2,
 } from 'lucide-react';
 import { createClient } from '@/lib/supabase/client';
 import { useAppStore } from '../store/app-store';
@@ -38,9 +36,7 @@ export default function ChatPage() {
   const conversations = useAppStore((s) => s.conversations);
   const activeConversationId = useAppStore((s) => s.activeConversationId);
   const createConversation = useAppStore((s) => s.createConversation);
-  const openConversation = useAppStore((s) => s.openConversation);
-  const renameConversation = useAppStore((s) => s.renameConversation);
-  const deleteConversation = useAppStore((s) => s.deleteConversation);
+  const switchConversation = useAppStore((s) => s.switchConversation);
   const sendMessage = useAppStore((s) => s.sendMessage);
   const retryLastPrompt = useAppStore((s) => s.retryLastPrompt);
   const isAgentResponding = useAppStore((s) => s.isAgentResponding);
@@ -55,17 +51,6 @@ export default function ChatPage() {
   const [composerNotice, setComposerNotice] = useState<string | null>(null);
   const [showAuthPrompt, setShowAuthPrompt] = useState(false);
   const [speechSupported, setSpeechSupported] = useState(false);
-
-  const formatRelativeTime = (iso: string) => {
-    const deltaMs = Date.now() - new Date(iso).getTime();
-    const minute = 60 * 1000;
-    const hour = 60 * minute;
-    const day = 24 * hour;
-    if (deltaMs < minute) return 'now';
-    if (deltaMs < hour) return `${Math.floor(deltaMs / minute)}m`;
-    if (deltaMs < day) return `${Math.floor(deltaMs / hour)}h`;
-    return `${Math.floor(deltaMs / day)}d`;
-  };
 
   const listRef = useRef<HTMLDivElement>(null);
   const composerRef = useRef<HTMLDivElement>(null);
@@ -234,13 +219,24 @@ export default function ChatPage() {
         </button>
       </header>
 
-      <section className="mb-3 flex items-center gap-2 px-1">
-        <button type="button" onClick={() => createConversation()} className="btn-secondary px-3 py-1.5 text-xs">
+      <section className="mb-3 flex items-center gap-2 overflow-x-auto px-1 pb-1">
+        <button
+          type="button"
+          onClick={() => createConversation()}
+          className="btn-secondary shrink-0 px-3 py-1.5 text-xs"
+        >
           + New chat
         </button>
-        <button type="button" onClick={() => setOpenPanel('conversations')} className="btn-secondary px-3 py-1.5 text-xs">
-          Conversations
-        </button>
+        {conversations.map((conversation) => (
+          <button
+            key={conversation.id}
+            type="button"
+            onClick={() => switchConversation(conversation.id)}
+            className={`shrink-0 rounded-full border px-3 py-1.5 text-xs ${conversation.id === activeConversationId ? 'border-black/30 bg-[#e8e8e8] text-primary' : 'border-black/10 bg-[#f4f4f4] text-secondary'}`}
+          >
+            {conversation.title}
+          </button>
+        ))}
       </section>
 
       {plan === 'FREE' ? (
@@ -335,69 +331,20 @@ export default function ChatPage() {
         ) : null}
 
         {openPanel === 'conversations' ? (
-          <div className="message-appear mb-2 max-h-72 overflow-y-auto rounded-2xl border border-black/[0.06] bg-[#f6f6f6] p-2 shadow-[0_8px_20px_rgba(0,0,0,0.05)]">
-            <div className="mb-2 flex items-center justify-between px-1">
-              <p className="text-xs font-semibold text-secondary">Conversations</p>
+          <div className="message-appear mb-2 max-h-52 overflow-y-auto rounded-2xl border border-black/[0.06] bg-[#f6f6f6] p-1.5 shadow-[0_8px_20px_rgba(0,0,0,0.05)]">
+            {conversations.map((conversation) => (
               <button
+                key={conversation.id}
                 type="button"
                 onClick={() => {
-                  createConversation();
+                  switchConversation(conversation.id);
                   setOpenPanel(null);
                 }}
-                className="btn-secondary px-2.5 py-1 text-[11px]"
+                className="composer-menu-btn justify-between"
               >
-                + New
+                <span className="truncate">{conversation.title}</span>
+                {conversation.id === activeConversationId ? <span className="badge">Active</span> : null}
               </button>
-            </div>
-            {conversations.map((conversation) => (
-              <div
-                key={conversation.id}
-                className={`mb-1.5 rounded-xl border p-2 ${conversation.id === activeConversationId ? 'border-black/25 bg-[#ededed]' : 'border-black/10 bg-[#f3f3f3]'}`}
-              >
-                <button
-                  type="button"
-                  onClick={() => {
-                    openConversation(conversation.id);
-                    setOpenPanel(null);
-                  }}
-                  className="w-full text-left"
-                >
-                  <div className="flex items-center justify-between gap-2">
-                    <p className="truncate text-sm font-medium text-primary">{conversation.title}</p>
-                    <p className="text-[11px] text-secondary">{formatRelativeTime(conversation.updatedAt)}</p>
-                  </div>
-                  <p className="mt-0.5 line-clamp-1 text-xs text-secondary">
-                    {conversation.lastMessagePreview || 'No messages yet'}
-                  </p>
-                  <p className="mt-1 text-[11px] text-secondary">{conversation.messageCount} messages</p>
-                </button>
-                <div className="mt-1.5 flex justify-end gap-1">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      const nextTitle = window.prompt('Rename conversation', conversation.title);
-                      if (!nextTitle) return;
-                      renameConversation(conversation.id, nextTitle);
-                    }}
-                    className="composer-icon-btn h-7 w-7"
-                    aria-label="Rename conversation"
-                  >
-                    <Edit3 className="h-3.5 w-3.5" />
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      const shouldDelete = window.confirm('Delete this conversation? This cannot be undone.');
-                      if (!shouldDelete) return;
-                      deleteConversation(conversation.id);
-                    }}
-                    className="composer-icon-btn h-7 w-7"
-                    aria-label="Delete conversation"
-                  >
-                    <Trash2 className="h-3.5 w-3.5" />
-                  </button>
-                </div>
-              </div>
             ))}
           </div>
         ) : null}
