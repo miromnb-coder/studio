@@ -2,23 +2,14 @@ import { NextResponse } from 'next/server';
 import { runAgentV7 } from '@/agent/v7/orchestrator';
 import { initializeFirebase } from '@/firebase';
 import { SubscriptionService, PLAN_LIMITS } from '@/services/subscription-service';
-import type { AgentResponse, AgentResponseStep } from '@/types/agent-response';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
 
 /**
  * @fileOverview Streaming API Entry Point for Agent Engine v7.
- * Includes Mandatory Message Sanitization to prevent 'messages.content is missing' errors.
+ * Includes mandatory message sanitization and metadata-first streaming.
  */
-
-function summarizeStepOutput(output: Record<string, unknown>): string | undefined {
-  if (typeof output.response === 'string') return output.response;
-  if (typeof output.insights === 'string') return output.insights;
-  if (typeof output.notes === 'string') return output.notes;
-  if (Array.isArray(output.leaks)) return `${output.leaks.length} potential leaks found.`;
-  return undefined;
-}
 
 export async function POST(req: Request) {
   try {
@@ -70,14 +61,32 @@ export async function POST(req: Request) {
       await SubscriptionService.incrementUsage(firestore, userId);
     }
 
-    console.log("Initializing Agent V7 Orchestrator...");
-    const { stream, metadata, steps, structuredData } = await runAgentV7(safeInput || "Continue", userId || 'system_anonymous', safeHistory, imageUri);
+    console.log('Initializing Agent V7 Orchestrator...');
+    const { stream, metadata, steps, structuredData } = await runAgentV7(
+      safeInput || 'Continue',
+      userId || 'system_anonymous',
+      safeHistory,
+      imageUri
+    );
 
     const encoder = new TextEncoder();
+
     const readableStream = new ReadableStream({
       async start(controller) {
-        // First chunk is always metadata for UI routing
-        controller.enqueue(encoder.encode(`__METADATA__:${JSON.stringify({ ...metadata, steps, structuredData })}\n`));
+        const safeMetadata = {
+          intent: metadata?.intent || 'general',
+          plan: metadata?.planSummary || 'No plan available.',
+          steps: Array.isArray(steps) ? steps : [],
+          structuredData: structuredData ?? null,
+          memoryUsed: !!metadata?.memoryUsed,
+          iterationCount: Array.isArray(steps) ? steps.length : 0,
+          version: metadata?.version || 'v7',
+          debug: metadata?.debug ?? null,
+        };
+
+        controller.enqueue(
+          encoder.encode(`__METADATA__:${JSON.stringify(safeMetadata)}\n`)
+        );
 
         try {
           if (!stream) {
@@ -85,35 +94,39 @@ export async function POST(req: Request) {
             return;
           }
 
-          for await (const chunk of stream) {
-            const content = (chunk as any).choices?.[0]?.delta?.content || "";
+          for await (const chunk of stream as any) {
+            const content = chunk?.choices?.[0]?.delta?.content || '';
             if (content) {
               controller.enqueue(encoder.encode(content));
             }
           }
         } catch (e: any) {
-          console.error("STREAM_ITERATION_ERROR:", e.message);
-          controller.enqueue(encoder.encode(`\n[ERROR: ${e.message}]`));
+          console.error('STREAM_ITERATION_ERROR:', e?.message || e);
+          controller.enqueue(
+            encoder.encode('\nSomething went wrong while generating the response.')
+          );
         } finally {
           controller.close();
         }
       },
     });
 
-    const payload: AgentResponse = {
-      reply: reply || 'Analysis finalized.',
-      metadata: {
-        intent: metadata.intent || 'general',
-        plan: metadata.planSummary || 'No plan available.',
-        steps: mappedSteps,
-        structuredData,
-        memoryUsed: metadata.memoryUsed,
-        iterationCount: steps.length,
+    return new Response(readableStream, {
+      headers: {
+        'Content-Type': 'text/plain; charset=utf-8',
+        'Cache-Control': 'no-cache, no-transform',
+        Connection: 'keep-alive',
       },
-    };
-
-    return NextResponse.json(payload);
+    });
   } catch (error: any) {
-    return NextResponse.json({ success: false, error: error.message }, { status: 500 });
+    console.error('AGENT_ROUTE_ERROR:', error);
+
+    return NextResponse.json(
+      {
+        error: 'AGENT_ROUTE_ERROR',
+        message: error?.message || 'Unknown server error',
+      },
+      { status: 500 }
+    );
   }
 }
