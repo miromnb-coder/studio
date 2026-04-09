@@ -83,6 +83,7 @@ type AppActions = {
   markAlertFalsePositive: (alertId: string) => void;
   openAlertInChat: (alertId: string, mode?: 'analyze' | 'open') => void;
   setUser: (user: UserProfile) => void;
+  clearUser: () => void;
   updateUserName: (name: string) => void;
   logout: () => void;
 };
@@ -492,6 +493,12 @@ const actions: AppActions = {
     emit();
   },
 
+  clearUser: () => {
+    setState((prev) => ({ ...prev, user: null }));
+    persist();
+    emit();
+  },
+
   updateUserName: (name) => {
     const nextName = name.trim();
     if (!nextName) return;
@@ -499,10 +506,8 @@ const actions: AppActions = {
   },
 
   logout: () => {
-    setState((prev) => ({ ...prev, user: null }));
+    actions.clearUser();
     addHistory({ title: 'User logged out', description: 'Session ended on this device', type: 'account' });
-    persist();
-    emit();
   },
 };
 

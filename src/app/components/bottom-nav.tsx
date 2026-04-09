@@ -14,6 +14,11 @@ const tabs = [
 
 export function BottomNav() {
   const pathname = usePathname();
+  const hiddenOn = ['/login', '/signup'];
+
+  if (hiddenOn.includes(pathname)) {
+    return null;
+  }
 
   return (
     <nav className="fixed bottom-0 left-1/2 z-40 grid w-full max-w-md -translate-x-1/2 grid-cols-5 border-t border-black/10 bg-[#f7f7f7]/95 px-4 pt-3 pb-[calc(0.75rem+env(safe-area-inset-bottom))] backdrop-blur-sm">
