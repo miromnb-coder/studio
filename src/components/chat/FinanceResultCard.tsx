@@ -35,9 +35,15 @@ export type FinanceStructuredData = {
   recommendations?: string[];
 };
 
+type FinanceActionType = 'create_savings_plan' | 'find_alternatives' | 'draft_cancellation';
+
 type FinanceResultCardProps = {
   data: FinanceStructuredData;
   className?: string;
+  onAction?: (actionType: FinanceActionType) => void;
+  actionLoading?: FinanceActionType | null;
+  isPremium?: boolean;
+  onPremiumRequired?: () => void;
 };
 
 function formatMoney(amount: number | null | undefined, currency?: string | null) {
@@ -221,6 +227,10 @@ function sortLeaks(leaks: FinanceLeak[]) {
 export default function FinanceResultCard({
   data,
   className = '',
+  onAction,
+  actionLoading = null,
+  isPremium = false,
+  onPremiumRequired,
 }: FinanceResultCardProps) {
   const [expanded, setExpanded] = useState(false);
 
@@ -229,6 +239,15 @@ export default function FinanceResultCard({
   const currency = data.currency || leaks.find((item) => item.currency)?.currency || 'EUR';
   const estimatedMonthlySavings = getEstimatedMonthlySavings(data);
   const displayedLeaks = expanded ? leaks : leaks.slice(0, 3);
+
+
+  const triggerAction = (actionType: FinanceActionType) => {
+    if (!isPremium) {
+      onPremiumRequired?.();
+      return;
+    }
+    onAction?.(actionType);
+  };
 
   return (
     <section
@@ -370,6 +389,41 @@ export default function FinanceResultCard({
             No clear financial leaks were detected in this run.
           </div>
         )}
+
+
+
+        <div className="mt-5 rounded-2xl border border-slate-200/80 bg-white/70 p-4 shadow-sm">
+          <h4 className="text-sm font-semibold text-slate-900">Actions</h4>
+          <div className="mt-3 grid grid-cols-1 gap-2 sm:grid-cols-3">
+            <button
+              type="button"
+              onClick={() => triggerAction('create_savings_plan')}
+              disabled={actionLoading === 'create_savings_plan'}
+              className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-left text-xs font-medium text-slate-700 disabled:opacity-60"
+            >
+              {actionLoading === 'create_savings_plan' ? 'Creating…' : 'Create savings plan'}
+            </button>
+            <button
+              type="button"
+              onClick={() => triggerAction('find_alternatives')}
+              disabled={actionLoading === 'find_alternatives'}
+              className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-left text-xs font-medium text-slate-700 disabled:opacity-60"
+            >
+              {actionLoading === 'find_alternatives' ? 'Finding…' : 'Find cheaper alternatives'}
+            </button>
+            <button
+              type="button"
+              onClick={() => triggerAction('draft_cancellation')}
+              disabled={actionLoading === 'draft_cancellation'}
+              className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-left text-xs font-medium text-slate-700 disabled:opacity-60"
+            >
+              {actionLoading === 'draft_cancellation' ? 'Drafting…' : 'Draft cancellation message'}
+            </button>
+          </div>
+          {!isPremium ? (
+            <p className="mt-2 text-xs text-slate-500">Upgrade to Premium to run these actions.</p>
+          ) : null}
+        </div>
 
         {data.recommendations && data.recommendations.length > 0 ? (
           <div className="mt-5 rounded-2xl border border-slate-200/80 bg-white/70 p-4 shadow-sm">

@@ -24,6 +24,9 @@ import { useAppStore } from '../store/app-store';
 import { AgentStrategyCard } from './components/AgentStrategyCard';
 import { StructuredResultCard } from './components/StructuredResultCard';
 import { useUserEntitlements } from '../hooks/use-user-entitlements';
+import FinanceResultCard from '@/components/chat/FinanceResultCard';
+import FinanceActionResultCard from '@/components/chat/FinanceActionResultCard';
+import type { FinanceActionType } from '@/lib/finance/types';
 
 const PREMIUM_UPLOAD_MESSAGE = 'File upload is a Premium feature. Upgrade to attach files.';
 
@@ -61,6 +64,7 @@ export default function ChatPage() {
   const openConversation = useAppStore((s) => s.openConversation);
   const deleteConversation = useAppStore((s) => s.deleteConversation);
   const renameConversation = useAppStore((s) => s.renameConversation);
+  const runFinanceAction = useAppStore((s) => s.runFinanceAction);
   const { plan, usage, isPremium, isLimitReached, refresh } = useUserEntitlements();
 
   const [draft, setDraft] = useState('');
@@ -70,6 +74,7 @@ export default function ChatPage() {
   const [showPaywall, setShowPaywall] = useState(false);
   const [showAuthPrompt, setShowAuthPrompt] = useState(false);
   const [voiceSupported, setVoiceSupported] = useState(true);
+  const [financeActionLoadingForMessage, setFinanceActionLoadingForMessage] = useState<Record<string, FinanceActionType | null>>({});
 
   const listRef = useRef<HTMLDivElement>(null);
   const composerRef = useRef<HTMLDivElement>(null);
@@ -252,6 +257,23 @@ export default function ChatPage() {
     setComposerNotice('Conversation renamed.');
   };
 
+  const handleFinanceAction = async (messageId: string, actionType: FinanceActionType) => {
+    if (!isPremium) {
+      setShowPaywall(true);
+      return;
+    }
+    setFinanceActionLoadingForMessage((prev) => ({ ...prev, [messageId]: actionType }));
+    const result = await runFinanceAction(messageId, actionType);
+    setFinanceActionLoadingForMessage((prev) => ({ ...prev, [messageId]: null }));
+    if (!result.ok && result.errorCode === 'PREMIUM_REQUIRED') {
+      setShowPaywall(true);
+      return;
+    }
+    if (!result.ok) {
+      setComposerNotice('Action completed with partial result.');
+    }
+  };
+
   return (
     <main className="screen app-bg pb-52">
       <header className="mb-3 space-y-2 px-1 pt-1">
@@ -322,7 +344,20 @@ export default function ChatPage() {
                 {metadata ? (
                   <div className="px-1">
                     <AgentStrategyCard metadata={metadata} />
-                    <StructuredResultCard data={metadata.structuredData} />
+                    {metadata.structuredData?.finance ? (
+                      <FinanceResultCard
+                        data={metadata.structuredData.finance}
+                        onAction={(actionType) => void handleFinanceAction(message.id, actionType)}
+                        actionLoading={financeActionLoadingForMessage[message.id] || null}
+                        isPremium={isPremium}
+                        onPremiumRequired={() => setShowPaywall(true)}
+                      />
+                    ) : (
+                      <StructuredResultCard data={metadata.structuredData} />
+                    )}
+                    {metadata.structuredData?.actionResult ? (
+                      <FinanceActionResultCard result={metadata.structuredData.actionResult} />
+                    ) : null}
                   </div>
                 ) : null}
               </div>
@@ -339,9 +374,9 @@ export default function ChatPage() {
           </div>
         ) : null}
 
-        {streamError && !streamError.startsWith('LIMIT_REACHED:') && !streamError.startsWith('AUTH_REQUIRED:') ? (
+        {streamError && !streamError.startsWith('LIMIT_REACHED:') && !streamError.startsWith('AUTH_REQUIRED:') && !streamError.startsWith('PREMIUM_REQUIRED:') ? (
           <div className="rounded-xl border border-black/5 bg-[#f7f7f7] px-3 py-2.5 text-sm text-[#373737]">
-            Something went wrong. Please try again.
+            We hit a processing issue, but your conversation is still safe.
             <button type="button" onClick={() => void retryLastPrompt()} className="btn-secondary ml-2 inline-flex items-center gap-1 px-2 py-1 text-xs">
               <RefreshCw className="h-3 w-3" /> Retry
             </button>
