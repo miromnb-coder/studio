@@ -57,17 +57,7 @@ export async function POST(req: Request) {
 
     const { firestore } = initializeFirebase();
 
-    if (!userId || userId === 'system_anonymous') {
-      return NextResponse.json(
-        {
-          error: 'AUTH_REQUIRED',
-          message: 'Please sign in to continue chatting.',
-        },
-        { status: 401 },
-      );
-    }
-
-    {
+    if (userId && userId !== 'system_anonymous' && firestore) {
       const { plan, usage } = await SubscriptionService.getUserStatus(firestore, userId);
 
       const planKey = (plan || 'FREE').toUpperCase() as keyof typeof PLAN_LIMITS;
@@ -78,7 +68,7 @@ export async function POST(req: Request) {
         return NextResponse.json(
           {
             error: 'LIMIT_REACHED',
-            message: 'Daily free usage limit reached. Upgrade to continue.',
+            message: 'Daily intelligence quota exceeded.',
             usage: { ...usage, limit },
           },
           { status: 403 }
@@ -97,27 +87,15 @@ export async function POST(req: Request) {
 
     const reply = await collectStreamToText(stream);
 
-    const normalizedSteps = Array.isArray(steps)
-      ? steps.map((step) => {
-          const status: 'failed' | 'completed' = step?.status === 'error' ? 'failed' : 'completed';
-          return {
-            action: step?.tool || 'Execution step',
-            status,
-            summary: step?.reason,
-            error: step?.error,
-          };
-        })
-      : [];
-
     const payload: AgentResponse = {
       reply: reply || 'Analysis finalized.',
       metadata: {
         intent: metadata?.intent || 'general',
         plan: metadata?.planSummary || 'No plan available.',
-        steps: normalizedSteps,
-        structuredData: structuredData ?? undefined,
+        steps: Array.isArray(steps) ? steps : [],
+        structuredData: structuredData ?? null,
         memoryUsed: !!metadata?.memoryUsed,
-        iterationCount: normalizedSteps.length,
+        iterationCount: Array.isArray(steps) ? steps.length : 0,
       },
     };
 
@@ -131,7 +109,7 @@ export async function POST(req: Request) {
         intent: 'general',
         plan: 'Fallback response',
         steps: [],
-        structuredData: undefined,
+        structuredData: null,
         memoryUsed: false,
         iterationCount: 0,
       },

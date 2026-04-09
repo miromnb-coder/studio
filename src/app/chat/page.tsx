@@ -1,57 +1,26 @@
 'use client';
 
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { useRouter } from 'next/navigation';
-import {
-  ArrowUp,
-  AudioLines,
-  ClipboardPaste,
-  Crown,
-  FilePlus2,
-  FolderOpen,
-  Menu,
-  Mic,
-  NotebookPen,
-  Plus,
-  RefreshCw,
-  Sparkles,
-} from 'lucide-react';
-import { createClient } from '@/lib/supabase/client';
+import { ArrowUp, Plus, RefreshCw, Mic, AudioLines, Github, Paperclip, ImagePlus, NotebookPen, ClipboardPaste } from 'lucide-react';
 import { useAppStore } from '../store/app-store';
 import { AgentStrategyCard } from './components/AgentStrategyCard';
 import { StructuredResultCard } from './components/StructuredResultCard';
 
-const MAX_TEXTAREA_HEIGHT = 168;
-
 export default function ChatPage() {
-  const router = useRouter();
   const hydrated = useAppStore((s) => s.hydrated);
   const hydrate = useAppStore((s) => s.hydrate);
-  const user = useAppStore((s) => s.user);
-  const setUser = useAppStore((s) => s.setUser);
   const messages = useAppStore((s) => s.messages);
   const draftPrompt = useAppStore((s) => s.draftPrompt);
   const setDraftPrompt = useAppStore((s) => s.setDraftPrompt);
-  const clearConversationDraft = useAppStore((s) => s.clearConversationDraft);
-  const conversations = useAppStore((s) => s.conversations);
-  const activeConversationId = useAppStore((s) => s.activeConversationId);
-  const createConversation = useAppStore((s) => s.createConversation);
-  const switchConversation = useAppStore((s) => s.switchConversation);
   const sendMessage = useAppStore((s) => s.sendMessage);
   const retryLastPrompt = useAppStore((s) => s.retryLastPrompt);
   const isAgentResponding = useAppStore((s) => s.isAgentResponding);
   const streamError = useAppStore((s) => s.streamError);
-  const plan = useAppStore((s) => s.plan);
-  const usageCount = useAppStore((s) => s.usageCount);
-  const usageLimit = useAppStore((s) => s.usageLimit);
 
   const [draft, setDraft] = useState('');
   const [isVoiceMode, setIsVoiceMode] = useState(false);
-  const [openPanel, setOpenPanel] = useState<'add' | 'menu' | 'conversations' | null>(null);
+  const [openPanel, setOpenPanel] = useState<'add' | 'tools' | null>(null);
   const [composerNotice, setComposerNotice] = useState<string | null>(null);
-  const [showAuthPrompt, setShowAuthPrompt] = useState(false);
-  const [speechSupported, setSpeechSupported] = useState(false);
-
   const listRef = useRef<HTMLDivElement>(null);
   const composerRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -60,26 +29,6 @@ export default function ChatPage() {
   useEffect(() => {
     if (!hydrated) hydrate();
   }, [hydrate, hydrated]);
-
-  useEffect(() => {
-    const loadUser = async () => {
-      const supabase = createClient();
-      const { data } = await supabase.auth.getUser();
-      const authUser = data.user;
-      if (!authUser) return;
-      const name =
-        (authUser.user_metadata?.full_name as string | undefined) ||
-        authUser.email?.split('@')[0] ||
-        'User';
-      setUser({ id: authUser.id, email: authUser.email ?? '', name });
-    };
-    void loadUser();
-  }, [setUser]);
-
-  useEffect(() => {
-    const speechWindow = window as Window & { SpeechRecognition?: unknown; webkitSpeechRecognition?: unknown };
-    setSpeechSupported(Boolean(speechWindow.SpeechRecognition || speechWindow.webkitSpeechRecognition));
-  }, []);
 
   useEffect(() => {
     setDraft(draftPrompt);
@@ -93,9 +42,7 @@ export default function ChatPage() {
   useEffect(() => {
     if (!textareaRef.current) return;
     textareaRef.current.style.height = 'auto';
-    const nextHeight = Math.min(textareaRef.current.scrollHeight, MAX_TEXTAREA_HEIGHT);
-    textareaRef.current.style.height = `${nextHeight}px`;
-    textareaRef.current.style.overflowY = textareaRef.current.scrollHeight > MAX_TEXTAREA_HEIGHT ? 'auto' : 'hidden';
+    textareaRef.current.style.height = `${Math.min(textareaRef.current.scrollHeight, 144)}px`;
   }, [draft]);
 
   useEffect(() => {
@@ -116,43 +63,38 @@ export default function ChatPage() {
 
   useEffect(() => {
     if (!composerNotice) return;
-    const timeout = window.setTimeout(() => setComposerNotice(null), 2500);
+    const timeout = window.setTimeout(() => setComposerNotice(null), 2600);
     return () => window.clearTimeout(timeout);
   }, [composerNotice]);
 
-  const requireAuth = () => {
-    if (user) return false;
-    setShowAuthPrompt(true);
-    return true;
-  };
+  useEffect(() => {
+    if (!hydrated) return;
+    const shouldAutoSend =
+      typeof window !== 'undefined' && new URLSearchParams(window.location.search).get('autosend') === '1';
+    if (shouldAutoSend && draftPrompt.trim()) {
+      void sendMessage(draftPrompt);
+      setDraftPrompt('');
+      setDraft('');
+      if (typeof window !== 'undefined') {
+        window.sessionStorage.removeItem('nova-operator-chat-draft');
+        window.history.replaceState({}, '', '/chat');
+      }
+    }
+  }, [draftPrompt, hydrated, sendMessage, setDraftPrompt]);
 
   const send = async () => {
     if (!draft.trim() || isAgentResponding) return;
-    if (requireAuth()) return;
-    try {
-      await sendMessage(draft);
-      setDraftPrompt('');
-      setDraft('');
-      if (typeof window !== 'undefined') window.sessionStorage.removeItem('nova-operator-chat-draft');
-    } catch (error) {
-      const message = error instanceof Error ? error.message : 'Failed to send message.';
-      if (message.includes('LIMIT_REACHED')) {
-        setComposerNotice('Daily free limit reached. Upgrade to keep chatting.');
-        return;
-      }
-      if (message.includes('AUTH_REQUIRED')) {
-        setShowAuthPrompt(true);
-      }
-    }
+    await sendMessage(draft);
+    setDraftPrompt('');
+    setDraft('');
+    if (typeof window !== 'undefined') window.sessionStorage.removeItem('nova-operator-chat-draft');
   };
 
   const empty = useMemo(() => messages.length === 0, [messages]);
   const activeAssistantMessage = [...messages].reverse().find((m) => m.role === 'assistant');
   const showTyping = isAgentResponding && !!activeAssistantMessage && !activeAssistantMessage.content;
-  const canSend = !!draft.trim() && !isAgentResponding && !!user && (plan === 'PRO' || usageCount < usageLimit);
 
   const applyTemplate = (template: string, notice: string) => {
-    if (requireAuth()) return;
     const nextValue = draft ? `${draft}\n${template}` : template;
     setDraft(nextValue);
     setDraftPrompt(nextValue);
@@ -160,12 +102,16 @@ export default function ChatPage() {
     setOpenPanel(null);
   };
 
-  const startSpeechToText = () => {
-    if (!speechSupported) {
-      setComposerNotice('Speech input is not available on this device.');
-      return;
-    }
+  const toggleVoiceMode = () => {
+    setIsVoiceMode((prev) => {
+      const next = !prev;
+      setComposerNotice(next ? 'Voice mode ready.' : 'Voice mode turned off.');
+      return next;
+    });
+  };
 
+  const startSpeechToText = () => {
+    if (typeof window === 'undefined') return;
     const speechWindow = window as Window & {
       SpeechRecognition?: new () => {
         lang: string;
@@ -186,9 +132,12 @@ export default function ChatPage() {
         start: () => void;
       };
     };
-
     const SpeechRecognitionCtor = speechWindow.SpeechRecognition ?? speechWindow.webkitSpeechRecognition;
-    if (!SpeechRecognitionCtor) return;
+
+    if (!SpeechRecognitionCtor) {
+      setComposerNotice('Speech input is not available on this device.');
+      return;
+    }
 
     const recognition = new SpeechRecognitionCtor();
     recognition.lang = 'en-US';
@@ -197,60 +146,27 @@ export default function ChatPage() {
     recognition.onstart = () => setComposerNotice('Listening…');
     recognition.onresult = (event) => {
       const transcript = event.results?.[0]?.[0]?.transcript?.trim();
-      if (!transcript) return;
+      if (!transcript) {
+        setComposerNotice('No speech detected. Please try again.');
+        return;
+      }
       const nextValue = draft ? `${draft} ${transcript}` : transcript;
       setDraft(nextValue);
       setDraftPrompt(nextValue);
-      setComposerNotice('Speech added to your draft.');
+      setComposerNotice('Speech added to your message.');
     };
     recognition.onerror = () => setComposerNotice('Microphone permission is required to transcribe speech.');
     recognition.start();
   };
 
   return (
-    <main className="screen app-bg pb-52">
-      <header className="mb-3 flex items-start justify-between px-1 pt-1">
-        <div>
-          <h1 className="text-xl font-semibold text-primary">Kivo</h1>
-          <p className="text-sm text-secondary">Your personal AI assistant</p>
-        </div>
-        <button type="button" onClick={() => router.push('/settings?upgrade=1')} className="btn-secondary inline-flex items-center gap-1.5 px-3 py-1.5 text-xs">
-          <Crown className="h-3.5 w-3.5" /> Upgrade
-        </button>
+    <main className="screen app-bg pb-48">
+      <header className="mb-4 px-1 pt-1">
+        <h1 className="text-xl font-semibold text-primary">Kivo</h1>
+        <p className="text-sm text-secondary">Your personal AI assistant</p>
       </header>
 
-      <section className="mb-3 flex items-center gap-2 overflow-x-auto px-1 pb-1">
-        <button
-          type="button"
-          onClick={() => createConversation()}
-          className="btn-secondary shrink-0 px-3 py-1.5 text-xs"
-        >
-          + New chat
-        </button>
-        {conversations.map((conversation) => (
-          <button
-            key={conversation.id}
-            type="button"
-            onClick={() => switchConversation(conversation.id)}
-            className={`shrink-0 rounded-full border px-3 py-1.5 text-xs ${conversation.id === activeConversationId ? 'border-black/30 bg-[#e8e8e8] text-primary' : 'border-black/10 bg-[#f4f4f4] text-secondary'}`}
-          >
-            {conversation.title}
-          </button>
-        ))}
-      </section>
-
-      {plan === 'FREE' ? (
-        <section className="mb-3 rounded-2xl border border-black/10 bg-[#f5f5f5] px-3 py-2 text-xs text-secondary">
-          Free usage: <span className="font-semibold text-primary">{Math.max(usageLimit - usageCount, 0)}</span> messages left today.
-          {usageCount >= usageLimit ? (
-            <button type="button" onClick={() => router.push('/settings?upgrade=1')} className="ml-2 font-semibold text-primary underline-offset-2 hover:underline">
-              Upgrade for more
-            </button>
-          ) : null}
-        </section>
-      ) : null}
-
-      <section ref={listRef} className="relative z-10 max-h-[calc(100vh-310px)] space-y-4 overflow-y-auto pb-2">
+      <section ref={listRef} className="relative z-10 max-h-[calc(100vh-250px)] space-y-4 overflow-y-auto pb-2">
         {empty ? (
           <div className="px-1 py-6 text-sm text-secondary">Ask anything. Kivo will think and help you move forward.</div>
         ) : (
@@ -294,15 +210,20 @@ export default function ChatPage() {
       </section>
 
       <div ref={composerRef} className="fixed bottom-[calc(72px+env(safe-area-inset-bottom))] left-1/2 z-30 w-full max-w-md -translate-x-1/2 px-4 pb-2 pt-2">
-        {composerNotice ? <p className="message-appear mb-2 px-2 text-xs text-[#6f6f6f]">{composerNotice}</p> : null}
+        {composerNotice ? (
+          <p className="message-appear mb-2 px-2 text-xs text-[#6f6f6f]">{composerNotice}</p>
+        ) : null}
 
         {openPanel === 'add' ? (
           <div className="message-appear mb-2 rounded-2xl border border-black/[0.06] bg-[#f6f6f6] p-1.5 shadow-[0_8px_20px_rgba(0,0,0,0.05)]">
             <button type="button" onClick={() => fileInputRef.current?.click()} className="composer-menu-btn">
-              <FilePlus2 className="h-4 w-4" /> Upload file
+              <Paperclip className="h-4 w-4" /> Attach file
+            </button>
+            <button type="button" onClick={() => applyTemplate('Please use this image as context:', 'Image template added.')} className="composer-menu-btn">
+              <ImagePlus className="h-4 w-4" /> Insert image
             </button>
             <button type="button" onClick={() => applyTemplate('Start a structured task template for: ', 'Task template added.')} className="composer-menu-btn">
-              <NotebookPen className="h-4 w-4" /> Task template
+              <NotebookPen className="h-4 w-4" /> Start task template
             </button>
             <button type="button" onClick={() => applyTemplate('Quick note: ', 'Note template added.')} className="composer-menu-btn">
               <ClipboardPaste className="h-4 w-4" /> Add note
@@ -310,46 +231,18 @@ export default function ChatPage() {
           </div>
         ) : null}
 
-        {openPanel === 'menu' ? (
+        {openPanel === 'tools' ? (
           <div className="message-appear mb-2 rounded-2xl border border-black/[0.06] bg-[#f6f6f6] p-1.5 shadow-[0_8px_20px_rgba(0,0,0,0.05)]">
-            <button type="button" onClick={() => { createConversation(); setOpenPanel(null); }} className="composer-menu-btn">
-              <Plus className="h-4 w-4" /> New chat
+            <button type="button" onClick={() => applyTemplate('Use GitHub context from repository: ', 'GitHub context prompt added.')} className="composer-menu-btn">
+              <Github className="h-4 w-4" /> Use GitHub context
             </button>
-            <button type="button" onClick={() => setOpenPanel('conversations')} className="composer-menu-btn">
-              <FolderOpen className="h-4 w-4" /> View conversations
-            </button>
-            <button type="button" onClick={() => { clearConversationDraft(); setDraft(''); setOpenPanel(null); }} className="composer-menu-btn">
-              <ClipboardPaste className="h-4 w-4" /> Clear current draft
-            </button>
-            <button type="button" onClick={() => { setComposerNotice(`Plan: ${plan}. Used ${usageCount}/${usageLimit} today.`); setOpenPanel(null); }} className="composer-menu-btn">
-              <Sparkles className="h-4 w-4" /> Plan & usage info
-            </button>
-            <button type="button" onClick={() => router.push('/settings?upgrade=1')} className="composer-menu-btn">
-              <Crown className="h-4 w-4" /> Upgrade
+            <button type="button" onClick={() => applyTemplate('Add repository context and summarize key open work in: ', 'Repo context prompt added.')} className="composer-menu-btn">
+              <NotebookPen className="h-4 w-4" /> Add repo context
             </button>
           </div>
         ) : null}
 
-        {openPanel === 'conversations' ? (
-          <div className="message-appear mb-2 max-h-52 overflow-y-auto rounded-2xl border border-black/[0.06] bg-[#f6f6f6] p-1.5 shadow-[0_8px_20px_rgba(0,0,0,0.05)]">
-            {conversations.map((conversation) => (
-              <button
-                key={conversation.id}
-                type="button"
-                onClick={() => {
-                  switchConversation(conversation.id);
-                  setOpenPanel(null);
-                }}
-                className="composer-menu-btn justify-between"
-              >
-                <span className="truncate">{conversation.title}</span>
-                {conversation.id === activeConversationId ? <span className="badge">Active</span> : null}
-              </button>
-            ))}
-          </div>
-        ) : null}
-
-        <div className="flex items-end gap-2 rounded-[30px] border border-black/[0.06] bg-[#f6f6f6] p-2.5 shadow-[0_12px_28px_rgba(0,0,0,0.06)]">
+        <div className="flex items-end gap-1.5 rounded-[28px] border border-black/[0.06] bg-[#f6f6f6] p-2 shadow-[0_10px_24px_rgba(0,0,0,0.04)]">
           <input
             ref={fileInputRef}
             type="file"
@@ -364,16 +257,12 @@ export default function ChatPage() {
           <button type="button" className="composer-icon-btn" aria-label="Open add menu" onClick={() => setOpenPanel((prev) => (prev === 'add' ? null : 'add'))}>
             <Plus className="h-4 w-4" />
           </button>
-          <button type="button" className="composer-icon-btn" aria-label="Open utility menu" onClick={() => setOpenPanel((prev) => (prev === 'menu' ? null : 'menu'))}>
-            <Menu className="h-4 w-4" />
+          <button type="button" className="composer-icon-btn" aria-label="Open tools menu" onClick={() => setOpenPanel((prev) => (prev === 'tools' ? null : 'tools'))}>
+            <Github className="h-4 w-4" />
           </button>
           <textarea
             ref={textareaRef}
             value={draft}
-            onFocus={() => {
-              if (requireAuth()) return;
-              setTimeout(() => textareaRef.current?.scrollIntoView({ block: 'nearest' }), 120);
-            }}
             onChange={(e) => {
               setDraft(e.target.value);
               setDraftPrompt(e.target.value);
@@ -385,40 +274,20 @@ export default function ChatPage() {
               }
             }}
             rows={1}
-            placeholder={user ? 'Ask anything or assign a task' : 'Sign in to start chatting'}
-            className="system-input min-h-[46px] flex-1 resize-none border-none bg-[#f8f8f8] px-3 py-2.5 text-[15px]"
-            readOnly={!user}
+            placeholder="Assign a task or ask anything"
+            className="system-input max-h-36 min-h-[44px] flex-1 resize-none border-none bg-[#f8f8f8] px-3 py-2.5 text-[15px]"
           />
-          <button
-            type="button"
-            className={`composer-icon-btn ${isVoiceMode ? 'composer-icon-btn-active' : ''}`}
-            aria-label="Toggle voice mode"
-            onClick={() => setIsVoiceMode((prev) => !prev)}
-            disabled={!speechSupported}
-          >
+          <button type="button" className={`composer-icon-btn ${isVoiceMode ? 'composer-icon-btn-active' : ''}`} aria-label="Toggle voice mode" onClick={toggleVoiceMode}>
             <AudioLines className="h-4 w-4" />
           </button>
-          <button type="button" className="composer-icon-btn" aria-label="Start speech to text" onClick={startSpeechToText} disabled={!speechSupported}>
+          <button type="button" className="composer-icon-btn" aria-label="Start speech to text" onClick={startSpeechToText}>
             <Mic className="h-4 w-4" />
           </button>
-          <button type="button" onClick={() => void send()} className="composer-send-btn disabled:opacity-45" disabled={!canSend} aria-label="Send message">
+          <button type="button" onClick={() => void send()} className="composer-send-btn disabled:opacity-45" disabled={!draft.trim() || isAgentResponding} aria-label="Send message">
             <ArrowUp className="h-4 w-4" />
           </button>
         </div>
       </div>
-
-      {showAuthPrompt ? (
-        <div className="fixed inset-0 z-40 flex items-end bg-black/25 p-4">
-          <div className="w-full rounded-2xl border border-black/10 bg-[#f6f6f6] p-4">
-            <p className="text-sm font-semibold text-primary">Sign in required</p>
-            <p className="mt-1 text-sm text-secondary">Please sign in or create an account before sending messages.</p>
-            <div className="mt-3 flex gap-2">
-              <button type="button" onClick={() => setShowAuthPrompt(false)} className="btn-secondary flex-1 px-3 py-2 text-sm">Not now</button>
-              <button type="button" onClick={() => router.push('/login?next=/chat')} className="btn-primary flex-1 px-3 py-2 text-sm">Go to login</button>
-            </div>
-          </div>
-        </div>
-      ) : null}
     </main>
   );
 }
