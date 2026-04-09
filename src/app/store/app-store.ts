@@ -11,7 +11,6 @@ export type AlertType = 'billing' | 'risk' | 'digest';
 
 export type Message = {
   id: string;
-  conversationId?: string;
   role: MessageRole;
   content: string;
   createdAt: string;
@@ -287,17 +286,9 @@ const actions: AppActions = {
 
     const agent: AgentName = DEFAULT_ACTIVE_AGENT;
     const requestId = createId();
-    const userMessage: Message = {
-      id: createId(),
-      conversationId: state.activeConversationId ?? undefined,
-      role: 'user',
-      content: cleanPrompt,
-      createdAt: nowIso(),
-      agent,
-    };
+    const userMessage: Message = { id: createId(), role: 'user', content: cleanPrompt, createdAt: nowIso(), agent };
     const assistantMessage: Message = {
       id: createId(),
-      conversationId: state.activeConversationId ?? undefined,
       role: 'assistant',
       content: '',
       createdAt: nowIso(),
