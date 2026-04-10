@@ -1,7 +1,7 @@
-import type { Firestore } from 'firebase/firestore';
-import { doc, getDoc, runTransaction, setDoc } from 'firebase/firestore';
+import type { SupabaseClient } from '@supabase/supabase-js';
+import { normalizePlan, todayKey, type UserPlan } from '@/lib/usage/usage';
 
-export type UserPlan = 'FREE' | 'PREMIUM';
+export type { UserPlan };
 
 export const PLAN_LIMITS: Record<UserPlan, { dailyAgentRuns: number }> = {
   FREE: { dailyAgentRuns: 10 },
@@ -13,21 +13,10 @@ type UsageSnapshot = {
   lastResetDate: string;
 };
 
-const todayKey = () => new Date().toISOString().slice(0, 10);
-
-const normalizePlan = (plan: string | null | undefined): UserPlan => {
-  const value = (plan || 'FREE').toUpperCase();
-  if (value === 'PREMIUM' || value === 'PRO') return 'PREMIUM';
-  return 'FREE';
-};
-
 const defaultUsage = (): UsageSnapshot => ({
   agentRuns: 0,
   lastResetDate: todayKey(),
 });
-
-const usageDocRef = (firestore: Firestore, userId: string) => doc(firestore, 'users', userId, 'usage', 'daily');
-const userDocRef = (firestore: Firestore, userId: string) => doc(firestore, 'users', userId);
 
 export async function getUserSubscription() {
   return {
@@ -59,56 +48,77 @@ export async function handleStripeWebhook() {
 }
 
 export class SubscriptionService {
-  static async getUserStatus(firestore: Firestore, userId: string): Promise<{ plan: UserPlan; usage: UsageSnapshot }> {
-    const [userSnap, usageSnap] = await Promise.all([getDoc(userDocRef(firestore, userId)), getDoc(usageDocRef(firestore, userId))]);
+  static async getUserStatus(supabase: SupabaseClient, userId: string): Promise<{ plan: UserPlan; usage: UsageSnapshot }> {
+    const usageDate = todayKey();
 
-    const plan = normalizePlan(userSnap.exists() ? (userSnap.data()?.plan as string | undefined) : 'FREE');
+    const [profileResult, usageResult] = await Promise.all([
+      supabase.from('profiles').select('plan').eq('id', userId).maybeSingle(),
+      supabase
+        .from('usage_daily')
+        .select('agent_runs,usage_date')
+        .eq('user_id', userId)
+        .eq('usage_date', usageDate)
+        .maybeSingle(),
+    ]);
 
-    const usageData = usageSnap.exists() ? usageSnap.data() : null;
-    const nextUsage: UsageSnapshot = {
-      agentRuns: typeof usageData?.agentRuns === 'number' ? usageData.agentRuns : 0,
-      lastResetDate: typeof usageData?.lastResetDate === 'string' ? usageData.lastResetDate : todayKey(),
-    };
-
-    if (nextUsage.lastResetDate !== todayKey()) {
-      const resetUsage = defaultUsage();
-      await setDoc(usageDocRef(firestore, userId), resetUsage, { merge: true });
-      return { plan, usage: resetUsage };
+    if (profileResult.error) {
+      console.error('SUPABASE_PROFILE_READ_ERROR:', profileResult.error);
     }
 
-    return { plan, usage: nextUsage };
-  }
+    if (usageResult.error) {
+      console.error('SUPABASE_USAGE_READ_ERROR:', usageResult.error);
+    }
 
-  static async incrementUsage(firestore: Firestore, userId: string): Promise<UsageSnapshot> {
-    const usageRef = usageDocRef(firestore, userId);
-    const snapshot = await runTransaction(firestore, async (transaction) => {
-      const existing = await transaction.get(usageRef);
-      const current = existing.exists() ? existing.data() : null;
-      const lastResetDate = typeof current?.lastResetDate === 'string' ? current.lastResetDate : todayKey();
-      const shouldReset = lastResetDate !== todayKey();
-      const currentRuns = shouldReset ? 0 : typeof current?.agentRuns === 'number' ? current.agentRuns : 0;
-      const next: UsageSnapshot = {
-        agentRuns: currentRuns + 1,
-        lastResetDate: todayKey(),
-      };
-
-      transaction.set(usageRef, next, { merge: true });
-      return next;
-    });
-
-    return snapshot;
-  }
-
-  static async updatePlan(firestore: Firestore, userId: string, plan: UserPlan): Promise<boolean> {
-    const normalized = normalizePlan(plan);
-    await setDoc(
-      userDocRef(firestore, userId),
-      {
-        plan: normalized,
-        updatedAt: new Date().toISOString(),
+    return {
+      plan: normalizePlan(profileResult.data?.plan),
+      usage: {
+        agentRuns: typeof usageResult.data?.agent_runs === 'number' ? usageResult.data.agent_runs : 0,
+        lastResetDate: usageDate,
       },
-      { merge: true },
+    };
+  }
+
+  static async incrementUsage(supabase: SupabaseClient, userId: string): Promise<UsageSnapshot> {
+    const status = await SubscriptionService.getUserStatus(supabase, userId);
+    const nextUsage: UsageSnapshot = {
+      agentRuns: status.usage.agentRuns + 1,
+      lastResetDate: todayKey(),
+    };
+
+    const { error } = await supabase.from('usage_daily').upsert(
+      {
+        user_id: userId,
+        usage_date: nextUsage.lastResetDate,
+        agent_runs: nextUsage.agentRuns,
+        updated_at: new Date().toISOString(),
+      },
+      { onConflict: 'user_id,usage_date' },
     );
+
+    if (error) {
+      console.error('SUPABASE_USAGE_UPSERT_ERROR:', error);
+      return status.usage;
+    }
+
+    return nextUsage;
+  }
+
+  static async updatePlan(supabase: SupabaseClient, userId: string, plan: UserPlan): Promise<boolean> {
+    const normalized = normalizePlan(plan);
+
+    const { error } = await supabase.from('profiles').upsert(
+      {
+        id: userId,
+        plan: normalized,
+        updated_at: new Date().toISOString(),
+      },
+      { onConflict: 'id' },
+    );
+
+    if (error) {
+      console.error('SUPABASE_PLAN_UPSERT_ERROR:', error);
+      return false;
+    }
 
     return true;
   }

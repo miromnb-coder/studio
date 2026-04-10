@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { initializeFirebase } from '@/firebase';
+import { createClient as createSupabaseServerClient } from '@/lib/supabase/server';
 import { SubscriptionService, UserPlan } from '@/services/subscription-service';
 
 /**
@@ -16,8 +16,7 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: 'Authentication required' }, { status: 401 });
     }
 
-    const { firestore } = initializeFirebase();
-    if (!firestore) throw new Error("Database link failed");
+    const supabase = await createSupabaseServerClient();
 
     console.log(`[CHECKOUT] Initializing session for User ${userId}, Plan ${planId}`);
 
@@ -28,31 +27,27 @@ export async function POST(req: Request) {
       // const stripe = new (await import('stripe')).default(stripeKey);
       // const session = await stripe.checkout.sessions.create({ ... });
       // return NextResponse.json({ url: session.url });
-      
-      console.log("[CHECKOUT] Stripe configured. (Implementation placeholder for stripe package usage)");
+
+      console.log('[CHECKOUT] Stripe configured. (Implementation placeholder for stripe package usage)');
     }
 
     // --- STRIPE-READY SIMULATION (DEVELOPMENT / PROTOTYPE) ---
     // We add a realistic delay to mimic network latency
-    await new Promise(r => setTimeout(r, 1500));
+    await new Promise((r) => setTimeout(r, 1500));
 
     // Update the database directly to reflect the new plan
     // In production, this would happen via Stripe Webhook
     const normalizedPlan = planId.toUpperCase() as UserPlan;
-    const success = await SubscriptionService.updatePlan(firestore, userId, normalizedPlan);
+    const success = await SubscriptionService.updatePlan(supabase, userId, normalizedPlan);
 
-    if (!success) throw new Error("Subscription sync failed");
+    if (!success) throw new Error('Subscription sync failed');
 
-    return NextResponse.json({ 
-      success: true, 
-      redirectUrl: '/dashboard?upgrade=success' 
+    return NextResponse.json({
+      success: true,
+      redirectUrl: '/dashboard?upgrade=success',
     });
-
   } catch (error: any) {
     console.error('[CHECKOUT_ERROR]:', error.message);
-    return NextResponse.json(
-      { error: 'Payment protocol failure: ' + error.message }, 
-      { status: 500 }
-    );
+    return NextResponse.json({ error: 'Payment protocol failure: ' + error.message }, { status: 500 });
   }
 }
