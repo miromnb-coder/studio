@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { runAgentV7 } from '@/agent/v7/orchestrator';
+import { runAgentV8 } from '@/agent/v8/orchestrator';
 import type { AgentResponse } from '@/types/agent-response';
 import {
   normalizeFinanceAnalysis,
@@ -36,10 +36,13 @@ const SAFE_AGENT_FALLBACK: AgentResponse = {
   reply: 'I ran into an issue, but here’s what I could analyze so far.',
   metadata: {
     intent: 'general',
+    mode: 'general',
     plan: 'Partial fallback',
     steps: [],
     structuredData: null,
+    suggestedActions: [],
     memoryUsed: false,
+    verificationPassed: false,
     iterationCount: 0,
   },
 };
@@ -48,26 +51,6 @@ function todayKey() {
   return new Date().toISOString().slice(0, 10);
 }
 
-async function collectStreamToText(
-  stream: AsyncIterable<any> | null | undefined,
-): Promise<string> {
-  if (!stream) return '';
-
-  let finalText = '';
-
-  try {
-    for await (const chunk of stream as any) {
-      const content = chunk?.choices?.[0]?.delta?.content || '';
-      if (content) {
-        finalText += content;
-      }
-    }
-  } catch (error) {
-    console.error('AGENT_STREAM_COLLECT_ERROR:', error);
-  }
-
-  return finalText.trim();
-}
 
 function safeJsonResponse(payload: unknown, status = 200) {
   return NextResponse.json(payload, { status });
@@ -266,31 +249,39 @@ export async function POST(req: Request) {
       historyCount: safeHistory.length,
     });
 
-    const agentResult = await runAgentV7(
-      safeInput || 'Continue',
+    const agentResult = await runAgentV8({
+      input: safeInput || 'Continue',
       userId,
-      safeHistory,
-      imageUri,
-      retrievedMemory as unknown as Record<string, unknown>,
-    ).catch((error) => {
-      console.error('AGENT_V7_EXECUTION_ERROR:', error);
+      history: safeHistory,
+      memory: retrievedMemory as unknown as Record<string, unknown>,
+      productState: {
+        plan,
+        usage: {
+          current: usage.agentRuns,
+          limit,
+          remaining: Math.max(limit - usage.agentRuns, 0),
+        },
+        gmailConnected: Boolean((retrievedMemory as any)?.gmailConnected),
+      },
+    }).catch((error) => {
+      console.error('AGENT_V8_EXECUTION_ERROR:', error);
       return null;
     });
 
     console.info('AGENT_ROUTE_ORCHESTRATOR_DONE', {
       ok: Boolean(agentResult),
       intent: agentResult?.metadata?.intent || 'unknown',
-      stepCount: agentResult?.steps?.length || 0,
+      stepCount: agentResult?.metadata?.steps?.length || 0,
     });
 
     if (!agentResult) {
       return safeJsonResponse(SAFE_AGENT_FALLBACK);
     }
 
-    const normalizedFinance = normalizeFinanceAnalysis(agentResult.structuredData);
+    const normalizedFinance = normalizeFinanceAnalysis(agentResult.metadata?.structuredData || {});
     const shouldAttachFinance =
       agentResult.metadata?.intent === 'finance' ||
-      Boolean((agentResult.structuredData || {}).detect_leaks) ||
+      Boolean((agentResult.metadata?.structuredData || {}).detect_leaks) ||
       Boolean(actionType);
 
     if (actionType) {
@@ -359,8 +350,7 @@ export async function POST(req: Request) {
     }
 
     console.info('AGENT_ROUTE_RESPONSE_SYNTHESIS_START');
-    const streamedReply = await collectStreamToText(agentResult.stream);
-    const reply = streamedReply || agentResult.finalText || '';
+    const reply = agentResult.reply || '';
     console.info('AGENT_ROUTE_RESPONSE_SYNTHESIS_DONE', {
       hasReply: reply.trim().length > 0,
     });
@@ -401,21 +391,24 @@ export async function POST(req: Request) {
       reply: reply || SAFE_AGENT_FALLBACK.reply,
       metadata: {
         intent: agentResult.metadata?.intent || 'general',
-        plan: agentResult.metadata?.planSummary || 'Partial fallback',
-        steps: Array.isArray(agentResult.steps)
-          ? agentResult.steps.map((step) => ({
-              action: `${step.tool}: ${step.reason}`,
-              status: step.status === 'error' ? 'failed' : 'completed',
-              summary: step.reason,
+        mode: agentResult.metadata?.mode || 'general',
+        plan: agentResult.metadata?.plan || 'Partial fallback',
+        steps: Array.isArray(agentResult.metadata?.steps)
+          ? agentResult.metadata.steps.map((step) => ({
+              action: `${step.tool}: ${step.summary}`,
+              status: step.status === 'failed' ? 'failed' : 'completed',
+              summary: step.summary,
               error: step.error,
             }))
           : [],
         structuredData: {
-          ...(agentResult.structuredData || {}),
+          ...(agentResult.metadata?.structuredData || {}),
           ...(shouldAttachFinance ? { finance: normalizedFinance } : {}),
         },
+        suggestedActions: agentResult.metadata?.suggestedActions || [],
         memoryUsed: !!agentResult.metadata?.memoryUsed,
-        iterationCount: Array.isArray(agentResult.steps) ? agentResult.steps.length : 0,
+        verificationPassed: !!agentResult.metadata?.verificationPassed,
+        iterationCount: Array.isArray(agentResult.metadata?.steps) ? agentResult.metadata.steps.length : 0,
       },
       usage: {
         current: updatedUsage.agentRuns,

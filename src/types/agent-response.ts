@@ -13,6 +13,7 @@ export type AgentResponseStep = {
 
 export type AgentResponseMetadata = {
   intent: AgentIntent;
+  mode?: 'finance' | 'technical' | 'general';
   plan: string;
   steps: AgentResponseStep[];
   structuredData?: {
@@ -20,7 +21,14 @@ export type AgentResponseMetadata = {
     actionResult?: FinanceActionResult;
     [key: string]: unknown;
   } | null;
+  suggestedActions?: Array<{
+    id: string;
+    label: string;
+    kind: 'finance' | 'technical' | 'general' | 'premium';
+    payload?: Record<string, unknown>;
+  }>;
   memoryUsed?: boolean;
+  verificationPassed?: boolean;
   iterationCount?: number;
 };
 
