@@ -1,6 +1,6 @@
 'use client';
 
-import { FormEvent, useCallback, useEffect, useMemo, useState } from 'react';
+import { Suspense, FormEvent, useCallback, useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { createClient } from '@/lib/supabase/client';
@@ -9,7 +9,7 @@ import { useAppStore } from '../store/app-store';
 import { useUserEntitlements } from '../hooks/use-user-entitlements';
 import { GmailIntegrationCard } from '../components/profile/GmailIntegrationCard';
 
-export default function ProfilePage() {
+function ProfilePageContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const supabase = useMemo(() => createClient(), []);
@@ -62,7 +62,11 @@ export default function ProfilePage() {
         .eq('id', authUser.id)
         .maybeSingle();
 
-      const nextName = profile?.full_name || (authUser.user_metadata?.full_name as string | undefined) || authUser.email?.split('@')[0] || 'User';
+      const nextName =
+        profile?.full_name ||
+        (authUser.user_metadata?.full_name as string | undefined) ||
+        authUser.email?.split('@')[0] ||
+        'User';
       const nextEmail = authUser.email ?? '';
 
       setFullName(nextName);
@@ -166,6 +170,8 @@ export default function ProfilePage() {
     router.refresh();
   };
 
+  const gmailCallbackState = searchParams.get('gmail');
+
   return (
     <main className="screen app-bg">
       <section className="card-surface p-5">
@@ -219,12 +225,20 @@ export default function ProfilePage() {
           </Link>
         </div>
 
-        <GmailIntegrationCard gmailCallbackState={searchParams.get('gmail')} />
+        <GmailIntegrationCard gmailCallbackState={gmailCallbackState} />
 
         <button type="button" className="btn-secondary tap-feedback mt-3 w-full px-4 py-2 text-sm" onClick={logout} disabled={isSigningOut}>
           {isSigningOut ? 'Signing out…' : 'Sign out'}
         </button>
       </section>
     </main>
+  );
+}
+
+export default function ProfilePage() {
+  return (
+    <Suspense fallback={null}>
+      <ProfilePageContent />
+    </Suspense>
   );
 }
