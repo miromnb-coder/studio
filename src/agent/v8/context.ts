@@ -33,7 +33,7 @@ export async function buildContextV8(params: {
   const safeMemory = params.memory || {};
   const includeFinance = params.route.intent === 'finance';
   const includeSemanticMemory = params.route.intent === 'memory' || params.route.intent === 'finance';
-  const shouldFetchRelevantMemories = params.route.intent === 'memory' || params.route.intent === 'finance' || params.route.intent === 'coding';
+  const shouldFetchRelevantMemories = true;
 
   const relevantMemories = shouldFetchRelevantMemories
     ? await fetchRelevantUserMemory({
@@ -44,7 +44,7 @@ export async function buildContextV8(params: {
     }).catch(() => [])
     : [];
 
-  const filteredRelevantMemories = includeFinance
+  const filteredRelevantMemories = includeFinance || params.route.intent === 'memory'
     ? relevantMemories
     : relevantMemories.filter((item) => (item.relevanceScore || 0) >= 0.82).slice(0, 3);
 
