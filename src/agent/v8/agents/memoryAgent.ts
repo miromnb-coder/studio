@@ -16,30 +16,39 @@ export type MemoryAgentOutput = {
 
 function classifyMemory(content: string, intent: string): { type: UserMemoryTypeV8; importance: number } {
   const lower = content.toLowerCase();
-  if (intent === 'finance' || /\b(subscription|budget|saving|expense|debt|income)\b/.test(lower)) {
+  if (intent === 'finance' || /\b(subscription|budget|saving|expense|debt|income|money|finance|raha|sääst|saast|tilaus|kulu|lasku|talous)\b/.test(lower)) {
     return { type: 'finance', importance: 0.88 };
   }
-  if (/\bprefer|like|language|suomeksi|always|never\b/.test(lower)) {
+  if (/\bprefer|like|language|suomeksi|always|never|pidän|pidan|tykkään|tykkaan|haluan vastaukset|prefiero|preferisco\b/.test(lower)) {
     return { type: 'preference', importance: 0.82 };
   }
-  if (/\bgoal|plan to|want to|target|deadline\b/.test(lower)) {
+  if (/\b(goal|plan to|want to|target|deadline|haluan|aion|rakennan|tavoite|quiero|voglio|je veux)\b/.test(lower)) {
     return { type: 'goal', importance: 0.8 };
   }
-  if (/\bmy name is|i am|i work|i live|important\b/.test(lower)) {
+  if (/\b(my name is|i am|i work|i live|important|olen|asun|työskentelen|nimeni on|trabajo|vivo|sono)\b/.test(lower)) {
     return { type: 'fact', importance: 0.74 };
   }
   return { type: 'other', importance: 0.55 };
 }
 
+function isHighSignalMemorySentence(message: string): boolean {
+  const lower = message.toLowerCase();
+  const firstPersonSignal =
+    /\b(i|i'm|my|me|minä|mina|minun|mä|ma|yo|je|ich|io|mi|mon)\b/.test(lower);
+  const preferenceGoalSignal =
+    /\b(like|prefer|want|need|always|never|remember|muista|haluan|tykkään|pidän|rakennan|quiero|prefiero|j'aime)\b/.test(lower);
+  return firstPersonSignal && preferenceGoalSignal;
+}
+
 function extractCandidates(message: string): string[] {
   const trimmed = message.trim();
-  if (trimmed.length < 20) return [];
+  if (trimmed.length < 10) return [];
 
   const clauses = trimmed
-    .split(/(?<=[.!?])\s+/)
+    .split(/(?<=[.!?])\s+|\s+(?:ja|sekä|että|and|also|y|et)\s+/i)
     .map((part) => part.trim())
-    .filter((part) => part.length >= 24)
-    .slice(0, 2);
+    .filter((part) => part.length >= 10 && (part.length >= 20 || isHighSignalMemorySentence(part)))
+    .slice(0, 3);
 
   return clauses;
 }

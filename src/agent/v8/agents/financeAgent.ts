@@ -42,7 +42,7 @@ export async function runFinanceAgent(input: FinanceAgentInput): Promise<Finance
   const memoryHighlights = (input.context.memory.relevantMemories || [])
     .map((item) => item.content)
     .slice(0, 2);
-  const userFocusOnSavings = memoryHighlights.some((item) => /\bsave|saving|budget|cut costs|subscriptions?\b/i.test(item));
+  const userFocusOnSavings = memoryHighlights.some((item) => /\b(save|saving|budget|cut costs|subscriptions?|sääst|saast|raha|tilaus|ahorro|épargne|epargne)\b/i.test(item));
   const gmailConnected = input.context.environment.gmailConnected;
   const gmailSummary = String(gmailData.summary || '').trim();
   const gmailSavingsOpportunities = Array.isArray(gmailData.savingsOpportunities)
@@ -78,11 +78,11 @@ export async function runFinanceAgent(input: FinanceAgentInput): Promise<Finance
   }
 
   const message = input.context.user.message.toLowerCase();
-  const asksTotal = /\b(total|monthly|spend|cost)\b/.test(message);
-  const asksCount = /\b(how many|count|number of)\b/.test(message);
-  const asksSavings = /\b(save|savings|reduce|cut)\b/.test(message);
-  const asksNextAction = /\b(next|priority|what should i do|best action|deserves attention)\b/.test(message);
-  const asksEmailCheck = /\b(email|gmail|inbox|mail)\b/.test(message);
+  const asksTotal = /\b(total|monthly|spend|cost|amount|rahaa|kulutus|kulut|kuukaudessa|kokonais|gasto|mensual)\b/.test(message);
+  const asksCount = /\b(how many|count|number of|kuinka monta|montako|määrä|maara|cuánt|cuant)\b/.test(message);
+  const asksSavings = /\b(save|savings|reduce|cut|sääst|saast|säästö|saasto|halvem|ahorr|épargn|epargn)\b/.test(message);
+  const asksNextAction = /\b(next|priority|what should i do|best action|deserves attention|mitä minun pitäisi tehdä|mita minun pitaisi tehda|seuraavaksi|kannattaa|que debo hacer|prochaine action)\b/.test(message);
+  const asksEmailCheck = /\b(email|gmail|inbox|mail|sähköposti|sahkoposti|posti|correo|courriel)\b/.test(message);
 
   let answerDraft = '';
   if ((asksSavings || asksNextAction) && asksEmailCheck && gmailData.connected) {
