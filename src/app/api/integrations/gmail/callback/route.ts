@@ -1,6 +1,7 @@
 import { cookies } from 'next/headers';
 import { NextResponse } from 'next/server';
 import { createClient as createSupabaseServerClient } from '@/lib/supabase/server';
+import { resolveAppOrigin } from '@/lib/auth/redirects';
 import {
   encryptToken,
   exchangeCodeForToken,
@@ -18,16 +19,17 @@ function toObject(value: unknown): Record<string, unknown> {
 
 export async function GET(req: Request) {
   const requestUrl = new URL(req.url);
+  const appOrigin = resolveAppOrigin(requestUrl);
   const code = requestUrl.searchParams.get('code');
   const state = requestUrl.searchParams.get('state');
   const error = requestUrl.searchParams.get('error');
 
   if (error) {
-    return NextResponse.redirect(new URL('/profile?gmail=error', requestUrl.origin));
+    return NextResponse.redirect(new URL('/profile?gmail=error', appOrigin));
   }
 
   if (!code || !state) {
-    return NextResponse.redirect(new URL('/profile?gmail=missing_code', requestUrl.origin));
+    return NextResponse.redirect(new URL('/profile?gmail=missing_code', appOrigin));
   }
 
   try {
@@ -35,13 +37,13 @@ export async function GET(req: Request) {
     const { data: auth } = await supabase.auth.getUser();
     const userId = auth.user?.id;
     if (!userId) {
-      return NextResponse.redirect(new URL('/login', requestUrl.origin));
+      return NextResponse.redirect(new URL('/login', appOrigin));
     }
 
     const stateCookieValue = (await cookies()).get('gmail_oauth_state')?.value;
 
     if (!stateCookieValue || stateCookieValue !== state || !state.startsWith(`${userId}:`)) {
-      return NextResponse.redirect(new URL('/profile?gmail=state_mismatch', requestUrl.origin));
+      return NextResponse.redirect(new URL('/profile?gmail=state_mismatch', appOrigin));
     }
 
     let accessToken: string | null = null;
@@ -73,7 +75,7 @@ export async function GET(req: Request) {
     }
 
     if (!accessToken) {
-      const redirectUri = `${requestUrl.origin}/api/integrations/gmail/callback`;
+      const redirectUri = `${appOrigin}/api/integrations/gmail/callback`;
       const fallbackTokens = await exchangeCodeForToken(code, redirectUri);
       accessToken = fallbackTokens.accessToken;
       refreshToken = fallbackTokens.refreshToken || null;
@@ -128,7 +130,7 @@ export async function GET(req: Request) {
       { onConflict: 'user_id' },
     );
 
-    const response = NextResponse.redirect(new URL('/profile?gmail=connected', requestUrl.origin));
+    const response = NextResponse.redirect(new URL('/profile?gmail=connected', appOrigin));
     response.cookies.set({
       name: 'gmail_oauth_state',
       value: '',
@@ -142,6 +144,6 @@ export async function GET(req: Request) {
     return response;
   } catch (callbackError) {
     console.error('GMAIL_CALLBACK_ERROR', callbackError);
-    return NextResponse.redirect(new URL('/profile?gmail=error', requestUrl.origin));
+    return NextResponse.redirect(new URL('/profile?gmail=error', appOrigin));
   }
 }

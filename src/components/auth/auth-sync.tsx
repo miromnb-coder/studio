@@ -3,6 +3,7 @@
 import { useEffect } from 'react';
 import { createClient } from '@/lib/supabase/client';
 import { useAppStore } from '@/app/store/app-store';
+import { upsertUserProfile } from '@/lib/auth/profile';
 
 export function AuthSync() {
   const setUser = useAppStore((s) => s.setUser);
@@ -21,16 +22,12 @@ export function AuthSync() {
         return;
       }
 
-      const { data: profile } = await supabase
-        .from('profiles')
-        .select('full_name')
-        .eq('id', user.id)
-        .maybeSingle();
+      const profileState = await upsertUserProfile(supabase, user);
 
       setUser({
         id: user.id,
-        email: user.email ?? '',
-        name: profile?.full_name || (user.user_metadata?.full_name as string | undefined) || user.email?.split('@')[0] || 'User',
+        email: profileState.email,
+        name: profileState.fullName,
       });
     };
 
