@@ -26,6 +26,8 @@ export async function POST() {
 
     const lastAnalysis = asObject(profile?.last_analysis);
 
+    const disconnectedAt = new Date().toISOString();
+
     await supabase.from('finance_profiles').upsert(
       {
         user_id: userId,
@@ -38,16 +40,25 @@ export async function POST() {
           ...lastAnalysis,
           gmail_integration: {
             status: 'disconnected',
-            disconnected_at: new Date().toISOString(),
+            disconnected_at: disconnectedAt,
             access_token_encrypted: null,
             refresh_token_encrypted: null,
             expires_at: null,
             last_error: null,
           },
         },
-        updated_at: new Date().toISOString(),
+        updated_at: disconnectedAt,
       },
       { onConflict: 'user_id' },
+    );
+
+    await supabase.from('profiles').upsert(
+      {
+        id: userId,
+        gmail_connected: false,
+        updated_at: disconnectedAt,
+      },
+      { onConflict: 'id' },
     );
 
     return NextResponse.json({ status: 'disconnected' });

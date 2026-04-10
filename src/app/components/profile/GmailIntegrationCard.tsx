@@ -5,6 +5,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 export type GmailIntegrationStatus = 'disconnected' | 'connecting' | 'connected' | 'syncing' | 'error';
 
 type StatusPayload = {
+  connected?: boolean;
   status?: GmailIntegrationStatus;
   lastSyncedAt?: string | null;
   emailsAnalyzed?: number;
@@ -32,6 +33,7 @@ function formatSyncTime(value: string | null): string {
 
 export function GmailIntegrationCard() {
   const [status, setStatus] = useState<GmailIntegrationStatus>('disconnected');
+  const [gmailConnected, setGmailConnected] = useState(false);
   const [lastSyncedAt, setLastSyncedAt] = useState<string | null>(null);
   const [emailsAnalyzed, setEmailsAnalyzed] = useState(0);
   const [subscriptionsFound, setSubscriptionsFound] = useState(0);
@@ -53,6 +55,7 @@ export function GmailIntegrationCard() {
       }
 
       const payload = (await response.json()) as StatusPayload;
+      setGmailConnected(Boolean(payload.connected));
       setStatus(payload.status || 'disconnected');
       setLastSyncedAt(payload.lastSyncedAt || null);
       setEmailsAnalyzed(typeof payload.emailsAnalyzed === 'number' ? payload.emailsAnalyzed : 0);
@@ -72,6 +75,7 @@ export function GmailIntegrationCard() {
 
   const connect = () => {
     setIsConnecting(true);
+    setGmailConnected(false);
     setStatus('connecting');
     setErrorMessage(null);
     window.location.href = '/api/integrations/gmail/connect';
@@ -97,6 +101,7 @@ export function GmailIntegrationCard() {
       }
 
       const payload = (await response.json()) as SyncPayload;
+      setGmailConnected(true);
       setStatus(payload.status || 'connected');
       setLastSyncedAt(payload.lastSyncedAt || new Date().toISOString());
       setEmailsAnalyzed(typeof payload.emailsAnalyzed === 'number' ? payload.emailsAnalyzed : 0);
@@ -132,6 +137,7 @@ export function GmailIntegrationCard() {
       }
 
       setStatus('disconnected');
+      setGmailConnected(false);
       setLastSyncedAt(null);
       setEmailsAnalyzed(0);
       setSubscriptionsFound(0);
@@ -157,8 +163,6 @@ export function GmailIntegrationCard() {
     return 'Not connected';
   }, [loadingStatus, status]);
 
-  const canSync = status === 'connected' || status === 'syncing';
-
   return (
     <section className="mt-4 rounded-xl border border-black/10 bg-[#f2f2f2] p-4 text-sm">
       <p className="text-base font-medium text-primary">Integrations</p>
@@ -181,7 +185,7 @@ export function GmailIntegrationCard() {
         {successMessage ? <p className="mt-3 rounded-lg border border-[#cbe4d2] bg-[#eef8f0] px-3 py-2 text-xs text-[#255b34]">{successMessage}</p> : null}
 
         <div className="mt-3 flex flex-wrap gap-2">
-          {status === 'disconnected' || status === 'error' || status === 'connecting' ? (
+          {!gmailConnected ? (
             <button
               type="button"
               onClick={connect}
@@ -192,7 +196,7 @@ export function GmailIntegrationCard() {
             </button>
           ) : null}
 
-          {canSync ? (
+          {gmailConnected ? (
             <button
               type="button"
               onClick={syncEmails}

@@ -8,6 +8,7 @@ export type GmailConnectionStatus = 'disconnected' | 'connecting' | 'connected' 
 
 export interface ConnectGmailCardProps {
   status: GmailConnectionStatus;
+  connected?: boolean;
   lastSyncedAt?: string | null;
   emailsAnalyzed?: number;
   subscriptionsFound?: number;
@@ -55,6 +56,7 @@ function formatDate(value?: string | null): string {
 
 export function ConnectGmailCard({
   status,
+  connected = false,
   lastSyncedAt,
   emailsAnalyzed = 0,
   subscriptionsFound = 0,
@@ -65,7 +67,7 @@ export function ConnectGmailCard({
   onDisconnect,
 }: ConnectGmailCardProps) {
   const isBusy = status === 'connecting' || status === 'syncing';
-  const canSync = status === 'connected';
+  const canSync = connected && status !== 'syncing';
 
   return (
     <motion.section
@@ -128,7 +130,7 @@ export function ConnectGmailCard({
       ) : null}
 
       <div className="relative mt-4 flex flex-wrap gap-2">
-        {status === 'disconnected' ? (
+        {!connected ? (
           <motion.button
             whileTap={{ scale: 0.98 }}
             onClick={onConnect}
@@ -140,7 +142,7 @@ export function ConnectGmailCard({
           </motion.button>
         ) : null}
 
-        {status === 'connected' || status === 'syncing' ? (
+        {connected ? (
           <motion.button
             whileTap={{ scale: 0.98 }}
             onClick={onSync}
@@ -153,7 +155,7 @@ export function ConnectGmailCard({
           </motion.button>
         ) : null}
 
-        {status === 'error' ? (
+        {status === 'error' && !connected ? (
           <motion.button
             whileTap={{ scale: 0.98 }}
             onClick={onReconnect}
@@ -165,7 +167,7 @@ export function ConnectGmailCard({
           </motion.button>
         ) : null}
 
-        {(status === 'connected' || status === 'syncing' || status === 'error') && onDisconnect ? (
+        {(connected || status === 'error') && onDisconnect ? (
           <motion.button
             whileTap={{ scale: 0.98 }}
             onClick={onDisconnect}

@@ -102,6 +102,8 @@ export async function GET(req: Request) {
 
     const lastAnalysis = toObject(profile?.last_analysis);
 
+    const connectedAt = new Date().toISOString();
+
     await supabase.from('finance_profiles').upsert(
       {
         user_id: userId,
@@ -119,7 +121,7 @@ export async function GET(req: Request) {
             access_token_encrypted: encryptToken(accessToken),
             refresh_token_encrypted: refreshToken ? encryptToken(refreshToken) : null,
             expires_at: expiryIso,
-            connected_at: new Date().toISOString(),
+            connected_at: connectedAt,
             verified_email: verifiedProfile.emailAddress,
             verified_messages_total: verifiedProfile.messagesTotal,
             last_error: null,
@@ -128,6 +130,16 @@ export async function GET(req: Request) {
         updated_at: new Date().toISOString(),
       },
       { onConflict: 'user_id' },
+    );
+
+    await supabase.from('profiles').upsert(
+      {
+        id: userId,
+        gmail_connected: true,
+        gmail_connected_at: connectedAt,
+        updated_at: connectedAt,
+      },
+      { onConflict: 'id' },
     );
 
     const response = NextResponse.redirect(new URL('/profile?gmail=connected', appOrigin));

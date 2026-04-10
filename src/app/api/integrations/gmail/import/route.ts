@@ -71,6 +71,8 @@ export async function POST() {
       return NextResponse.json({ error: 'GMAIL_NOT_CONNECTED', message: 'Connect Gmail before syncing.' }, { status: 400 });
     }
 
+    const syncedAt = new Date().toISOString();
+
     await supabase.from('finance_profiles').upsert(
       {
         user_id: userId,
@@ -136,7 +138,7 @@ export async function POST() {
       gmail_integration: {
         ...gmailIntegration,
         status: 'connected',
-        last_synced_at: new Date().toISOString(),
+        last_synced_at: syncedAt,
         last_sync_emails_analyzed: emails.length,
         last_sync_subscriptions_found: subscriptionsCount,
         chat_ready_summary: chatReadySummary,
@@ -154,10 +156,20 @@ export async function POST() {
         estimated_savings: savingsEstimate,
         currency,
         memory_summary: aiSummary,
-        last_analysis: nextLastAnalysis,
-        updated_at: new Date().toISOString(),
+      last_analysis: nextLastAnalysis,
+        updated_at: syncedAt,
       },
       { onConflict: 'user_id' },
+    );
+
+    await supabase.from('profiles').upsert(
+      {
+        id: userId,
+        gmail_connected: true,
+        gmail_last_sync_at: syncedAt,
+        updated_at: syncedAt,
+      },
+      { onConflict: 'id' },
     );
 
     await supabase.from('finance_history').insert({

@@ -57,22 +57,10 @@ function parseActionType(raw: unknown): FinanceActionType | null {
   return null;
 }
 
-function asObject(value: unknown): Record<string, unknown> {
-  return typeof value === 'object' && value !== null ? (value as Record<string, unknown>) : {};
-}
-
 function resolveGmailConnected(params: {
-  userMetadata: Record<string, unknown>;
-  financeProfile?: Record<string, unknown> | null;
+  userProfile?: Record<string, unknown> | null;
 }): boolean {
-  const metadata = params.userMetadata;
-  const metadataFlag = metadata.gmail_connected;
-  if (typeof metadataFlag === 'boolean') return metadataFlag;
-
-  const profile = params.financeProfile || {};
-  const lastAnalysis = asObject(profile.last_analysis);
-  const gmail = asObject(lastAnalysis.gmail_integration);
-  return Boolean(gmail.access_token_encrypted) && String(gmail.status || 'connected') !== 'disconnected';
+  return Boolean(params.userProfile?.gmail_connected);
 }
 
 export async function POST(req: Request) {
@@ -123,8 +111,11 @@ export async function POST(req: Request) {
     }
 
     const { plan, usage, email } = await getUserPlanAndUsage(supabase, userId);
-    const { data: authUserData } = await supabase.auth.getUser();
-    const userMetadata = asObject(authUserData.user?.user_metadata);
+    const { data: userProfile } = await supabase
+      .from('profiles')
+      .select('gmail_connected')
+      .eq('id', userId)
+      .maybeSingle();
     const unlimitedReason = isDevUnlimitedMode() ? 'dev' : isAdminBypass(email) ? 'admin' : null;
 
     if (actionType && plan !== 'PREMIUM') {
@@ -199,8 +190,7 @@ export async function POST(req: Request) {
           remaining: usageBeforeRun.remaining,
         },
         gmailConnected: resolveGmailConnected({
-          userMetadata,
-          financeProfile: retrievedMemory.financeProfile as Record<string, unknown> | null,
+          userProfile: (userProfile as Record<string, unknown> | null) || null,
         }),
       },
     }).catch((error) => {

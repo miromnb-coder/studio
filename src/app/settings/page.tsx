@@ -6,6 +6,7 @@ import { useUserEntitlements } from '../hooks/use-user-entitlements';
 import { ConnectGmailCard, type GmailConnectionStatus } from '@/components/integrations/ConnectGmailCard';
 
 type GmailStatusPayload = {
+  connected?: boolean;
   status: GmailConnectionStatus;
   lastSyncedAt?: string | null;
   emailsAnalyzed?: number;
@@ -14,6 +15,7 @@ type GmailStatusPayload = {
 };
 
 const initialGmailState: GmailStatusPayload = {
+  connected: false,
   status: 'disconnected',
   lastSyncedAt: null,
   emailsAnalyzed: 0,
@@ -102,6 +104,7 @@ export default function SettingsPage() {
       </section>
 
       <ConnectGmailCard
+        connected={Boolean(gmail.connected)}
         status={gmail.status}
         lastSyncedAt={gmail.lastSyncedAt}
         emailsAnalyzed={gmail.emailsAnalyzed}
