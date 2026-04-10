@@ -1,46 +1,132 @@
-import { useMemo } from 'react';
-import type { SavingsPoint } from './types';
+'use client';
 
-type SavingsChartProps = {
-  points: SavingsPoint[];
+import { motion } from 'framer-motion';
+
+type DataPoint = {
+  date: string;
+  savings: number;
 };
 
-export function SavingsChart({ points }: SavingsChartProps) {
-  const chart = useMemo(() => {
-    if (!points.length) return null;
-    const width = 300;
-    const height = 120;
-    const padding = 12;
-    const maxValue = Math.max(...points.map((point) => point.value), 1);
-    const stepX = points.length > 1 ? (width - padding * 2) / (points.length - 1) : 0;
+type SavingsChartProps = {
+  data: DataPoint[];
+  currency?: string;
+};
 
-    const path = points
-      .map((point, index) => {
-        const x = padding + index * stepX;
-        const y = height - padding - (point.value / maxValue) * (height - padding * 2);
-        return `${index === 0 ? 'M' : 'L'}${x.toFixed(2)},${y.toFixed(2)}`;
-      })
-      .join(' ');
+function formatMoney(value: number, currency = 'EUR') {
+  try {
+    return new Intl.NumberFormat('fi-FI', {
+      style: 'currency',
+      currency,
+      maximumFractionDigits: value % 1 === 0 ? 0 : 2,
+    }).format(value);
+  } catch {
+    return `${value} ${currency}`;
+  }
+}
 
-    return { width, height, padding, path, maxValue };
-  }, [points]);
+export default function SavingsChart({ data, currency = 'EUR' }: SavingsChartProps) {
+  if (!data || data.length === 0) {
+    return (
+      <div className="rounded-[24px] border border-white/70 bg-white/70 p-5 text-sm text-slate-500">
+        No savings data yet.
+      </div>
+    );
+  }
 
-  if (!chart) return null;
+  const max = Math.max(...data.map((d) => d.savings));
+  const min = Math.min(...data.map((d) => d.savings));
+
+  const normalize = (value: number) => {
+    if (max === min) return 50;
+    return ((value - min) / (max - min)) * 100;
+  };
+
+  const points = data.map((d, i) => {
+    const x = (i / (data.length - 1)) * 100;
+    const y = 100 - normalize(d.savings);
+    return `${x},${y}`;
+  });
+
+  const path = `M ${points.join(' L ')}`;
 
   return (
-    <section className="card-surface dashboard-reveal p-4">
-      <h2 className="mb-2 text-base font-semibold text-primary">Savings over time</h2>
-      <svg viewBox={`0 0 ${chart.width} ${chart.height}`} className="w-full" role="img" aria-label="Savings trend chart">
-        <path d={chart.path} fill="none" stroke="rgba(18, 18, 18, 0.9)" strokeWidth="2.2" strokeLinecap="round" />
-      </svg>
-      <div className="mt-2 flex items-center justify-between gap-2">
-        {points.map((point) => (
-          <div key={`${point.label}-${point.value}`} className="min-w-0 text-center">
-            <p className="text-[11px] font-medium text-primary">${Math.round(point.value)}</p>
-            <p className="truncate text-[10px] text-secondary">{point.label}</p>
-          </div>
-        ))}
+    <div className="rounded-[28px] border border-white/70 bg-white/75 p-5 shadow-sm backdrop-blur-xl">
+      <div className="mb-4 flex items-center justify-between">
+        <div>
+          <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">
+            Savings over time
+          </p>
+          <h3 className="mt-1 text-base font-semibold text-slate-950">
+            Your savings growth
+          </h3>
+        </div>
+
+        <div className="text-sm text-slate-500">
+          {formatMoney(data[data.length - 1].savings, currency)}
+        </div>
       </div>
-    </section>
+
+      <div className="relative h-40 w-full">
+        {/* Glow background */}
+        <motion.div
+          className="absolute inset-0 rounded-2xl bg-white/50 blur-xl"
+          animate={{ opacity: [0.3, 0.6, 0.3] }}
+          transition={{ duration: 4, repeat: Infinity }}
+        />
+
+        <svg
+          viewBox="0 0 100 100"
+          preserveAspectRatio="none"
+          className="absolute inset-0 h-full w-full"
+        >
+          {/* Line */}
+          <motion.path
+            d={path}
+            fill="none"
+            stroke="rgba(15,23,42,0.8)"
+            strokeWidth="1.8"
+            initial={{ pathLength: 0 }}
+            animate={{ pathLength: 1 }}
+            transition={{ duration: 1.2, ease: 'easeOut' }}
+          />
+
+          {/* Area fill */}
+          <motion.path
+            d={`${path} L 100,100 L 0,100 Z`}
+            fill="rgba(15,23,42,0.06)"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            transition={{ delay: 0.3, duration: 0.6 }}
+          />
+        </svg>
+
+        {/* Points */}
+        {data.map((d, i) => {
+          const x = (i / (data.length - 1)) * 100;
+          const y = 100 - normalize(d.savings);
+
+          return (
+            <motion.div
+              key={i}
+              className="absolute h-2 w-2 rounded-full bg-slate-900"
+              style={{
+                left: `${x}%`,
+                top: `${y}%`,
+                transform: 'translate(-50%, -50%)',
+              }}
+              initial={{ scale: 0 }}
+              animate={{ scale: 1 }}
+              transition={{ delay: 0.4 + i * 0.05 }}
+            />
+          );
+        })}
+      </div>
+
+      {/* Labels */}
+      <div className="mt-3 flex justify-between text-xs text-slate-400">
+        <span>{data[0].date}</span>
+        <span>{data[data.length - 1].date}</span>
+      </div>
+    </div>
   );
 }
