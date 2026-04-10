@@ -53,6 +53,9 @@ export async function runResearchAgent(input: ResearchAgentInput): Promise<Resea
     role: item.role,
     content: item.content,
   }));
+  const toolResultKeys = Object.keys(input.execution.structuredData || {});
+  const environmentSummary = `gmailConnected=${input.context.environment.gmailConnected}, plan=${input.context.environment.productState.plan}`;
+  const topRecommendation = input.context.intelligence.recommendations[0];
 
   const modeHint =
     input.route.intent === 'coding'
@@ -92,6 +95,10 @@ Respond in ${responseLanguage}.`,
           content: `User request: ${message}
 Relevant memory: ${relevantMemories.length ? relevantMemories.join(' | ') : 'none'}
 Tool outputs present: ${input.execution.steps.length > 0 ? 'yes' : 'no'}
+Tool output keys: ${toolResultKeys.length ? toolResultKeys.join(', ') : 'none'}
+Top recommendation: ${topRecommendation ? `${topRecommendation.title} (${topRecommendation.priority})` : 'none'}
+Environment: ${environmentSummary}
+You must ground your answer in at least one of: memory, tool outputs, recommendation, or environment.
 If the request is ambiguous, ask one short clarifying question. Otherwise give a direct final answer.`,
         },
       ],
@@ -102,6 +109,14 @@ If the request is ambiguous, ask one short clarifying question. Otherwise give a
   } catch {
     // keep fallback draft
   }
+
+  const memoryUsed = relevantMemories.length > 0;
+  const toolResultUsed = toolResultKeys.length > 0;
+  const intelligenceUsed = Boolean(topRecommendation);
+
+  console.info('CONTEXT_MEMORY_USED', { memoryUsed, memoryCount: relevantMemories.length });
+  console.info('TOOL_RESULT_USED', { toolResultUsed, toolResultKeys });
+  console.info('INTELLIGENCE_USED', { intelligenceUsed, recommendationCount: input.context.intelligence.recommendations.length });
 
   const keyPoints = [
     `Intent: ${input.route.intent}`,
