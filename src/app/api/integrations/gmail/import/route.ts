@@ -122,6 +122,7 @@ export async function POST() {
     const aiSummary =
       analysis.summary ||
       `I analyzed ${emails.length} recent finance-related emails and detected ${incomingSignals.length} recurring payment signals.`;
+    const chatReadySummary = `I analyzed your recent emails and found ${incomingSignals.length} subscription or recurring payment signals across ${analysis.merchants.length} merchants.`;
 
     const currency = profile?.currency || incomingSignals.find((signal) => signal.currency)?.currency || 'USD';
     const savingsEstimate =
@@ -137,6 +138,7 @@ export async function POST() {
         last_synced_at: new Date().toISOString(),
         last_sync_emails_analyzed: emails.length,
         last_sync_subscriptions_found: incomingSignals.length,
+        chat_ready_summary: chatReadySummary,
         last_error: null,
       },
     };
@@ -168,6 +170,7 @@ export async function POST() {
         subscriptions_found: incomingSignals.length,
         trial_risks: analysis.trialRisks,
         savings_opportunities: analysis.savingsOpportunities,
+        chat_ready_summary: chatReadySummary,
         structured_data: {
           merchants: analysis.merchants,
           subscriptions: analysis.subscriptions,
@@ -193,7 +196,7 @@ export async function POST() {
       lastSyncedAt: nextLastAnalysis.gmail_integration.last_synced_at,
       emailsAnalyzed: emails.length,
       subscriptionsFound: incomingSignals.length,
-      summary: aiSummary,
+      summary: chatReadySummary,
     });
   } catch (error) {
     console.error('GMAIL_IMPORT_ERROR', error);
