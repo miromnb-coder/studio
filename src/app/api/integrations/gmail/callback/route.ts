@@ -55,17 +55,10 @@ async function writeOrThrow(
   }
 }
 
-function extractUserIdFromState(state: string): string | null {
-  const separatorIndex = state.indexOf(':');
-  if (separatorIndex <= 0) return null;
-  return state.slice(0, separatorIndex);
-}
-
 export async function GET(req: Request) {
   const requestUrl = new URL(req.url);
   const appOrigin = resolveAppOrigin(requestUrl);
   const code = requestUrl.searchParams.get('code');
-  const state = requestUrl.searchParams.get('state');
   const error = requestUrl.searchParams.get('error');
 
   const failRedirect = (reason: string, step?: string) => {
@@ -87,31 +80,30 @@ export async function GET(req: Request) {
     return failRedirect('oauth_error');
   }
 
-  if (!code || !state) {
+  if (!code) {
     const missingTarget = new URL('/profile', appOrigin);
     missingTarget.searchParams.set('gmail', 'missing_code');
     console.log('GMAIL_CALLBACK_REDIRECT', {
-      reason: 'missing_code_or_state',
+      reason: 'missing_code',
       redirect: missingTarget.pathname + missingTarget.search,
     });
     return NextResponse.redirect(missingTarget);
   }
 
   try {
-    const stateCookieValue = (await cookies()).get('gmail_oauth_state')?.value;
-    const userIdFromState = extractUserIdFromState(state);
+    const cookieStore = await cookies();
+    const localState = cookieStore.get('gmail_oauth_state')?.value;
+    const userId = cookieStore.get('gmail_oauth_user_id')?.value;
 
-    if (!stateCookieValue || stateCookieValue !== state || !userIdFromState) {
+    if (!localState || !userId) {
       const mismatchTarget = new URL('/profile', appOrigin);
       mismatchTarget.searchParams.set('gmail', 'state_mismatch');
       console.log('GMAIL_CALLBACK_REDIRECT', {
-        reason: 'state_mismatch',
+        reason: 'missing_local_oauth_cookie',
         redirect: mismatchTarget.pathname + mismatchTarget.search,
       });
       return NextResponse.redirect(mismatchTarget);
     }
-
-    const userId = userIdFromState;
 
     const supabase = await createSupabaseServerClient();
     const adminSupabase = createAdminClient();
@@ -245,8 +237,19 @@ export async function GET(req: Request) {
     });
 
     const response = NextResponse.redirect(successTarget);
+
     response.cookies.set({
       name: 'gmail_oauth_state',
+      value: '',
+      maxAge: 0,
+      path: '/',
+      httpOnly: true,
+      sameSite: 'lax',
+      secure: true,
+    });
+
+    response.cookies.set({
+      name: 'gmail_oauth_user_id',
       value: '',
       maxAge: 0,
       path: '/',
