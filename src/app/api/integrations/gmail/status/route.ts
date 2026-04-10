@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { createClient as createSupabaseServerClient } from '@/lib/supabase/server';
+import type { ConnectStatus } from '@/lib/integrations/gmail';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -28,7 +29,12 @@ export async function GET() {
     const gmail = asObject(lastAnalysis.gmail_integration);
 
     const connected = Boolean(gmail.access_token_encrypted);
-    const status = connected ? 'connected' : 'disconnected';
+    const storedStatus = String(gmail.status || '').toLowerCase();
+
+    let status: ConnectStatus = connected ? 'connected' : 'disconnected';
+    if (storedStatus === 'syncing') status = 'syncing';
+    if (storedStatus === 'error') status = 'error';
+    if (!connected && storedStatus === 'error') status = 'error';
 
     return NextResponse.json({
       status,

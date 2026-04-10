@@ -1,7 +1,7 @@
 import crypto from 'node:crypto';
 import { groq } from '@/ai/groq';
 
-export const GMAIL_FINANCE_QUERY = '("receipt" OR "invoice" OR "subscription" OR "payment" OR "trial")';
+export const GMAIL_FINANCE_QUERY = '("receipt" OR "invoice" OR "subscription" OR "payment" OR "trial" OR "renewal" OR "billed") newer_than:180d';
 
 export type ConnectStatus = 'disconnected' | 'connecting' | 'connected' | 'syncing' | 'error';
 
@@ -17,6 +17,7 @@ export interface ParsedFinancialEmail {
   sender: string;
   subject: string;
   snippet: string;
+  date: string | null;
 }
 
 export interface FinancialSubscriptionSignal {
@@ -47,12 +48,18 @@ interface GmailFinanceAnalysis {
   subscriptions: FinancialSubscriptionSignal[];
   recurringPayments: FinancialSubscriptionSignal[];
   merchants: string[];
+  trialRisks: string[];
+  savingsOpportunities: string[];
+  summary: string;
 }
 
 const DEFAULT_ANALYSIS: GmailFinanceAnalysis = {
   subscriptions: [],
   recurringPayments: [],
   merchants: [],
+  trialRisks: [],
+  savingsOpportunities: [],
+  summary: '',
 };
 
 function parseKeyMaterial(key: string): Buffer {
@@ -199,7 +206,8 @@ export function parseFinancialEmails(messages: GmailMessage[]): ParsedFinancialE
       const sender = extractHeader(message.payload, 'From');
       const subject = extractHeader(message.payload, 'Subject');
       const snippet = String(message.snippet || '').trim();
-      return { sender, subject, snippet };
+      const date = extractHeader(message.payload, 'Date') || null;
+      return { sender, subject, snippet, date };
     })
     .filter((email) => email.sender || email.subject || email.snippet)
     .slice(0, 100);
@@ -230,7 +238,7 @@ export async function fetchFinancialEmails(accessToken: string, maxResults = 100
   const details = await Promise.all(
     ids.slice(0, 100).map(async (id) => {
       const response = await fetch(
-        `https://gmail.googleapis.com/gmail/v1/users/me/messages/${id}?format=metadata&metadataHeaders=From&metadataHeaders=Subject`,
+        `https://gmail.googleapis.com/gmail/v1/users/me/messages/${id}?format=metadata&metadataHeaders=From&metadataHeaders=Subject&metadataHeaders=Date`,
         {
           headers: {
             Authorization: `Bearer ${accessToken}`,
@@ -291,7 +299,7 @@ export async function analyzeFinancialEmailsWithAI(emails: ParsedFinancialEmail[
         {
           role: 'system',
           content:
-            'You are a finance extraction system. Extract subscriptions, recurring payments, amounts, and merchants from sender, subject, and snippet only. Never infer from hidden email body. Return strict JSON with keys: subscriptions, recurringPayments, merchants. Each item in subscriptions/recurringPayments should contain merchant, amount, currency, period, category, confidence.',
+            'You are a finance extraction system. Extract subscriptions, recurring payments, probable merchants, trial/renewal risks, and savings opportunities from sender, subject, snippet, and date only. Never infer from hidden email body. Return strict JSON with keys: subscriptions, recurringPayments, merchants, trialRisks, savingsOpportunities, summary. Each item in subscriptions/recurringPayments should contain merchant, amount, currency, period, category, confidence.',
         },
         {
           role: 'user',
@@ -304,6 +312,9 @@ export async function analyzeFinancialEmailsWithAI(emails: ParsedFinancialEmail[
       subscriptions?: Array<Record<string, unknown>>;
       recurringPayments?: Array<Record<string, unknown>>;
       merchants?: unknown;
+      trialRisks?: unknown;
+      savingsOpportunities?: unknown;
+      summary?: unknown;
     };
 
     const subscriptions = (parsed.subscriptions || [])
@@ -326,7 +337,20 @@ export async function analyzeFinancialEmailsWithAI(emails: ParsedFinancialEmail[
       ),
     );
 
-    return { subscriptions, recurringPayments, merchants };
+    const trialRisks = Array.isArray(parsed.trialRisks) ? parsed.trialRisks.map((item) => String(item || '').trim()).filter(Boolean).slice(0, 8) : [];
+
+    const savingsOpportunities = Array.isArray(parsed.savingsOpportunities)
+      ? parsed.savingsOpportunities.map((item) => String(item || '').trim()).filter(Boolean).slice(0, 8)
+      : [];
+
+    return {
+      subscriptions,
+      recurringPayments,
+      merchants,
+      trialRisks,
+      savingsOpportunities,
+      summary: String(parsed.summary || '').trim(),
+    };
   } catch {
     return DEFAULT_ANALYSIS;
   }

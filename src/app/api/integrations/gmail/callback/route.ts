@@ -17,11 +17,11 @@ export async function GET(req: Request) {
   const error = requestUrl.searchParams.get('error');
 
   if (error) {
-    return NextResponse.redirect(new URL('/settings?gmail=error', requestUrl.origin));
+    return NextResponse.redirect(new URL('/profile?gmail=error', requestUrl.origin));
   }
 
   if (!code || !state) {
-    return NextResponse.redirect(new URL('/settings?gmail=missing_code', requestUrl.origin));
+    return NextResponse.redirect(new URL('/profile?gmail=missing_code', requestUrl.origin));
   }
 
   try {
@@ -35,7 +35,7 @@ export async function GET(req: Request) {
     const stateCookieValue = (await cookies()).get('gmail_oauth_state')?.value;
 
     if (!stateCookieValue || stateCookieValue !== state || !state.startsWith(`${userId}:`)) {
-      return NextResponse.redirect(new URL('/settings?gmail=state_mismatch', requestUrl.origin));
+      return NextResponse.redirect(new URL('/profile?gmail=state_mismatch', requestUrl.origin));
     }
 
     const redirectUri =
@@ -77,7 +77,7 @@ export async function GET(req: Request) {
       { onConflict: 'user_id' },
     );
 
-    const response = NextResponse.redirect(new URL('/settings?gmail=connected', requestUrl.origin));
+    const response = NextResponse.redirect(new URL('/profile?gmail=connected', requestUrl.origin));
     response.cookies.set({
       name: 'gmail_oauth_state',
       value: '',
@@ -91,6 +91,6 @@ export async function GET(req: Request) {
     return response;
   } catch (callbackError) {
     console.error('GMAIL_CALLBACK_ERROR', callbackError);
-    return NextResponse.redirect(new URL('/settings?gmail=error', requestUrl.origin));
+    return NextResponse.redirect(new URL('/profile?gmail=error', requestUrl.origin));
   }
 }
