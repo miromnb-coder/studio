@@ -24,10 +24,19 @@ export async function GET() {
       .maybeSingle();
     const gmailConnected = Boolean(profile?.gmail_connected);
 
-    return NextResponse.json({
-      signed_in_with_google: signedInWithGoogle,
-      gmail_connected: gmailConnected,
-    });
+    return NextResponse.json(
+      {
+        signed_in_with_google: signedInWithGoogle,
+        gmail_connected: gmailConnected,
+      },
+      {
+        headers: {
+          'Cache-Control': 'no-store, no-cache, must-revalidate, proxy-revalidate',
+          Pragma: 'no-cache',
+          Expires: '0',
+        },
+      },
+    );
   } catch (error) {
     console.error('AUTH_STATUS_ERROR', error);
     return NextResponse.json({ error: 'AUTH_STATUS_FAILED' }, { status: 500 });

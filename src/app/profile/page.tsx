@@ -1,8 +1,8 @@
 'use client';
 
-import { FormEvent, useEffect, useMemo, useState } from 'react';
+import { FormEvent, useCallback, useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { createClient } from '@/lib/supabase/client';
 import { toFriendlyAuthMessage } from '@/lib/auth/messages';
 import { useAppStore } from '../store/app-store';
@@ -11,6 +11,7 @@ import { GmailIntegrationCard } from '../components/profile/GmailIntegrationCard
 
 export default function ProfilePage() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const supabase = useMemo(() => createClient(), []);
 
   const user = useAppStore((s) => s.user);
@@ -26,6 +27,22 @@ export default function ProfilePage() {
   const [signedInWithGoogle, setSignedInWithGoogle] = useState(false);
   const [gmailConnected, setGmailConnected] = useState(false);
   const { plan, usage } = useUserEntitlements();
+
+  const loadAuthStatus = useCallback(async () => {
+    try {
+      const authStatusResponse = await fetch(`/api/auth/status?_ts=${Date.now()}`, { cache: 'no-store' });
+      if (authStatusResponse.ok) {
+        const payload = (await authStatusResponse.json()) as {
+          signed_in_with_google?: boolean;
+          gmail_connected?: boolean;
+        };
+        setSignedInWithGoogle(Boolean(payload.signed_in_with_google));
+        setGmailConnected(Boolean(payload.gmail_connected));
+      }
+    } catch (statusError) {
+      console.error('AUTH_STATUS_LOAD_ERROR', statusError);
+    }
+  }, []);
 
   useEffect(() => {
     const loadProfile = async () => {
@@ -52,23 +69,35 @@ export default function ProfilePage() {
       setEmail(nextEmail);
       setUser({ id: authUser.id, email: nextEmail, name: nextName });
 
-      try {
-        const authStatusResponse = await fetch('/api/auth/status', { cache: 'no-store' });
-        if (authStatusResponse.ok) {
-          const payload = (await authStatusResponse.json()) as {
-            signed_in_with_google?: boolean;
-            gmail_connected?: boolean;
-          };
-          setSignedInWithGoogle(Boolean(payload.signed_in_with_google));
-          setGmailConnected(Boolean(payload.gmail_connected));
-        }
-      } catch (statusError) {
-        console.error('AUTH_STATUS_LOAD_ERROR', statusError);
-      }
+      await loadAuthStatus();
     };
 
     void loadProfile();
-  }, [supabase, setUser, clearUser, router]);
+  }, [supabase, setUser, clearUser, router, loadAuthStatus]);
+
+  useEffect(() => {
+    const gmail = searchParams.get('gmail');
+    if (!gmail) return;
+
+    if (gmail === 'connected') {
+      setStatus('Gmail connected successfully.');
+      setError(null);
+      void loadAuthStatus();
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(new CustomEvent('gmail:callback-complete', { detail: { status: 'connected' } }));
+      }
+      return;
+    }
+
+    const reason = searchParams.get('reason');
+    const step = searchParams.get('step');
+    const failureDetails = reason === 'write_failed' && step ? ` (step: ${step})` : '';
+    setStatus(null);
+    setError(`Gmail connection failed. Please try again.${failureDetails}`);
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('gmail:callback-complete', { detail: { status: 'error', reason, step } }));
+    }
+  }, [searchParams, loadAuthStatus]);
 
   const saveProfile = async (event: FormEvent) => {
     event.preventDefault();
@@ -190,7 +219,7 @@ export default function ProfilePage() {
           </Link>
         </div>
 
-        <GmailIntegrationCard />
+        <GmailIntegrationCard gmailCallbackState={searchParams.get('gmail')} />
 
         <button type="button" className="btn-secondary tap-feedback mt-3 w-full px-4 py-2 text-sm" onClick={logout} disabled={isSigningOut}>
           {isSigningOut ? 'Signing out…' : 'Sign out'}

@@ -19,11 +19,18 @@ function toObject(value: unknown): Record<string, unknown> {
 
 async function writeOrThrow(
   label: string,
-  operation: () => Promise<{ error: unknown }>,
+  operation: () => Promise<{ error: unknown; data?: unknown; status?: number; statusText?: string }>,
   payload: Record<string, unknown>,
 ) {
-  console.log('Saving to Supabase:', { label, data: payload });
+  console.log('GMAIL_CALLBACK_WRITE_START', { label, payload });
   const result = await operation();
+  console.log('GMAIL_CALLBACK_WRITE_RESULT', {
+    label,
+    status: result.status,
+    statusText: result.statusText,
+    hasData: result.data !== undefined && result.data !== null,
+    error: result.error || null,
+  });
   if (result.error) {
     console.error(`${label}_WRITE_ERROR`, result.error);
     throw result.error;
@@ -36,13 +43,26 @@ export async function GET(req: Request) {
   const code = requestUrl.searchParams.get('code');
   const state = requestUrl.searchParams.get('state');
   const error = requestUrl.searchParams.get('error');
+  const failRedirect = (reason: string, step?: string) => {
+    const target = new URL('/profile', appOrigin);
+    target.searchParams.set('gmail', 'error');
+    target.searchParams.set('reason', reason);
+    if (step) {
+      target.searchParams.set('step', step);
+    }
+    console.log('GMAIL_CALLBACK_REDIRECT', { reason, step: step || null, redirect: target.pathname + target.search });
+    return NextResponse.redirect(target);
+  };
 
   if (error) {
-    return NextResponse.redirect(new URL('/profile?gmail=error', appOrigin));
+    return failRedirect('oauth_error');
   }
 
   if (!code || !state) {
-    return NextResponse.redirect(new URL('/profile?gmail=missing_code', appOrigin));
+    const missingTarget = new URL('/profile', appOrigin);
+    missingTarget.searchParams.set('gmail', 'missing_code');
+    console.log('GMAIL_CALLBACK_REDIRECT', { reason: 'missing_code_or_state', redirect: missingTarget.pathname + missingTarget.search });
+    return NextResponse.redirect(missingTarget);
   }
 
   try {
@@ -50,13 +70,18 @@ export async function GET(req: Request) {
     const { data: auth } = await supabase.auth.getUser();
     const userId = auth.user?.id;
     if (!userId) {
-      return NextResponse.redirect(new URL('/login', appOrigin));
+      const loginTarget = new URL('/login', appOrigin);
+      console.log('GMAIL_CALLBACK_REDIRECT', { reason: 'auth_required', redirect: loginTarget.pathname + loginTarget.search });
+      return NextResponse.redirect(loginTarget);
     }
 
     const stateCookieValue = (await cookies()).get('gmail_oauth_state')?.value;
 
     if (!stateCookieValue || stateCookieValue !== state || !state.startsWith(`${userId}:`)) {
-      return NextResponse.redirect(new URL('/profile?gmail=state_mismatch', appOrigin));
+      const mismatchTarget = new URL('/profile', appOrigin);
+      mismatchTarget.searchParams.set('gmail', 'state_mismatch');
+      console.log('GMAIL_CALLBACK_REDIRECT', { reason: 'state_mismatch', redirect: mismatchTarget.pathname + mismatchTarget.search });
+      return NextResponse.redirect(mismatchTarget);
     }
 
     let accessToken: string | null = null;
@@ -142,11 +167,16 @@ export async function GET(req: Request) {
       updated_at: new Date().toISOString(),
     };
 
-    await writeOrThrow(
-      'finance_profiles_gmail_connected',
-      () => supabase.from('finance_profiles').upsert(financeProfilePayload, { onConflict: 'user_id' }),
-      financeProfilePayload,
-    );
+    try {
+      await writeOrThrow(
+        'finance_profiles_gmail_connected',
+        () => supabase.from('finance_profiles').upsert(financeProfilePayload, { onConflict: 'user_id' }),
+        financeProfilePayload,
+      );
+    } catch (errorAtFinanceWrite) {
+      console.error('GMAIL_CALLBACK_FAILURE_POINT', { step: 'finance_profiles_gmail_connected', error: errorAtFinanceWrite });
+      return failRedirect('write_failed', 'finance_profiles_gmail_connected');
+    }
 
     const profilePayload = {
       id: userId,
@@ -155,13 +185,20 @@ export async function GET(req: Request) {
       updated_at: connectedAt,
     };
 
-    await writeOrThrow(
-      'profiles_gmail_connected',
-      () => supabase.from('profiles').upsert(profilePayload, { onConflict: 'id' }),
-      profilePayload,
-    );
+    try {
+      await writeOrThrow(
+        'profiles_gmail_connected',
+        () => supabase.from('profiles').upsert(profilePayload, { onConflict: 'id' }),
+        profilePayload,
+      );
+    } catch (errorAtProfileWrite) {
+      console.error('GMAIL_CALLBACK_FAILURE_POINT', { step: 'profiles_gmail_connected', error: errorAtProfileWrite });
+      return failRedirect('write_failed', 'profiles_gmail_connected');
+    }
 
-    const response = NextResponse.redirect(new URL('/profile?gmail=connected', appOrigin));
+    const successTarget = new URL('/profile?gmail=connected', appOrigin);
+    console.log('GMAIL_CALLBACK_REDIRECT', { reason: 'connected', redirect: successTarget.pathname + successTarget.search });
+    const response = NextResponse.redirect(successTarget);
     response.cookies.set({
       name: 'gmail_oauth_state',
       value: '',
@@ -175,6 +212,6 @@ export async function GET(req: Request) {
     return response;
   } catch (callbackError) {
     console.error('GMAIL_CALLBACK_ERROR', callbackError);
-    return NextResponse.redirect(new URL('/profile?gmail=error', appOrigin));
+    return failRedirect('callback_exception');
   }
 }
