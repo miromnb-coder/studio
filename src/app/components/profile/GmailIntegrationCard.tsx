@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
 
-export type GmailIntegrationStatus = 'disconnected' | 'connected' | 'syncing' | 'error';
+export type GmailIntegrationStatus = 'disconnected' | 'connecting' | 'connected' | 'syncing' | 'error';
 
 type StatusPayload = {
   status?: GmailIntegrationStatus;
@@ -67,6 +67,7 @@ export function GmailIntegrationCard() {
 
   const connect = () => {
     setIsConnecting(true);
+    setStatus('connecting');
     setErrorMessage(null);
     window.location.href = '/api/integrations/gmail/connect';
   };
@@ -139,6 +140,7 @@ export function GmailIntegrationCard() {
 
   const statusLabel = useMemo(() => {
     if (loadingStatus) return 'Loading status…';
+    if (status === 'connecting') return 'Connecting…';
     if (status === 'syncing') return 'Syncing…';
     if (status === 'connected') return 'Connected';
     if (status === 'error') return 'Error';
@@ -167,7 +169,7 @@ export function GmailIntegrationCard() {
         {errorMessage ? <p className="mt-3 rounded-lg border border-[#dfc9c9] bg-[#f8eded] px-3 py-2 text-xs text-[#6e3030]">{errorMessage}</p> : null}
 
         <div className="mt-3 flex flex-wrap gap-2">
-          {status === 'disconnected' || status === 'error' ? (
+          {status === 'disconnected' || status === 'error' || status === 'connecting' ? (
             <button
               type="button"
               onClick={connect}

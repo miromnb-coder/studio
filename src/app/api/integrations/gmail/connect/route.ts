@@ -2,6 +2,7 @@ import crypto from 'node:crypto';
 import { NextResponse } from 'next/server';
 import { createClient as createSupabaseServerClient } from '@/lib/supabase/server';
 import { GMAIL_READONLY_SCOPE } from '@/lib/integrations/gmail';
+import { resolveAppOrigin } from '@/lib/auth/redirects';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -20,7 +21,8 @@ export async function GET(req: Request) {
     const state = `${userId}:${stateNonce}`;
 
     const requestUrl = new URL(req.url);
-    const redirectTo = `${requestUrl.origin}/api/integrations/gmail/callback`;
+    const appOrigin = resolveAppOrigin(requestUrl);
+    const redirectTo = `${appOrigin}/api/integrations/gmail/callback`;
 
     const { data, error } = await supabase.auth.signInWithOAuth({
       provider: 'google',

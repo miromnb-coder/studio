@@ -23,6 +23,8 @@ export default function ProfilePage() {
   const [error, setError] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
   const [isSigningOut, setIsSigningOut] = useState(false);
+  const [signedInWithGoogle, setSignedInWithGoogle] = useState(false);
+  const [gmailConnected, setGmailConnected] = useState(false);
   const { plan, usage } = useUserEntitlements();
 
   useEffect(() => {
@@ -49,6 +51,20 @@ export default function ProfilePage() {
       setFullName(nextName);
       setEmail(nextEmail);
       setUser({ id: authUser.id, email: nextEmail, name: nextName });
+
+      try {
+        const authStatusResponse = await fetch('/api/auth/status', { cache: 'no-store' });
+        if (authStatusResponse.ok) {
+          const payload = (await authStatusResponse.json()) as {
+            signed_in_with_google?: boolean;
+            gmail_connected?: boolean;
+          };
+          setSignedInWithGoogle(Boolean(payload.signed_in_with_google));
+          setGmailConnected(Boolean(payload.gmail_connected));
+        }
+      } catch (statusError) {
+        console.error('AUTH_STATUS_LOAD_ERROR', statusError);
+      }
     };
 
     void loadProfile();
@@ -158,6 +174,12 @@ export default function ProfilePage() {
             {isSaving ? 'Saving…' : 'Save profile'}
           </button>
         </form>
+
+        <div className="mt-4 rounded-xl border border-black/10 bg-[#f2f2f2] p-4 text-sm">
+          <p className="font-medium text-primary">Connection status</p>
+          <p className="mt-1 text-secondary">Google sign-in: {signedInWithGoogle ? 'Connected' : 'Not connected'}</p>
+          <p className="text-secondary">Gmail access: {gmailConnected ? 'Connected' : 'Not connected'}</p>
+        </div>
 
         <div className="mt-4 rounded-xl border border-black/10 bg-[#f2f2f2] p-4 text-sm">
           <p className="font-medium text-primary">Subscription</p>
