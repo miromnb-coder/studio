@@ -79,7 +79,7 @@ export default function ChatPage() {
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   const activeAssistantMessage = [...messages].reverse().find((m) => m.role === 'assistant');
-  const showThinkingSurface = isAgentResponding && !!activeAssistantMessage;
+  const showThinkingSurface = isAgentResponding;
   const empty = useMemo(() => messages.length === 0, [messages]);
 
   const derivedExecutionSteps = useMemo<ExecutionStep[]>(() => {
@@ -361,7 +361,9 @@ export default function ChatPage() {
       <section ref={listRef} className="relative z-10 max-h-[calc(100vh-340px)] space-y-4 overflow-y-auto pb-3 pr-1">
         {empty ? <div className="px-1 py-6 text-sm text-secondary">Assign a task to activate Kivo. The workspace will track analysis and execution automatically.</div> : null}
 
-        {messages.map((message) => (
+        {messages
+          .filter((message) => !(message.role === 'assistant' && message.isStreaming && isAgentResponding))
+          .map((message) => (
           <motion.div
             key={message.id}
             initial={{ opacity: 0, y: 8 }}
