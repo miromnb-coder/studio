@@ -8,7 +8,7 @@ type DataPoint = {
 };
 
 type SavingsChartProps = {
-  data: DataPoint[];
+  points: DataPoint[];
   currency?: string;
 };
 
@@ -24,8 +24,8 @@ function formatMoney(value: number, currency = 'EUR') {
   }
 }
 
-export default function SavingsChart({ data, currency = 'EUR' }: SavingsChartProps) {
-  if (!data || data.length === 0) {
+export function SavingsChart({ points, currency = 'EUR' }: SavingsChartProps) {
+  if (!points || points.length === 0) {
     return (
       <div className="rounded-[24px] border border-white/70 bg-white/70 p-5 text-sm text-slate-500">
         No savings data yet.
@@ -33,21 +33,21 @@ export default function SavingsChart({ data, currency = 'EUR' }: SavingsChartPro
     );
   }
 
-  const max = Math.max(...data.map((d) => d.savings));
-  const min = Math.min(...data.map((d) => d.savings));
+  const max = Math.max(...points.map((d) => d.savings));
+  const min = Math.min(...points.map((d) => d.savings));
 
   const normalize = (value: number) => {
     if (max === min) return 50;
     return ((value - min) / (max - min)) * 100;
   };
 
-  const points = data.map((d, i) => {
-    const x = (i / (data.length - 1)) * 100;
+  const chartPoints = points.map((d, i) => {
+    const x = points.length === 1 ? 50 : (i / (points.length - 1)) * 100;
     const y = 100 - normalize(d.savings);
     return `${x},${y}`;
   });
 
-  const path = `M ${points.join(' L ')}`;
+  const path = `M ${chartPoints.join(' L ')}`;
 
   return (
     <div className="rounded-[28px] border border-white/70 bg-white/75 p-5 shadow-sm backdrop-blur-xl">
@@ -62,7 +62,7 @@ export default function SavingsChart({ data, currency = 'EUR' }: SavingsChartPro
         </div>
 
         <div className="text-sm text-slate-500">
-          {formatMoney(data[data.length - 1].savings, currency)}
+          {formatMoney(points[points.length - 1].savings, currency)}
         </div>
       </div>
 
@@ -101,8 +101,8 @@ export default function SavingsChart({ data, currency = 'EUR' }: SavingsChartPro
         </svg>
 
         {/* Points */}
-        {data.map((d, i) => {
-          const x = (i / (data.length - 1)) * 100;
+        {points.map((d, i) => {
+          const x = points.length === 1 ? 50 : (i / (points.length - 1)) * 100;
           const y = 100 - normalize(d.savings);
 
           return (
@@ -124,8 +124,8 @@ export default function SavingsChart({ data, currency = 'EUR' }: SavingsChartPro
 
       {/* Labels */}
       <div className="mt-3 flex justify-between text-xs text-slate-400">
-        <span>{data[0].date}</span>
-        <span>{data[data.length - 1].date}</span>
+        <span>{points[0].date}</span>
+        <span>{points[points.length - 1].date}</span>
       </div>
     </div>
   );
