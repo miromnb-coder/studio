@@ -56,7 +56,7 @@ function parseActionType(raw: unknown): FinanceActionType | null {
 
 function shouldUseOperatorAlertsContext(input: string): boolean {
   const normalized = input.toLowerCase();
-  return [
+  const explicitPhrases = [
     'what should i do next',
     'any issues',
     'anything important',
@@ -65,11 +65,19 @@ function shouldUseOperatorAlertsContext(input: string): boolean {
     'what changed',
     'what should i cancel',
     'deserves attention',
-    'subscription',
-    'billing',
-    'spend',
-    'finance',
-  ].some((phrase) => normalized.includes(phrase));
+    'mitä minun pitäisi tehdä seuraavaksi',
+    'mita minun pitaisi tehda seuraavaksi',
+    'onko jotain tärkeää',
+    'onko jotain tarkeaa',
+    'miten voin säästää',
+    'miten voin saastaa',
+    'mikä näyttää riskiltä',
+    'mika nayttaa riskilta',
+    'mitä minun kannattaa peruuttaa',
+    'mita minun kannattaa peruuttaa',
+  ];
+  const semanticSignals = /\b(subscription|billing|spend|finance|save|cancel|risk|priority|attention|raha|sääst|saast|tilaus|lasku|kulu|talous)\b/i;
+  return explicitPhrases.some((phrase) => normalized.includes(phrase)) || semanticSignals.test(normalized);
 }
 
 type OperatorAlertContextRow = {
@@ -106,7 +114,7 @@ function asArrayOfObjects(value: unknown): Array<Record<string, unknown>> {
 }
 
 function inferMemorySummaryType(input: string): 'finance' | 'general' {
-  return /\b(save|saving|budget|subscription|bill|expense|debt|money|finance|monthly|cost)\b/i.test(input)
+  return /\b(save|saving|budget|subscription|bill|expense|debt|money|finance|monthly|cost|raha|sääst|saast|budjet|tilaus|lasku|kulu|talous|ahorro|dinero|gasto|suscrip|factura)\b/i.test(input)
     ? 'finance'
     : 'general';
 }
