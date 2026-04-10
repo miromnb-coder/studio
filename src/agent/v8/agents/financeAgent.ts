@@ -26,23 +26,32 @@ function formatMoney(value: number): string {
   return Number.isFinite(value) ? `$${value.toFixed(2)}` : '$0.00';
 }
 
+function safeLower(text: unknown): string {
+  return String(text || '').toLowerCase();
+}
+
 export async function runFinanceAgent(input: FinanceAgentInput): Promise<FinanceAgentOutput> {
   const financeData = asRecord(input.execution.structuredData.finance_read);
   const profile = asRecord(financeData.profile);
   const recurringSignals = Array.isArray(financeData.recurringSignals) ? financeData.recurringSignals : [];
   const gmailData = asRecord(input.execution.structuredData.gmail_fetch);
-  const activeSubscriptionsRaw = profile.active_subscriptions;
+  const recommendations = resolveRecommendations(input).slice(0, 3);
 
+  const activeSubscriptionsRaw = profile.active_subscriptions;
   const activeSubscriptions = Array.isArray(activeSubscriptionsRaw)
     ? activeSubscriptionsRaw.length
     : Number(activeSubscriptionsRaw || 0);
   const totalMonthlyCost = Number(profile.total_monthly_cost || 0);
   const estimatedSavings = Number(profile.estimated_savings || 0);
-  const recommendations = resolveRecommendations(input).slice(0, 3);
-  const memoryHighlights = (input.context.memory.relevantMemories || [])
-    .map((item) => item.content)
-    .slice(0, 2);
-  const userFocusOnSavings = memoryHighlights.some((item) => /\b(save|saving|budget|cut costs|subscriptions?|sääst|saast|raha|tilaus|ahorro|épargne|epargne)\b/i.test(item));
+
+  const relevantMemories = (input.context.memory.relevantMemories || []).map((item) => item.content).filter(Boolean);
+  const memoryHighlights = relevantMemories.slice(0, 2);
+  const memorySummary = String(input.context.memory.summary || '').trim();
+
+  const userFocusOnSavings = [...relevantMemories, memorySummary].some((item) =>
+    /\b(save|saving|budget|cut costs|subscriptions?|sääst|saast|raha|tilaus|ahorro|épargne|epargne)\b/i.test(item),
+  );
+
   const gmailConnected = input.context.environment.gmailConnected;
   const gmailSummary = String(gmailData.summary || '').trim();
   const gmailSavingsOpportunities = Array.isArray(gmailData.savingsOpportunities)
@@ -52,6 +61,9 @@ export async function runFinanceAgent(input: FinanceAgentInput): Promise<Finance
     ? gmailData.trialRisks.map((item) => String(item || '').trim()).filter(Boolean)
     : [];
   const emailSubscriptionsFound = Number(gmailData.subscriptionsFound || 0);
+
+  const toolResultKeys = Object.keys(input.execution.structuredData || {});
+  const toolsUsed = input.execution.steps.filter((s) => s.status === 'completed').map((s) => s.tool);
 
   const findings = [
     activeSubscriptions > 0
@@ -67,7 +79,7 @@ export async function runFinanceAgent(input: FinanceAgentInput): Promise<Finance
 
   if (gmailData.connected) {
     findings.push(
-      `Gmail was used for this request${recurringSignals.length ? ` and surfaced ${recurringSignals.length} recurring signals` : ''}.`,
+      `Gmail tool result used${recurringSignals.length ? ` with ${recurringSignals.length} recurring signals` : ''}.`,
     );
   } else if (!gmailConnected) {
     findings.push('Gmail is not connected in the current environment.');
@@ -77,63 +89,101 @@ export async function runFinanceAgent(input: FinanceAgentInput): Promise<Finance
     findings.push(`Generated ${recommendations.length} ranked recommendations.`);
   }
 
-  const message = input.context.user.message.toLowerCase();
+  const message = safeLower(input.context.user.message);
   const asksTotal = /\b(total|monthly|spend|cost|amount|rahaa|kulutus|kulut|kuukaudessa|kokonais|gasto|mensual)\b/.test(message);
   const asksCount = /\b(how many|count|number of|kuinka monta|montako|määrä|maara|cuánt|cuant)\b/.test(message);
   const asksSavings = /\b(save|savings|reduce|cut|sääst|saast|säästö|saasto|halvem|ahorr|épargn|epargn)\b/.test(message);
   const asksNextAction = /\b(next|priority|what should i do|best action|deserves attention|mitä minun pitäisi tehdä|mita minun pitaisi tehda|seuraavaksi|kannattaa|que debo hacer|prochaine action)\b/.test(message);
   const asksEmailCheck = /\b(email|gmail|inbox|mail|sähköposti|sahkoposti|posti|correo|courriel)\b/.test(message);
 
-  let answerDraft = '';
-  if ((asksSavings || asksNextAction) && asksEmailCheck && gmailData.connected) {
-    const subscriptionContext =
-      emailSubscriptionsFound > 0
-        ? `I found ${emailSubscriptionsFound} subscription signals in your email metadata.`
-        : 'I checked your email metadata for recurring charges.';
-    const topEmailOpportunity = gmailSavingsOpportunities[0] || '';
-    const trialRisk = gmailTrialRisks[0] || '';
-    const recommendationHint = recommendations.length ? `Top recommendation: ${recommendations[0].title}.` : '';
-    answerDraft = `${subscriptionContext} ${gmailSummary || ''} ${topEmailOpportunity ? `Savings opportunity: ${topEmailOpportunity}.` : ''} ${trialRisk ? `Watch out for: ${trialRisk}.` : ''} ${recommendationHint}`.trim();
-  } else if (asksNextAction && recommendations.length) {
-    const [first] = recommendations;
-    const topImpact = asRecord(first.estimated_impact);
-    const monthlySavings = Number(topImpact.monthly_savings || 0);
-    const actions = Array.isArray(first.suggested_actions) ? first.suggested_actions.slice(0, 2).join(' ') : '';
-    answerDraft = `${first.title}. ${first.summary} ${monthlySavings > 0 ? `Estimated impact: ${formatMoney(monthlySavings)}/month.` : ''} ${actions}`.trim();
-  } else if (asksCount && activeSubscriptions > 0) {
-    answerDraft = `You currently have ${activeSubscriptions} active subscriptions.`;
-  } else if (asksTotal && totalMonthlyCost > 0) {
-    answerDraft = `Your recurring monthly spend is about ${formatMoney(totalMonthlyCost)}.`;
-  } else if (asksSavings && recommendations.length) {
-    const savingsCandidates = recommendations
-      .map((item) => Number(asRecord(item.estimated_impact).monthly_savings || 0))
-      .filter((value) => value > 0);
-    const topSavings = Math.max(...savingsCandidates, estimatedSavings, 0);
-    answerDraft = topSavings > 0
-      ? `A realistic first savings target is about ${formatMoney(topSavings)}/month by addressing your highest-priority recommendation.`
-      : 'I found savings opportunities, but none have a reliable numeric estimate yet.';
-  } else if (activeSubscriptions > 0 || totalMonthlyCost > 0) {
-    answerDraft = `You have ${activeSubscriptions || 'an unknown number of'} subscriptions with about ${formatMoney(totalMonthlyCost)} in monthly recurring spend.`;
-  } else {
-    answerDraft = 'I do not have enough finance data yet to answer precisely. Ask me to analyze subscriptions or monthly recurring spend.';
-  }
+  const topRecommendation = recommendations[0] || null;
+  const topRecRecord = asRecord(topRecommendation);
+  const topRecImpact = Number(asRecord(topRecRecord.estimated_impact).monthly_savings || 0);
+  const topRecTitle = String(topRecRecord.title || '').trim();
+  const topRecSummary = String(topRecRecord.summary || '').trim();
+
+  const weightedSignals = [
+    asksNextAction ? 'asks_next_action' : '',
+    asksSavings ? 'asks_savings' : '',
+    asksEmailCheck && gmailData.connected ? 'gmail_tool_available' : '',
+    topRecTitle ? 'has_recommendation' : '',
+    activeSubscriptions > 0 ? 'has_subscription_count' : '',
+    totalMonthlyCost > 0 ? 'has_monthly_cost' : '',
+    userFocusOnSavings ? 'memory_savings_preference' : '',
+  ].filter(Boolean);
+
+  const responseParts: string[] = [];
 
   if (userFocusOnSavings) {
-    answerDraft = `Since you’re focused on saving money, ${answerDraft.charAt(0).toLowerCase()}${answerDraft.slice(1)}`;
+    responseParts.push('Since your memory profile indicates you prefer saving money, prioritize actions that reduce recurring costs first.');
+  } else if (memoryHighlights.length) {
+    responseParts.push(`From your memory context: ${memoryHighlights[0]}.`);
   }
 
-  if (asksEmailCheck && !gmailData.connected && gmailConnected) {
-    answerDraft += ' I could not complete a live Gmail fetch this turn, so I used your latest synced Gmail finance summary.';
+  if (asksCount && activeSubscriptions > 0) {
+    responseParts.push(`You currently have ${activeSubscriptions} active subscriptions.`);
+  }
+  if (asksTotal && totalMonthlyCost > 0) {
+    responseParts.push(`Your recurring monthly spend is about ${formatMoney(totalMonthlyCost)}.`);
   }
 
-  if (recommendations.length && !asksNextAction) {
-    const next = recommendations[0];
-    answerDraft += ` Next best action: ${next.title}.`;
+  if ((asksSavings || asksNextAction || responseParts.length === 0) && topRecTitle) {
+    responseParts.push(
+      `${topRecTitle}${topRecSummary ? ` — ${topRecSummary}` : ''}${topRecImpact > 0 ? ` Estimated impact: ${formatMoney(topRecImpact)}/month.` : '.'}`,
+    );
   }
+
+  if (asksEmailCheck || asksSavings || asksNextAction) {
+    if (gmailData.connected) {
+      const emailInsight = emailSubscriptionsFound > 0
+        ? `Gmail tool results found ${emailSubscriptionsFound} subscription-related email signals.`
+        : 'Gmail tool executed, but did not return a strong subscription count signal.';
+      responseParts.push(emailInsight);
+
+      if (gmailSummary) responseParts.push(`Email summary: ${gmailSummary}`);
+      if (gmailSavingsOpportunities[0]) responseParts.push(`Top Gmail savings opportunity: ${gmailSavingsOpportunities[0]}.`);
+      if (gmailTrialRisks[0]) responseParts.push(`Trial risk to review: ${gmailTrialRisks[0]}.`);
+    } else if (gmailConnected) {
+      responseParts.push('Gmail is connected in your environment, but no fresh gmail_fetch result was returned on this turn.');
+    } else {
+      responseParts.push('Gmail is not connected in your current environment, so recommendations are based on available finance memory and profile data.');
+    }
+  }
+
+  if (!responseParts.length) {
+    responseParts.push('I do not have enough finance data yet to answer precisely. Ask me to analyze subscriptions or monthly recurring spend.');
+  }
+
+  const answerDraft = responseParts.join(' ').replace(/\s{2,}/g, ' ').trim();
+
+  const memoryUsed = userFocusOnSavings || memoryHighlights.length > 0 || memorySummary.length > 0;
+  const toolResultUsed = toolResultKeys.length > 0 && (gmailSummary.length > 0 || activeSubscriptions > 0 || totalMonthlyCost > 0 || toolsUsed.length > 0);
+  const intelligenceUsed = recommendations.length > 0;
+
+  console.info('CONTEXT_MEMORY_USED', {
+    memoryUsed,
+    highlights: memoryHighlights.length,
+    summaryType: input.context.memory.summaryType,
+  });
+  console.info('TOOL_RESULT_USED', {
+    toolResultUsed,
+    keys: toolResultKeys,
+    toolsUsed,
+  });
+  console.info('INTELLIGENCE_USED', {
+    intelligenceUsed,
+    recommendationCount: recommendations.length,
+    operatorAlertCount: input.context.intelligence.operatorAlerts.length,
+  });
 
   return {
-    findings,
+    findings: [...findings, `Reasoning signals combined: ${weightedSignals.join(', ') || 'none'}.`],
     answerDraft,
-    shouldStore: activeSubscriptions > 0 || totalMonthlyCost > 0 || estimatedSavings > 0 || recommendations.length > 0,
+    shouldStore:
+      activeSubscriptions > 0 ||
+      totalMonthlyCost > 0 ||
+      estimatedSavings > 0 ||
+      recommendations.length > 0 ||
+      gmailSummary.length > 0,
   };
 }
