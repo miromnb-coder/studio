@@ -49,6 +49,7 @@ export function toUsageEnvelope(args: {
   unlimitedReason: 'dev' | 'admin' | null;
 }): UsageEnvelope {
   const baseLimit = PLAN_LIMITS[args.plan]?.dailyAgentRuns ?? PLAN_LIMITS.FREE.dailyAgentRuns;
+
   if (args.unlimitedReason) {
     return {
       current: args.usage.agentRuns,
@@ -75,14 +76,15 @@ export async function getUserPlanAndUsage(supabase: any, userId: string): Promis
 }> {
   const usageDate = todayKey();
 
-  const [profileResult, usageResult] = await Promise.all([
-    supabase.from('profiles').select('plan,email').eq('id', userId).maybeSingle(),
+  const [profileResult, usageResult, authResult] = await Promise.all([
+    supabase.from('profiles').select('plan').eq('id', userId).maybeSingle(),
     supabase
       .from('usage_daily')
       .select('agent_runs,premium_action_runs,usage_date')
       .eq('user_id', userId)
       .eq('usage_date', usageDate)
       .maybeSingle(),
+    supabase.auth.getUser(),
   ]);
 
   if (profileResult.error) {
@@ -95,7 +97,7 @@ export async function getUserPlanAndUsage(supabase: any, userId: string): Promis
 
   return {
     plan: normalizePlan(profileResult.data?.plan),
-    email: typeof profileResult.data?.email === 'string' ? profileResult.data.email : null,
+    email: typeof authResult.data?.user?.email === 'string' ? authResult.data.user.email : null,
     usage: {
       agentRuns: typeof usageResult.data?.agent_runs === 'number' ? usageResult.data.agent_runs : 0,
       premiumActionRuns:
@@ -137,10 +139,9 @@ export async function incrementUsage(
     data: payload,
   });
 
-  const { error } = await supabase.from('usage_daily').upsert(
-    payload,
-    { onConflict: 'user_id,usage_date' },
-  );
+  const { error } = await supabase.from('usage_daily').upsert(payload, {
+    onConflict: 'user_id,usage_date',
+  });
 
   if (error) {
     console.error('SUPABASE_USAGE_UPSERT_ERROR:', error);
