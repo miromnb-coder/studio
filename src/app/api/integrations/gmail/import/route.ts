@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { createClient as createSupabaseServerClient } from '@/lib/supabase/server';
+import { evaluateOperatorAlertsForUser } from '@/lib/operator/alerts';
 import {
   analyzeFinancialEmailsWithAI,
   computeMonthlyTotal,
@@ -253,6 +254,17 @@ export async function POST() {
       },
       'sync_complete',
     );
+
+
+    try {
+      await evaluateOperatorAlertsForUser(supabase, userId);
+    } catch (operatorError) {
+      console.error('OPERATOR_ALERT_ERROR', {
+        action: 'gmail_import_post_sync_evaluate',
+        userId,
+        error: operatorError instanceof Error ? operatorError.message : String(operatorError),
+      });
+    }
 
     const profileWrite = await supabase.from('profiles').upsert(
       {
