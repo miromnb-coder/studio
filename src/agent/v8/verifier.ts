@@ -11,6 +11,9 @@ const GENERIC_PATTERNS = [
   /i can assist with that/i,
   /let me know if you need anything else/i,
   /prepared response/i,
+  /here is a direct, grounded answer to your question\.?/i,
+  /i understood your request/i,
+  /operator/i,
 ];
 
 export function verifyExecutionV8(input: AgentCriticInputV8): VerificationResult {
@@ -32,8 +35,12 @@ export function verifyExecutionV8(input: AgentCriticInputV8): VerificationResult
     notes.push('General intent should avoid tools unless strictly required.');
   }
 
+  if (refinedReply.length > 0 && refinedReply.split(/\s+/).length < 8) {
+    notes.push('Reply may be too short to be useful for the request.');
+  }
+
   if (!refinedReply) {
-    refinedReply = 'I understood your request and can continue once you share one more concrete detail.';
+    refinedReply = 'I need one concrete detail to give a precise answer.';
     notes.push('Inserted fallback because draft reply was empty.');
   }
 

@@ -23,6 +23,10 @@ function countTokens(tokens: string[], text: string): number {
   return tokens.reduce((sum, token) => (text.includes(token) ? sum + 1 : sum), 0);
 }
 
+function isShortFollowUp(message: string): boolean {
+  return message.trim().split(/\s+/).length <= 5;
+}
+
 function pickMode(intent: AgentIntentV8): AgentModeV8 {
   if (intent === 'finance') return 'finance';
   if (intent === 'gmail') return 'gmail';
@@ -46,7 +50,7 @@ export function routeIntentV8(message: string, history: AgentMessageV8[] = []): 
   }
 
   const recentContext = history.slice(-3).map((h) => h.content.toLowerCase()).join(' ');
-  const corpus = `${recentContext} ${normalizedMessage}`;
+  const corpus = isShortFollowUp(normalizedMessage) ? `${recentContext} ${normalizedMessage}` : normalizedMessage;
 
   const financeScore = countTokens(FINANCE_TOKENS, corpus);
   const gmailScore = countTokens(GMAIL_TOKENS, corpus);
@@ -57,19 +61,19 @@ export function routeIntentV8(message: string, history: AgentMessageV8[] = []): 
   let intent: AgentIntentV8 = 'general';
   let reason = 'General chat is the default path.';
 
-  if (gmailScore >= 1 && /\b(email|gmail|inbox|mailbox)\b/.test(normalizedMessage)) {
+  if (gmailScore >= 1 && /\b(email|gmail|inbox|mailbox|mail)\b/.test(normalizedMessage)) {
     intent = 'gmail';
     reason = 'Explicit email/Gmail request.';
-  } else if (financeScore >= 2) {
+  } else if (financeScore >= 2 || /\b(stock|etf|crypto|portfolio|investing)\b/.test(normalizedMessage)) {
     intent = 'finance';
     reason = 'Clear money/subscription/expense intent.';
-  } else if (codingScore >= 2) {
+  } else if (codingScore >= 1 && /\b(code|debug|error|bug|typescript|javascript|python|api|compile|test)\b/.test(normalizedMessage)) {
     intent = 'coding';
     reason = 'Technical/coding intent detected.';
-  } else if (productivityScore >= 2) {
+  } else if (productivityScore >= 1 && /\b(plan|schedule|task|todo|calendar|organize|priorit)\b/.test(normalizedMessage)) {
     intent = 'productivity';
     reason = 'Planning/productivity intent detected.';
-  } else if (memoryScore >= 1) {
+  } else if (memoryScore >= 1 && /\bremember|memory|store|save|don't forget\b/.test(normalizedMessage)) {
     intent = 'memory';
     reason = 'User asks to store/retrieve memory.';
   }
@@ -79,9 +83,7 @@ export function routeIntentV8(message: string, history: AgentMessageV8[] = []): 
     0.5 + Math.max(financeScore, gmailScore, productivityScore, codingScore, memoryScore) * 0.1,
   );
 
-  const needsGmail =
-    intent === 'gmail' ||
-    (intent === 'finance' && /\b(email|gmail|receipt|invoice|inbox|statement in mail)\b/.test(normalizedMessage));
+  const needsGmail = intent === 'gmail';
 
   return {
     intent,

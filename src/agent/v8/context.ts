@@ -25,6 +25,7 @@ export async function buildContextV8(params: {
 }): Promise<AgentContextV8> {
   const safeMemory = params.memory || {};
   const includeFinance = params.route.intent === 'finance';
+  const includeSemanticMemory = params.route.intent === 'memory' || params.route.intent === 'finance';
 
   const relevantMemories = await fetchRelevantUserMemory({
     userId: params.userId,
@@ -44,7 +45,7 @@ export async function buildContextV8(params: {
       summaryType: safeMemory.summaryType === 'finance' ? 'finance' : 'general',
       financeProfile: includeFinance ? safeMemory.financeProfile || null : null,
       financeEvents: includeFinance ? safeMemory.financeEvents || [] : [],
-      semanticMemories: params.route.intent === 'general' ? [] : safeMemory.semanticMemories || [],
+      semanticMemories: includeSemanticMemory ? safeMemory.semanticMemories || [] : [],
       relevantMemories,
     },
     environment: {
