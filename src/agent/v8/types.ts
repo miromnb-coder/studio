@@ -1,6 +1,6 @@
-export type AgentIntentV8 = 'finance' | 'technical' | 'analysis' | 'general';
+export type AgentIntentV8 = 'general' | 'finance' | 'gmail' | 'productivity' | 'unknown';
 
-export type AgentModeV8 = 'finance' | 'technical' | 'general';
+export type AgentModeV8 = 'general' | 'finance' | 'gmail' | 'productivity';
 
 export type AgentRole = 'system' | 'assistant' | 'user';
 
@@ -112,7 +112,7 @@ export type ExecutionResultV8 = {
 export type SuggestedActionV8 = {
   id: string;
   label: string;
-  kind: 'finance' | 'technical' | 'general' | 'premium';
+  kind: 'finance' | 'gmail' | 'productivity' | 'general' | 'premium';
   payload?: Record<string, unknown>;
 };
 

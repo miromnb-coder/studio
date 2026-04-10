@@ -22,7 +22,11 @@ export function AssistantResponseSurface({
   onPremiumRequired,
 }: AssistantResponseSurfaceProps) {
   const metadata = message.agentMetadata;
-  const hasDeepContent = Boolean(metadata?.steps?.length || metadata?.plan || metadata?.structuredData);
+  const isFinanceIntent = metadata?.intent === 'finance';
+  const isGmailIntent = metadata?.intent === 'gmail';
+  const hasFinanceVisuals = Boolean(metadata?.structuredData?.finance || metadata?.structuredData?.actionResult);
+  const hasToolDetails = Boolean(metadata?.steps?.length || metadata?.plan);
+  const showOperatorDetails = isFinanceIntent || isGmailIntent || hasFinanceVisuals;
   const isFinanceAction = (value: unknown): value is FinanceActionType =>
     value === 'create_savings_plan' || value === 'find_alternatives' || value === 'draft_cancellation';
 
@@ -38,7 +42,7 @@ export function AssistantResponseSurface({
       </div>
 
       <AnimatePresence>
-        {metadata && hasDeepContent ? (
+        {metadata && showOperatorDetails ? (
           <motion.div
             key={`${message.id}-meta`}
             initial={{ opacity: 0, y: 8 }}
@@ -69,19 +73,21 @@ export function AssistantResponseSurface({
               </details>
             ) : null}
 
-            <details className="group rounded-xl border border-black/10 px-3 py-2">
-              <summary className="cursor-pointer list-none text-xs font-medium text-secondary">Show analysis</summary>
-              <div className="mt-2 space-y-2 text-xs text-[#515151]">
-                {metadata.plan ? <p>{metadata.plan}</p> : null}
-                {metadata.steps?.length ? (
-                  <ul className="space-y-1">
-                    {metadata.steps.map((step, index) => (
-                      <li key={`${step.action}-${index}`}>• {step.action}: {step.summary || step.status}</li>
-                    ))}
-                  </ul>
-                ) : null}
-              </div>
-            </details>
+            {hasToolDetails ? (
+              <details className="group rounded-xl border border-black/10 px-3 py-2">
+                <summary className="cursor-pointer list-none text-xs font-medium text-secondary">Execution details</summary>
+                <div className="mt-2 space-y-2 text-xs text-[#515151]">
+                  {metadata.plan ? <p>{metadata.plan}</p> : null}
+                  {metadata.steps?.length ? (
+                    <ul className="space-y-1">
+                      {metadata.steps.map((step, index) => (
+                        <li key={`${step.action}-${index}`}>• {step.action}: {step.summary || step.status}</li>
+                      ))}
+                    </ul>
+                  ) : null}
+                </div>
+              </details>
+            ) : null}
 
             {metadata.structuredData?.finance ? (
               <details className="group rounded-xl border border-black/10 px-3 py-2">
