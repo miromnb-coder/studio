@@ -1,6 +1,7 @@
 import { cookies } from 'next/headers';
 import { NextResponse } from 'next/server';
 import { createClient as createSupabaseServerClient } from '@/lib/supabase/server';
+import { createClient as createSupabaseClient } from '@supabase/supabase-js';
 import { resolveAppOrigin } from '@/lib/auth/redirects';
 import {
   encryptToken,
@@ -17,6 +18,22 @@ function toObject(value: unknown): Record<string, unknown> {
   return typeof value === 'object' && value !== null ? (value as Record<string, unknown>) : {};
 }
 
+function createAdminClient() {
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+
+  if (!supabaseUrl || !serviceRoleKey) {
+    throw new Error('Missing NEXT_PUBLIC_SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY');
+  }
+
+  return createSupabaseClient(supabaseUrl, serviceRoleKey, {
+    auth: {
+      autoRefreshToken: false,
+      persistSession: false,
+    },
+  });
+}
+
 async function writeOrThrow(
   label: string,
   operation: () => Promise<{ error: unknown; data?: unknown; status?: number; statusText?: string }>,
@@ -31,10 +48,17 @@ async function writeOrThrow(
     hasData: result.data !== undefined && result.data !== null,
     error: result.error || null,
   });
+
   if (result.error) {
     console.error(`${label}_WRITE_ERROR`, result.error);
     throw result.error;
   }
+}
+
+function extractUserIdFromState(state: string): string | null {
+  const separatorIndex = state.indexOf(':');
+  if (separatorIndex <= 0) return null;
+  return state.slice(0, separatorIndex);
 }
 
 export async function GET(req: Request) {
@@ -43,6 +67,7 @@ export async function GET(req: Request) {
   const code = requestUrl.searchParams.get('code');
   const state = requestUrl.searchParams.get('state');
   const error = requestUrl.searchParams.get('error');
+
   const failRedirect = (reason: string, step?: string) => {
     const target = new URL('/profile', appOrigin);
     target.searchParams.set('gmail', 'error');
@@ -50,7 +75,11 @@ export async function GET(req: Request) {
     if (step) {
       target.searchParams.set('step', step);
     }
-    console.log('GMAIL_CALLBACK_REDIRECT', { reason, step: step || null, redirect: target.pathname + target.search });
+    console.log('GMAIL_CALLBACK_REDIRECT', {
+      reason,
+      step: step || null,
+      redirect: target.pathname + target.search,
+    });
     return NextResponse.redirect(target);
   };
 
@@ -61,28 +90,31 @@ export async function GET(req: Request) {
   if (!code || !state) {
     const missingTarget = new URL('/profile', appOrigin);
     missingTarget.searchParams.set('gmail', 'missing_code');
-    console.log('GMAIL_CALLBACK_REDIRECT', { reason: 'missing_code_or_state', redirect: missingTarget.pathname + missingTarget.search });
+    console.log('GMAIL_CALLBACK_REDIRECT', {
+      reason: 'missing_code_or_state',
+      redirect: missingTarget.pathname + missingTarget.search,
+    });
     return NextResponse.redirect(missingTarget);
   }
 
   try {
-    const supabase = await createSupabaseServerClient();
-    const { data: auth } = await supabase.auth.getUser();
-    const userId = auth.user?.id;
-    if (!userId) {
-      const loginTarget = new URL('/login', appOrigin);
-      console.log('GMAIL_CALLBACK_REDIRECT', { reason: 'auth_required', redirect: loginTarget.pathname + loginTarget.search });
-      return NextResponse.redirect(loginTarget);
-    }
-
     const stateCookieValue = (await cookies()).get('gmail_oauth_state')?.value;
+    const userIdFromState = extractUserIdFromState(state);
 
-    if (!stateCookieValue || stateCookieValue !== state || !state.startsWith(`${userId}:`)) {
+    if (!stateCookieValue || stateCookieValue !== state || !userIdFromState) {
       const mismatchTarget = new URL('/profile', appOrigin);
       mismatchTarget.searchParams.set('gmail', 'state_mismatch');
-      console.log('GMAIL_CALLBACK_REDIRECT', { reason: 'state_mismatch', redirect: mismatchTarget.pathname + mismatchTarget.search });
+      console.log('GMAIL_CALLBACK_REDIRECT', {
+        reason: 'state_mismatch',
+        redirect: mismatchTarget.pathname + mismatchTarget.search,
+      });
       return NextResponse.redirect(mismatchTarget);
     }
+
+    const userId = userIdFromState;
+
+    const supabase = await createSupabaseServerClient();
+    const adminSupabase = createAdminClient();
 
     let accessToken: string | null = null;
     let refreshToken: string | null = null;
@@ -104,12 +136,16 @@ export async function GET(req: Request) {
 
       accessToken = session?.provider_token || null;
       refreshToken = session?.provider_refresh_token || null;
+
       if (session?.expires_at) {
         expiryIso = new Date(session.expires_at * 1000).toISOString();
       }
+
       if (session?.token_type) {
         tokenType = session.token_type;
       }
+    } else {
+      console.error('GMAIL_CALLBACK_SESSION_EXCHANGE_ERROR', exchangeError);
     }
 
     if (!accessToken) {
@@ -124,6 +160,7 @@ export async function GET(req: Request) {
 
     const verifiedProfile = await verifyGmailAccessToken(accessToken);
     const scopeQuery = requestUrl.searchParams.get('scope');
+
     if (scopeQuery) {
       tokenScope = scopeQuery;
     }
@@ -132,14 +169,13 @@ export async function GET(req: Request) {
       tokenScope = `${tokenScope} ${GMAIL_READONLY_SCOPE}`.trim();
     }
 
-    const { data: profile } = await supabase
+    const { data: profile } = await adminSupabase
       .from('finance_profiles')
       .select('last_analysis,active_subscriptions,total_monthly_cost,estimated_savings,currency,memory_summary')
       .eq('user_id', userId)
       .maybeSingle();
 
     const lastAnalysis = toObject(profile?.last_analysis);
-
     const connectedAt = new Date().toISOString();
 
     const financeProfilePayload = {
@@ -170,11 +206,14 @@ export async function GET(req: Request) {
     try {
       await writeOrThrow(
         'finance_profiles_gmail_connected',
-        () => supabase.from('finance_profiles').upsert(financeProfilePayload, { onConflict: 'user_id' }),
+        () => adminSupabase.from('finance_profiles').upsert(financeProfilePayload, { onConflict: 'user_id' }),
         financeProfilePayload,
       );
     } catch (errorAtFinanceWrite) {
-      console.error('GMAIL_CALLBACK_FAILURE_POINT', { step: 'finance_profiles_gmail_connected', error: errorAtFinanceWrite });
+      console.error('GMAIL_CALLBACK_FAILURE_POINT', {
+        step: 'finance_profiles_gmail_connected',
+        error: errorAtFinanceWrite,
+      });
       return failRedirect('write_failed', 'finance_profiles_gmail_connected');
     }
 
@@ -188,16 +227,23 @@ export async function GET(req: Request) {
     try {
       await writeOrThrow(
         'profiles_gmail_connected',
-        () => supabase.from('profiles').upsert(profilePayload, { onConflict: 'id' }),
+        () => adminSupabase.from('profiles').upsert(profilePayload, { onConflict: 'id' }),
         profilePayload,
       );
     } catch (errorAtProfileWrite) {
-      console.error('GMAIL_CALLBACK_FAILURE_POINT', { step: 'profiles_gmail_connected', error: errorAtProfileWrite });
+      console.error('GMAIL_CALLBACK_FAILURE_POINT', {
+        step: 'profiles_gmail_connected',
+        error: errorAtProfileWrite,
+      });
       return failRedirect('write_failed', 'profiles_gmail_connected');
     }
 
     const successTarget = new URL('/profile?gmail=connected', appOrigin);
-    console.log('GMAIL_CALLBACK_REDIRECT', { reason: 'connected', redirect: successTarget.pathname + successTarget.search });
+    console.log('GMAIL_CALLBACK_REDIRECT', {
+      reason: 'connected',
+      redirect: successTarget.pathname + successTarget.search,
+    });
+
     const response = NextResponse.redirect(successTarget);
     response.cookies.set({
       name: 'gmail_oauth_state',
