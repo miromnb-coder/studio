@@ -42,17 +42,8 @@ export interface RetrievedMemoryContext {
   semanticMemories?: MemoryEmbeddingRecord[];
 }
 
-function resolveGmailConnected(profile: FinanceProfileRecord | null): boolean {
-  const lastAnalysis = typeof profile?.last_analysis === 'object' && profile?.last_analysis
-    ? (profile.last_analysis as Record<string, unknown>)
-    : {};
-  const gmail = typeof lastAnalysis.gmail_integration === 'object' && lastAnalysis.gmail_integration
-    ? (lastAnalysis.gmail_integration as Record<string, unknown>)
-    : {};
-
-  const hasToken = Boolean(gmail.access_token_encrypted);
-  const status = String(gmail.status || 'connected').toLowerCase();
-  return hasToken && status !== 'disconnected' && status !== 'error';
+function resolveGmailConnected(profile: Record<string, unknown> | null): boolean {
+  return Boolean(profile?.gmail_connected);
 }
 
 interface MemorySummaryRecord {
@@ -252,8 +243,9 @@ export async function retrieveRelevantMemory(
   intent: MemoryIntent,
   queryText = '',
 ): Promise<RetrievedMemoryContext> {
-  const [profileResult, eventsResult, summariesResult, semanticMemories] = await Promise.all([
+  const [profileResult, userProfileResult, eventsResult, summariesResult, semanticMemories] = await Promise.all([
     supabase.from('finance_profiles').select('*').eq('user_id', userId).maybeSingle(),
+    supabase.from('profiles').select('gmail_connected').eq('id', userId).maybeSingle(),
     supabase
       .from('memory_events')
       .select('event_type,title,summary,data,created_at')
@@ -284,7 +276,7 @@ export async function retrieveRelevantMemory(
     userId,
     summaryType: intent,
     summary,
-    gmailConnected: resolveGmailConnected(profile),
+    gmailConnected: resolveGmailConnected((userProfileResult.data as Record<string, unknown> | null) || null),
     financeProfile: profile,
     financeEvents: events,
     summaries,
