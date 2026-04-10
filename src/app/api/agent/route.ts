@@ -57,6 +57,43 @@ function parseActionType(raw: unknown): FinanceActionType | null {
   return null;
 }
 
+
+function shouldUseOperatorAlertsContext(input: string): boolean {
+  const normalized = input.toLowerCase();
+  return [
+    'what should i do next',
+    'any issues',
+    'anything important',
+    'how can i save',
+    'what looks risky',
+    'what changed',
+    'what should i cancel',
+    'deserves attention',
+    'subscription',
+    'billing',
+    'spend',
+    'finance',
+  ].some((phrase) => normalized.includes(phrase));
+}
+
+type OperatorAlertContextRow = {
+  id: string;
+  severity: 'low' | 'medium' | 'high';
+  title: string;
+  summary: string;
+  suggested_action: string;
+  updated_at: string;
+};
+
+function buildOperatorAlertsPrompt(alerts: OperatorAlertContextRow[]): string {
+  if (!alerts.length) return '';
+  const lines = alerts.slice(0, 5).map((alert, index) =>
+    `${index + 1}. [${alert.severity.toUpperCase()}] ${alert.title} — ${alert.summary} Next: ${alert.suggested_action}`,
+  );
+
+  return `\n\nActive operator alerts (grounded in user data, use only if relevant):\n${lines.join('\n')}`;
+}
+
 function resolveGmailConnected(params: {
   userProfile?: Record<string, unknown> | null;
 }): boolean {
@@ -113,6 +150,28 @@ export async function POST(req: Request) {
     const userId = authUser?.id;
     if (!userId || userId === 'system_anonymous') {
       return safeJsonResponse({ error: 'AUTH_REQUIRED', message: 'Please sign in to use chat.' }, 401);
+    }
+
+
+    let operatorAlertsContext: OperatorAlertContextRow[] = [];
+    if (shouldUseOperatorAlertsContext(String(safeInput || ''))) {
+      const operatorAlertRes = await supabase
+        .from('operator_alerts')
+        .select('id,severity,title,summary,suggested_action,updated_at')
+        .eq('user_id', userId)
+        .eq('status', 'active')
+        .order('updated_at', { ascending: false })
+        .limit(5);
+
+      if (operatorAlertRes.error) {
+        console.error('OPERATOR_ALERT_ERROR', {
+          action: 'agent_context_fetch',
+          userId,
+          error: operatorAlertRes.error.message,
+        });
+      } else {
+        operatorAlertsContext = (operatorAlertRes.data || []) as OperatorAlertContextRow[];
+      }
     }
 
     if (requestedUserId && requestedUserId !== userId) {
@@ -190,7 +249,7 @@ export async function POST(req: Request) {
     });
 
     const agentResult = await runAgentV8({
-      input: safeInput || 'Continue',
+      input: `${safeInput || 'Continue'}${buildOperatorAlertsPrompt(operatorAlertsContext)}`,
       userId,
       history: safeHistory,
       memory: retrievedMemory as unknown as Record<string, unknown>,
@@ -225,6 +284,15 @@ export async function POST(req: Request) {
       agentResult.metadata?.intent === 'finance' ||
       Boolean((agentResult.metadata?.structuredData || {}).detect_leaks) ||
       Boolean(actionType);
+
+    const operatorAlertsStructured = operatorAlertsContext.map((alert) => ({
+      id: alert.id,
+      severity: alert.severity,
+      title: alert.title,
+      summary: alert.summary,
+      suggestedAction: alert.suggested_action,
+      updatedAt: alert.updated_at,
+    }));
 
     if (actionType) {
       const actionResult = runFinanceAction(actionType, normalizedFinance);
@@ -284,6 +352,7 @@ export async function POST(req: Request) {
             finance: normalizedFinance,
             actionResult:
               actionResult.type === 'error' ? safeFinanceActionFallback() : actionResult,
+            operator_alerts: operatorAlertsStructured,
           },
           memoryUsed: !!retrievedMemory.summary,
           iterationCount: 1,
@@ -360,6 +429,7 @@ export async function POST(req: Request) {
         structuredData: {
           ...(agentResult.metadata?.structuredData || {}),
           ...(shouldAttachFinance ? { finance: normalizedFinance } : {}),
+          ...(operatorAlertsStructured.length ? { operator_alerts: operatorAlertsStructured } : {}),
         },
         suggestedActions: agentResult.metadata?.suggestedActions || [],
         memoryUsed: !!agentResult.metadata?.memoryUsed,
