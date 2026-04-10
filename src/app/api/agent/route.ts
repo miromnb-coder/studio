@@ -8,6 +8,8 @@ import {
 } from '@/lib/finance/normalize';
 import type { FinanceActionType } from '@/lib/finance/types';
 import { createClient as createSupabaseServerClient } from '@/lib/supabase/server';
+import { getUserProfileIntelligence, updateUserProfileIntelligence } from '@/lib/operator/personalization';
+import type { OperatorAlertType } from '@/lib/operator/alerts';
 import {
   detectMemoryIntent,
   extractImportantMemory,
@@ -78,21 +80,20 @@ function shouldUseOperatorAlertsContext(input: string): boolean {
 
 type OperatorAlertContextRow = {
   id: string;
+  user_id: string;
+  type: OperatorAlertType;
   severity: 'low' | 'medium' | 'high';
+  status: 'active' | 'dismissed' | 'completed';
   title: string;
   summary: string;
   suggested_action: string;
+  source: string;
+  dedupe_key: string;
+  metadata: Record<string, unknown>;
+  created_at: string;
   updated_at: string;
 };
 
-function buildOperatorAlertsPrompt(alerts: OperatorAlertContextRow[]): string {
-  if (!alerts.length) return '';
-  const lines = alerts.slice(0, 5).map((alert, index) =>
-    `${index + 1}. [${alert.severity.toUpperCase()}] ${alert.title} — ${alert.summary} Next: ${alert.suggested_action}`,
-  );
-
-  return `\n\nActive operator alerts (grounded in user data, use only if relevant):\n${lines.join('\n')}`;
-}
 
 function resolveGmailConnected(params: {
   userProfile?: Record<string, unknown> | null;
@@ -157,7 +158,7 @@ export async function POST(req: Request) {
     if (shouldUseOperatorAlertsContext(String(safeInput || ''))) {
       const operatorAlertRes = await supabase
         .from('operator_alerts')
-        .select('id,severity,title,summary,suggested_action,updated_at')
+        .select('id,user_id,type,severity,status,title,summary,suggested_action,source,dedupe_key,metadata,created_at,updated_at')
         .eq('user_id', userId)
         .eq('status', 'active')
         .order('updated_at', { ascending: false })
@@ -232,6 +233,12 @@ export async function POST(req: Request) {
       summary: 'No prior context available.',
     };
 
+    const userProfileIntelligence = await getUserProfileIntelligence(supabase, userId).catch((error) => {
+      console.error('USER_PROFILE_INTELLIGENCE_FETCH_ERROR:', error);
+      return null;
+    });
+
+
     const retrievedMemory: RetrievedMemoryContext = await retrieveRelevantMemory(
       supabase,
       userId,
@@ -249,10 +256,12 @@ export async function POST(req: Request) {
     });
 
     const agentResult = await runAgentV8({
-      input: `${safeInput || 'Continue'}${buildOperatorAlertsPrompt(operatorAlertsContext)}`,
+      input: safeInput || 'Continue',
       userId,
       history: safeHistory,
       memory: retrievedMemory as unknown as Record<string, unknown>,
+      operatorAlerts: operatorAlertsContext,
+      userProfileIntelligence,
       productState: {
         plan,
         usage: {
@@ -330,6 +339,15 @@ export async function POST(req: Request) {
         });
       }
 
+      await updateUserProfileIntelligence({
+        supabase,
+        userId,
+        userMessage: safeInput || '',
+        existing: userProfileIntelligence,
+      }).catch((error) => {
+        console.error('USER_PROFILE_INTELLIGENCE_UPDATE_ERROR:', error);
+      });
+
       const usageAfterRun = toUsageEnvelope({
         plan,
         usage: updatedUsage,
@@ -402,6 +420,15 @@ export async function POST(req: Request) {
         });
       }
     }
+
+    await updateUserProfileIntelligence({
+      supabase,
+      userId,
+      userMessage: safeInput || '',
+      existing: userProfileIntelligence,
+    }).catch((error) => {
+      console.error('USER_PROFILE_INTELLIGENCE_UPDATE_ERROR:', error);
+    });
 
     const usageAfterRun = toUsageEnvelope({
       plan,

@@ -20,6 +20,8 @@ export async function runAgentV8(input: AgentRunInputV8): Promise<AgentResponseV
     memory: input.memory,
     route,
     productState: input.productState,
+    operatorAlerts: input.operatorAlerts,
+    userProfileIntelligence: input.userProfileIntelligence || null,
   });
 
   state = 'planning';

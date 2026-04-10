@@ -35,6 +35,17 @@ export function createPlanV8(route: RouteResultV8, message: string): ExecutionPl
       ));
     }
 
+    if (route.wantsRecommendations) {
+      steps.push(buildStep(
+        route.needsGmail ? '3' : '2',
+        'Generate strategic recommendations',
+        'generate_recommendations',
+        'Rank high-impact recommendations grounded in user finance and alert evidence.',
+        { limit: 5 },
+        false,
+      ));
+    }
+
     return {
       intent: route.intent,
       mode: route.mode,
