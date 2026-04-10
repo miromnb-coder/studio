@@ -18,7 +18,7 @@ export async function GET(req: Request) {
     }
 
     const stateNonce = crypto.randomBytes(18).toString('hex');
-    const state = `${userId}:${stateNonce}`;
+    const localState = `${userId}:${stateNonce}`;
 
     const requestUrl = new URL(req.url);
     const appOrigin = resolveAppOrigin(requestUrl);
@@ -33,7 +33,6 @@ export async function GET(req: Request) {
           access_type: 'offline',
           prompt: 'consent',
           include_granted_scopes: 'true',
-          state,
         },
       },
     });
@@ -46,7 +45,16 @@ export async function GET(req: Request) {
     const response = NextResponse.redirect(data.url);
     response.cookies.set({
       name: 'gmail_oauth_state',
-      value: state,
+      value: localState,
+      httpOnly: true,
+      sameSite: 'lax',
+      secure: true,
+      path: '/',
+      maxAge: 60 * 10,
+    });
+    response.cookies.set({
+      name: 'gmail_oauth_user_id',
+      value: userId,
       httpOnly: true,
       sameSite: 'lax',
       secure: true,
