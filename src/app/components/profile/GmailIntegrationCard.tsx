@@ -31,7 +31,11 @@ function formatSyncTime(value: string | null): string {
   return parsed.toLocaleString();
 }
 
-export function GmailIntegrationCard() {
+type GmailIntegrationCardProps = {
+  gmailCallbackState?: string | null;
+};
+
+export function GmailIntegrationCard({ gmailCallbackState = null }: GmailIntegrationCardProps) {
   const [status, setStatus] = useState<GmailIntegrationStatus>('disconnected');
   const [gmailConnected, setGmailConnected] = useState(false);
   const [lastSyncedAt, setLastSyncedAt] = useState<string | null>(null);
@@ -47,7 +51,7 @@ export function GmailIntegrationCard() {
   const loadStatus = useCallback(async () => {
     try {
       setLoadingStatus(true);
-      const response = await fetch('/api/integrations/gmail/status', { cache: 'no-store' });
+      const response = await fetch(`/api/integrations/gmail/status?_ts=${Date.now()}`, { cache: 'no-store' });
       if (!response.ok) {
         setStatus('error');
         setErrorMessage('Unable to load Gmail integration status right now.');
@@ -71,6 +75,27 @@ export function GmailIntegrationCard() {
 
   useEffect(() => {
     void loadStatus();
+  }, [loadStatus]);
+
+  useEffect(() => {
+    if (gmailCallbackState !== 'connected' && gmailCallbackState !== 'error') return;
+
+    void loadStatus();
+    const timer = setTimeout(() => {
+      void loadStatus();
+    }, 1200);
+
+    return () => clearTimeout(timer);
+  }, [gmailCallbackState, loadStatus]);
+
+  useEffect(() => {
+    const handleCallbackComplete = () => {
+      void loadStatus();
+    };
+    window.addEventListener('gmail:callback-complete', handleCallbackComplete as EventListener);
+    return () => {
+      window.removeEventListener('gmail:callback-complete', handleCallbackComplete as EventListener);
+    };
   }, [loadStatus]);
 
   const connect = () => {
@@ -181,6 +206,11 @@ export function GmailIntegrationCard() {
         </p>
         <p className="mt-1 text-xs text-secondary">Estimated monthly savings: {estimatedMonthlySavings.toFixed(2)}</p>
 
+        {gmailCallbackState === 'error' && !errorMessage ? (
+          <p className="mt-3 rounded-lg border border-[#dfc9c9] bg-[#f8eded] px-3 py-2 text-xs text-[#6e3030]">
+            Gmail connection failed. Please retry, and if it keeps failing contact support.
+          </p>
+        ) : null}
         {errorMessage ? <p className="mt-3 rounded-lg border border-[#dfc9c9] bg-[#f8eded] px-3 py-2 text-xs text-[#6e3030]">{errorMessage}</p> : null}
         {successMessage ? <p className="mt-3 rounded-lg border border-[#cbe4d2] bg-[#eef8f0] px-3 py-2 text-xs text-[#255b34]">{successMessage}</p> : null}
 

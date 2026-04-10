@@ -41,14 +41,23 @@ export async function GET() {
     if (storedStatus === 'error') status = 'error';
     if (!connected && storedStatus === 'error') status = 'error';
 
-    return NextResponse.json({
-      connected,
-      status,
-      lastSyncedAt: userProfile?.gmail_last_sync_at ? String(userProfile.gmail_last_sync_at) : null,
-      emailsAnalyzed: typeof gmail.last_sync_emails_analyzed === 'number' ? gmail.last_sync_emails_analyzed : 0,
-      subscriptionsFound: typeof gmail.last_sync_subscriptions_found === 'number' ? gmail.last_sync_subscriptions_found : 0,
-      errorMessage: gmail.last_error ? String(gmail.last_error) : null,
-    });
+    return NextResponse.json(
+      {
+        connected,
+        status,
+        lastSyncedAt: userProfile?.gmail_last_sync_at ? String(userProfile.gmail_last_sync_at) : null,
+        emailsAnalyzed: typeof gmail.last_sync_emails_analyzed === 'number' ? gmail.last_sync_emails_analyzed : 0,
+        subscriptionsFound: typeof gmail.last_sync_subscriptions_found === 'number' ? gmail.last_sync_subscriptions_found : 0,
+        errorMessage: gmail.last_error ? String(gmail.last_error) : null,
+      },
+      {
+        headers: {
+          'Cache-Control': 'no-store, no-cache, must-revalidate, proxy-revalidate',
+          Pragma: 'no-cache',
+          Expires: '0',
+        },
+      },
+    );
   } catch (error) {
     console.error('GMAIL_STATUS_ERROR', error);
     return NextResponse.json({ error: 'GMAIL_STATUS_FAILED' }, { status: 500 });
