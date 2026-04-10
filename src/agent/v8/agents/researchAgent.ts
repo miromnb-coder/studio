@@ -14,11 +14,6 @@ export type ResearchAgentOutput = {
 
 const FINNISH_LANGUAGE_PATTERN = /\b(voitko vastata suomeksi|vastaa suomeksi|suomeksi|kirjoita suomeksi)\b/i;
 
-function prefersFinnish(message: string, history: AgentContextV8['conversation']): boolean {
-  const corpus = `${history.slice(-4).map((item) => item.content).join(' ')} ${message}`;
-  return FINNISH_LANGUAGE_PATTERN.test(corpus);
-}
-
 function stripTemplateLanguage(text: string): string {
   return text
     .replace(/\b(here('| i)s|this is)\s+(a\s+)?(direct|grounded)\s+answer[^.]*\.?/gi, '')
@@ -27,8 +22,31 @@ function stripTemplateLanguage(text: string): string {
     .trim();
 }
 
+function resolveResponseLanguage(context: AgentContextV8): string {
+  const message = context.user.message;
+  if (FINNISH_LANGUAGE_PATTERN.test(message)) return 'fi';
+
+  const explicitLanguage = message.toLowerCase().match(/\b(reply|respond|answer|speak|write)\s+(in\s+)?([a-z\-]{2,20})\b/i)?.[3];
+  if (explicitLanguage) return explicitLanguage.slice(0, 8);
+
+  return context.intelligence.userProfile?.preferred_language || 'en';
+}
+
+function resolveVerbosity(context: AgentContextV8): 'short' | 'medium' | 'detailed' {
+  const message = context.user.message.toLowerCase();
+  if (/\b(short|brief|concise|quick|tldr)\b/.test(message)) return 'short';
+  if (/\b(detailed|deep|thorough|step-by-step|comprehensive)\b/.test(message)) return 'detailed';
+  return context.intelligence.userProfile?.verbosity_preference || 'medium';
+}
+
+function verbosityInstruction(level: 'short' | 'medium' | 'detailed'): string {
+  if (level === 'short') return 'Keep the answer short (2-4 sentences) unless the user asks for more.';
+  if (level === 'detailed') return 'Provide a detailed answer with structure and concrete steps.';
+  return 'Keep the answer concise but complete.';
+}
+
 export async function runResearchAgent(input: ResearchAgentInput): Promise<ResearchAgentOutput> {
-  const inFinnish = prefersFinnish(input.context.user.message, input.context.conversation);
+  const responseLanguage = resolveResponseLanguage(input.context);
   const message = input.context.user.message;
   const relevantMemories = input.context.memory.relevantMemories.slice(0, 2).map((item) => item.content);
   const conversationTail = input.context.conversation.slice(-4).map((item) => ({
@@ -45,7 +63,9 @@ export async function runResearchAgent(input: ResearchAgentInput): Promise<Resea
           ? 'Focus on memory/retrieval requests without unrelated details.'
           : 'Focus on directly answering the user question with clear reasoning.';
 
-  let answerDraft = inFinnish
+  const replyLength = resolveVerbosity(input.context);
+
+  let answerDraft = responseLanguage === 'fi'
     ? 'Tarvitsen yhden täsmällisen lisätiedon, jotta voin vastata oikein.'
     : 'I need one specific detail to answer this correctly.';
 
@@ -63,7 +83,8 @@ Avoid generic filler, fake process summaries, and operator-style language.
 Do not mention tools, plans, hidden steps, intent labels, or internal routing unless the user asks.
 For simple questions, give the answer immediately with no preamble.
 ${modeHint}
-Respond in ${inFinnish ? 'Finnish' : 'English'}.`,
+${verbosityInstruction(replyLength)}
+Respond in ${responseLanguage}.`,
         },
         ...conversationTail,
         {
@@ -88,7 +109,8 @@ If the request is ambiguous, ask one short clarifying question. Otherwise give a
       ? `Relevant memories used: ${relevantMemories.length}`
       : 'No strongly relevant long-term memory found.',
     `Tool steps executed: ${input.execution.steps.length}`,
-    `Language: ${inFinnish ? 'fi' : 'en'}`,
+    `Language: ${responseLanguage}`,
+    `Verbosity preference: ${replyLength}`,
   ];
 
   return { keyPoints, answerDraft };

@@ -1,3 +1,4 @@
+import { generateOperatorRecommendations } from '@/lib/operator/recommendations';
 import { AgentContextV8, AgentMessageV8, MemoryEnvelopeV8, ProductStateV8, RouteResultV8 } from './types';
 import { fetchRelevantUserMemory } from './tools/memory-store';
 
@@ -15,6 +16,10 @@ function sanitizeHistory(history: unknown[] = []): AgentMessageV8[] {
     .slice(-8);
 }
 
+function asObject(value: unknown): Record<string, unknown> | null {
+  return value && typeof value === 'object' ? (value as Record<string, unknown>) : null;
+}
+
 export async function buildContextV8(params: {
   userId: string;
   message: string;
@@ -22,6 +27,8 @@ export async function buildContextV8(params: {
   memory?: MemoryEnvelopeV8 | null;
   route: RouteResultV8;
   productState: ProductStateV8;
+  operatorAlerts?: AgentContextV8['intelligence']['operatorAlerts'];
+  userProfileIntelligence?: AgentContextV8['intelligence']['userProfile'];
 }): Promise<AgentContextV8> {
   const safeMemory = params.memory || {};
   const includeFinance = params.route.intent === 'finance';
@@ -41,6 +48,20 @@ export async function buildContextV8(params: {
     ? relevantMemories
     : relevantMemories.filter((item) => (item.relevanceScore || 0) >= 0.82).slice(0, 3);
 
+  const financeProfile = includeFinance ? safeMemory.financeProfile || null : null;
+  const financeEvents = includeFinance ? safeMemory.financeEvents || [] : [];
+  const gmailFinanceSummary = asObject(asObject(asObject(financeProfile)?.last_analysis)?.gmail_import);
+  const recommendations = params.route.wantsRecommendations
+    ? generateOperatorRecommendations({
+      userId: params.userId,
+      operatorAlerts: params.operatorAlerts || [],
+      financeProfile: financeProfile as Record<string, unknown> | null,
+      financeHistory: financeEvents,
+      gmailFinanceSummary,
+      limit: 5,
+    })
+    : [];
+
   return {
     user: {
       id: params.userId,
@@ -50,10 +71,16 @@ export async function buildContextV8(params: {
     memory: {
       summary: typeof safeMemory.summary === 'string' ? safeMemory.summary : 'No prior context available.',
       summaryType: safeMemory.summaryType === 'finance' ? 'finance' : 'general',
-      financeProfile: includeFinance ? safeMemory.financeProfile || null : null,
-      financeEvents: includeFinance ? safeMemory.financeEvents || [] : [],
+      financeProfile,
+      financeEvents,
       semanticMemories: includeSemanticMemory ? safeMemory.semanticMemories || [] : [],
       relevantMemories: filteredRelevantMemories,
+    },
+    intelligence: {
+      operatorAlerts: params.operatorAlerts || [],
+      recommendations,
+      userProfile: params.userProfileIntelligence || null,
+      gmailFinanceSummary,
     },
     environment: {
       gmailConnected: params.productState.gmailConnected,

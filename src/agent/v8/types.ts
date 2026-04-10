@@ -1,3 +1,7 @@
+import { OperatorAlertRecord } from '@/lib/operator/alerts';
+import { OperatorRecommendation } from '@/lib/operator/recommendations';
+import { UserProfileIntelligence } from '@/lib/operator/personalization';
+
 export type AgentIntentV8 =
   | 'general'
   | 'finance'
@@ -62,6 +66,12 @@ export type AgentContextV8 = {
     semanticMemories?: Array<Record<string, unknown>>;
     relevantMemories: UserMemoryItemV8[];
   };
+  intelligence: {
+    operatorAlerts: OperatorAlertRecord[];
+    recommendations: OperatorRecommendation[];
+    userProfile: UserProfileIntelligence | null;
+    gmailFinanceSummary: Record<string, unknown> | null;
+  };
   environment: {
     gmailConnected: boolean;
     productState: ProductStateV8;
@@ -76,11 +86,13 @@ export type RouteResultV8 = {
   reason: string;
   needsGmail: boolean;
   needsFinanceData: boolean;
+  wantsRecommendations: boolean;
 };
 
 export type ToolNameV8 =
   | 'gmail_fetch'
   | 'finance_read'
+  | 'generate_recommendations'
   | 'detect_leaks'
   | 'create_savings_plan'
   | 'find_alternatives'
@@ -163,6 +175,8 @@ export type AgentRunInputV8 = {
   userId: string;
   history?: unknown[];
   memory?: MemoryEnvelopeV8 | null;
+  operatorAlerts?: OperatorAlertRecord[];
+  userProfileIntelligence?: UserProfileIntelligence | null;
   productState: ProductStateV8;
 };
 

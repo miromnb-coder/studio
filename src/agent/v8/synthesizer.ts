@@ -17,8 +17,19 @@ export type SynthesisInputV8 = {
   refinedReply: string;
 };
 
-function buildSuggestedActions(route: RouteResultV8, structuredData: Record<string, unknown>): SuggestedActionV8[] {
+function buildSuggestedActions(input: SynthesisInputV8): SuggestedActionV8[] {
+  const { route, execution, context } = input;
   if (route.intent === 'finance') {
+    const recommendations = context.intelligence.recommendations.slice(0, 2);
+    if (recommendations.length > 0) {
+      return recommendations.map((rec) => ({
+        id: `rec_${rec.id}`,
+        label: rec.title,
+        kind: 'finance',
+        payload: { recommendationId: rec.id, priority: rec.priority, type: rec.type },
+      }));
+    }
+
     return [
       { id: 'act_budget_review', label: 'Review recurring payments', kind: 'finance' },
       { id: 'act_cut_one', label: 'Cut one subscription', kind: 'finance' },
@@ -37,7 +48,7 @@ function buildSuggestedActions(route: RouteResultV8, structuredData: Record<stri
     return [{ id: 'act_define_deadline', label: 'Set deadline', kind: 'productivity' }];
   }
 
-  return Object.keys(structuredData).length ? [{ id: 'act_review_data', label: 'Review data', kind: 'general' }] : [];
+  return Object.keys(execution.structuredData).length ? [{ id: 'act_review_data', label: 'Review data', kind: 'general' }] : [];
 }
 
 export function synthesizeResponseV8(input: SynthesisInputV8): AgentResponseV8 {
@@ -51,8 +62,16 @@ export function synthesizeResponseV8(input: SynthesisInputV8): AgentResponseV8 {
       mode: input.route.mode,
       plan: input.plan.summary,
       steps: input.execution.steps,
-      structuredData: input.execution.structuredData,
-      suggestedActions: buildSuggestedActions(input.route, input.execution.structuredData),
+      structuredData: {
+        ...input.execution.structuredData,
+        ...(input.context.intelligence.recommendations.length
+          ? { recommendations: input.context.intelligence.recommendations }
+          : {}),
+        ...(input.context.intelligence.userProfile
+          ? { user_profile_intelligence: input.context.intelligence.userProfile }
+          : {}),
+      },
+      suggestedActions: buildSuggestedActions(input),
       memoryUsed: input.context.memory.relevantMemories.length > 0,
       verificationPassed: input.verificationPassed,
       state,

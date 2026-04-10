@@ -39,6 +39,7 @@ const EXPLICIT_GMAIL_PATTERNS = [
 const EXPLICIT_FINANCE_PATTERNS = [
   /\b(budget|spend|expense|subscription|bill|savings|debt|income|cash flow|mortgage|refund)\b/i,
   /\b(stock|etf|crypto|portfolio|invest(ing|ment)?)\b/i,
+  /\b(what should i do next|priority|deserves attention|best next action|save money|cut costs)\b/i,
 ];
 
 const EXPLICIT_MEMORY_PATTERNS = [
@@ -49,6 +50,12 @@ const EXPLICIT_MEMORY_PATTERNS = [
 const EXPLICIT_CODING_PATTERNS = [
   /\b(code|debug|error|bug|refactor|compile|unit test|stack trace|typescript|javascript|python|sql)\b/i,
   /\b(api|endpoint|function|class)\b.{0,24}\b(error|issue|bug|fail|broken)\b/i,
+];
+
+const RECOMMENDATION_PATTERNS = [
+  /\b(what should i do next|best next action|priority action|deserves attention)\b/i,
+  /\b(how can i save|save money|reduce spending|cut costs|cancel subscription)\b/i,
+  /\b(what should i cancel|which subscription|low value)\b/i,
 ];
 
 function pickMode(intent: AgentIntentV8): AgentModeV8 {
@@ -70,6 +77,7 @@ export function routeIntentV8(message: string, history: AgentMessageV8[] = []): 
       reason: 'Empty input.',
       needsGmail: false,
       needsFinanceData: false,
+      wantsRecommendations: false,
     };
   }
 
@@ -85,6 +93,7 @@ export function routeIntentV8(message: string, history: AgentMessageV8[] = []): 
   const explicitGmail = hasAnyPattern(EXPLICIT_GMAIL_PATTERNS, normalizedMessage);
   const explicitCoding = hasAnyPattern(EXPLICIT_CODING_PATTERNS, normalizedMessage);
   const explicitMemory = hasAnyPattern(EXPLICIT_MEMORY_PATTERNS, normalizedMessage);
+  const wantsRecommendations = hasAnyPattern(RECOMMENDATION_PATTERNS, normalizedMessage);
 
   let intent: AgentIntentV8 = 'general';
   let reason = 'General chat is the default path.';
@@ -123,5 +132,6 @@ export function routeIntentV8(message: string, history: AgentMessageV8[] = []): 
     reason,
     needsGmail,
     needsFinanceData: intent === 'finance',
+    wantsRecommendations: wantsRecommendations || intent === 'finance',
   };
 }
