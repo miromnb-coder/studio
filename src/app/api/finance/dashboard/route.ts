@@ -1,12 +1,15 @@
 import { NextResponse } from 'next/server';
 import { createClient as createSupabaseServerClient } from '@/lib/supabase/server';
+import { generateProactiveInsights } from '@/services/proactive-service';
 
 type DashboardInsight = {
   id: string;
   title: string;
-  detail: string;
-  severity: 'low' | 'medium' | 'high';
+  summary: string;
+  reason: string;
+  priority: 'low' | 'medium' | 'high';
   contextPrompt: string;
+  actionType?: 'open_chat' | 'create_savings_plan' | 'find_alternatives' | 'draft_cancellation' | 'review_subscription';
 };
 
 type SubscriptionItem = {
@@ -137,66 +140,6 @@ function buildSavingsSeries(
   }));
 }
 
-function buildInsights(
-  profile: Record<string, unknown> | null,
-  history: Array<Record<string, unknown>>,
-  subscriptions: SubscriptionItem[],
-): DashboardInsight[] {
-  const insights: DashboardInsight[] = [];
-  const estimatedSavings = toNumber(profile?.estimated_savings, 0);
-
-  if (estimatedSavings > 0) {
-    insights.push({
-      id: 'savings-open',
-      title: `You can still save about $${Math.round(estimatedSavings)}/month`,
-      detail: 'Ask the operator to prioritize the fastest, lowest-effort savings actions first.',
-      severity: estimatedSavings >= 60 ? 'high' : 'medium',
-      contextPrompt: `Create a ranked savings action plan to recover $${Math.round(estimatedSavings)} per month. Focus on quick wins first.`,
-    });
-  }
-
-  const topSubscription = subscriptions[0];
-  if (topSubscription && topSubscription.monthlyCost > 0) {
-    insights.push({
-      id: 'highest-subscription',
-      title: `${topSubscription.name} is your highest recurring cost`,
-      detail: `$${Math.round(topSubscription.monthlyCost)}/month. Check if downgrade or alternatives can reduce this spend.`,
-      severity: topSubscription.monthlyCost >= 40 ? 'high' : 'medium',
-      contextPrompt: `Review ${topSubscription.name} at $${Math.round(topSubscription.monthlyCost)}/month and suggest downgrade or replacement options with concrete savings.`,
-    });
-  }
-
-  const issueSubscription = subscriptions.find((sub) => sub.status === 'issue');
-  if (issueSubscription) {
-    insights.push({
-      id: `issue-${issueSubscription.id}`,
-      title: `${issueSubscription.name} may need attention`,
-      detail: `Status signal: ${issueSubscription.rawStatus || 'issue detected'}. Validate whether this charge is still needed.`,
-      severity: 'medium',
-      contextPrompt: `Investigate why ${issueSubscription.name} is flagged as "${issueSubscription.rawStatus}" and recommend the safest next action.`,
-    });
-  }
-
-  if (insights.length < 3) {
-    const pendingAction = history.find((event) => {
-      const metadata = asObject(event.metadata);
-      return String(metadata.status || '').toLowerCase() === 'pending';
-    });
-
-    if (pendingAction) {
-      insights.push({
-        id: 'pending-action',
-        title: 'A finance action is still pending',
-        detail: String(pendingAction.summary || pendingAction.title || 'Finish the pending action to lock in results.'),
-        severity: 'low',
-        contextPrompt: `Resume this pending finance action: ${String(pendingAction.summary || pendingAction.title || 'pending task')}.`,
-      });
-    }
-  }
-
-  return insights.slice(0, 3);
-}
-
 function buildOpportunities(subscriptions: SubscriptionItem[]): OpportunityItem[] {
   return subscriptions
     .filter((subscription) => subscription.monthlyCost > 0)
@@ -279,7 +222,7 @@ export async function GET(req: Request) {
         summary: String(row.summary || ''),
         date: String(row.created_at || ''),
       })),
-      proactiveInsights: buildInsights(profile, history, subscriptions),
+      proactiveInsights: generateProactiveInsights({ profile, history }) as DashboardInsight[],
       savingsSeries: buildSavingsSeries(history, estimatedSavings),
       timeline: history
         .slice(0, 12)

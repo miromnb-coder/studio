@@ -4,33 +4,44 @@ function buildSuggestedActions(route: RouteResultV8, structuredData: Record<stri
   const actions: SuggestedActionV8[] = [];
 
   if (route.intent === 'finance') {
-    actions.push({ id: 'act_cancel', label: 'Draft cancellation email', kind: 'premium', payload: { actionType: 'draft_cancellation' } });
-    actions.push({ id: 'act_plan', label: 'Create savings plan', kind: 'finance', payload: { actionType: 'create_savings_plan' } });
+    const leaks = (structuredData.detect_leaks as Record<string, unknown> | undefined) || {};
+    const hasSavings = typeof leaks.estimatedMonthlySavings === 'number' && leaks.estimatedMonthlySavings > 0;
+    if (hasSavings) {
+      actions.push({ id: 'act_plan', label: 'Create savings plan', kind: 'finance', payload: { actionType: 'create_savings_plan' } });
+      actions.push({ id: 'act_alt', label: 'Find cheaper alternatives', kind: 'finance', payload: { actionType: 'find_alternatives' } });
+    }
+    actions.push({ id: 'act_cancel', label: 'Draft cancellation message', kind: 'premium', payload: { actionType: 'draft_cancellation' } });
   } else if (route.intent === 'technical') {
-    actions.push({ id: 'act_patch', label: 'Generate patch checklist', kind: 'technical' });
+    actions.push({ id: 'act_patch', label: 'Run fix checklist', kind: 'technical' });
   } else {
-    actions.push({ id: 'act_next', label: 'Show next best steps', kind: 'general' });
+    actions.push({ id: 'act_next', label: 'Show next best step', kind: 'general' });
   }
 
   if (structuredData.check_gmail_connection && (structuredData.check_gmail_connection as Record<string, unknown>).connected) {
     actions.push({ id: 'act_gmail', label: 'Import Gmail finance data', kind: 'finance', payload: { actionType: 'import_gmail_finance' } });
   }
 
-  return actions;
+  return actions.slice(0, 3);
 }
 
 function buildReply(route: RouteResultV8, execution: ExecutionResultV8, context: AgentContextV8): string {
   if (route.intent === 'finance') {
     const leakData = (execution.structuredData.detect_leaks as Record<string, unknown> | undefined) || {};
     const savings = typeof leakData.estimatedMonthlySavings === 'number' ? leakData.estimatedMonthlySavings : 0;
-    return `I analyzed your finances and found savings opportunities. Estimated monthly savings is $${savings.toFixed(2)}. I also prepared a prioritized plan and next actions.`;
+    const headline = savings > 0
+      ? `You can likely recover about $${savings.toFixed(2)}/month.`
+      : 'I found a few targeted areas to optimize your recurring spend.';
+    const next = savings > 0
+      ? 'Next step: run "Create savings plan" and execute the first action today.'
+      : 'Next step: review your top subscription and confirm whether it is still needed.';
+    return `${headline} ${next}`;
   }
 
   if (route.intent === 'technical') {
-    return 'I analyzed the technical issue, identified likely root causes, and prepared a focused fix strategy with next steps.';
+    return 'Root cause is narrowed. Next step: apply the fix checklist in order and verify after each change.';
   }
 
-  return `I reviewed your request with available context${context.memory.summary ? ' and memory signals' : ''}, then prepared actionable insights and next steps.`;
+  return `Here’s the fastest path: start with the highest-impact action now${context.memory.summary ? ', based on your prior context' : ''}.`;
 }
 
 export function synthesizeResponseV8(params: {

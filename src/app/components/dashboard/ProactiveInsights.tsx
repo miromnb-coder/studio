@@ -7,6 +7,8 @@ type ProactiveInsightsProps = {
 };
 
 export function ProactiveInsights({ insights, onOpenInsight }: ProactiveInsightsProps) {
+  if (!insights.length) return null;
+
   return (
     <section className="dashboard-reveal space-y-2">
       <h2 className="px-1 text-sm font-semibold uppercase tracking-wide text-secondary">Proactive insights</h2>
@@ -20,7 +22,8 @@ export function ProactiveInsights({ insights, onOpenInsight }: ProactiveInsights
           <div className="flex items-start justify-between gap-3">
             <div>
               <p className="text-sm font-semibold text-primary">{insight.title}</p>
-              <p className="mt-1 text-xs text-secondary">{insight.detail}</p>
+              <p className="mt-1 text-xs text-secondary">{insight.summary}</p>
+              <p className="mt-1 text-[11px] text-[#5a5a5a]">{insight.reason}</p>
             </div>
             <ArrowUpRight className="mt-0.5 h-4 w-4 text-secondary" />
           </div>

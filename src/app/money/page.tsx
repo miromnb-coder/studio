@@ -25,8 +25,9 @@ type DashboardPayload = {
   proactiveInsights: Array<{
     id: string;
     title: string;
-    detail: string;
-    severity: 'low' | 'medium' | 'high';
+    summary: string;
+    reason: string;
+    priority: 'low' | 'medium' | 'high';
   }>;
   timeline: Array<{
     date: string;
@@ -134,9 +135,10 @@ export default function MoneyPage() {
                 <div key={insight.id} className="card-interactive rounded-2xl px-3 py-3">
                   <div className="flex items-center justify-between gap-2">
                     <p className="text-sm font-semibold text-primary">{insight.title}</p>
-                    <span className="badge">{insight.severity}</span>
+                    <span className="badge">{insight.priority}</span>
                   </div>
-                  <p className="mt-1 text-xs text-secondary">{insight.detail}</p>
+                  <p className="mt-1 text-xs text-secondary">{insight.summary}</p>
+                  <p className="mt-1 text-[11px] text-[#5a5a5a]">{insight.reason}</p>
                 </div>
               ))
             )}

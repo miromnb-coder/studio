@@ -8,6 +8,7 @@ import {
   fetchFinancialEmails,
   mergeSubscriptionSignals,
 } from '@/lib/integrations/gmail';
+import { generateProactiveInsights } from '@/services/proactive-service';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -139,6 +140,8 @@ export async function POST() {
         last_sync_emails_analyzed: emails.length,
         last_sync_subscriptions_found: incomingSignals.length,
         chat_ready_summary: chatReadySummary,
+        trial_risks: analysis.trialRisks,
+        savings_opportunities: analysis.savingsOpportunities,
         last_error: null,
       },
     };
@@ -176,6 +179,39 @@ export async function POST() {
           subscriptions: analysis.subscriptions,
           recurringPayments: analysis.recurringPayments,
         },
+      },
+      created_at: new Date().toISOString(),
+    });
+
+    const { data: recentHistory } = await supabase
+      .from('finance_history')
+      .select('event_type,title,summary,metadata,created_at')
+      .eq('user_id', userId)
+      .order('created_at', { ascending: false })
+      .limit(20);
+
+    const proactiveInsights = generateProactiveInsights({
+      profile: {
+        ...(profile || {}),
+        active_subscriptions: mergedSubscriptions,
+        estimated_savings: savingsEstimate,
+        last_analysis: nextLastAnalysis,
+      },
+      history: (recentHistory || []) as Array<Record<string, unknown>>,
+    });
+
+    await supabase.from('finance_history').insert({
+      user_id: userId,
+      event_type: 'proactive_insight',
+      title: 'Money Brain refreshed after Gmail sync',
+      summary: proactiveInsights.length
+        ? `Top insight: ${proactiveInsights[0].title}`
+        : 'No high-value proactive insights detected.',
+      metadata: {
+        key: proactiveInsights[0]?.id || 'none',
+        source: 'gmail_import',
+        insight_ids: proactiveInsights.map((insight) => insight.id),
+        status: 'generated',
       },
       created_at: new Date().toISOString(),
     });

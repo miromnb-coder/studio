@@ -1,9 +1,11 @@
 export type DashboardInsight = {
   id: string;
   title: string;
-  detail: string;
-  severity: 'low' | 'medium' | 'high';
+  summary: string;
+  reason: string;
+  priority: 'low' | 'medium' | 'high';
   contextPrompt: string;
+  actionType?: 'open_chat' | 'create_savings_plan' | 'find_alternatives' | 'draft_cancellation' | 'review_subscription';
 };
 
 export type SubscriptionItem = {
