@@ -42,6 +42,7 @@ export type AgentContextV8 = {
     semanticMemories?: Array<Record<string, unknown>>;
   };
   environment: {
+    gmailConnected: boolean;
     productState: ProductStateV8;
     nowIso: string;
   };

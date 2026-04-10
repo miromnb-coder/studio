@@ -8,8 +8,8 @@ export async function checkGmailConnectionTool(
     ok: true,
     tool: 'check_gmail_connection',
     output: {
-      connected: context.environment.productState.gmailConnected,
-      importAvailable: context.environment.productState.gmailConnected,
+      connected: context.environment.gmailConnected,
+      importAvailable: context.environment.gmailConnected,
     },
   };
 }
@@ -18,7 +18,7 @@ export async function importGmailFinanceTool(
   _input: Record<string, unknown>,
   context: AgentContextV8,
 ): Promise<ToolResultV8> {
-  if (!context.environment.productState.gmailConnected) {
+  if (!context.environment.gmailConnected) {
     return {
       ok: false,
       tool: 'import_gmail_finance',

@@ -17,6 +17,9 @@ type SyncPayload = {
   lastSyncedAt?: string | null;
   emailsAnalyzed?: number;
   subscriptionsFound?: number;
+  recurringPaymentsFound?: number;
+  monthlyTotal?: number;
+  estimatedMonthlySavings?: number;
   summary?: string;
 };
 
@@ -36,6 +39,8 @@ export function GmailIntegrationCard() {
   const [isConnecting, setIsConnecting] = useState(false);
   const [isSyncing, setIsSyncing] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [successMessage, setSuccessMessage] = useState<string | null>(null);
+  const [estimatedMonthlySavings, setEstimatedMonthlySavings] = useState(0);
 
   const loadStatus = useCallback(async () => {
     try {
@@ -76,6 +81,7 @@ export function GmailIntegrationCard() {
     setIsSyncing(true);
     setStatus('syncing');
     setErrorMessage(null);
+    setSuccessMessage(null);
 
     try {
       const response = await fetch('/api/integrations/gmail/import', {
@@ -95,6 +101,8 @@ export function GmailIntegrationCard() {
       setLastSyncedAt(payload.lastSyncedAt || new Date().toISOString());
       setEmailsAnalyzed(typeof payload.emailsAnalyzed === 'number' ? payload.emailsAnalyzed : 0);
       setSubscriptionsFound(typeof payload.subscriptionsFound === 'number' ? payload.subscriptionsFound : 0);
+      setEstimatedMonthlySavings(typeof payload.estimatedMonthlySavings === 'number' ? payload.estimatedMonthlySavings : 0);
+      setSuccessMessage(payload.summary || 'I analyzed your recent emails and finished your finance sync.');
       if (typeof window !== 'undefined') {
         localStorage.setItem('finance_data_updated_at', new Date().toISOString());
         window.dispatchEvent(new CustomEvent('finance:data-updated', { detail: { source: 'gmail_sync', summary: payload.summary || null } }));
@@ -110,6 +118,7 @@ export function GmailIntegrationCard() {
 
   const disconnect = async () => {
     setErrorMessage(null);
+    setSuccessMessage(null);
     setIsConnecting(true);
     try {
       const response = await fetch('/api/integrations/gmail/disconnect', {
@@ -126,6 +135,7 @@ export function GmailIntegrationCard() {
       setLastSyncedAt(null);
       setEmailsAnalyzed(0);
       setSubscriptionsFound(0);
+      setEstimatedMonthlySavings(0);
       if (typeof window !== 'undefined') {
         localStorage.setItem('finance_data_updated_at', new Date().toISOString());
         window.dispatchEvent(new CustomEvent('finance:data-updated', { detail: { source: 'gmail_disconnect' } }));
@@ -165,8 +175,10 @@ export function GmailIntegrationCard() {
         <p className="mt-1 text-xs text-secondary">
           Emails analyzed: {emailsAnalyzed} · Subscriptions found: {subscriptionsFound}
         </p>
+        <p className="mt-1 text-xs text-secondary">Estimated monthly savings: {estimatedMonthlySavings.toFixed(2)}</p>
 
         {errorMessage ? <p className="mt-3 rounded-lg border border-[#dfc9c9] bg-[#f8eded] px-3 py-2 text-xs text-[#6e3030]">{errorMessage}</p> : null}
+        {successMessage ? <p className="mt-3 rounded-lg border border-[#cbe4d2] bg-[#eef8f0] px-3 py-2 text-xs text-[#255b34]">{successMessage}</p> : null}
 
         <div className="mt-3 flex flex-wrap gap-2">
           {status === 'disconnected' || status === 'error' || status === 'connecting' ? (

@@ -35,10 +35,24 @@ export interface RetrievedMemoryContext {
   userId: string;
   summary: string;
   summaryType: MemoryIntent;
+  gmailConnected?: boolean;
   financeProfile?: FinanceProfileRecord | null;
   financeEvents?: MemoryEventRecord[];
   summaries?: Array<{ summary_type: string; summary_text: string }>;
   semanticMemories?: MemoryEmbeddingRecord[];
+}
+
+function resolveGmailConnected(profile: FinanceProfileRecord | null): boolean {
+  const lastAnalysis = typeof profile?.last_analysis === 'object' && profile?.last_analysis
+    ? (profile.last_analysis as Record<string, unknown>)
+    : {};
+  const gmail = typeof lastAnalysis.gmail_integration === 'object' && lastAnalysis.gmail_integration
+    ? (lastAnalysis.gmail_integration as Record<string, unknown>)
+    : {};
+
+  const hasToken = Boolean(gmail.access_token_encrypted);
+  const status = String(gmail.status || 'connected').toLowerCase();
+  return hasToken && status !== 'disconnected' && status !== 'error';
 }
 
 interface MemorySummaryRecord {
@@ -270,6 +284,7 @@ export async function retrieveRelevantMemory(
     userId,
     summaryType: intent,
     summary,
+    gmailConnected: resolveGmailConnected(profile),
     financeProfile: profile,
     financeEvents: events,
     summaries,

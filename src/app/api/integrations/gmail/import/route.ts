@@ -113,19 +113,19 @@ export async function POST() {
     const analysis = await analyzeFinancialEmailsWithAI(emails);
 
     const incomingSignals = [...analysis.subscriptions, ...analysis.recurringPayments];
+    const subscriptionsCount = analysis.subscriptions.length;
     const existingSubscriptions = Array.isArray(profile?.active_subscriptions)
       ? (profile.active_subscriptions as Array<Record<string, unknown>>)
       : [];
 
     const mergedSubscriptions = mergeSubscriptionSignals(existingSubscriptions, incomingSignals);
     const monthlyTotal = computeMonthlyTotal(mergedSubscriptions);
+    const currency = profile?.currency || incomingSignals.find((signal) => signal.currency)?.currency || 'USD';
 
     const aiSummary =
       analysis.summary ||
       `I analyzed ${emails.length} recent finance-related emails and detected ${incomingSignals.length} recurring payment signals.`;
-    const chatReadySummary = `I analyzed your recent emails and found ${incomingSignals.length} subscription or recurring payment signals across ${analysis.merchants.length} merchants.`;
-
-    const currency = profile?.currency || incomingSignals.find((signal) => signal.currency)?.currency || 'USD';
+    const chatReadySummary = `I analyzed your recent emails and found ${subscriptionsCount} subscriptions costing ${monthlyTotal.toFixed(2)} ${currency}/month.`;
     const savingsEstimate =
       typeof profile?.estimated_savings === 'number'
         ? profile.estimated_savings
@@ -138,7 +138,7 @@ export async function POST() {
         status: 'connected',
         last_synced_at: new Date().toISOString(),
         last_sync_emails_analyzed: emails.length,
-        last_sync_subscriptions_found: incomingSignals.length,
+        last_sync_subscriptions_found: subscriptionsCount,
         chat_ready_summary: chatReadySummary,
         trial_risks: analysis.trialRisks,
         savings_opportunities: analysis.savingsOpportunities,
@@ -170,7 +170,7 @@ export async function POST() {
         source: 'gmail',
         status: 'success',
         emails_analyzed: emails.length,
-        subscriptions_found: incomingSignals.length,
+        subscriptions_found: subscriptionsCount,
         trial_risks: analysis.trialRisks,
         savings_opportunities: analysis.savingsOpportunities,
         chat_ready_summary: chatReadySummary,
@@ -231,7 +231,10 @@ export async function POST() {
       status: 'connected',
       lastSyncedAt: nextLastAnalysis.gmail_integration.last_synced_at,
       emailsAnalyzed: emails.length,
-      subscriptionsFound: incomingSignals.length,
+      subscriptionsFound: subscriptionsCount,
+      recurringPaymentsFound: analysis.recurringPayments.length,
+      monthlyTotal,
+      estimatedMonthlySavings: savingsEstimate,
       summary: chatReadySummary,
     });
   } catch (error) {
