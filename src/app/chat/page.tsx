@@ -2,33 +2,27 @@
 
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import {
-  ArrowUp,
-  Plus,
-  RefreshCw,
-  Mic,
-  AudioLines,
-  Paperclip,
-  ImagePlus,
-  NotebookPen,
-  ClipboardPaste,
-  MessageSquare,
-  Pencil,
-  Trash2,
-  Menu,
-  Crown,
-  Sparkles,
-  X,
-} from 'lucide-react';
+import { Crown, MessageSquare, Plus, RefreshCw } from 'lucide-react';
+import { AnimatePresence, motion } from 'framer-motion';
 import { useAppStore } from '../store/app-store';
-import { AgentStrategyCard } from './components/AgentStrategyCard';
-import { StructuredResultCard } from './components/StructuredResultCard';
 import { useUserEntitlements } from '../hooks/use-user-entitlements';
-import FinanceResultCard from '@/components/chat/FinanceResultCard';
-import FinanceActionResultCard from '@/components/chat/FinanceActionResultCard';
 import type { FinanceActionType } from '@/lib/finance/types';
+import { AgentThinkingSurface } from './components/AgentThinkingSurface';
+import { AssistantResponseSurface } from './components/AssistantResponseSurface';
+import { ChatComposerPremium } from './components/ChatComposerPremium';
+import { ConversationSwitcherSheet } from './components/ConversationSwitcherSheet';
+import { AgentActivityBadge } from './components/AgentActivityBadge';
+import type { ExecutionStep } from './components/AgentExecutionTimeline';
 
 const PREMIUM_UPLOAD_MESSAGE = 'File upload is a Premium feature. Upgrade to attach files.';
+const THINKING_STEPS = [
+  'Understanding request',
+  'Loading memory',
+  'Running analysis',
+  'Detecting subscriptions',
+  'Generating savings insights',
+  'Preparing response',
+];
 
 const formatConversationTime = (iso: string) => {
   const timestamp = new Date(iso);
@@ -65,6 +59,7 @@ export default function ChatPage() {
   const deleteConversation = useAppStore((s) => s.deleteConversation);
   const renameConversation = useAppStore((s) => s.renameConversation);
   const runFinanceAction = useAppStore((s) => s.runFinanceAction);
+  const activeSteps = useAppStore((s) => s.activeSteps);
   const { plan, usage, isPremium, isLimitReached, refresh } = useUserEntitlements();
 
   const [draft, setDraft] = useState('');
@@ -75,6 +70,7 @@ export default function ChatPage() {
   const [showAuthPrompt, setShowAuthPrompt] = useState(false);
   const [voiceSupported, setVoiceSupported] = useState(true);
   const [financeActionLoadingForMessage, setFinanceActionLoadingForMessage] = useState<Record<string, FinanceActionType | null>>({});
+  const [simulatedStepIndex, setSimulatedStepIndex] = useState(0);
 
   const listRef = useRef<HTMLDivElement>(null);
   const composerRef = useRef<HTMLDivElement>(null);
@@ -82,8 +78,25 @@ export default function ChatPage() {
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   const activeAssistantMessage = [...messages].reverse().find((m) => m.role === 'assistant');
-  const showTyping = isAgentResponding && !!activeAssistantMessage && !activeAssistantMessage.content;
+  const showThinkingSurface = isAgentResponding && !!activeAssistantMessage;
   const empty = useMemo(() => messages.length === 0, [messages]);
+
+  const derivedExecutionSteps = useMemo<ExecutionStep[]>(() => {
+    if (activeAssistantMessage?.agentMetadata?.steps?.length) {
+      return activeAssistantMessage.agentMetadata.steps.map((step, idx) => ({
+        id: `${activeAssistantMessage.id}-${idx}`,
+        label: step.action,
+        summary: step.summary || step.error,
+        status: step.status,
+      }));
+    }
+
+    return THINKING_STEPS.map((label, idx) => ({
+      id: `sim-${idx}`,
+      label,
+      status: !isAgentResponding ? 'completed' : idx < simulatedStepIndex ? 'completed' : idx === simulatedStepIndex ? 'running' : 'pending',
+    }));
+  }, [activeAssistantMessage, isAgentResponding, simulatedStepIndex]);
 
   const requireAuth = () => {
     if (user) return false;
@@ -113,7 +126,7 @@ export default function ChatPage() {
   useEffect(() => {
     if (!listRef.current) return;
     listRef.current.scrollTop = listRef.current.scrollHeight;
-  }, [messages, isAgentResponding, activeConversationId]);
+  }, [messages, isAgentResponding, activeConversationId, simulatedStepIndex]);
 
   useEffect(() => {
     if (!textareaRef.current) return;
@@ -127,7 +140,7 @@ export default function ChatPage() {
       if (!composerRef.current) return;
       const target = event.target as Node;
       if (!composerRef.current.contains(target)) {
-        setOpenPanel(null);
+        setOpenPanel((prev) => (prev === 'conversations' ? prev : null));
       }
     };
     document.addEventListener('mousedown', handler);
@@ -149,6 +162,20 @@ export default function ChatPage() {
     setShowPaywall(true);
     void refresh();
   }, [streamError, refresh]);
+
+  useEffect(() => {
+    if (!isAgentResponding) {
+      setSimulatedStepIndex(0);
+      return;
+    }
+
+    setSimulatedStepIndex(0);
+    const interval = window.setInterval(() => {
+      setSimulatedStepIndex((current) => (current >= THINKING_STEPS.length - 1 ? current : current + 1));
+    }, 900);
+
+    return () => window.clearInterval(interval);
+  }, [isAgentResponding, activeConversationId]);
 
   const applyTemplate = (template: string, notice: string) => {
     if (requireAuth()) return;
@@ -269,18 +296,20 @@ export default function ChatPage() {
       setShowPaywall(true);
       return;
     }
-    if (!result.ok) {
-      setComposerNotice('Action completed with partial result.');
-    }
+    if (!result.ok) setComposerNotice('Action completed with partial result.');
   };
 
+  const thinkingStatus = activeSteps.length
+    ? activeSteps.find((step) => step.status === 'running')?.label || 'Processing execution steps'
+    : derivedExecutionSteps.find((step) => step.status === 'running')?.label || 'Preparing response';
+
   return (
-    <main className="screen app-bg pb-52">
+    <main className="screen app-bg pb-56">
       <header className="mb-3 space-y-2 px-1 pt-1">
         <div className="flex items-center justify-between gap-3">
           <div>
             <h1 className="text-xl font-semibold text-primary">Kivo</h1>
-            <p className="text-sm text-secondary">Your personal AI assistant</p>
+            <p className="text-sm text-secondary">AI operator workspace</p>
           </div>
           <div className="flex items-center gap-2">
             <button type="button" onClick={openUpgrade} className="inline-flex items-center gap-1 rounded-full border border-black/10 bg-[#f6f6f6] px-3 py-1.5 text-xs font-medium text-[#232323]">
@@ -292,87 +321,72 @@ export default function ChatPage() {
           </div>
         </div>
 
-        <div className="flex items-center justify-between rounded-2xl border border-black/[0.06] bg-[#f6f6f6] px-3 py-2">
-          <button type="button" onClick={() => setOpenPanel((prev) => (prev === 'conversations' ? null : 'conversations'))} className="inline-flex items-center gap-2 text-sm font-medium text-[#2f2f2f]">
-            <MessageSquare className="h-4 w-4" /> Conversations
-          </button>
-          <div className="text-right">
-            <p className="text-[11px] font-medium text-[#4c4c4c]">{plan === 'PREMIUM' ? 'Premium' : 'Free plan'}</p>
-            <p className="text-[11px] text-[#6a6a6a]">{formatUsageLine(usage.current, usage.limit)}</p>
+        <div className="rounded-2xl border border-black/[0.06] bg-[#f6f6f6]/95 px-3 py-2 shadow-[0_8px_18px_rgba(0,0,0,0.04)] backdrop-blur-xl">
+          <div className="flex items-center justify-between">
+            <button type="button" onClick={() => setOpenPanel((prev) => (prev === 'conversations' ? null : 'conversations'))} className="inline-flex items-center gap-2 text-sm font-medium text-[#2f2f2f]">
+              <MessageSquare className="h-4 w-4" /> Conversations
+            </button>
+            <div className="text-right">
+              <p className="text-[11px] font-medium text-[#4c4c4c]">{plan === 'PREMIUM' ? 'Premium' : 'Free plan'}</p>
+              <p className="text-[11px] text-[#6a6a6a]">{formatUsageLine(usage.current, usage.limit)}</p>
+            </div>
+          </div>
+          <div className="mt-2">
+            <AgentActivityBadge isActive={isAgentResponding} label={isAgentResponding ? 'Agent actively executing' : 'Agent standing by'} />
           </div>
         </div>
 
-        {openPanel === 'conversations' ? (
-          <div className="message-appear max-h-64 space-y-2 overflow-y-auto rounded-2xl border border-black/[0.06] bg-[#f7f7f7] p-2 shadow-[0_10px_24px_rgba(0,0,0,0.04)]">
-            {conversationList.map((conversation) => {
-              const isActive = conversation.id === activeConversationId;
-              return (
-                <div key={conversation.id} className={`rounded-xl border px-2.5 py-2 ${isActive ? 'border-[#6377a8]/30 bg-[#ebeff8]' : 'border-black/[0.05] bg-white'}`}>
-                  <button type="button" onClick={() => { openConversation(conversation.id); setOpenPanel(null); }} className="w-full text-left">
-                    <div className="flex items-start justify-between gap-2">
-                      <p className={`line-clamp-1 text-sm font-medium ${isActive ? 'text-[#24355e]' : 'text-[#252525]'}`}>{conversation.title}</p>
-                      <span className="text-[11px] text-[#6a6a6a]">{formatConversationTime(conversation.updatedAt)}</span>
-                    </div>
-                    <p className="line-clamp-1 text-xs text-[#636363]">{conversation.lastMessagePreview || 'No messages yet'}</p>
-                  </button>
-                  <div className="mt-2 flex items-center justify-end gap-1">
-                    <button type="button" onClick={() => handleRenameConversation(conversation.id, conversation.title)} className="composer-icon-btn" aria-label="Rename conversation">
-                      <Pencil className="h-3.5 w-3.5" />
-                    </button>
-                    <button type="button" onClick={() => handleDeleteConversation(conversation.id)} className="composer-icon-btn" aria-label="Delete conversation">
-                      <Trash2 className="h-3.5 w-3.5" />
-                    </button>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        ) : null}
+        <AnimatePresence>
+          {openPanel === 'conversations' ? (
+            <ConversationSwitcherSheet
+              conversations={conversationList}
+              activeConversationId={activeConversationId}
+              onOpenConversation={(id) => {
+                openConversation(id);
+                setOpenPanel(null);
+              }}
+              onRenameConversation={handleRenameConversation}
+              onDeleteConversation={handleDeleteConversation}
+              formatConversationTime={formatConversationTime}
+            />
+          ) : null}
+        </AnimatePresence>
       </header>
 
-      <section ref={listRef} className="relative z-10 max-h-[calc(100vh-320px)] space-y-4 overflow-y-auto pb-3">
-        {empty ? (
-          <div className="px-1 py-6 text-sm text-secondary">Ask anything. Kivo will think and help you move forward.</div>
-        ) : (
-          messages.map((message) => {
-            const metadata = message.role === 'assistant' ? message.agentMetadata : undefined;
-            return (
-              <div key={message.id} className={`message-appear max-w-[95%] ${message.role === 'user' ? 'ml-auto' : ''}`}>
-                <div className={message.role === 'user' ? 'ml-auto max-w-[90%] rounded-[18px] border border-black/[0.04] bg-[#f3f3f3] px-3.5 py-2.5 text-[15px] leading-6 text-[#1f1f1f]' : 'px-1 py-1 text-[16px] leading-[1.82] text-[#1d1d1d]'}>
-                  {message.content || (message.isStreaming ? ' ' : '')}
-                </div>
-                {metadata ? (
-                  <div className="px-1">
-                    <AgentStrategyCard metadata={metadata} />
-                    {metadata.structuredData?.finance ? (
-                      <FinanceResultCard
-                        data={metadata.structuredData.finance}
-                        onAction={(actionType) => void handleFinanceAction(message.id, actionType)}
-                        actionLoading={financeActionLoadingForMessage[message.id] || null}
-                        isPremium={isPremium}
-                        onPremiumRequired={() => setShowPaywall(true)}
-                      />
-                    ) : (
-                      <StructuredResultCard data={metadata.structuredData} />
-                    )}
-                    {metadata.structuredData?.actionResult ? (
-                      <FinanceActionResultCard result={metadata.structuredData.actionResult} />
-                    ) : null}
-                  </div>
-                ) : null}
-              </div>
-            );
-          })
-        )}
+      <section ref={listRef} className="relative z-10 max-h-[calc(100vh-340px)] space-y-4 overflow-y-auto pb-3 pr-1">
+        {empty ? <div className="px-1 py-6 text-sm text-secondary">Assign a task to activate Kivo. The workspace will track analysis and execution automatically.</div> : null}
 
-        {showTyping ? (
-          <div className="message-appear px-1 pt-1 text-sm">
-            <div className="inline-flex items-center gap-2 text-[#6b7ba7]">
-              <span className="kivo-thinking-orb" />
-              <p className="text-xs tracking-[0.01em]">Kivo is thinking…</p>
-            </div>
-          </div>
-        ) : null}
+        {messages.map((message) => (
+          <motion.div
+            key={message.id}
+            initial={{ opacity: 0, y: 8 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.2 }}
+            className={`max-w-[96%] ${message.role === 'user' ? 'ml-auto' : ''}`}
+          >
+            {message.role === 'user' ? (
+              <div className="ml-auto max-w-[90%] rounded-[18px] border border-black/[0.04] bg-[#f3f3f3] px-3.5 py-2.5 text-[15px] leading-6 text-[#1f1f1f]">
+                {message.content}
+              </div>
+            ) : (
+              <AssistantResponseSurface
+                message={message}
+                isPremium={isPremium}
+                actionLoading={financeActionLoadingForMessage[message.id] || null}
+                onAction={(actionType) => void handleFinanceAction(message.id, actionType)}
+                onPremiumRequired={() => setShowPaywall(true)}
+              />
+            )}
+          </motion.div>
+        ))}
+
+        <AnimatePresence>
+          {showThinkingSurface ? (
+            <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: 6 }}>
+              <AgentThinkingSurface statusText={thinkingStatus} steps={derivedExecutionSteps} />
+            </motion.div>
+          ) : null}
+        </AnimatePresence>
 
         {streamError && !streamError.startsWith('LIMIT_REACHED:') && !streamError.startsWith('AUTH_REQUIRED:') && !streamError.startsWith('PREMIUM_REQUIRED:') ? (
           <div className="rounded-xl border border-black/5 bg-[#f7f7f7] px-3 py-2.5 text-sm text-[#373737]">
@@ -384,136 +398,64 @@ export default function ChatPage() {
         ) : null}
       </section>
 
-      <div ref={composerRef} className="fixed bottom-[calc(72px+env(safe-area-inset-bottom))] left-1/2 z-30 w-full max-w-md -translate-x-1/2 px-4 pb-2 pt-2">
-        {composerNotice ? <p className="message-appear mb-2 px-2 text-xs text-[#6f6f6f]">{composerNotice}</p> : null}
+      <ChatComposerPremium
+        composerRef={composerRef}
+        fileInputRef={fileInputRef}
+        textareaRef={textareaRef}
+        draft={draft}
+        notice={composerNotice}
+        openPanel={openPanel === 'conversations' ? null : openPanel}
+        isVoiceMode={isVoiceMode}
+        voiceSupported={voiceSupported}
+        isAgentResponding={isAgentResponding}
+        isLimitReached={isLimitReached}
+        userPresent={Boolean(user)}
+        onDraftChange={(value) => {
+          if (requireAuth()) return;
+          setDraft(value);
+          setDraftPrompt(value);
+        }}
+        onSend={() => void handleSend()}
+        onTextareaFocus={() => {
+          if (requireAuth()) router.push('/login?next=/chat');
+        }}
+        onTogglePanel={(panel) => setOpenPanel((prev) => (prev === panel ? null : panel))}
+        onToggleVoiceMode={toggleVoiceMode}
+        onSpeechToText={startSpeechToText}
+        onAttachFile={() => {
+          if (!isPremium) {
+            setComposerNotice(PREMIUM_UPLOAD_MESSAGE);
+            setShowPaywall(true);
+            return;
+          }
+          fileInputRef.current?.click();
+          setOpenPanel(null);
+        }}
+        onAddImagePrompt={() => applyTemplate('Please use this image as context:', 'Image template added.')}
+        onStartTaskTemplate={() => applyTemplate('Start a structured task template for: ', 'Task template added.')}
+        onAddNoteTemplate={() => applyTemplate('Quick note: ', 'Note template added.')}
+        onNewChat={handleNewChat}
+        onViewConversations={() => setOpenPanel('conversations')}
+        onClearDraft={() => {
+          setDraft('');
+          setDraftPrompt('');
+          setComposerNotice('Draft cleared.');
+          setOpenPanel(null);
+        }}
+        onOpenPlanInfo={() => setComposerNotice(`Usage: ${usage.current}/${usage.limit} • Plan: ${plan}`)}
+        onUpgrade={openUpgrade}
+      />
 
-        {openPanel === 'add' ? (
-          <div className="message-appear mb-2 rounded-2xl border border-black/[0.06] bg-[#f6f6f6] p-1.5 shadow-[0_8px_20px_rgba(0,0,0,0.05)]">
-            <button
-              type="button"
-              onClick={() => {
-                if (!isPremium) {
-                  setComposerNotice(PREMIUM_UPLOAD_MESSAGE);
-                  setShowPaywall(true);
-                  return;
-                }
-                fileInputRef.current?.click();
-              }}
-              className="composer-menu-btn"
-            >
-              <Paperclip className="h-4 w-4" /> Attach file
-            </button>
-            <button type="button" onClick={() => applyTemplate('Please use this image as context:', 'Image template added.')} className="composer-menu-btn">
-              <ImagePlus className="h-4 w-4" /> Insert image prompt
-            </button>
-            <button type="button" onClick={() => applyTemplate('Start a structured task template for: ', 'Task template added.')} className="composer-menu-btn">
-              <NotebookPen className="h-4 w-4" /> Start task template
-            </button>
-            <button type="button" onClick={() => applyTemplate('Quick note: ', 'Note template added.')} className="composer-menu-btn">
-              <ClipboardPaste className="h-4 w-4" /> Add note
-            </button>
-          </div>
-        ) : null}
-
-        {openPanel === 'utility' ? (
-          <div className="message-appear mb-2 rounded-2xl border border-black/[0.06] bg-[#f6f6f6] p-1.5 shadow-[0_8px_20px_rgba(0,0,0,0.05)]">
-            <button type="button" onClick={handleNewChat} className="composer-menu-btn">
-              <Plus className="h-4 w-4" /> New chat
-            </button>
-            <button type="button" onClick={() => setOpenPanel('conversations')} className="composer-menu-btn">
-              <MessageSquare className="h-4 w-4" /> View conversations
-            </button>
-            <button
-              type="button"
-              onClick={() => {
-                if (!isPremium) {
-                  setShowPaywall(true);
-                  setComposerNotice(PREMIUM_UPLOAD_MESSAGE);
-                  return;
-                }
-                fileInputRef.current?.click();
-              }}
-              className="composer-menu-btn"
-            >
-              <Paperclip className="h-4 w-4" /> Upload file
-            </button>
-            <button type="button" onClick={() => { setDraft(''); setDraftPrompt(''); setComposerNotice('Draft cleared.'); setOpenPanel(null); }} className="composer-menu-btn">
-              <X className="h-4 w-4" /> Clear current draft
-            </button>
-            <button type="button" onClick={() => setComposerNotice(`Usage: ${usage.current}/${usage.limit} • Plan: ${plan}`)} className="composer-menu-btn">
-              <Sparkles className="h-4 w-4" /> Open plan & usage info
-            </button>
-            <button type="button" onClick={openUpgrade} className="composer-menu-btn">
-              <Crown className="h-4 w-4" /> Upgrade
-            </button>
-          </div>
-        ) : null}
-
-        <div className="flex items-end gap-1.5 rounded-[30px] border border-black/[0.06] bg-[#f6f6f6] p-2 shadow-[0_10px_24px_rgba(0,0,0,0.04)]">
-          <input
-            ref={fileInputRef}
-            type="file"
-            className="hidden"
-            onChange={(event) => {
-              const fileName = event.target.files?.[0]?.name;
-              if (!fileName) return;
-              applyTemplate(`Attached file context: ${fileName}`, 'File attached to prompt context.');
-            }}
-          />
-
-          <button type="button" className="composer-icon-btn" aria-label="Open add menu" onClick={() => setOpenPanel((prev) => (prev === 'add' ? null : 'add'))}>
-            <Plus className="h-4 w-4" />
-          </button>
-          <button type="button" className="composer-icon-btn" aria-label="Open utility menu" onClick={() => setOpenPanel((prev) => (prev === 'utility' ? null : 'utility'))}>
-            <Menu className="h-4 w-4" />
-          </button>
-          <textarea
-            ref={textareaRef}
-            value={draft}
-            onFocus={() => {
-              if (requireAuth()) router.push('/login?next=/chat');
-            }}
-            onChange={(e) => {
-              if (requireAuth()) return;
-              setDraft(e.target.value);
-              setDraftPrompt(e.target.value);
-            }}
-            onKeyDown={(event) => {
-              if (event.key === 'Enter' && !event.shiftKey) {
-                event.preventDefault();
-                void handleSend();
-              }
-            }}
-            rows={1}
-            placeholder={user ? 'Assign a task or ask anything' : 'Sign in to start chatting'}
-            className="system-input max-h-[164px] min-h-[44px] flex-1 resize-none border-none bg-[#f8f8f8] px-3 py-2.5 text-[15px]"
-          />
-          <button type="button" className={`composer-icon-btn ${isVoiceMode ? 'composer-icon-btn-active' : ''} ${!voiceSupported ? 'opacity-40' : ''}`} aria-label="Toggle voice mode" onClick={toggleVoiceMode} disabled={!voiceSupported}>
-            <AudioLines className="h-4 w-4" />
-          </button>
-          <button type="button" className={`composer-icon-btn ${!voiceSupported ? 'opacity-40' : ''}`} aria-label="Start speech to text" onClick={startSpeechToText} disabled={!voiceSupported}>
-            <Mic className="h-4 w-4" />
-          </button>
-          <button
-            type="button"
-            onClick={() => void handleSend()}
-            className="composer-send-btn disabled:opacity-45"
-            disabled={!draft.trim() || isAgentResponding || isLimitReached}
-            aria-label="Send message"
-          >
-            <ArrowUp className="h-4 w-4" />
-          </button>
-        </div>
-
-        {isLimitReached ? (
-          <div className="mt-2 rounded-2xl border border-black/10 bg-[#f6f6f6] px-3 py-2.5 text-xs text-[#444]">
+      {isLimitReached ? (
+        <div className="fixed bottom-[calc(160px+env(safe-area-inset-bottom))] left-1/2 z-20 w-full max-w-md -translate-x-1/2 px-4">
+          <div className="rounded-2xl border border-black/10 bg-[#f6f6f6] px-3 py-2.5 text-xs text-[#444] shadow-[0_8px_18px_rgba(0,0,0,0.05)]">
             You&apos;ve reached your daily limit. Upgrade for higher limits and file tools.
             <button type="button" onClick={openUpgrade} className="ml-2 inline-flex rounded-full border border-black/15 px-2 py-0.5 text-[11px] font-medium">
               Upgrade
             </button>
           </div>
-        ) : null}
-      </div>
+        </div>
+      ) : null}
 
       {showAuthPrompt ? (
         <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/35 px-6">
