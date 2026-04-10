@@ -28,6 +28,14 @@ type OpportunityItem = {
   contextPrompt: string;
 };
 
+type GmailImportSummary = {
+  lastSyncedAt: string | null;
+  emailsAnalyzed: number;
+  subscriptionsFound: number;
+  recurringPaymentsFound: number;
+  summary: string;
+};
+
 function toNumber(value: unknown, fallback = 0): number {
   return typeof value === 'number' && Number.isFinite(value) ? value : fallback;
 }
@@ -208,6 +216,16 @@ export async function GET(req: Request) {
     const monthlyTotal = toNumber(profile?.total_monthly_cost, 0);
     const estimatedSavings = toNumber(profile?.estimated_savings, 0);
 
+    const lastAnalysis = asObject(profile?.last_analysis);
+    const gmailImport = asObject(lastAnalysis.gmail_import);
+    const gmailImportSummary: GmailImportSummary = {
+      lastSyncedAt: typeof gmailImport.last_synced_at === 'string' ? gmailImport.last_synced_at : null,
+      emailsAnalyzed: toNumber(gmailImport.emails_analyzed, 0),
+      subscriptionsFound: toNumber(gmailImport.subscriptions_found, 0),
+      recurringPaymentsFound: toNumber(gmailImport.recurring_payments_found, 0),
+      summary: String(gmailImport.summary || ''),
+    };
+
     return NextResponse.json({
       stats: {
         monthlyTotal,
@@ -233,6 +251,7 @@ export async function GET(req: Request) {
         }))
         .reverse(),
       profileSummary: String(profile?.memory_summary || ''),
+      gmailImport: gmailImportSummary,
     });
   } catch (error) {
     console.error('FINANCE_DASHBOARD_ROUTE_ERROR:', error);

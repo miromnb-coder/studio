@@ -1,7 +1,8 @@
 import crypto from 'node:crypto';
 import { groq } from '@/ai/groq';
 
-export const GMAIL_FINANCE_QUERY = '("receipt" OR "invoice" OR "subscription" OR "payment" OR "trial" OR "renewal" OR "billed") newer_than:180d';
+export const GMAIL_FINANCE_QUERY =
+  '("receipt" OR "invoice" OR "subscription" OR "payment" OR "trial" OR "renewal" OR "billed" OR "charge" OR "statement") newer_than:365d -category:social -category:promotions';
 
 export type ConnectStatus = 'disconnected' | 'connecting' | 'connected' | 'syncing' | 'error';
 
@@ -13,6 +14,19 @@ export interface GmailTokenBundle {
   tokenType?: string;
 }
 
+export interface GmailIntegrationState {
+  status?: ConnectStatus;
+  scope?: string;
+  token_type?: string;
+  access_token_encrypted?: string | null;
+  refresh_token_encrypted?: string | null;
+  expires_at?: string | null;
+  connected_at?: string | null;
+  last_synced_at?: string | null;
+  last_sync_emails_analyzed?: number;
+  last_sync_subscriptions_found?: number;
+  last_error?: string | null;
+}
 
 export const GMAIL_READONLY_SCOPE = 'https://www.googleapis.com/auth/gmail.readonly';
 
@@ -21,7 +35,7 @@ export function hasGmailReadonlyScope(scope: string | null | undefined): boolean
   return scope.split(/\s+/).includes(GMAIL_READONLY_SCOPE);
 }
 
-export async function verifyGmailAccessToken(accessToken: string): Promise<{ emailAddress: string | null; messagesTotal: number | null; }> {
+export async function verifyGmailAccessToken(accessToken: string): Promise<{ emailAddress: string | null; messagesTotal: number | null }> {
   const response = await fetch('https://gmail.googleapis.com/gmail/v1/users/me/profile', {
     headers: {
       Authorization: `Bearer ${accessToken}`,
@@ -40,6 +54,7 @@ export async function verifyGmailAccessToken(accessToken: string): Promise<{ ema
     messagesTotal: typeof payload.messagesTotal === 'number' ? payload.messagesTotal : null,
   };
 }
+
 export interface ParsedFinancialEmail {
   sender: string;
   subject: string;
@@ -56,6 +71,15 @@ export interface FinancialSubscriptionSignal {
   confidence: number;
 }
 
+export interface GmailFinanceAnalysis {
+  subscriptions: FinancialSubscriptionSignal[];
+  recurringPayments: FinancialSubscriptionSignal[];
+  merchants: string[];
+  trialRisks: string[];
+  savingsOpportunities: string[];
+  summary: string;
+}
+
 interface GmailHeader {
   name?: string;
   value?: string;
@@ -69,15 +93,6 @@ interface GmailMessage {
   id?: string;
   snippet?: string;
   payload?: GmailMessagePayload;
-}
-
-interface GmailFinanceAnalysis {
-  subscriptions: FinancialSubscriptionSignal[];
-  recurringPayments: FinancialSubscriptionSignal[];
-  merchants: string[];
-  trialRisks: string[];
-  savingsOpportunities: string[];
-  summary: string;
 }
 
 const DEFAULT_ANALYSIS: GmailFinanceAnalysis = {
@@ -132,6 +147,60 @@ export function decryptToken(payload: string): string {
   decipher.setAuthTag(tag);
   const decrypted = Buffer.concat([decipher.update(encrypted), decipher.final()]);
   return decrypted.toString('utf8');
+}
+
+export function parseIntegrationState(value: unknown): GmailIntegrationState {
+  if (!value || typeof value !== 'object') return {};
+  return value as GmailIntegrationState;
+}
+
+function resolveTokenExpiry(value: string | null | undefined): number | null {
+  if (!value) return null;
+  const parsed = new Date(value);
+  return Number.isNaN(parsed.getTime()) ? null : parsed.getTime();
+}
+
+export async function getUsableAccessTokenFromIntegration(input: GmailIntegrationState): Promise<{
+  accessToken: string;
+  refreshApplied: boolean;
+  nextIntegration: GmailIntegrationState;
+}> {
+  const encryptedAccessToken = String(input.access_token_encrypted || '');
+  if (!encryptedAccessToken) {
+    throw new Error('GMAIL_TOKEN_MISSING');
+  }
+
+  let accessToken = decryptToken(encryptedAccessToken);
+  const refreshEncrypted = String(input.refresh_token_encrypted || '');
+  const expiresAtEpoch = resolveTokenExpiry(input.expires_at);
+  const needsRefresh = Boolean(refreshEncrypted) && Boolean(expiresAtEpoch && expiresAtEpoch < Date.now() + 60_000);
+
+  if (!needsRefresh) {
+    return {
+      accessToken,
+      refreshApplied: false,
+      nextIntegration: { ...input },
+    };
+  }
+
+  const refreshToken = decryptToken(refreshEncrypted);
+  const refreshed = await refreshAccessToken(refreshToken);
+
+  accessToken = refreshed.accessToken;
+  return {
+    accessToken,
+    refreshApplied: true,
+    nextIntegration: {
+      ...input,
+      access_token_encrypted: encryptToken(refreshed.accessToken),
+      refresh_token_encrypted: input.refresh_token_encrypted || null,
+      expires_at: refreshed.expiryDate ? new Date(refreshed.expiryDate).toISOString() : input.expires_at || null,
+      scope: refreshed.scope || input.scope || GMAIL_READONLY_SCOPE,
+      token_type: refreshed.tokenType || input.token_type || 'Bearer',
+      status: 'connected',
+      last_error: null,
+    },
+  };
 }
 
 export async function exchangeCodeForToken(code: string, redirectUri: string): Promise<GmailTokenBundle> {
@@ -241,10 +310,9 @@ export function parseFinancialEmails(messages: GmailMessage[]): ParsedFinancialE
 }
 
 export async function fetchFinancialEmails(accessToken: string, maxResults = 100): Promise<ParsedFinancialEmail[]> {
+  const cappedMax = Math.max(10, Math.min(maxResults, 100));
   const listResponse = await fetch(
-    `https://gmail.googleapis.com/gmail/v1/users/me/messages?maxResults=${Math.max(50, Math.min(maxResults, 100))}&q=${encodeURIComponent(
-      GMAIL_FINANCE_QUERY,
-    )}`,
+    `https://gmail.googleapis.com/gmail/v1/users/me/messages?maxResults=${cappedMax}&q=${encodeURIComponent(GMAIL_FINANCE_QUERY)}`,
     {
       headers: {
         Authorization: `Bearer ${accessToken}`,
@@ -263,7 +331,7 @@ export async function fetchFinancialEmails(accessToken: string, maxResults = 100
   if (!ids.length) return [];
 
   const details = await Promise.all(
-    ids.slice(0, 100).map(async (id) => {
+    ids.map(async (id) => {
       const response = await fetch(
         `https://gmail.googleapis.com/gmail/v1/users/me/messages/${id}?format=metadata&metadataHeaders=From&metadataHeaders=Subject&metadataHeaders=Date`,
         {
@@ -301,8 +369,7 @@ function normalizeSignal(raw: Record<string, unknown>, fallbackCategory: 'subscr
     period.includes('month') ? 'monthly' : period.includes('year') || period.includes('annual') ? 'yearly' : 'unknown';
 
   const categoryValue = String(raw.category || fallbackCategory).toLowerCase();
-  const category: 'subscription' | 'recurring_payment' =
-    categoryValue === 'recurring_payment' ? 'recurring_payment' : 'subscription';
+  const category: 'subscription' | 'recurring_payment' = categoryValue === 'recurring_payment' ? 'recurring_payment' : 'subscription';
 
   return {
     merchant,
@@ -364,7 +431,9 @@ export async function analyzeFinancialEmailsWithAI(emails: ParsedFinancialEmail[
       ),
     );
 
-    const trialRisks = Array.isArray(parsed.trialRisks) ? parsed.trialRisks.map((item) => String(item || '').trim()).filter(Boolean).slice(0, 8) : [];
+    const trialRisks = Array.isArray(parsed.trialRisks)
+      ? parsed.trialRisks.map((item) => String(item || '').trim()).filter(Boolean).slice(0, 8)
+      : [];
 
     const savingsOpportunities = Array.isArray(parsed.savingsOpportunities)
       ? parsed.savingsOpportunities.map((item) => String(item || '').trim()).filter(Boolean).slice(0, 8)
@@ -387,10 +456,7 @@ function merchantKey(value: string): string {
   return value.toLowerCase().replace(/[^a-z0-9]/g, '');
 }
 
-export function mergeSubscriptionSignals(
-  existing: Array<Record<string, unknown>>,
-  nextSignals: FinancialSubscriptionSignal[],
-): Array<Record<string, unknown>> {
+export function mergeSubscriptionSignals(existing: Array<Record<string, unknown>>, nextSignals: FinancialSubscriptionSignal[]): Array<Record<string, unknown>> {
   const byKey = new Map<string, Record<string, unknown>>();
 
   existing.forEach((item, index) => {
@@ -403,7 +469,9 @@ export function mergeSubscriptionSignals(
     const previous = byKey.get(key) || {};
     const monthlyAmount =
       signal.amount == null
-        ? (typeof previous.monthly_amount === 'number' ? previous.monthly_amount : 0)
+        ? typeof previous.monthly_amount === 'number'
+          ? previous.monthly_amount
+          : 0
         : signal.period === 'yearly'
           ? Math.round((signal.amount / 12) * 100) / 100
           : signal.amount;
@@ -427,15 +495,17 @@ export function mergeSubscriptionSignals(
 }
 
 export function computeMonthlyTotal(subscriptions: Array<Record<string, unknown>>): number {
-  return Math.round(
-    subscriptions.reduce((sum, subscription) => {
-      const monthly =
-        typeof subscription.monthly_amount === 'number'
-          ? subscription.monthly_amount
-          : typeof subscription.amount === 'number'
-            ? subscription.amount
-            : 0;
-      return sum + monthly;
-    }, 0) * 100,
-  ) / 100;
+  return (
+    Math.round(
+      subscriptions.reduce((sum, subscription) => {
+        const monthly =
+          typeof subscription.monthly_amount === 'number'
+            ? subscription.monthly_amount
+            : typeof subscription.amount === 'number'
+              ? subscription.amount
+              : 0;
+        return sum + monthly;
+      }, 0) * 100,
+    ) / 100
+  );
 }

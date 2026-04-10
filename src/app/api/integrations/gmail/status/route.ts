@@ -21,9 +21,10 @@ export async function GET() {
 
     const { data: profile } = await supabase
       .from('finance_profiles')
-      .select('last_analysis')
+      .select('total_monthly_cost,estimated_savings,last_analysis')
       .eq('user_id', userId)
       .maybeSingle();
+
     const { data: userProfile } = await supabase
       .from('profiles')
       .select('gmail_connected,gmail_last_sync_at')
@@ -32,6 +33,7 @@ export async function GET() {
 
     const lastAnalysis = asObject(profile?.last_analysis);
     const gmail = asObject(lastAnalysis.gmail_integration);
+    const gmailImport = asObject(lastAnalysis.gmail_import);
 
     const connected = Boolean(userProfile?.gmail_connected);
     const storedStatus = String(gmail.status || '').toLowerCase();
@@ -45,9 +47,27 @@ export async function GET() {
       {
         connected,
         status,
-        lastSyncedAt: userProfile?.gmail_last_sync_at ? String(userProfile.gmail_last_sync_at) : null,
-        emailsAnalyzed: typeof gmail.last_sync_emails_analyzed === 'number' ? gmail.last_sync_emails_analyzed : 0,
-        subscriptionsFound: typeof gmail.last_sync_subscriptions_found === 'number' ? gmail.last_sync_subscriptions_found : 0,
+        lastSyncedAt: userProfile?.gmail_last_sync_at
+          ? String(userProfile.gmail_last_sync_at)
+          : typeof gmailImport.last_synced_at === 'string'
+            ? gmailImport.last_synced_at
+            : null,
+        emailsAnalyzed:
+          typeof gmailImport.emails_analyzed === 'number'
+            ? gmailImport.emails_analyzed
+            : typeof gmail.last_sync_emails_analyzed === 'number'
+              ? gmail.last_sync_emails_analyzed
+              : 0,
+        subscriptionsFound:
+          typeof gmailImport.subscriptions_found === 'number'
+            ? gmailImport.subscriptions_found
+            : typeof gmail.last_sync_subscriptions_found === 'number'
+              ? gmail.last_sync_subscriptions_found
+              : 0,
+        recurringPaymentsFound: typeof gmailImport.recurring_payments_found === 'number' ? gmailImport.recurring_payments_found : 0,
+        monthlyTotal: typeof profile?.total_monthly_cost === 'number' ? profile.total_monthly_cost : 0,
+        estimatedMonthlySavings: typeof profile?.estimated_savings === 'number' ? profile.estimated_savings : 0,
+        summary: gmailImport.summary ? String(gmailImport.summary) : '',
         errorMessage: gmail.last_error ? String(gmail.last_error) : null,
       },
       {

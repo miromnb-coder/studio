@@ -10,6 +10,10 @@ type StatusPayload = {
   lastSyncedAt?: string | null;
   emailsAnalyzed?: number;
   subscriptionsFound?: number;
+  recurringPaymentsFound?: number;
+  monthlyTotal?: number;
+  estimatedMonthlySavings?: number;
+  summary?: string;
   errorMessage?: string | null;
 };
 
@@ -22,6 +26,7 @@ type SyncPayload = {
   monthlyTotal?: number;
   estimatedMonthlySavings?: number;
   summary?: string;
+  warning?: string | null;
 };
 
 function formatSyncTime(value: string | null): string {
@@ -41,12 +46,26 @@ export function GmailIntegrationCard({ gmailCallbackState = null }: GmailIntegra
   const [lastSyncedAt, setLastSyncedAt] = useState<string | null>(null);
   const [emailsAnalyzed, setEmailsAnalyzed] = useState(0);
   const [subscriptionsFound, setSubscriptionsFound] = useState(0);
+  const [recurringPaymentsFound, setRecurringPaymentsFound] = useState(0);
+  const [monthlyTotal, setMonthlyTotal] = useState(0);
+  const [estimatedMonthlySavings, setEstimatedMonthlySavings] = useState(0);
+  const [summary, setSummary] = useState('');
   const [loadingStatus, setLoadingStatus] = useState(true);
   const [isConnecting, setIsConnecting] = useState(false);
   const [isSyncing, setIsSyncing] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
-  const [estimatedMonthlySavings, setEstimatedMonthlySavings] = useState(0);
+
+  const applyPayload = useCallback((payload: StatusPayload | SyncPayload) => {
+    setStatus(payload.status || 'disconnected');
+    setLastSyncedAt(payload.lastSyncedAt || null);
+    setEmailsAnalyzed(typeof payload.emailsAnalyzed === 'number' ? payload.emailsAnalyzed : 0);
+    setSubscriptionsFound(typeof payload.subscriptionsFound === 'number' ? payload.subscriptionsFound : 0);
+    setRecurringPaymentsFound(typeof payload.recurringPaymentsFound === 'number' ? payload.recurringPaymentsFound : 0);
+    setMonthlyTotal(typeof payload.monthlyTotal === 'number' ? payload.monthlyTotal : 0);
+    setEstimatedMonthlySavings(typeof payload.estimatedMonthlySavings === 'number' ? payload.estimatedMonthlySavings : 0);
+    setSummary(payload.summary ? String(payload.summary) : '');
+  }, []);
 
   const loadStatus = useCallback(async () => {
     try {
@@ -60,10 +79,7 @@ export function GmailIntegrationCard({ gmailCallbackState = null }: GmailIntegra
 
       const payload = (await response.json()) as StatusPayload;
       setGmailConnected(Boolean(payload.connected));
-      setStatus(payload.status || 'disconnected');
-      setLastSyncedAt(payload.lastSyncedAt || null);
-      setEmailsAnalyzed(typeof payload.emailsAnalyzed === 'number' ? payload.emailsAnalyzed : 0);
-      setSubscriptionsFound(typeof payload.subscriptionsFound === 'number' ? payload.subscriptionsFound : 0);
+      applyPayload(payload);
       setErrorMessage(payload.errorMessage || null);
     } catch {
       setStatus('error');
@@ -71,10 +87,27 @@ export function GmailIntegrationCard({ gmailCallbackState = null }: GmailIntegra
     } finally {
       setLoadingStatus(false);
     }
-  }, []);
+  }, [applyPayload]);
 
   useEffect(() => {
     void loadStatus();
+  }, [loadStatus]);
+
+  useEffect(() => {
+    const handleCallbackComplete = () => {
+      void loadStatus();
+    };
+
+    const handleFinanceRefresh = () => {
+      void loadStatus();
+    };
+
+    window.addEventListener('gmail:callback-complete', handleCallbackComplete as EventListener);
+    window.addEventListener('finance:data-updated', handleFinanceRefresh as EventListener);
+    return () => {
+      window.removeEventListener('gmail:callback-complete', handleCallbackComplete as EventListener);
+      window.removeEventListener('finance:data-updated', handleFinanceRefresh as EventListener);
+    };
   }, [loadStatus]);
 
   useEffect(() => {
@@ -87,16 +120,6 @@ export function GmailIntegrationCard({ gmailCallbackState = null }: GmailIntegra
 
     return () => clearTimeout(timer);
   }, [gmailCallbackState, loadStatus]);
-
-  useEffect(() => {
-    const handleCallbackComplete = () => {
-      void loadStatus();
-    };
-    window.addEventListener('gmail:callback-complete', handleCallbackComplete as EventListener);
-    return () => {
-      window.removeEventListener('gmail:callback-complete', handleCallbackComplete as EventListener);
-    };
-  }, [loadStatus]);
 
   const connect = () => {
     setIsConnecting(true);
@@ -118,25 +141,35 @@ export function GmailIntegrationCard({ gmailCallbackState = null }: GmailIntegra
         headers: { 'Content-Type': 'application/json' },
       });
 
-      if (!response.ok) {
-        const payload = (await response.json().catch(() => ({}))) as { error?: string };
+      const payload = (await response.json().catch(() => ({}))) as SyncPayload & { error?: string; message?: string };
+
+      if (!response.ok && response.status !== 207) {
         setStatus('error');
-        setErrorMessage(payload.error === 'GMAIL_NOT_CONNECTED' ? 'Connect Gmail before syncing.' : 'Gmail sync failed. Please try again.');
+        setErrorMessage(payload.error === 'GMAIL_NOT_CONNECTED' ? 'Connect Gmail before syncing.' : payload.message || 'Gmail sync failed. Please try again.');
         return;
       }
 
-      const payload = (await response.json()) as SyncPayload;
       setGmailConnected(true);
-      setStatus(payload.status || 'connected');
-      setLastSyncedAt(payload.lastSyncedAt || new Date().toISOString());
-      setEmailsAnalyzed(typeof payload.emailsAnalyzed === 'number' ? payload.emailsAnalyzed : 0);
-      setSubscriptionsFound(typeof payload.subscriptionsFound === 'number' ? payload.subscriptionsFound : 0);
-      setEstimatedMonthlySavings(typeof payload.estimatedMonthlySavings === 'number' ? payload.estimatedMonthlySavings : 0);
-      setSuccessMessage(payload.summary || 'I analyzed your recent emails and finished your finance sync.');
+      applyPayload(payload);
+      setSuccessMessage(payload.summary || 'Gmail sync completed.');
+
+      if (payload.warning) {
+        setErrorMessage(payload.warning);
+      }
+
       if (typeof window !== 'undefined') {
         localStorage.setItem('finance_data_updated_at', new Date().toISOString());
-        window.dispatchEvent(new CustomEvent('finance:data-updated', { detail: { source: 'gmail_sync', summary: payload.summary || null } }));
+        window.dispatchEvent(
+          new CustomEvent('finance:data-updated', {
+            detail: {
+              source: 'gmail_sync',
+              summary: payload.summary || null,
+            },
+          }),
+        );
       }
+
+      void loadStatus();
     } catch {
       setStatus('error');
       setErrorMessage('Gmail sync failed. Please try again.');
@@ -166,7 +199,11 @@ export function GmailIntegrationCard({ gmailCallbackState = null }: GmailIntegra
       setLastSyncedAt(null);
       setEmailsAnalyzed(0);
       setSubscriptionsFound(0);
+      setRecurringPaymentsFound(0);
+      setMonthlyTotal(0);
       setEstimatedMonthlySavings(0);
+      setSummary('');
+
       if (typeof window !== 'undefined') {
         localStorage.setItem('finance_data_updated_at', new Date().toISOString());
         window.dispatchEvent(new CustomEvent('finance:data-updated', { detail: { source: 'gmail_disconnect' } }));
@@ -195,16 +232,19 @@ export function GmailIntegrationCard({ gmailCallbackState = null }: GmailIntegra
         <div className="flex items-start justify-between gap-3">
           <div>
             <p className="font-medium text-primary">Gmail Integration</p>
-            <p className="mt-1 text-secondary">Connect your Gmail to automatically detect subscriptions and save money.</p>
+            <p className="mt-1 text-secondary">Connect Gmail to detect recurring charges, summarize risk, and estimate savings.</p>
           </div>
           <span className="rounded-full border border-black/10 bg-white px-2 py-1 text-xs text-secondary">{statusLabel}</span>
         </div>
 
         <p className="mt-3 text-xs text-secondary">Last sync: {formatSyncTime(lastSyncedAt)}</p>
         <p className="mt-1 text-xs text-secondary">
-          Emails analyzed: {emailsAnalyzed} · Subscriptions found: {subscriptionsFound}
+          Emails analyzed: {emailsAnalyzed} · Subscriptions: {subscriptionsFound} · Recurring: {recurringPaymentsFound}
         </p>
-        <p className="mt-1 text-xs text-secondary">Estimated monthly savings: {estimatedMonthlySavings.toFixed(2)}</p>
+        <p className="mt-1 text-xs text-secondary">
+          Monthly total: ${monthlyTotal.toFixed(2)} · Estimated savings: ${estimatedMonthlySavings.toFixed(2)}
+        </p>
+        {summary ? <p className="mt-2 rounded-lg bg-[#f7f7f7] px-3 py-2 text-xs text-secondary">{summary}</p> : null}
 
         {gmailCallbackState === 'error' && !errorMessage ? (
           <p className="mt-3 rounded-lg border border-[#dfc9c9] bg-[#f8eded] px-3 py-2 text-xs text-[#6e3030]">
