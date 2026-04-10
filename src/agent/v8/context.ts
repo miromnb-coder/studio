@@ -39,6 +39,7 @@ export function buildContextV8(params: {
       semanticMemories: params.route.intent === 'general' ? [] : safeMemory.semanticMemories || [],
     },
     environment: {
+      gmailConnected: params.productState.gmailConnected,
       productState: params.productState,
       nowIso: new Date().toISOString(),
     },

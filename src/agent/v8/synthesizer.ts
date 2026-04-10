@@ -1,5 +1,12 @@
 import { AgentContextV8, AgentResponseV8, ExecutionPlanV8, ExecutionResultV8, RouteResultV8, SuggestedActionV8 } from './types';
 
+function isEmailAccessQuestion(message: string): boolean {
+  const text = message.toLowerCase();
+  if (!text) return false;
+  return /\b(email|emails|gmail|inbox|subscription emails|mailbox)\b/.test(text)
+    && /\b(can|able|access|analy[sz]e|scan|read|check|look|do you)\b/.test(text);
+}
+
 function buildSuggestedActions(route: RouteResultV8, structuredData: Record<string, unknown>): SuggestedActionV8[] {
   const actions: SuggestedActionV8[] = [];
 
@@ -25,6 +32,13 @@ function buildSuggestedActions(route: RouteResultV8, structuredData: Record<stri
 }
 
 function buildReply(route: RouteResultV8, execution: ExecutionResultV8, context: AgentContextV8): string {
+  if (isEmailAccessQuestion(context.user.message)) {
+    if (!context.environment.gmailConnected) {
+      return 'Your Gmail is not connected yet. Connect it so I can analyze your emails and find subscriptions.';
+    }
+    return 'Yes, I can analyze your emails. Do you want me to scan for subscriptions and recurring payments?';
+  }
+
   if (route.intent === 'finance') {
     const leakData = (execution.structuredData.detect_leaks as Record<string, unknown> | undefined) || {};
     const savings = typeof leakData.estimatedMonthlySavings === 'number' ? leakData.estimatedMonthlySavings : 0;
@@ -51,14 +65,19 @@ export function synthesizeResponseV8(params: {
   context: AgentContextV8;
   verificationPassed: boolean;
 }): AgentResponseV8 {
-  const { route, plan, execution, context, verificationPassed } = params;
+  const { route, execution, context, verificationPassed } = params;
+  const userFacingPlan = route.intent === 'finance'
+    ? 'Reviewed your finance context and prepared practical next actions.'
+    : route.intent === 'technical'
+      ? 'Reviewed the issue and prepared a clear fix path.'
+      : 'Prepared a focused next-step response.';
 
   return {
     reply: buildReply(route, execution, context),
     metadata: {
       intent: route.intent,
       mode: route.mode,
-      plan: plan.summary,
+      plan: userFacingPlan,
       steps: execution.steps,
       structuredData: execution.structuredData,
       suggestedActions: buildSuggestedActions(route, execution.structuredData),
