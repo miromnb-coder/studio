@@ -1,38 +1,29 @@
 import { AgentContextV8, ToolResultV8 } from '../types';
 
-export async function checkGmailConnectionTool(
-  _input: Record<string, unknown>,
-  context: AgentContextV8,
-): Promise<ToolResultV8> {
-  return {
-    ok: true,
-    tool: 'check_gmail_connection',
-    output: {
-      connected: context.environment.gmailConnected,
-      importAvailable: context.environment.gmailConnected,
-    },
-  };
-}
-
-export async function importGmailFinanceTool(
-  _input: Record<string, unknown>,
+export async function gmailFetchTool(
+  input: Record<string, unknown>,
   context: AgentContextV8,
 ): Promise<ToolResultV8> {
   if (!context.environment.gmailConnected) {
     return {
       ok: false,
-      tool: 'import_gmail_finance',
-      output: { imported: 0 },
+      tool: 'gmail_fetch',
+      output: { connected: false, messages: [] },
       error: 'Gmail is not connected.',
     };
   }
 
+  const query = typeof input.query === 'string' ? input.query : context.user.message;
+  const financeOnly = Boolean(input.financeOnly);
+
   return {
     ok: true,
-    tool: 'import_gmail_finance',
+    tool: 'gmail_fetch',
     output: {
-      imported: 0,
-      status: 'Future-ready hook. Import handled by dedicated integration route.',
+      connected: true,
+      query,
+      financeOnly,
+      status: 'Gmail fetch delegated to integration endpoint. Connection verified for this request.',
     },
   };
 }

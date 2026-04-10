@@ -1,68 +1,94 @@
 import { AgentIntentV8, AgentModeV8, AgentMessageV8, RouteResultV8 } from './types';
 
-const financeTokens = [
-  'budget', 'spend', 'expense', 'expenses', 'subscription', 'subscriptions', 'bill', 'bills', 'savings',
-  'cashflow', 'cancel', 'price', 'money', 'debt', 'income', 'receipt', 'receipts', 'cost', 'costs', 'payment',
-  'payments', 'refund', 'finance', 'monthly',
+const FINANCE_TOKENS = [
+  'budget', 'spend', 'expense', 'subscription', 'bill', 'savings', 'money', 'debt', 'income', 'payment',
+  'refund', 'finance', 'monthly', 'recurring', 'cash flow', 'bank', 'invest', 'mortgage',
 ];
 
-const gmailTokens = [
-  'gmail', 'email', 'emails', 'mailbox', 'inbox', 'mail', 'sync', 'search email', 'find email', 'email thread',
+const GMAIL_TOKENS = [
+  'gmail', 'email', 'inbox', 'mailbox', 'mail thread', 'search email', 'scan email', 'my emails',
 ];
 
-const productivityTokens = [
-  'task', 'tasks', 'todo', 'to-do', 'plan', 'planning', 'schedule', 'calendar', 'reminder', 'organize',
-  'organization', 'prioritize', 'roadmap',
+const PRODUCTIVITY_TOKENS = [
+  'task', 'todo', 'to-do', 'plan my day', 'schedule', 'calendar', 'reminder', 'organize',
 ];
 
-function score(tokens: string[], text: string): number {
-  return tokens.reduce((acc, token) => (text.includes(token) ? acc + 1 : acc), 0);
+const CODING_TOKENS = [
+  'code', 'typescript', 'javascript', 'python', 'bug', 'debug', 'refactor', 'compile', 'test', 'algorithm',
+];
+
+const MEMORY_TOKENS = ['remember this', 'save this', 'store this', 'don\'t forget', 'memory'];
+
+function countTokens(tokens: string[], text: string): number {
+  return tokens.reduce((sum, token) => (text.includes(token) ? sum + 1 : sum), 0);
 }
 
 function pickMode(intent: AgentIntentV8): AgentModeV8 {
   if (intent === 'finance') return 'finance';
   if (intent === 'gmail') return 'gmail';
   if (intent === 'productivity') return 'productivity';
+  if (intent === 'coding') return 'coding';
+  if (intent === 'memory') return 'memory';
   return 'general';
 }
 
 export function routeIntentV8(message: string, history: AgentMessageV8[] = []): RouteResultV8 {
-  if (!message.trim()) {
+  const normalizedMessage = message.trim().toLowerCase();
+  if (!normalizedMessage) {
     return {
       intent: 'unknown',
       mode: 'general',
-      confidence: 0.45,
-      reason: 'Message was empty or ambiguous.',
+      confidence: 0.35,
+      reason: 'Empty input.',
+      needsGmail: false,
+      needsFinanceData: false,
     };
   }
 
-  const corpus = `${history.slice(-2).map((h) => h.content.toLowerCase()).join(' ')} ${message.toLowerCase()}`;
+  const recentContext = history.slice(-3).map((h) => h.content.toLowerCase()).join(' ');
+  const corpus = `${recentContext} ${normalizedMessage}`;
 
-  const financeScore = score(financeTokens, corpus);
-  const gmailScore = score(gmailTokens, corpus);
-  const productivityScore = score(productivityTokens, corpus);
+  const financeScore = countTokens(FINANCE_TOKENS, corpus);
+  const gmailScore = countTokens(GMAIL_TOKENS, corpus);
+  const productivityScore = countTokens(PRODUCTIVITY_TOKENS, corpus);
+  const codingScore = countTokens(CODING_TOKENS, corpus);
+  const memoryScore = countTokens(MEMORY_TOKENS, corpus);
 
   let intent: AgentIntentV8 = 'general';
-  let reason = 'General conversation default selected.';
+  let reason = 'General chat is the default path.';
 
-  if (financeScore >= 2 && financeScore >= gmailScore && financeScore >= productivityScore) {
-    intent = 'finance';
-    reason = 'Detected explicit finance intent from spending/cost/subscription language.';
-  } else if (gmailScore >= 2 && gmailScore >= financeScore) {
+  if (gmailScore >= 1 && /\b(email|gmail|inbox|mailbox)\b/.test(normalizedMessage)) {
     intent = 'gmail';
-    reason = 'Detected explicit Gmail/email intent.';
+    reason = 'Explicit email/Gmail request.';
+  } else if (financeScore >= 2) {
+    intent = 'finance';
+    reason = 'Clear money/subscription/expense intent.';
+  } else if (codingScore >= 2) {
+    intent = 'coding';
+    reason = 'Technical/coding intent detected.';
   } else if (productivityScore >= 2) {
     intent = 'productivity';
-    reason = 'Detected planning/task/reminder productivity intent.';
+    reason = 'Planning/productivity intent detected.';
+  } else if (memoryScore >= 1) {
+    intent = 'memory';
+    reason = 'User asks to store/retrieve memory.';
   }
 
-  const maxScore = Math.max(financeScore, gmailScore, productivityScore);
-  const confidence = Math.min(0.99, 0.5 + maxScore * 0.1);
+  const confidence = Math.min(
+    0.98,
+    0.5 + Math.max(financeScore, gmailScore, productivityScore, codingScore, memoryScore) * 0.1,
+  );
+
+  const needsGmail =
+    intent === 'gmail' ||
+    (intent === 'finance' && /\b(email|gmail|receipt|invoice|inbox|statement in mail)\b/.test(normalizedMessage));
 
   return {
     intent,
     mode: pickMode(intent),
     confidence,
     reason,
+    needsGmail,
+    needsFinanceData: intent === 'finance',
   };
 }

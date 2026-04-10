@@ -1,6 +1,6 @@
 import type { FinanceActionResult, FinanceAnalysis } from '@/lib/finance/types';
 
-export type AgentIntent = 'general' | 'finance' | 'gmail' | 'productivity' | 'unknown';
+export type AgentIntent = 'general' | 'finance' | 'gmail' | 'productivity' | 'coding' | 'memory' | 'unknown';
 
 export type AgentStepStatus = 'running' | 'completed' | 'failed';
 
@@ -13,7 +13,7 @@ export type AgentResponseStep = {
 
 export type AgentResponseMetadata = {
   intent: AgentIntent;
-  mode?: 'general' | 'finance' | 'gmail' | 'productivity';
+  mode?: 'general' | 'finance' | 'gmail' | 'productivity' | 'coding' | 'memory';
   plan: string;
   steps: AgentResponseStep[];
   structuredData?: {
