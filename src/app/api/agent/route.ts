@@ -10,13 +10,7 @@ import type { FinanceActionType } from '@/lib/finance/types';
 import { createClient as createSupabaseServerClient } from '@/lib/supabase/server';
 import { getUserProfileIntelligence, updateUserProfileIntelligence } from '@/lib/operator/personalization';
 import type { OperatorAlertType } from '@/lib/operator/alerts';
-import {
-  detectMemoryIntent,
-  extractImportantMemory,
-  retrieveRelevantMemory,
-  persistSmartMemory,
-  type RetrievedMemoryContext,
-} from '@/lib/memory/smart-memory';
+import { fetchRelevantUserMemory } from '@/agent/v8/tools/memory-store';
 import {
   getUserPlanAndUsage,
   incrementUsage,
@@ -99,6 +93,22 @@ function resolveGmailConnected(params: {
   userProfile?: Record<string, unknown> | null;
 }): boolean {
   return Boolean(params.userProfile?.gmail_connected);
+}
+
+function asObject(value: unknown): Record<string, unknown> {
+  return value && typeof value === 'object' ? (value as Record<string, unknown>) : {};
+}
+
+function asArrayOfObjects(value: unknown): Array<Record<string, unknown>> {
+  return Array.isArray(value)
+    ? value.filter((item): item is Record<string, unknown> => !!item && typeof item === 'object')
+    : [];
+}
+
+function inferMemorySummaryType(input: string): 'finance' | 'general' {
+  return /\b(save|saving|budget|subscription|bill|expense|debt|money|finance|monthly|cost)\b/i.test(input)
+    ? 'finance'
+    : 'general';
 }
 
 export async function POST(req: Request) {
@@ -222,32 +232,59 @@ export async function POST(req: Request) {
       );
     }
 
-    const memoryIntent = await detectMemoryIntent(safeInput || 'Continue').catch((error) => {
-      console.error('MEMORY_INTENT_ERROR:', error);
-      return 'general' as const;
-    });
-
-    const fallbackMemory: RetrievedMemoryContext = {
-      userId,
-      summaryType: memoryIntent,
-      summary: 'No prior context available.',
-    };
-
     const userProfileIntelligence = await getUserProfileIntelligence(supabase, userId).catch((error) => {
       console.error('USER_PROFILE_INTELLIGENCE_FETCH_ERROR:', error);
       return null;
     });
 
-
-    const retrievedMemory: RetrievedMemoryContext = await retrieveRelevantMemory(
-      supabase,
+    const summaryType = inferMemorySummaryType(safeInput || 'Continue');
+    const relevantMemories = await fetchRelevantUserMemory({
       userId,
-      memoryIntent,
-      safeInput || '',
-    ).catch((error) => {
+      query: safeInput || 'Continue',
+      limit: summaryType === 'finance' ? 8 : 6,
+      financeOnly: summaryType === 'finance',
+    }).catch((error) => {
       console.error('MEMORY_RETRIEVAL_ERROR:', error);
-      return fallbackMemory;
+      return [];
     });
+
+    const { data: financeProfileData } = await supabase
+      .from('finance_profiles')
+      .select('active_subscriptions,total_monthly_cost,estimated_savings,currency,memory_summary,last_analysis')
+      .eq('user_id', userId)
+      .maybeSingle();
+
+    const financeProfile = financeProfileData
+      ? {
+          active_subscriptions: asArrayOfObjects(financeProfileData.active_subscriptions),
+          total_monthly_cost: financeProfileData.total_monthly_cost ?? 0,
+          estimated_savings: financeProfileData.estimated_savings ?? 0,
+          currency: financeProfileData.currency || 'USD',
+          memory_summary: financeProfileData.memory_summary || '',
+          last_analysis: asObject(financeProfileData.last_analysis),
+        }
+      : null;
+
+    const memorySummary =
+      relevantMemories.length > 0
+        ? relevantMemories.slice(0, 3).map((item) => item.content).join(' ')
+        : typeof financeProfile?.memory_summary === 'string' && financeProfile.memory_summary.trim().length > 0
+          ? financeProfile.memory_summary.trim()
+          : 'No prior context available.';
+
+    const memoryEnvelope = {
+      summaryType,
+      summary: memorySummary,
+      financeProfile,
+      financeEvents: [],
+      semanticMemories: relevantMemories.map((item) => ({
+        id: item.id,
+        content: item.content,
+        type: item.type,
+        importance: item.importance,
+        relevanceScore: item.relevanceScore || 0,
+      })),
+    };
 
     console.info('AGENT_ROUTE_ORCHESTRATOR_START', {
       userId,
@@ -259,7 +296,7 @@ export async function POST(req: Request) {
       input: safeInput || 'Continue',
       userId,
       history: safeHistory,
-      memory: retrievedMemory as unknown as Record<string, unknown>,
+      memory: memoryEnvelope,
       operatorAlerts: operatorAlertsContext,
       userProfileIntelligence,
       productState: {
@@ -317,28 +354,6 @@ export async function POST(req: Request) {
         });
       }
 
-      const extracted = await extractImportantMemory({
-        intent: memoryIntent,
-        userInput: safeInput || '',
-        assistantReply: actionResult.summary,
-        finance: normalizedFinance,
-        actionType,
-      }).catch((error) => {
-        console.error('SMART_MEMORY_EXTRACT_ACTION_ERROR:', error);
-        return null;
-      });
-
-      if (extracted) {
-        await persistSmartMemory(
-          supabase,
-          userId,
-          extracted,
-          retrievedMemory.financeProfile,
-        ).catch((error) => {
-          console.error('SMART_MEMORY_PERSIST_ACTION_ERROR:', error);
-        });
-      }
-
       await updateUserProfileIntelligence({
         supabase,
         userId,
@@ -372,7 +387,7 @@ export async function POST(req: Request) {
               actionResult.type === 'error' ? safeFinanceActionFallback() : actionResult,
             operator_alerts: operatorAlertsStructured,
           },
-          memoryUsed: !!retrievedMemory.summary,
+          memoryUsed: relevantMemories.length > 0,
           iterationCount: 1,
         },
         usage: {
@@ -396,30 +411,6 @@ export async function POST(req: Request) {
       console.error('USAGE_INCREMENT_ERROR:', error);
       return usage;
     });
-
-    if (reply.trim().length > 0) {
-      const extracted = await extractImportantMemory({
-        intent: memoryIntent,
-        userInput: safeInput || '',
-        assistantReply: reply,
-        finance: normalizedFinance,
-        actionType: null,
-      }).catch((error) => {
-        console.error('SMART_MEMORY_EXTRACT_ERROR:', error);
-        return null;
-      });
-
-      if (extracted) {
-        await persistSmartMemory(
-          supabase,
-          userId,
-          extracted,
-          retrievedMemory.financeProfile,
-        ).catch((error) => {
-          console.error('SMART_MEMORY_PERSIST_ERROR:', error);
-        });
-      }
-    }
 
     await updateUserProfileIntelligence({
       supabase,

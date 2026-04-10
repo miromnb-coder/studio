@@ -31,11 +31,27 @@ export async function runFinanceAgent(input: FinanceAgentInput): Promise<Finance
   const profile = asRecord(financeData.profile);
   const recurringSignals = Array.isArray(financeData.recurringSignals) ? financeData.recurringSignals : [];
   const gmailData = asRecord(input.execution.structuredData.gmail_fetch);
+  const activeSubscriptionsRaw = profile.active_subscriptions;
 
-  const activeSubscriptions = Number(profile.active_subscriptions || 0);
+  const activeSubscriptions = Array.isArray(activeSubscriptionsRaw)
+    ? activeSubscriptionsRaw.length
+    : Number(activeSubscriptionsRaw || 0);
   const totalMonthlyCost = Number(profile.total_monthly_cost || 0);
   const estimatedSavings = Number(profile.estimated_savings || 0);
   const recommendations = resolveRecommendations(input).slice(0, 3);
+  const memoryHighlights = (input.context.memory.relevantMemories || [])
+    .map((item) => item.content)
+    .slice(0, 2);
+  const userFocusOnSavings = memoryHighlights.some((item) => /\bsave|saving|budget|cut costs|subscriptions?\b/i.test(item));
+  const gmailConnected = input.context.environment.gmailConnected;
+  const gmailSummary = String(gmailData.summary || '').trim();
+  const gmailSavingsOpportunities = Array.isArray(gmailData.savingsOpportunities)
+    ? gmailData.savingsOpportunities.map((item) => String(item || '').trim()).filter(Boolean)
+    : [];
+  const gmailTrialRisks = Array.isArray(gmailData.trialRisks)
+    ? gmailData.trialRisks.map((item) => String(item || '').trim()).filter(Boolean)
+    : [];
+  const emailSubscriptionsFound = Number(gmailData.subscriptionsFound || 0);
 
   const findings = [
     activeSubscriptions > 0
@@ -53,6 +69,8 @@ export async function runFinanceAgent(input: FinanceAgentInput): Promise<Finance
     findings.push(
       `Gmail was used for this request${recurringSignals.length ? ` and surfaced ${recurringSignals.length} recurring signals` : ''}.`,
     );
+  } else if (!gmailConnected) {
+    findings.push('Gmail is not connected in the current environment.');
   }
 
   if (recommendations.length) {
@@ -64,9 +82,19 @@ export async function runFinanceAgent(input: FinanceAgentInput): Promise<Finance
   const asksCount = /\b(how many|count|number of)\b/.test(message);
   const asksSavings = /\b(save|savings|reduce|cut)\b/.test(message);
   const asksNextAction = /\b(next|priority|what should i do|best action|deserves attention)\b/.test(message);
+  const asksEmailCheck = /\b(email|gmail|inbox|mail)\b/.test(message);
 
   let answerDraft = '';
-  if (asksNextAction && recommendations.length) {
+  if ((asksSavings || asksNextAction) && asksEmailCheck && gmailData.connected) {
+    const subscriptionContext =
+      emailSubscriptionsFound > 0
+        ? `I found ${emailSubscriptionsFound} subscription signals in your email metadata.`
+        : 'I checked your email metadata for recurring charges.';
+    const topEmailOpportunity = gmailSavingsOpportunities[0] || '';
+    const trialRisk = gmailTrialRisks[0] || '';
+    const recommendationHint = recommendations.length ? `Top recommendation: ${recommendations[0].title}.` : '';
+    answerDraft = `${subscriptionContext} ${gmailSummary || ''} ${topEmailOpportunity ? `Savings opportunity: ${topEmailOpportunity}.` : ''} ${trialRisk ? `Watch out for: ${trialRisk}.` : ''} ${recommendationHint}`.trim();
+  } else if (asksNextAction && recommendations.length) {
     const [first] = recommendations;
     const topImpact = asRecord(first.estimated_impact);
     const monthlySavings = Number(topImpact.monthly_savings || 0);
@@ -88,6 +116,14 @@ export async function runFinanceAgent(input: FinanceAgentInput): Promise<Finance
     answerDraft = `You have ${activeSubscriptions || 'an unknown number of'} subscriptions with about ${formatMoney(totalMonthlyCost)} in monthly recurring spend.`;
   } else {
     answerDraft = 'I do not have enough finance data yet to answer precisely. Ask me to analyze subscriptions or monthly recurring spend.';
+  }
+
+  if (userFocusOnSavings) {
+    answerDraft = `Since you’re focused on saving money, ${answerDraft.charAt(0).toLowerCase()}${answerDraft.slice(1)}`;
+  }
+
+  if (asksEmailCheck && !gmailData.connected && gmailConnected) {
+    answerDraft += ' I could not complete a live Gmail fetch this turn, so I used your latest synced Gmail finance summary.';
   }
 
   if (recommendations.length && !asksNextAction) {
