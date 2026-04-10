@@ -18,9 +18,8 @@ const PREMIUM_UPLOAD_MESSAGE = 'File upload is a Premium feature. Upgrade to att
 const THINKING_STEPS = [
   'Understanding request',
   'Loading memory',
-  'Running analysis',
-  'Detecting subscriptions',
-  'Generating savings insights',
+  'Connecting context',
+  'Evaluating options',
   'Preparing response',
 ];
 
@@ -359,7 +358,7 @@ export default function ChatPage() {
       </header>
 
       <section ref={listRef} className="relative z-10 max-h-[calc(100vh-340px)] space-y-4 overflow-y-auto pb-3 pr-1">
-        {empty ? <div className="px-1 py-6 text-sm text-secondary">Assign a task to activate Kivo. The workspace will track analysis and execution automatically.</div> : null}
+        {empty ? <div className="px-1 py-6 text-sm text-secondary">Ask anything to start. Kivo defaults to direct assistant mode and uses tools only when needed.</div> : null}
 
         {messages
           .filter((message) => !(message.role === 'assistant' && message.isStreaming && isAgentResponding))

@@ -35,18 +35,32 @@ export function createPlanV8(route: RouteResultV8, message: string): ExecutionPl
     };
   }
 
-  if (route.intent === 'technical') {
+  if (route.intent === 'gmail') {
     return {
       intent: route.intent,
       mode: route.mode,
-      summary: 'Load technical memory, analyze error, suggest fix, and persist key findings.',
+      summary: 'Review mailbox intent, check Gmail connection, and prepare a direct email-focused response.',
       steps: [
-        step('1', 'Review recent technical context', 'retrieve_semantic_memory', 'Review recent technical context.', {}),
-        step('2', 'Analyze error', 'analyze_error', 'Extract probable root causes.', { text: message }),
-        step('3', 'Suggest fix', 'suggest_fix', 'Return fix strategy and patch plan.', { text: message }),
-        step('4', 'Save key findings', 'persist_memory', 'Save key findings for future runs.', {
-          source: 'technical',
+        step('1', 'Review mailbox context', 'retrieve_semantic_memory', 'Review recent mailbox context.', {}),
+        step('2', 'Check Gmail connection', 'check_gmail_connection', 'Check whether Gmail tools are available.', {}),
+        step('3', 'Save key notes', 'persist_memory', 'Save important Gmail intent for continuity.', {
+          source: 'gmail',
         }),
+      ],
+    };
+  }
+
+  if (route.intent === 'productivity') {
+    return {
+      intent: route.intent,
+      mode: route.mode,
+      summary: 'Review recent context, generate practical task/planning suggestions, and save notes.',
+      steps: [
+        step('1', 'Review recent context', 'retrieve_semantic_memory', 'Review recent conversation context.', {}),
+        step('2', 'Generate productivity insights', 'generate_proactive_insights', 'Generate practical planning suggestions.', {
+          text: message,
+        }),
+        step('3', 'Save key notes', 'persist_memory', 'Save important planning details.', { source: 'productivity' }),
       ],
     };
   }
@@ -54,13 +68,10 @@ export function createPlanV8(route: RouteResultV8, message: string): ExecutionPl
   return {
     intent: route.intent,
     mode: route.mode,
-    summary: 'Retrieve memory, generate insights, and keep response actionable.',
+    summary: 'Default to direct assistant response with lightweight context only.',
     steps: [
       step('1', 'Review recent context', 'retrieve_semantic_memory', 'Review recent conversation context.', {}),
-      step('2', 'Generate useful insights', 'generate_proactive_insights', 'Generate useful insights.', {
-        text: message,
-      }),
-      step('3', 'Save key notes', 'persist_memory', 'Save important new facts.', { source: 'general' }),
+      step('2', 'Save key notes', 'persist_memory', 'Save important new facts.', { source: 'general' }),
     ],
   };
 }

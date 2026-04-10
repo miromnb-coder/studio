@@ -353,7 +353,7 @@ export async function POST(req: Request) {
           ? agentResult.metadata.steps.map((step) => ({
               action: step.title,
               status: step.status === 'failed' ? 'failed' : 'completed',
-              summary: step.status === 'failed' ? 'This step could not be completed.' : 'Completed successfully.',
+              summary: step.summary || (step.status === 'failed' ? step.error || 'Step failed.' : 'Step completed.'),
               error: step.error,
             }))
           : [],
