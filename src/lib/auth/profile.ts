@@ -12,16 +12,44 @@ function inferName(user: User): string {
 
 export async function upsertUserProfile(supabase: SupabaseClient, user: User) {
   const fullName = inferName(user);
+  const nowIso = new Date().toISOString();
   const payload = {
     id: user.id,
     full_name: fullName,
-    updated_at: new Date().toISOString(),
+    updated_at: nowIso,
   };
 
-  const { error } = await supabase.from('profiles').upsert(payload, { onConflict: 'id' });
+  const { data: existingProfile, error: profileFetchError } = await supabase
+    .from('profiles')
+    .select('id,full_name,email')
+    .eq('id', user.id)
+    .maybeSingle();
+
+  if (profileFetchError) {
+    console.error('PROFILE_FETCH_ERROR', {
+      userId: user.id,
+      error: profileFetchError,
+    });
+  }
+
+  const nextPayload = {
+    ...payload,
+    email: user.email ?? null,
+  };
+
+  console.log('Saving to Supabase:', {
+    table: 'profiles',
+    operation: existingProfile ? 'upsert_existing' : 'upsert_create',
+    data: nextPayload,
+  });
+
+  const { error } = await supabase.from('profiles').upsert(nextPayload, { onConflict: 'id' });
 
   if (error) {
-    console.error('PROFILE_UPSERT_ERROR', error);
+    console.error('PROFILE_UPSERT_ERROR', {
+      userId: user.id,
+      error,
+    });
   }
 
   return {

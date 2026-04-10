@@ -69,18 +69,8 @@ export async function POST(req: Request) {
     const body = await req.json().catch(() => ({}));
     console.info('AGENT_ROUTE_PARSE_DONE');
 
-    const { input, history, imageUri, userId } = body ?? {};
+    const { input, history, imageUri, userId: requestedUserId } = body ?? {};
     const actionType = parseActionType(body?.actionType);
-
-    if (!userId || userId === 'system_anonymous') {
-      return safeJsonResponse(
-        {
-          error: 'AUTH_REQUIRED',
-          message: 'Please sign in to use chat.',
-        },
-        401,
-      );
-    }
 
     const safeHistory = (history || [])
       .filter((m: any) => m && typeof m.content === 'string' && m.content.trim().length > 0)
@@ -108,6 +98,28 @@ export async function POST(req: Request) {
     if (!supabase) {
       console.error('SUPABASE_UNAVAILABLE');
       return safeJsonResponse(SAFE_AGENT_FALLBACK);
+    }
+
+    const {
+      data: { user: authUser },
+      error: authError,
+    } = await supabase.auth.getUser();
+
+    if (authError) {
+      console.error('AGENT_ROUTE_AUTH_ERROR', authError);
+      return safeJsonResponse({ error: 'AUTH_REQUIRED', message: 'Please sign in to use chat.' }, 401);
+    }
+
+    const userId = authUser?.id;
+    if (!userId || userId === 'system_anonymous') {
+      return safeJsonResponse({ error: 'AUTH_REQUIRED', message: 'Please sign in to use chat.' }, 401);
+    }
+
+    if (requestedUserId && requestedUserId !== userId) {
+      console.warn('AGENT_ROUTE_USER_ID_MISMATCH', {
+        requestedUserId,
+        sessionUserId: userId,
+      });
     }
 
     const { plan, usage, email } = await getUserPlanAndUsage(supabase, userId);

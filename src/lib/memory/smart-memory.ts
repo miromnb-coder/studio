@@ -526,14 +526,20 @@ async function persistSemanticMemories(
     const embedding = await createEmbedding(item.content);
     if (!embedding) continue;
 
-    await supabase.from('memory_embeddings').insert({
+    const payload = {
       user_id: userId,
       domain: item.domain,
       source_type: item.sourceType,
       content: concise(item.content, 420),
       embedding,
       created_at: new Date().toISOString(),
-    });
+    };
+
+    console.log('Saving to Supabase:', { table: 'memory_embeddings', operation: 'insert', data: payload });
+    const { error } = await supabase.from('memory_embeddings').insert(payload);
+    if (error) {
+      console.error('MEMORY_EMBEDDINGS_INSERT_ERROR', error);
+    }
   }
 }
 
@@ -560,19 +566,21 @@ export async function persistSmartMemory(
     const totalMonthlyCost =
       toFiniteNumber(extracted.financeProfilePatch.total_monthly_cost) ?? computeMonthlyTotal(mergedSubscriptions);
 
-    await supabase.from('finance_profiles').upsert(
-      {
-        user_id: userId,
-        active_subscriptions: mergedSubscriptions,
-        total_monthly_cost: totalMonthlyCost,
-        estimated_savings: extracted.financeProfilePatch.estimated_savings ?? existingFinanceProfile?.estimated_savings ?? null,
-        memory_summary: extracted.financeProfilePatch.memory_summary ?? existingFinanceProfile?.memory_summary ?? null,
-        currency: extracted.financeProfilePatch.currency ?? existingFinanceProfile?.currency ?? 'USD',
-        last_analysis: extracted.financeProfilePatch.last_analysis ?? existingFinanceProfile?.last_analysis ?? {},
-        updated_at: new Date().toISOString(),
-      },
-      { onConflict: 'user_id' },
-    );
+    const financePayload = {
+      user_id: userId,
+      active_subscriptions: mergedSubscriptions,
+      total_monthly_cost: totalMonthlyCost,
+      estimated_savings: extracted.financeProfilePatch.estimated_savings ?? existingFinanceProfile?.estimated_savings ?? null,
+      memory_summary: extracted.financeProfilePatch.memory_summary ?? existingFinanceProfile?.memory_summary ?? null,
+      currency: extracted.financeProfilePatch.currency ?? existingFinanceProfile?.currency ?? 'USD',
+      last_analysis: extracted.financeProfilePatch.last_analysis ?? existingFinanceProfile?.last_analysis ?? {},
+      updated_at: new Date().toISOString(),
+    };
+    console.log('Saving to Supabase:', { table: 'finance_profiles', operation: 'upsert', data: financePayload });
+    const { error: financeUpsertError } = await supabase.from('finance_profiles').upsert(financePayload, { onConflict: 'user_id' });
+    if (financeUpsertError) {
+      console.error('FINANCE_PROFILE_MEMORY_UPSERT_ERROR', financeUpsertError);
+    }
   }
 
   for (const event of extracted.importantEvents) {
@@ -582,7 +590,7 @@ export async function persistSmartMemory(
 
     const createdAt = new Date().toISOString();
 
-    await supabase.from('memory_events').insert({
+    const memoryEventPayload = {
       user_id: userId,
       event_type: event.eventType,
       title: concise(event.title, 120),
@@ -590,20 +598,31 @@ export async function persistSmartMemory(
       data: event.data || {},
       importance: 0.8,
       created_at: createdAt,
-    });
+    };
+
+    console.log('Saving to Supabase:', { table: 'memory_events', operation: 'insert', data: memoryEventPayload });
+    const { error: memoryEventError } = await supabase.from('memory_events').insert(memoryEventPayload);
+    if (memoryEventError) {
+      console.error('MEMORY_EVENT_INSERT_ERROR', memoryEventError);
+    }
+
+    const financeHistoryPayload = {
+      user_id: userId,
+      event_type: event.eventType,
+      title: concise(event.title, 120),
+      summary: concise(event.summary, 240),
+      metadata: event.data || {},
+      created_at: createdAt,
+    };
+
+    console.log('Saving to Supabase:', { table: 'finance_history', operation: 'insert', data: financeHistoryPayload });
 
     await supabase
       .from('finance_history')
-      .insert({
-        user_id: userId,
-        event_type: event.eventType,
-        title: concise(event.title, 120),
-        summary: concise(event.summary, 240),
-        metadata: event.data || {},
-        created_at: createdAt,
-      })
+      .insert(financeHistoryPayload)
       .throwOnError()
-      .catch(() => {
+      .catch((error) => {
+        console.error('FINANCE_HISTORY_INSERT_ERROR', error);
         // keep memory persistence resilient when finance_history is not present in lower environments
       });
   }
@@ -611,16 +630,21 @@ export async function persistSmartMemory(
   for (const summary of extracted.summaries) {
     if (!summary.summaryText?.trim()) continue;
 
-    await supabase.from('memory_summaries').upsert(
-      {
-        user_id: userId,
-        summary_type: summary.summaryType,
-        summary_text: concise(summary.summaryText, 320),
-        source: 'agent_v7',
-        updated_at: new Date().toISOString(),
-      },
-      { onConflict: 'user_id,summary_type' },
-    );
+    const summaryPayload = {
+      user_id: userId,
+      summary_type: summary.summaryType,
+      summary_text: concise(summary.summaryText, 320),
+      source: 'agent_v7',
+      updated_at: new Date().toISOString(),
+    };
+
+    console.log('Saving to Supabase:', { table: 'memory_summaries', operation: 'upsert', data: summaryPayload });
+    const { error: summaryUpsertError } = await supabase
+      .from('memory_summaries')
+      .upsert(summaryPayload, { onConflict: 'user_id,summary_type' });
+    if (summaryUpsertError) {
+      console.error('MEMORY_SUMMARY_UPSERT_ERROR', summaryUpsertError);
+    }
   }
 
   await persistSemanticMemories(supabase, userId, extracted.semanticItems).catch(() => {
