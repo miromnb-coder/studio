@@ -17,6 +17,19 @@ function toObject(value: unknown): Record<string, unknown> {
   return typeof value === 'object' && value !== null ? (value as Record<string, unknown>) : {};
 }
 
+async function writeOrThrow(
+  label: string,
+  operation: () => Promise<{ error: unknown }>,
+  payload: Record<string, unknown>,
+) {
+  console.log('Saving to Supabase:', { label, data: payload });
+  const result = await operation();
+  if (result.error) {
+    console.error(`${label}_WRITE_ERROR`, result.error);
+    throw result.error;
+  }
+}
+
 export async function GET(req: Request) {
   const requestUrl = new URL(req.url);
   const appOrigin = resolveAppOrigin(requestUrl);
@@ -104,42 +117,48 @@ export async function GET(req: Request) {
 
     const connectedAt = new Date().toISOString();
 
-    await supabase.from('finance_profiles').upsert(
-      {
-        user_id: userId,
-        active_subscriptions: Array.isArray(profile?.active_subscriptions) ? profile.active_subscriptions : [],
-        total_monthly_cost: typeof profile?.total_monthly_cost === 'number' ? profile.total_monthly_cost : 0,
-        estimated_savings: typeof profile?.estimated_savings === 'number' ? profile.estimated_savings : 0,
-        currency: profile?.currency || 'USD',
-        memory_summary: profile?.memory_summary || '',
-        last_analysis: {
-          ...lastAnalysis,
-          gmail_integration: {
-            status: 'connected',
-            scope: tokenScope,
-            token_type: tokenType,
-            access_token_encrypted: encryptToken(accessToken),
-            refresh_token_encrypted: refreshToken ? encryptToken(refreshToken) : null,
-            expires_at: expiryIso,
-            connected_at: connectedAt,
-            verified_email: verifiedProfile.emailAddress,
-            verified_messages_total: verifiedProfile.messagesTotal,
-            last_error: null,
-          },
+    const financeProfilePayload = {
+      user_id: userId,
+      active_subscriptions: Array.isArray(profile?.active_subscriptions) ? profile.active_subscriptions : [],
+      total_monthly_cost: typeof profile?.total_monthly_cost === 'number' ? profile.total_monthly_cost : 0,
+      estimated_savings: typeof profile?.estimated_savings === 'number' ? profile.estimated_savings : 0,
+      currency: profile?.currency || 'USD',
+      memory_summary: profile?.memory_summary || '',
+      last_analysis: {
+        ...lastAnalysis,
+        gmail_integration: {
+          status: 'connected',
+          scope: tokenScope,
+          token_type: tokenType,
+          access_token_encrypted: encryptToken(accessToken),
+          refresh_token_encrypted: refreshToken ? encryptToken(refreshToken) : null,
+          expires_at: expiryIso,
+          connected_at: connectedAt,
+          verified_email: verifiedProfile.emailAddress,
+          verified_messages_total: verifiedProfile.messagesTotal,
+          last_error: null,
         },
-        updated_at: new Date().toISOString(),
       },
-      { onConflict: 'user_id' },
+      updated_at: new Date().toISOString(),
+    };
+
+    await writeOrThrow(
+      'finance_profiles_gmail_connected',
+      () => supabase.from('finance_profiles').upsert(financeProfilePayload, { onConflict: 'user_id' }),
+      financeProfilePayload,
     );
 
-    await supabase.from('profiles').upsert(
-      {
-        id: userId,
-        gmail_connected: true,
-        gmail_connected_at: connectedAt,
-        updated_at: connectedAt,
-      },
-      { onConflict: 'id' },
+    const profilePayload = {
+      id: userId,
+      gmail_connected: true,
+      gmail_connected_at: connectedAt,
+      updated_at: connectedAt,
+    };
+
+    await writeOrThrow(
+      'profiles_gmail_connected',
+      () => supabase.from('profiles').upsert(profilePayload, { onConflict: 'id' }),
+      profilePayload,
     );
 
     const response = NextResponse.redirect(new URL('/profile?gmail=connected', appOrigin));

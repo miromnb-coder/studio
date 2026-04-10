@@ -8,6 +8,19 @@ function asObject(value: unknown): Record<string, unknown> {
   return typeof value === 'object' && value !== null ? (value as Record<string, unknown>) : {};
 }
 
+async function writeOrThrow(
+  label: string,
+  operation: () => Promise<{ error: unknown }>,
+  payload: Record<string, unknown>,
+) {
+  console.log('Saving to Supabase:', { label, data: payload });
+  const result = await operation();
+  if (result.error) {
+    console.error(`${label}_WRITE_ERROR`, result.error);
+    throw result.error;
+  }
+}
+
 export async function POST() {
   try {
     const supabase = await createSupabaseServerClient();
@@ -28,37 +41,43 @@ export async function POST() {
 
     const disconnectedAt = new Date().toISOString();
 
-    await supabase.from('finance_profiles').upsert(
-      {
-        user_id: userId,
-        active_subscriptions: Array.isArray(profile?.active_subscriptions) ? profile.active_subscriptions : [],
-        total_monthly_cost: typeof profile?.total_monthly_cost === 'number' ? profile.total_monthly_cost : 0,
-        estimated_savings: typeof profile?.estimated_savings === 'number' ? profile.estimated_savings : 0,
-        currency: profile?.currency || 'USD',
-        memory_summary: profile?.memory_summary || '',
-        last_analysis: {
-          ...lastAnalysis,
-          gmail_integration: {
-            status: 'disconnected',
-            disconnected_at: disconnectedAt,
-            access_token_encrypted: null,
-            refresh_token_encrypted: null,
-            expires_at: null,
-            last_error: null,
-          },
+    const financeProfilePayload = {
+      user_id: userId,
+      active_subscriptions: Array.isArray(profile?.active_subscriptions) ? profile.active_subscriptions : [],
+      total_monthly_cost: typeof profile?.total_monthly_cost === 'number' ? profile.total_monthly_cost : 0,
+      estimated_savings: typeof profile?.estimated_savings === 'number' ? profile.estimated_savings : 0,
+      currency: profile?.currency || 'USD',
+      memory_summary: profile?.memory_summary || '',
+      last_analysis: {
+        ...lastAnalysis,
+        gmail_integration: {
+          status: 'disconnected',
+          disconnected_at: disconnectedAt,
+          access_token_encrypted: null,
+          refresh_token_encrypted: null,
+          expires_at: null,
+          last_error: null,
         },
-        updated_at: disconnectedAt,
       },
-      { onConflict: 'user_id' },
+      updated_at: disconnectedAt,
+    };
+
+    await writeOrThrow(
+      'finance_profiles_gmail_disconnected',
+      () => supabase.from('finance_profiles').upsert(financeProfilePayload, { onConflict: 'user_id' }),
+      financeProfilePayload,
     );
 
-    await supabase.from('profiles').upsert(
-      {
-        id: userId,
-        gmail_connected: false,
-        updated_at: disconnectedAt,
-      },
-      { onConflict: 'id' },
+    const profilePayload = {
+      id: userId,
+      gmail_connected: false,
+      updated_at: disconnectedAt,
+    };
+
+    await writeOrThrow(
+      'profiles_gmail_disconnected',
+      () => supabase.from('profiles').upsert(profilePayload, { onConflict: 'id' }),
+      profilePayload,
     );
 
     return NextResponse.json({ status: 'disconnected' });

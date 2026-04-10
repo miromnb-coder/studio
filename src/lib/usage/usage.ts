@@ -123,14 +123,22 @@ export async function incrementUsage(
     nextUsage.agentRuns += 1;
   }
 
+  const payload = {
+    user_id: userId,
+    usage_date: nextUsage.usageDate,
+    agent_runs: nextUsage.agentRuns,
+    premium_action_runs: nextUsage.premiumActionRuns,
+    updated_at: new Date().toISOString(),
+  };
+
+  console.log('Saving to Supabase:', {
+    table: 'usage_daily',
+    operation: 'upsert',
+    data: payload,
+  });
+
   const { error } = await supabase.from('usage_daily').upsert(
-    {
-      user_id: userId,
-      usage_date: nextUsage.usageDate,
-      agent_runs: nextUsage.agentRuns,
-      premium_action_runs: nextUsage.premiumActionRuns,
-      updated_at: new Date().toISOString(),
-    },
+    payload,
     { onConflict: 'user_id,usage_date' },
   );
 
