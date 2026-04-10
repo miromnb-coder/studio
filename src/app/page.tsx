@@ -1,61 +1,95 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { Bell, LogOut, Send, Sparkles } from 'lucide-react';
-import { useAppStore, type HistoryEntry } from './store/app-store';
+import { Bell, LogOut } from 'lucide-react';
+import { useAppStore } from './store/app-store';
 import { createClient } from '@/lib/supabase/client';
+import { DashboardHero } from './components/dashboard/DashboardHero';
+import { ProactiveInsights } from './components/dashboard/ProactiveInsights';
+import { SubscriptionsList } from './components/dashboard/SubscriptionsList';
+import { SavingsChart } from './components/dashboard/SavingsChart';
+import { OpportunitiesList } from './components/dashboard/OpportunitiesList';
+import { RecentActivity } from './components/dashboard/RecentActivity';
+import type { DashboardPayload, DashboardInsight, OpportunityItem, SubscriptionItem } from './components/dashboard/types';
 
-const smartSuggestions = [
-  'Help me plan my week with clear priorities.',
-  'Compare two options and recommend the better one.',
-  'Explain this concept deeply but simply.',
-  'Create an action plan for my next product launch.',
-];
+const emptyState: DashboardPayload = {
+  stats: { monthlyTotal: 0, estimatedSavings: 0, activeSubscriptions: 0 },
+  subscriptions: [],
+  topOpportunities: [],
+  recentActions: [],
+  proactiveInsights: [],
+  savingsSeries: [],
+  profileSummary: '',
+};
 
 export default function HomePage() {
+  const router = useRouter();
   const hydrated = useAppStore((s) => s.hydrated);
   const hydrate = useAppStore((s) => s.hydrate);
   const user = useAppStore((s) => s.user);
-  const history = useAppStore((s) => s.history);
-  const alerts = useAppStore((s) => s.alerts);
   const enqueuePromptAndGoToChat = useAppStore((s) => s.enqueuePromptAndGoToChat);
   const updateUserName = useAppStore((s) => s.updateUserName);
   const clearUser = useAppStore((s) => s.clearUser);
   const supabase = useMemo(() => createClient(), []);
 
-  const [prompt, setPrompt] = useState('');
+  const [data, setData] = useState<DashboardPayload>(emptyState);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     if (!hydrated) hydrate();
   }, [hydrate, hydrated]);
 
-  const recentActivity = useMemo(() => history.slice(0, 4), [history]);
-  const activeAlerts = useMemo(() => alerts.filter((item) => !item.resolved), [alerts]);
-  const userName = user?.name || 'there';
+  useEffect(() => {
+    let mounted = true;
 
-  const submitPrompt = () => {
-    if (!prompt.trim()) return;
-    enqueuePromptAndGoToChat(prompt);
-    setPrompt('');
-  };
+    const loadDashboard = async () => {
+      if (!user?.id) {
+        if (mounted) {
+          setData(emptyState);
+          setLoading(false);
+        }
+        return;
+      }
+
+      setLoading(true);
+      const response = await fetch(`/api/finance/dashboard?userId=${encodeURIComponent(user.id)}`, { cache: 'no-store' });
+      if (!mounted) return;
+
+      if (!response.ok) {
+        setData(emptyState);
+        setLoading(false);
+        return;
+      }
+
+      const payload = (await response.json()) as DashboardPayload;
+      setData({ ...emptyState, ...payload });
+      setLoading(false);
+    };
+
+    void loadDashboard();
+    return () => {
+      mounted = false;
+    };
+  }, [user?.id]);
 
   const editName = () => {
     const nextName = window.prompt('Edit name', user?.name || '');
-    if (nextName?.trim()) {
-      updateUserName(nextName.trim());
-      if (user?.id) {
-        void supabase.from('profiles').upsert(
-          {
-            id: user.id,
-            full_name: nextName.trim(),
-            updated_at: new Date().toISOString(),
-          },
-          { onConflict: 'id' },
-        );
-      }
-      void supabase.auth.updateUser({ data: { full_name: nextName.trim() } });
+    if (!nextName?.trim()) return;
+
+    updateUserName(nextName.trim());
+    if (user?.id) {
+      void supabase.from('profiles').upsert(
+        {
+          id: user.id,
+          full_name: nextName.trim(),
+          updated_at: new Date().toISOString(),
+        },
+        { onConflict: 'id' },
+      );
     }
+    void supabase.auth.updateUser({ data: { full_name: nextName.trim() } });
   };
 
   const logout = async () => {
@@ -64,82 +98,77 @@ export default function HomePage() {
     window.location.href = '/login';
   };
 
-  const openHistoryItem = (item: HistoryEntry) => {
-    if (item.prompt) return enqueuePromptAndGoToChat(item.prompt);
-    enqueuePromptAndGoToChat(`Continue from this context: ${item.title}. ${item.description}`);
+  const openInChat = useCallback(
+    (prompt: string) => {
+      enqueuePromptAndGoToChat(prompt);
+      router.push('/chat');
+    },
+    [enqueuePromptAndGoToChat, router],
+  );
+
+  const openInsight = (insight: DashboardInsight) => openInChat(insight.contextPrompt);
+
+  const openSubscription = (subscription: SubscriptionItem) => {
+    openInChat(
+      `Review my ${subscription.name} subscription (${Math.round(subscription.monthlyCost)}/month, status: ${subscription.rawStatus}). Tell me if I should keep, downgrade, or cancel.`,
+    );
   };
 
+  const openOpportunity = (item: OpportunityItem) => openInChat(item.contextPrompt);
+
+  const hasData = data.subscriptions.length > 0 || data.recentActions.length > 0 || data.proactiveInsights.length > 0;
+
   return (
-    <main className="screen app-bg">
-      <section className="mb-4 rounded-2xl bg-[#f7f7f7] px-4 py-4">
-        <div className="flex items-center justify-between gap-3">
-          <div className="flex items-center gap-3">
-            <div className="rounded-xl bg-[#ececec] p-2 text-[#303030]"><Sparkles className="h-4 w-4" /></div>
-            <div>
-              <p className="text-lg font-semibold text-primary">Kivo</p>
-              <p className="text-xs text-secondary">A calm, smart assistant for daily work</p>
-            </div>
-          </div>
-          <div className="flex items-center gap-1">
-            <button onClick={editName} type="button" className="tap-feedback rounded-full px-3 py-2 text-xs text-secondary">Edit</button>
-            <Link href="/alerts" className="tap-feedback rounded-full p-2 text-secondary"><Bell className="h-5 w-5" /></Link>
-            <button type="button" onClick={logout} className="tap-feedback rounded-full p-2 text-secondary"><LogOut className="h-5 w-5" /></button>
-          </div>
+    <main className="screen app-bg pb-24">
+      <section className="mb-4 flex items-center justify-between rounded-2xl bg-[#f7f7f7] px-4 py-3">
+        <div>
+          <p className="text-lg font-semibold text-primary">Operator Dashboard</p>
+          <button onClick={editName} type="button" className="text-xs text-secondary">{user?.name || 'Set your name'}</button>
+        </div>
+        <div className="flex items-center gap-1">
+          <Link href="/alerts" className="tap-feedback rounded-full p-2 text-secondary"><Bell className="h-5 w-5" /></Link>
+          <button type="button" onClick={logout} className="tap-feedback rounded-full p-2 text-secondary"><LogOut className="h-5 w-5" /></button>
         </div>
       </section>
 
-      <section className="space-y-3 pb-3">
-        <header className="px-1">
-          <h1 className="text-[1.8rem] font-semibold tracking-tight text-primary">Hi {userName} 👋</h1>
-          <p className="text-sm text-secondary">What should Kivo help you with right now?</p>
-        </header>
-
-        <article className="rounded-2xl bg-[#f7f7f7] p-4">
-          <textarea
-            value={prompt}
-            onChange={(e) => setPrompt(e.target.value)}
-            rows={3}
-            className="system-input w-full resize-none border-black/10 bg-[#f2f2f2] px-3 py-2 text-sm"
-            placeholder="Ask Kivo anything..."
+      {!user?.id ? (
+        <section className="card-elevated p-6 text-center">
+          <h1 className="text-2xl font-semibold tracking-tight text-primary">Sign in to activate your control center</h1>
+          <p className="mt-2 text-sm text-secondary">Your subscriptions and savings intelligence load from your secure Supabase profile.</p>
+          <Link href="/login" className="btn-primary mt-4 inline-flex px-4 py-2 text-sm">Go to login</Link>
+        </section>
+      ) : !hasData && !loading ? (
+        <section className="card-elevated dashboard-reveal space-y-4 p-6 text-center">
+          <h1 className="text-2xl font-semibold tracking-tight text-primary">Your dashboard is ready for first analysis</h1>
+          <p className="text-sm text-secondary">Paste your subscriptions to analyze, and the operator will build savings actions automatically.</p>
+          <button
+            type="button"
+            className="btn-primary mx-auto inline-flex px-4 py-2 text-sm"
+            onClick={() => openInChat('Paste your subscriptions to analyze and build my first savings dashboard.')}
+          >
+            Paste your subscriptions to analyze
+          </button>
+        </section>
+      ) : (
+        <section className="space-y-4">
+          <DashboardHero
+            monthlySavings={data.stats.estimatedSavings}
+            monthlyCost={data.stats.monthlyTotal}
+            activeSubscriptions={data.stats.activeSubscriptions}
+            loading={loading}
           />
-          <div className="mt-2 flex justify-end">
-            <button onClick={submitPrompt} type="button" className="btn-primary tap-feedback inline-flex items-center gap-2 px-4 py-2 text-sm disabled:opacity-50" disabled={!prompt.trim()}>
-              <Send className="h-4 w-4" /> Start
-            </button>
-          </div>
-        </article>
 
-        <article className="rounded-2xl bg-[#f7f7f7] p-4">
-          <h2 className="mb-2 text-sm font-semibold text-secondary">Smart suggestions</h2>
-          <div className="space-y-2">
-            {smartSuggestions.map((starter) => (
-              <button key={starter} onClick={() => enqueuePromptAndGoToChat(starter)} className="w-full rounded-xl bg-[#f2f2f2] px-3 py-3 text-left text-sm text-primary" type="button">
-                {starter}
-              </button>
-            ))}
-          </div>
-        </article>
+          <ProactiveInsights insights={data.proactiveInsights} onOpenInsight={openInsight} />
 
-        <article className="rounded-2xl bg-[#f7f7f7] p-4">
-          <div className="mb-2 flex items-center justify-between">
-            <h2 className="text-base font-semibold">Recent activity</h2>
-            <Link href="/chat" className="text-xs font-semibold text-secondary">Open Chat</Link>
-          </div>
-          <div className="space-y-2">
-            {recentActivity.length === 0 ? (
-              <p className="rounded-xl bg-[#f2f2f2] px-3 py-3 text-sm text-secondary">No recent activity yet.</p>
-            ) : (
-              recentActivity.map((item) => (
-                <button key={item.id} type="button" onClick={() => openHistoryItem(item)} className="w-full rounded-xl bg-[#f2f2f2] px-3 py-3 text-left">
-                  <p className="text-sm font-medium text-primary">{item.title}</p>
-                  <p className="text-xs text-secondary">{item.description}</p>
-                </button>
-              ))
-            )}
-          </div>
-          <p className="mt-3 text-xs text-secondary">{activeAlerts.length} active alert(s) need attention.</p>
-        </article>
-      </section>
+          <SubscriptionsList subscriptions={data.subscriptions} onOpenSubscription={openSubscription} />
+
+          <SavingsChart points={data.savingsSeries} />
+
+          <OpportunitiesList opportunities={data.topOpportunities} onOpenOpportunity={openOpportunity} />
+
+          <RecentActivity actions={data.recentActions} />
+        </section>
+      )}
     </main>
   );
 }
