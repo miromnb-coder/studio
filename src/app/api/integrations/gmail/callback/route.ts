@@ -1,7 +1,13 @@
 import { cookies } from 'next/headers';
 import { NextResponse } from 'next/server';
 import { createClient as createSupabaseServerClient } from '@/lib/supabase/server';
-import { encryptToken, exchangeCodeForToken } from '@/lib/integrations/gmail';
+import {
+  encryptToken,
+  exchangeCodeForToken,
+  GMAIL_READONLY_SCOPE,
+  hasGmailReadonlyScope,
+  verifyGmailAccessToken,
+} from '@/lib/integrations/gmail';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -38,10 +44,53 @@ export async function GET(req: Request) {
       return NextResponse.redirect(new URL('/profile?gmail=state_mismatch', requestUrl.origin));
     }
 
-    const redirectUri =
-      process.env.GMAIL_OAUTH_REDIRECT_URI || `${requestUrl.origin}/api/integrations/gmail/callback`;
+    let accessToken: string | null = null;
+    let refreshToken: string | null = null;
+    let tokenScope: string = GMAIL_READONLY_SCOPE;
+    let tokenType: string = 'Bearer';
+    let expiryIso: string | null = null;
 
-    const tokens = await exchangeCodeForToken(code, redirectUri);
+    const { data: exchangeData, error: exchangeError } = await supabase.auth.exchangeCodeForSession(code);
+
+    if (!exchangeError) {
+      const session = exchangeData.session as
+        | {
+            provider_token?: string | null;
+            provider_refresh_token?: string | null;
+            expires_at?: number | null;
+            token_type?: string | null;
+          }
+        | null;
+
+      accessToken = session?.provider_token || null;
+      refreshToken = session?.provider_refresh_token || null;
+      if (session?.expires_at) {
+        expiryIso = new Date(session.expires_at * 1000).toISOString();
+      }
+      if (session?.token_type) {
+        tokenType = session.token_type;
+      }
+    }
+
+    if (!accessToken) {
+      const redirectUri = `${requestUrl.origin}/api/integrations/gmail/callback`;
+      const fallbackTokens = await exchangeCodeForToken(code, redirectUri);
+      accessToken = fallbackTokens.accessToken;
+      refreshToken = fallbackTokens.refreshToken || null;
+      tokenScope = fallbackTokens.scope || GMAIL_READONLY_SCOPE;
+      tokenType = fallbackTokens.tokenType || 'Bearer';
+      expiryIso = fallbackTokens.expiryDate ? new Date(fallbackTokens.expiryDate).toISOString() : null;
+    }
+
+    const verifiedProfile = await verifyGmailAccessToken(accessToken);
+    const scopeQuery = requestUrl.searchParams.get('scope');
+    if (scopeQuery) {
+      tokenScope = scopeQuery;
+    }
+
+    if (!hasGmailReadonlyScope(tokenScope)) {
+      tokenScope = `${tokenScope} ${GMAIL_READONLY_SCOPE}`.trim();
+    }
 
     const { data: profile } = await supabase
       .from('finance_profiles')
@@ -63,12 +112,14 @@ export async function GET(req: Request) {
           ...lastAnalysis,
           gmail_integration: {
             status: 'connected',
-            scope: tokens.scope || 'https://www.googleapis.com/auth/gmail.readonly',
-            token_type: tokens.tokenType || 'Bearer',
-            access_token_encrypted: encryptToken(tokens.accessToken),
-            refresh_token_encrypted: tokens.refreshToken ? encryptToken(tokens.refreshToken) : null,
-            expires_at: tokens.expiryDate ? new Date(tokens.expiryDate).toISOString() : null,
+            scope: tokenScope,
+            token_type: tokenType,
+            access_token_encrypted: encryptToken(accessToken),
+            refresh_token_encrypted: refreshToken ? encryptToken(refreshToken) : null,
+            expires_at: expiryIso,
             connected_at: new Date().toISOString(),
+            verified_email: verifiedProfile.emailAddress,
+            verified_messages_total: verifiedProfile.messagesTotal,
             last_error: null,
           },
         },
