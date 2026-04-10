@@ -42,9 +42,10 @@ function buildSuggestedActions(route: RouteResultV8, structuredData: Record<stri
 
 export function synthesizeResponseV8(input: SynthesisInputV8): AgentResponseV8 {
   const state: SystemStateV8 = 'responding';
+  const finalReply = input.refinedReply.trim() || 'I need one concrete detail to answer this correctly.';
 
   return {
-    reply: input.refinedReply,
+    reply: finalReply,
     metadata: {
       intent: input.route.intent,
       mode: input.route.mode,

@@ -44,13 +44,27 @@ export async function runFinanceAgent(input: FinanceAgentInput): Promise<Finance
     );
   }
 
-  const answerDraft = [
-    findings[0],
-    findings[1],
-    estimatedSavings > 0
-      ? `Next best move: target one recurring charge this week and lock in ~${estimatedSavings.toFixed(2)}/month.`
-      : 'Next best move: identify the single least-used recurring payment and cancel or downgrade it first.',
-  ].join(' ');
+  const message = input.context.user.message.toLowerCase();
+  const asksTotal = /\b(total|monthly|spend|cost)\b/.test(message);
+  const asksCount = /\b(how many|count|number of)\b/.test(message);
+  const asksSavings = /\b(save|savings|reduce|cut)\b/.test(message);
+
+  let answerDraft = '';
+  if (asksCount && activeSubscriptions > 0) {
+    answerDraft = `You currently have ${activeSubscriptions} active subscriptions.`;
+  } else if (asksTotal && totalMonthlyCost > 0) {
+    answerDraft = `Your recurring monthly spend is about ${totalMonthlyCost.toFixed(2)}.`;
+  } else if (asksSavings && estimatedSavings > 0) {
+    answerDraft = `You can likely save about ${estimatedSavings.toFixed(2)} per month by removing one low-value recurring charge first.`;
+  } else if (activeSubscriptions > 0 || totalMonthlyCost > 0) {
+    answerDraft = `You have ${activeSubscriptions || 'an unknown number of'} subscriptions with about ${totalMonthlyCost.toFixed(2)} in monthly recurring spend.`;
+  } else {
+    answerDraft = 'I do not have enough finance data yet to answer precisely. Ask me to analyze subscriptions or monthly recurring spend.';
+  }
+
+  if (estimatedSavings > 0 && !asksSavings) {
+    answerDraft += ` A realistic first savings target is ${estimatedSavings.toFixed(2)} per month.`;
+  }
 
   return {
     findings,

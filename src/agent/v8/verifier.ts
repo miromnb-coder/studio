@@ -14,7 +14,27 @@ const GENERIC_PATTERNS = [
   /here is a direct, grounded answer to your question\.?/i,
   /i understood your request/i,
   /operator/i,
+  /^sure[,!]\s*/i,
+  /^absolutely[,!]\s*/i,
+  /^great question[.!]?\s*/i,
 ];
+
+function removeRepeatedSentences(text: string): string {
+  const parts = text
+    .split(/(?<=[.!?])\s+/)
+    .map((part) => part.trim())
+    .filter(Boolean);
+
+  const seen = new Set<string>();
+  const unique: string[] = [];
+  for (const part of parts) {
+    const key = part.toLowerCase();
+    if (seen.has(key)) continue;
+    seen.add(key);
+    unique.push(part);
+  }
+  return unique.join(' ').trim();
+}
 
 export function verifyExecutionV8(input: AgentCriticInputV8): VerificationResult {
   const notes: string[] = [];
@@ -26,6 +46,8 @@ export function verifyExecutionV8(input: AgentCriticInputV8): VerificationResult
       notes.push('Removed generic assistant phrasing.');
     }
   }
+
+  refinedReply = removeRepeatedSentences(refinedReply);
 
   if (input.intent !== 'gmail' && input.usedTools.includes('gmail_fetch')) {
     notes.push('Gmail tool executed outside explicit Gmail intent.');

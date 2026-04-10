@@ -12,15 +12,17 @@ function buildStep(
 }
 
 export function createPlanV8(route: RouteResultV8, message: string): ExecutionPlanV8 {
-  if (route.intent === 'finance') {
-    const steps: PlanStepV8[] = [buildStep(
-      '1',
-      'Read finance baseline',
-      'finance_read',
-      'Load finance profile and recurring costs needed for a grounded answer.',
-      { scope: 'subscriptions' },
-      true,
-    )];
+  if (route.intent === 'finance' && route.needsFinanceData) {
+    const steps: PlanStepV8[] = [
+      buildStep(
+        '1',
+        'Read finance baseline',
+        'finance_read',
+        'Load finance profile and recurring costs needed for a grounded answer.',
+        { scope: 'subscriptions' },
+        true,
+      ),
+    ];
 
     if (route.needsGmail) {
       steps.push(buildStep(
@@ -36,7 +38,9 @@ export function createPlanV8(route: RouteResultV8, message: string): ExecutionPl
     return {
       intent: route.intent,
       mode: route.mode,
-      summary: 'Use finance data only; add Gmail only when strictly required.',
+      summary: route.needsGmail
+        ? 'Use finance data and only the minimum Gmail metadata needed for the user request.'
+        : 'Use finance data only. Do not add unrelated tools.',
       steps,
     };
   }

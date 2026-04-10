@@ -26,13 +26,20 @@ export async function buildContextV8(params: {
   const safeMemory = params.memory || {};
   const includeFinance = params.route.intent === 'finance';
   const includeSemanticMemory = params.route.intent === 'memory' || params.route.intent === 'finance';
+  const shouldFetchRelevantMemories = params.route.intent === 'memory' || params.route.intent === 'finance' || params.route.intent === 'coding';
 
-  const relevantMemories = await fetchRelevantUserMemory({
-    userId: params.userId,
-    query: params.message,
-    limit: includeFinance ? 8 : 3,
-    financeOnly: includeFinance,
-  }).catch(() => []);
+  const relevantMemories = shouldFetchRelevantMemories
+    ? await fetchRelevantUserMemory({
+      userId: params.userId,
+      query: params.message,
+      limit: includeFinance ? 8 : 4,
+      financeOnly: includeFinance,
+    }).catch(() => [])
+    : [];
+
+  const filteredRelevantMemories = includeFinance
+    ? relevantMemories
+    : relevantMemories.filter((item) => (item.relevanceScore || 0) >= 0.82).slice(0, 3);
 
   return {
     user: {
@@ -46,7 +53,7 @@ export async function buildContextV8(params: {
       financeProfile: includeFinance ? safeMemory.financeProfile || null : null,
       financeEvents: includeFinance ? safeMemory.financeEvents || [] : [],
       semanticMemories: includeSemanticMemory ? safeMemory.semanticMemories || [] : [],
-      relevantMemories,
+      relevantMemories: filteredRelevantMemories,
     },
     environment: {
       gmailConnected: params.productState.gmailConnected,
