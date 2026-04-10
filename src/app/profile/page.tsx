@@ -184,7 +184,7 @@ export default function ProfilePage() {
         <div className="mt-4 rounded-xl border border-black/10 bg-[#f2f2f2] p-4 text-sm">
           <p className="font-medium text-primary">Subscription</p>
           <p className="mt-1 text-secondary">Current plan: {plan}</p>
-          <p className="text-secondary">Usage today: {usage.current} / {usage.limit}</p>
+          <p className="text-secondary">Usage today: {usage.unlimited ? 'Unlimited (Dev Mode)' : `${usage.current} / ${usage.limit}`}</p>
           <Link href="/upgrade" className="btn-secondary tap-feedback mt-3 inline-flex px-3 py-1.5 text-xs">
             Upgrade
           </Link>

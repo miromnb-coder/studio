@@ -1,19 +1,14 @@
 import { NextResponse } from 'next/server';
 import { createClient as createSupabaseServerClient } from '@/lib/supabase/server';
+import {
+  getUserPlanAndUsage,
+  isAdminBypass,
+  isDevUnlimitedMode,
+  toUsageEnvelope,
+} from '@/lib/usage/usage';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
-
-type UserPlan = 'FREE' | 'PREMIUM';
-const PLAN_LIMITS: Record<UserPlan, { dailyAgentRuns: number }> = {
-  FREE: { dailyAgentRuns: 10 },
-  PREMIUM: { dailyAgentRuns: 1000 },
-};
-
-function normalizePlan(value: unknown): UserPlan {
-  const upper = String(value || 'FREE').toUpperCase();
-  return upper === 'PREMIUM' || upper === 'PRO' ? 'PREMIUM' : 'FREE';
-}
 
 export async function GET(req: Request) {
   try {
@@ -25,33 +20,24 @@ export async function GET(req: Request) {
     }
 
     const supabase = await createSupabaseServerClient();
-    const usageDate = new Date().toISOString().slice(0, 10);
+    const { plan, usage, email } = await getUserPlanAndUsage(supabase, userId);
 
-    const [profileResult, usageResult] = await Promise.all([
-      supabase.from('profiles').select('plan').eq('id', userId).maybeSingle(),
-      supabase
-        .from('usage_daily')
-        .select('agent_runs,premium_action_runs,usage_date')
-        .eq('user_id', userId)
-        .eq('usage_date', usageDate)
-        .maybeSingle(),
-    ]);
-
-    const plan = normalizePlan(profileResult.data?.plan);
-    const limits = PLAN_LIMITS[plan] ?? PLAN_LIMITS.FREE;
-    const agentRuns = typeof usageResult.data?.agent_runs === 'number' ? usageResult.data.agent_runs : 0;
+    const unlimitedReason = isDevUnlimitedMode() ? 'dev' : isAdminBypass(email) ? 'admin' : null;
+    const usageEnvelope = toUsageEnvelope({
+      plan,
+      usage,
+      unlimitedReason,
+    });
 
     return NextResponse.json({
       plan,
       usage: {
-        agentRuns,
-        premiumActionRuns:
-          typeof usageResult.data?.premium_action_runs === 'number'
-            ? usageResult.data.premium_action_runs
-            : 0,
-        limit: limits.dailyAgentRuns,
-        remaining: Math.max(limits.dailyAgentRuns - agentRuns, 0),
-        lastResetDate: usageDate,
+        agentRuns: usageEnvelope.current,
+        limit: usageEnvelope.limit,
+        remaining: usageEnvelope.remaining,
+        lastResetDate: usage.usageDate,
+        unlimited: usageEnvelope.unlimited,
+        unlimitedReason: usageEnvelope.unlimitedReason,
       },
     });
   } catch (error) {

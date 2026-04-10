@@ -79,7 +79,7 @@ export default function UpgradePage() {
         </div>
 
         <div className="mt-4 rounded-xl border border-black/10 bg-[#f7f7f7] px-3 py-2 text-sm text-secondary">
-          Current plan: <span className="font-medium text-primary">{plan}</span> · Today: {usage.current}/{usage.limit} runs used.
+          Current plan: <span className="font-medium text-primary">{plan}</span> · Today: {usage.unlimited ? `Unlimited (Dev Mode) • ${usage.current} runs today` : `${usage.current}/${usage.limit}`} runs used.
         </div>
 
         {error ? <p className="mt-3 rounded-xl border border-[#dfc9c9] bg-[#f8eded] px-3 py-2 text-sm text-[#6e3030]">{error}</p> : null}

@@ -8,6 +8,8 @@ type UsageState = {
   limit: number;
   remaining: number;
   lastResetDate: string;
+  unlimited: boolean;
+  unlimitedReason: 'dev' | 'admin' | null;
 };
 
 type PlanType = 'FREE' | 'PREMIUM';
@@ -17,6 +19,8 @@ const defaultUsage: UsageState = {
   limit: 10,
   remaining: 10,
   lastResetDate: new Date().toISOString().slice(0, 10),
+  unlimited: false,
+  unlimitedReason: null,
 };
 
 export function useUserEntitlements() {
@@ -46,6 +50,11 @@ export function useUserEntitlements() {
         limit: data?.usage?.limit ?? 10,
         remaining: data?.usage?.remaining ?? 10,
         lastResetDate: data?.usage?.lastResetDate ?? defaultUsage.lastResetDate,
+        unlimited: Boolean(data?.usage?.unlimited),
+        unlimitedReason:
+          data?.usage?.unlimitedReason === 'dev' || data?.usage?.unlimitedReason === 'admin'
+            ? data.usage.unlimitedReason
+            : null,
       });
     } finally {
       setIsLoading(false);
@@ -71,6 +80,11 @@ export function useUserEntitlements() {
           limit: typeof detail.usage.limit === 'number' ? detail.usage.limit : prev.limit,
           remaining: typeof detail.usage.remaining === 'number' ? detail.usage.remaining : prev.remaining,
           lastResetDate: detail.usage.lastResetDate || prev.lastResetDate,
+          unlimited: typeof detail.usage.unlimited === 'boolean' ? detail.usage.unlimited : prev.unlimited,
+          unlimitedReason:
+            detail.usage.unlimitedReason === 'dev' || detail.usage.unlimitedReason === 'admin'
+              ? detail.usage.unlimitedReason
+              : prev.unlimitedReason,
         }));
       }
     };
@@ -86,6 +100,7 @@ export function useUserEntitlements() {
     isLoading,
     refresh,
     isPremium: plan === 'PREMIUM',
-    isLimitReached: usage.current >= usage.limit,
+    isUnlimited: usage.unlimited,
+    isLimitReached: !usage.unlimited && usage.current >= usage.limit,
   };
 }

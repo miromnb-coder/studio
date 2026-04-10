@@ -37,7 +37,8 @@ const formatConversationTime = (iso: string) => {
   return timestamp.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
 };
 
-const formatUsageLine = (current: number, limit: number) => `${Math.max(limit - current, 0)} / ${limit} uses left today`;
+const formatUsageLine = (current: number, limit: number, unlimited: boolean) =>
+  unlimited ? 'Unlimited (Dev Mode)' : `${Math.max(limit - current, 0)} / ${limit} uses left today`;
 
 export default function ChatPage() {
   const router = useRouter();
@@ -60,7 +61,7 @@ export default function ChatPage() {
   const renameConversation = useAppStore((s) => s.renameConversation);
   const runFinanceAction = useAppStore((s) => s.runFinanceAction);
   const activeSteps = useAppStore((s) => s.activeSteps);
-  const { plan, usage, isPremium, isLimitReached, refresh } = useUserEntitlements();
+  const { plan, usage, isPremium, isLimitReached, isUnlimited, refresh } = useUserEntitlements();
 
   const [draft, setDraft] = useState('');
   const [isVoiceMode, setIsVoiceMode] = useState(false);
@@ -331,7 +332,7 @@ export default function ChatPage() {
         <div className="rounded-2xl border border-black/[0.06] bg-[#f6f6f6]/95 px-3 py-2 shadow-[0_8px_18px_rgba(0,0,0,0.04)] backdrop-blur-xl">
           <div className="text-right">
             <p className="text-[11px] font-medium text-[#4c4c4c]">{plan === 'PREMIUM' ? 'Premium' : 'Free plan'}</p>
-            <p className="text-[11px] text-[#6a6a6a]">{formatUsageLine(usage.current, usage.limit)}</p>
+            <p className="text-[11px] text-[#6a6a6a]">{formatUsageLine(usage.current, usage.limit, usage.unlimited)}</p>
           </div>
           <div className="mt-2">
             <AgentActivityBadge isActive={isAgentResponding} label={isAgentResponding ? 'Agent actively executing' : 'Agent standing by'} />
@@ -446,11 +447,17 @@ export default function ChatPage() {
           setComposerNotice('Draft cleared.');
           setOpenPanel(null);
         }}
-        onOpenPlanInfo={() => setComposerNotice(`Usage: ${usage.current}/${usage.limit} • Plan: ${plan}`)}
+        onOpenPlanInfo={() =>
+          setComposerNotice(
+            usage.unlimited
+              ? `Usage: Unlimited (Dev Mode) • Runs today: ${usage.current} • Plan: ${plan}`
+              : `Usage: ${usage.current}/${usage.limit} • Plan: ${plan}`,
+          )
+        }
         onUpgrade={openUpgrade}
       />
 
-      {isLimitReached ? (
+      {isLimitReached && !isUnlimited ? (
         <div className="fixed bottom-[calc(160px+env(safe-area-inset-bottom))] left-1/2 z-20 w-full max-w-md -translate-x-1/2 px-4">
           <div className="rounded-2xl border border-black/10 bg-[#f6f6f6] px-3 py-2.5 text-xs text-[#444] shadow-[0_8px_18px_rgba(0,0,0,0.05)]">
             You&apos;ve reached your daily limit. Upgrade for higher limits and file tools.
@@ -478,7 +485,7 @@ export default function ChatPage() {
         </div>
       ) : null}
 
-      {showPaywall ? (
+      {showPaywall && !isUnlimited ? (
         <div className="fixed inset-0 z-40 flex items-end justify-center bg-black/30 px-4 pb-20 pt-8">
           <div className="w-full max-w-md rounded-[24px] border border-black/10 bg-[#f7f7f7] p-4 shadow-[0_12px_40px_rgba(0,0,0,0.2)]">
             <div className="mb-3 flex items-center gap-2 text-[#2f2f2f]">
