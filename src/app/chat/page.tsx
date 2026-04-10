@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { Crown, MessageSquare, Plus, RefreshCw } from 'lucide-react';
+import { Crown, PanelLeft, RefreshCw } from 'lucide-react';
 import { AnimatePresence, motion } from 'framer-motion';
 import { useAppStore } from '../store/app-store';
 import { useUserEntitlements } from '../hooks/use-user-entitlements';
@@ -307,29 +307,31 @@ export default function ChatPage() {
     <main className="screen app-bg pb-56">
       <header className="mb-3 space-y-2 px-1 pt-1">
         <div className="flex items-center justify-between gap-3">
-          <div>
-            <h1 className="text-xl font-semibold text-primary">Kivo</h1>
-            <p className="text-sm text-secondary">AI operator workspace</p>
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => setOpenPanel((prev) => (prev === 'conversations' ? null : 'conversations'))}
+              className="inline-flex h-9 w-9 items-center justify-center rounded-full border border-black/[0.08] bg-[#f6f6f6] text-[#2b2b2b] shadow-[0_4px_12px_rgba(0,0,0,0.04)]"
+              aria-label="Open conversation menu"
+            >
+              <PanelLeft className="h-4 w-4" />
+            </button>
+            <div>
+              <h1 className="text-xl font-semibold text-primary">Kivo</h1>
+              <p className="text-sm text-secondary">AI operator workspace</p>
+            </div>
           </div>
           <div className="flex items-center gap-2">
             <button type="button" onClick={openUpgrade} className="inline-flex items-center gap-1 rounded-full border border-black/10 bg-[#f6f6f6] px-3 py-1.5 text-xs font-medium text-[#232323]">
               <Crown className="h-3.5 w-3.5" /> Upgrade
             </button>
-            <button type="button" onClick={handleNewChat} className="inline-flex items-center gap-1 rounded-full border border-black/10 bg-[#f6f6f6] px-3 py-1.5 text-xs font-medium text-[#232323]">
-              <Plus className="h-3.5 w-3.5" /> New chat
-            </button>
           </div>
         </div>
 
         <div className="rounded-2xl border border-black/[0.06] bg-[#f6f6f6]/95 px-3 py-2 shadow-[0_8px_18px_rgba(0,0,0,0.04)] backdrop-blur-xl">
-          <div className="flex items-center justify-between">
-            <button type="button" onClick={() => setOpenPanel((prev) => (prev === 'conversations' ? null : 'conversations'))} className="inline-flex items-center gap-2 text-sm font-medium text-[#2f2f2f]">
-              <MessageSquare className="h-4 w-4" /> Conversations
-            </button>
-            <div className="text-right">
-              <p className="text-[11px] font-medium text-[#4c4c4c]">{plan === 'PREMIUM' ? 'Premium' : 'Free plan'}</p>
-              <p className="text-[11px] text-[#6a6a6a]">{formatUsageLine(usage.current, usage.limit)}</p>
-            </div>
+          <div className="text-right">
+            <p className="text-[11px] font-medium text-[#4c4c4c]">{plan === 'PREMIUM' ? 'Premium' : 'Free plan'}</p>
+            <p className="text-[11px] text-[#6a6a6a]">{formatUsageLine(usage.current, usage.limit)}</p>
           </div>
           <div className="mt-2">
             <AgentActivityBadge isActive={isAgentResponding} label={isAgentResponding ? 'Agent actively executing' : 'Agent standing by'} />
@@ -348,6 +350,8 @@ export default function ChatPage() {
               onRenameConversation={handleRenameConversation}
               onDeleteConversation={handleDeleteConversation}
               formatConversationTime={formatConversationTime}
+              onClose={() => setOpenPanel(null)}
+              onNewChat={handleNewChat}
             />
           ) : null}
         </AnimatePresence>
