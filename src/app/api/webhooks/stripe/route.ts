@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { initializeFirebase } from '@/firebase';
+import { createClient as createSupabaseServerClient } from '@/lib/supabase/server';
 import { SubscriptionService, UserPlan } from '@/services/subscription-service';
 
 /**
@@ -12,7 +12,7 @@ export async function POST(req: Request) {
     const payload = await req.text();
     // Verify signature in production:
     // const event = stripe.webhooks.constructEvent(payload, sig, endpointSecret);
-    
+
     // Simplified logic for prototype ingestion
     const event = JSON.parse(payload);
 
@@ -22,11 +22,9 @@ export async function POST(req: Request) {
       const plan = session.metadata?.plan_id as UserPlan;
 
       if (userId && plan) {
-        const { firestore } = initializeFirebase();
-        if (firestore) {
-          await SubscriptionService.updatePlan(firestore, userId, plan);
-          console.log(`[WEBHOOK] User ${userId} upgraded to ${plan}`);
-        }
+        const supabase = await createSupabaseServerClient();
+        await SubscriptionService.updatePlan(supabase, userId, plan);
+        console.log(`[WEBHOOK] User ${userId} upgraded to ${plan}`);
       }
     }
 

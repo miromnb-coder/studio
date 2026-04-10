@@ -11,13 +11,12 @@ Tactical financial intelligence unit powered by Agent Engine V5.6.
 ## Tech Stack
 - **Framework**: Next.js 15 (App Router)
 - **Intelligence**: Groq SDK + Llama 3.3 / 3.2 Vision
-- **Database**: Firebase Firestore
-- **Auth**: Firebase Authentication (Google + Email)
+- **Database**: Supabase Postgres
+- **Auth**: Supabase Auth (Google + Email)
 - **Styling**: Tailwind CSS + ShadCN UI + Framer Motion
 
 ## Configuration
-Requires `GROQ_API_KEY` in environment variables.
-Firebase configuration is managed via `src/firebase/config.ts`.
+Requires `GROQ_API_KEY`, `NEXT_PUBLIC_SUPABASE_URL`, and `NEXT_PUBLIC_SUPABASE_ANON_KEY` in environment variables.
 
 ## Usage
 1. **Initialize Audit**: Paste statement logs or upload screenshots in the Intelligence Hub.
