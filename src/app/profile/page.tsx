@@ -7,6 +7,7 @@ import { createClient } from '@/lib/supabase/client';
 import { toFriendlyAuthMessage } from '@/lib/auth/messages';
 import { useAppStore } from '../store/app-store';
 import { useUserEntitlements } from '../hooks/use-user-entitlements';
+import { GmailIntegrationCard } from '../components/profile/GmailIntegrationCard';
 
 export default function ProfilePage() {
   const router = useRouter();
@@ -166,6 +167,8 @@ export default function ProfilePage() {
             Upgrade
           </Link>
         </div>
+
+        <GmailIntegrationCard />
 
         <button type="button" className="btn-secondary tap-feedback mt-3 w-full px-4 py-2 text-sm" onClick={logout} disabled={isSigningOut}>
           {isSigningOut ? 'Signing out…' : 'Sign out'}

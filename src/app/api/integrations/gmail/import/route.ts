@@ -22,9 +22,12 @@ function resolveTokenExpiry(value: unknown): number | null {
   return Number.isNaN(date.getTime()) ? null : date.getTime();
 }
 
+const FALLBACK_ERROR = 'Unable to sync Gmail right now. Please reconnect and try again.';
+
 export async function POST() {
+  const supabase = await createSupabaseServerClient();
+
   try {
-    const supabase = await createSupabaseServerClient();
     const { data: auth } = await supabase.auth.getUser();
     const userId = auth.user?.id;
 
@@ -43,8 +46,51 @@ export async function POST() {
 
     const encryptedAccessToken = String(gmailIntegration.access_token_encrypted || '');
     if (!encryptedAccessToken) {
-      return NextResponse.json({ error: 'GMAIL_NOT_CONNECTED' }, { status: 400 });
+      await supabase.from('finance_profiles').upsert(
+        {
+          user_id: userId,
+          active_subscriptions: Array.isArray(profile?.active_subscriptions) ? profile.active_subscriptions : [],
+          total_monthly_cost: typeof profile?.total_monthly_cost === 'number' ? profile.total_monthly_cost : 0,
+          estimated_savings: typeof profile?.estimated_savings === 'number' ? profile.estimated_savings : 0,
+          currency: profile?.currency || 'USD',
+          memory_summary: profile?.memory_summary || '',
+          last_analysis: {
+            ...lastAnalysis,
+            gmail_integration: {
+              ...gmailIntegration,
+              status: 'error',
+              last_error: 'Gmail is not connected.',
+            },
+          },
+          updated_at: new Date().toISOString(),
+        },
+        { onConflict: 'user_id' },
+      );
+
+      return NextResponse.json({ error: 'GMAIL_NOT_CONNECTED', message: 'Connect Gmail before syncing.' }, { status: 400 });
     }
+
+    await supabase.from('finance_profiles').upsert(
+      {
+        user_id: userId,
+        active_subscriptions: Array.isArray(profile?.active_subscriptions) ? profile.active_subscriptions : [],
+        total_monthly_cost: typeof profile?.total_monthly_cost === 'number' ? profile.total_monthly_cost : 0,
+        estimated_savings: typeof profile?.estimated_savings === 'number' ? profile.estimated_savings : 0,
+        currency: profile?.currency || 'USD',
+        memory_summary: profile?.memory_summary || '',
+        last_analysis: {
+          ...lastAnalysis,
+          gmail_integration: {
+            ...gmailIntegration,
+            status: 'syncing',
+            last_error: null,
+            sync_started_at: new Date().toISOString(),
+          },
+        },
+        updated_at: new Date().toISOString(),
+      },
+      { onConflict: 'user_id' },
+    );
 
     let accessToken = decryptToken(encryptedAccessToken);
     const refreshEncrypted = String(gmailIntegration.refresh_token_encrypted || '');
@@ -62,7 +108,7 @@ export async function POST() {
       gmailIntegration.last_error = null;
     }
 
-    const emails = await fetchFinancialEmails(accessToken, 100);
+    const emails = await fetchFinancialEmails(accessToken, 75);
     const analysis = await analyzeFinancialEmailsWithAI(emails);
 
     const incomingSignals = [...analysis.subscriptions, ...analysis.recurringPayments];
@@ -72,6 +118,16 @@ export async function POST() {
 
     const mergedSubscriptions = mergeSubscriptionSignals(existingSubscriptions, incomingSignals);
     const monthlyTotal = computeMonthlyTotal(mergedSubscriptions);
+
+    const aiSummary =
+      analysis.summary ||
+      `I analyzed ${emails.length} recent finance-related emails and detected ${incomingSignals.length} recurring payment signals.`;
+
+    const currency = profile?.currency || incomingSignals.find((signal) => signal.currency)?.currency || 'USD';
+    const savingsEstimate =
+      typeof profile?.estimated_savings === 'number'
+        ? profile.estimated_savings
+        : Math.round(monthlyTotal * 0.15 * 100) / 100;
 
     const nextLastAnalysis = {
       ...lastAnalysis,
@@ -90,9 +146,9 @@ export async function POST() {
         user_id: userId,
         active_subscriptions: mergedSubscriptions,
         total_monthly_cost: monthlyTotal,
-        estimated_savings: typeof profile?.estimated_savings === 'number' ? profile.estimated_savings : 0,
-        currency: profile?.currency || 'USD',
-        memory_summary: profile?.memory_summary || '',
+        estimated_savings: savingsEstimate,
+        currency,
+        memory_summary: aiSummary,
         last_analysis: nextLastAnalysis,
         updated_at: new Date().toISOString(),
       },
@@ -101,26 +157,81 @@ export async function POST() {
 
     await supabase.from('finance_history').insert({
       user_id: userId,
-      event_type: 'gmail_import',
-      title: 'Gmail financial import completed',
-      summary: `Analyzed ${emails.length} emails and extracted ${incomingSignals.length} financial signals.`,
+      event_type: 'email_import',
+      title: 'Gmail sync completed',
+      summary: `Analyzed ${emails.length} relevant emails and extracted ${incomingSignals.length} financial signals.`,
       metadata: {
+        action_type: 'email_import',
         source: 'gmail',
+        status: 'success',
         emails_analyzed: emails.length,
         subscriptions_found: incomingSignals.length,
-        merchants: analysis.merchants,
+        trial_risks: analysis.trialRisks,
+        savings_opportunities: analysis.savingsOpportunities,
+        structured_data: {
+          merchants: analysis.merchants,
+          subscriptions: analysis.subscriptions,
+          recurringPayments: analysis.recurringPayments,
+        },
       },
       created_at: new Date().toISOString(),
     });
+
+    await supabase.from('memory_summaries').upsert(
+      {
+        user_id: userId,
+        summary_type: 'finance',
+        summary_text: aiSummary.slice(0, 320),
+        source: 'gmail_import',
+        updated_at: new Date().toISOString(),
+      },
+      { onConflict: 'user_id,summary_type' },
+    );
 
     return NextResponse.json({
       status: 'connected',
       lastSyncedAt: nextLastAnalysis.gmail_integration.last_synced_at,
       emailsAnalyzed: emails.length,
       subscriptionsFound: incomingSignals.length,
+      summary: aiSummary,
     });
   } catch (error) {
     console.error('GMAIL_IMPORT_ERROR', error);
-    return NextResponse.json({ error: 'GMAIL_IMPORT_FAILED' }, { status: 500 });
+
+    const { data: auth } = await supabase.auth.getUser();
+    const userId = auth.user?.id;
+
+    if (userId) {
+      const { data: profile } = await supabase
+        .from('finance_profiles')
+        .select('active_subscriptions,total_monthly_cost,estimated_savings,currency,memory_summary,last_analysis')
+        .eq('user_id', userId)
+        .maybeSingle();
+      const lastAnalysis = asObject(profile?.last_analysis);
+      const gmailIntegration = asObject(lastAnalysis.gmail_integration);
+
+      await supabase.from('finance_profiles').upsert(
+        {
+          user_id: userId,
+          active_subscriptions: Array.isArray(profile?.active_subscriptions) ? profile.active_subscriptions : [],
+          total_monthly_cost: typeof profile?.total_monthly_cost === 'number' ? profile.total_monthly_cost : 0,
+          estimated_savings: typeof profile?.estimated_savings === 'number' ? profile.estimated_savings : 0,
+          currency: profile?.currency || 'USD',
+          memory_summary: profile?.memory_summary || '',
+          last_analysis: {
+            ...lastAnalysis,
+            gmail_integration: {
+              ...gmailIntegration,
+              status: 'error',
+              last_error: FALLBACK_ERROR,
+            },
+          },
+          updated_at: new Date().toISOString(),
+        },
+        { onConflict: 'user_id' },
+      );
+    }
+
+    return NextResponse.json({ error: 'GMAIL_IMPORT_FAILED', message: FALLBACK_ERROR }, { status: 500 });
   }
 }
