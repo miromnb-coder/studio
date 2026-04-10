@@ -17,6 +17,7 @@ type SyncPayload = {
   lastSyncedAt?: string | null;
   emailsAnalyzed?: number;
   subscriptionsFound?: number;
+  summary?: string;
 };
 
 function formatSyncTime(value: string | null): string {
@@ -93,11 +94,45 @@ export function GmailIntegrationCard() {
       setLastSyncedAt(payload.lastSyncedAt || new Date().toISOString());
       setEmailsAnalyzed(typeof payload.emailsAnalyzed === 'number' ? payload.emailsAnalyzed : 0);
       setSubscriptionsFound(typeof payload.subscriptionsFound === 'number' ? payload.subscriptionsFound : 0);
+      if (typeof window !== 'undefined') {
+        localStorage.setItem('finance_data_updated_at', new Date().toISOString());
+        window.dispatchEvent(new CustomEvent('finance:data-updated', { detail: { source: 'gmail_sync', summary: payload.summary || null } }));
+      }
     } catch {
       setStatus('error');
       setErrorMessage('Gmail sync failed. Please try again.');
     } finally {
       setIsSyncing(false);
+      setIsConnecting(false);
+    }
+  };
+
+  const disconnect = async () => {
+    setErrorMessage(null);
+    setIsConnecting(true);
+    try {
+      const response = await fetch('/api/integrations/gmail/disconnect', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+      });
+      if (!response.ok) {
+        setStatus('error');
+        setErrorMessage('Could not disconnect Gmail right now.');
+        return;
+      }
+
+      setStatus('disconnected');
+      setLastSyncedAt(null);
+      setEmailsAnalyzed(0);
+      setSubscriptionsFound(0);
+      if (typeof window !== 'undefined') {
+        localStorage.setItem('finance_data_updated_at', new Date().toISOString());
+        window.dispatchEvent(new CustomEvent('finance:data-updated', { detail: { source: 'gmail_disconnect' } }));
+      }
+    } catch {
+      setStatus('error');
+      setErrorMessage('Could not disconnect Gmail right now.');
+    } finally {
       setIsConnecting(false);
     }
   };
@@ -151,6 +186,17 @@ export function GmailIntegrationCard() {
               className="btn-secondary tap-feedback px-3 py-1.5 text-xs disabled:opacity-60"
             >
               {isSyncing ? 'Syncing emails…' : 'Sync emails'}
+            </button>
+          ) : null}
+
+          {status === 'connected' || status === 'syncing' ? (
+            <button
+              type="button"
+              onClick={disconnect}
+              disabled={isConnecting || isSyncing || loadingStatus}
+              className="tap-feedback rounded-xl border border-black/10 bg-white px-3 py-1.5 text-xs text-secondary disabled:opacity-60"
+            >
+              {isConnecting ? 'Disconnecting…' : 'Disconnect'}
             </button>
           ) : null}
         </div>

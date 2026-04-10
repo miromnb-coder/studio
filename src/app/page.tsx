@@ -67,53 +67,58 @@ export default function HomePage() {
   const [loading, setLoading] = useState(true);
   const [dashboardError, setDashboardError] = useState<string | null>(null);
 
+  const loadDashboard = useCallback(async () => {
+    if (!user?.id) {
+      setData(emptyState);
+      setDashboardError(null);
+      setLoading(false);
+      return;
+    }
+
+    try {
+      setLoading(true);
+      setDashboardError(null);
+      const response = await fetch(`/api/finance/dashboard?userId=${encodeURIComponent(user.id)}`, { cache: 'no-store' });
+
+      if (!response.ok) {
+        setData(emptyState);
+        setDashboardError('We could not load your dashboard data right now.');
+        setLoading(false);
+        return;
+      }
+
+      const payload = (await response.json()) as DashboardPayload;
+      setData({ ...emptyState, ...payload });
+      setLoading(false);
+    } catch (error) {
+      console.error('HOME_DASHBOARD_FETCH_ERROR:', error);
+      setData(emptyState);
+      setDashboardError('We could not load your dashboard data right now.');
+      setLoading(false);
+    }
+  }, [user?.id]);
+
   useEffect(() => {
     if (!hydrated) hydrate();
   }, [hydrate, hydrated]);
 
   useEffect(() => {
-    let mounted = true;
-
-    const loadDashboard = async () => {
-      if (!user?.id) {
-        if (mounted) {
-          setData(emptyState);
-          setDashboardError(null);
-          setLoading(false);
-        }
-        return;
-      }
-
-      try {
-        setLoading(true);
-        setDashboardError(null);
-        const response = await fetch(`/api/finance/dashboard?userId=${encodeURIComponent(user.id)}`, { cache: 'no-store' });
-        if (!mounted) return;
-
-        if (!response.ok) {
-          setData(emptyState);
-          setDashboardError('We could not load your dashboard data right now.');
-          setLoading(false);
-          return;
-        }
-
-        const payload = (await response.json()) as DashboardPayload;
-        setData({ ...emptyState, ...payload });
-        setLoading(false);
-      } catch (error) {
-        console.error('HOME_DASHBOARD_FETCH_ERROR:', error);
-        if (!mounted) return;
-        setData(emptyState);
-        setDashboardError('We could not load your dashboard data right now.');
-        setLoading(false);
-      }
-    };
-
     void loadDashboard();
-    return () => {
-      mounted = false;
+  }, [loadDashboard]);
+
+  useEffect(() => {
+    const refreshDashboard = () => {
+      void loadDashboard();
     };
-  }, [user?.id]);
+    window.addEventListener('finance:data-updated', refreshDashboard);
+    window.addEventListener('focus', refreshDashboard);
+    window.addEventListener('storage', refreshDashboard);
+    return () => {
+      window.removeEventListener('finance:data-updated', refreshDashboard);
+      window.removeEventListener('focus', refreshDashboard);
+      window.removeEventListener('storage', refreshDashboard);
+    };
+  }, [loadDashboard]);
 
   const editName = () => {
     const nextName = window.prompt('Edit name', user?.name || '');
