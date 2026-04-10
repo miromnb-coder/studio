@@ -1,6 +1,13 @@
-export type AgentIntentV8 = 'general' | 'finance' | 'gmail' | 'productivity' | 'unknown';
+export type AgentIntentV8 =
+  | 'general'
+  | 'finance'
+  | 'gmail'
+  | 'productivity'
+  | 'coding'
+  | 'memory'
+  | 'unknown';
 
-export type AgentModeV8 = 'general' | 'finance' | 'gmail' | 'productivity';
+export type AgentModeV8 = 'general' | 'finance' | 'gmail' | 'productivity' | 'coding' | 'memory';
 
 export type AgentRole = 'system' | 'assistant' | 'user';
 
@@ -28,6 +35,19 @@ export type MemoryEnvelopeV8 = {
   summaries?: Array<Record<string, unknown>>;
 };
 
+export type UserMemoryTypeV8 = 'preference' | 'fact' | 'goal' | 'finance' | 'other';
+
+export type UserMemoryItemV8 = {
+  id?: string;
+  userId: string;
+  content: string;
+  type: UserMemoryTypeV8;
+  importance: number;
+  relevanceScore?: number;
+  createdAt?: string;
+  updatedAt?: string;
+};
+
 export type AgentContextV8 = {
   user: {
     id: string;
@@ -40,6 +60,7 @@ export type AgentContextV8 = {
     financeProfile?: Record<string, unknown> | null;
     financeEvents?: Array<Record<string, unknown>>;
     semanticMemories?: Array<Record<string, unknown>>;
+    relevantMemories: UserMemoryItemV8[];
   };
   environment: {
     gmailConnected: boolean;
@@ -53,9 +74,13 @@ export type RouteResultV8 = {
   mode: AgentModeV8;
   confidence: number;
   reason: string;
+  needsGmail: boolean;
+  needsFinanceData: boolean;
 };
 
 export type ToolNameV8 =
+  | 'gmail_fetch'
+  | 'finance_read'
   | 'detect_leaks'
   | 'create_savings_plan'
   | 'find_alternatives'
@@ -97,7 +122,7 @@ export type ExecutionStepResultV8 = {
   stepId: string;
   title: string;
   tool: ToolNameV8;
-  status: 'completed' | 'failed';
+  status: 'completed' | 'failed' | 'skipped';
   summary: string;
   input: Record<string, unknown>;
   output: Record<string, unknown>;
@@ -116,6 +141,8 @@ export type SuggestedActionV8 = {
   payload?: Record<string, unknown>;
 };
 
+export type SystemStateV8 = 'idle' | 'understanding' | 'planning' | 'executing' | 'responding';
+
 export type AgentResponseV8 = {
   reply: string;
   metadata: {
@@ -127,6 +154,7 @@ export type AgentResponseV8 = {
     suggestedActions: SuggestedActionV8[];
     memoryUsed: boolean;
     verificationPassed: boolean;
+    state: SystemStateV8;
   };
 };
 
@@ -136,4 +164,12 @@ export type AgentRunInputV8 = {
   history?: unknown[];
   memory?: MemoryEnvelopeV8 | null;
   productState: ProductStateV8;
+};
+
+export type AgentCriticInputV8 = {
+  userMessage: string;
+  intent: AgentIntentV8;
+  reply: string;
+  usedTools: ToolNameV8[];
+  plan: ExecutionPlanV8;
 };
