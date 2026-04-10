@@ -19,6 +19,14 @@ function prefersFinnish(message: string, history: AgentContextV8['conversation']
   return FINNISH_LANGUAGE_PATTERN.test(corpus);
 }
 
+function stripTemplateLanguage(text: string): string {
+  return text
+    .replace(/\b(here('| i)s|this is)\s+(a\s+)?(direct|grounded)\s+answer[^.]*\.?/gi, '')
+    .replace(/\b(i understood your request|as an ai|operator mode)\b[^.]*\.?/gi, '')
+    .replace(/\s{2,}/g, ' ')
+    .trim();
+}
+
 export async function runResearchAgent(input: ResearchAgentInput): Promise<ResearchAgentOutput> {
   const inFinnish = prefersFinnish(input.context.user.message, input.context.conversation);
   const message = input.context.user.message;
@@ -38,8 +46,8 @@ export async function runResearchAgent(input: ResearchAgentInput): Promise<Resea
           : 'Focus on directly answering the user question with clear reasoning.';
 
   let answerDraft = inFinnish
-    ? 'En saanut vielä vastausta muodostettua. Kokeile kysymystä yhdellä tarkalla lauseella.'
-    : 'I could not generate a full answer yet. Please restate your request in one clear sentence.';
+    ? 'Tarvitsen yhden täsmällisen lisätiedon, jotta voin vastata oikein.'
+    : 'I need one specific detail to answer this correctly.';
 
   try {
     const completion = await groq.chat.completions.create({
@@ -49,10 +57,11 @@ export async function runResearchAgent(input: ResearchAgentInput): Promise<Resea
         {
           role: 'system',
           content: `You are a smart general AI assistant.
-Default to normal, direct conversation.
-Answer the exact user request first.
+Answer the user request directly in the first sentence.
+Use natural language, not templates.
 Avoid generic filler, fake process summaries, and operator-style language.
-Do not mention tools, plans, hidden steps, or internal routing unless the user asks.
+Do not mention tools, plans, hidden steps, intent labels, or internal routing unless the user asks.
+For simple questions, give the answer immediately with no preamble.
 ${modeHint}
 Respond in ${inFinnish ? 'Finnish' : 'English'}.`,
         },
@@ -60,16 +69,15 @@ Respond in ${inFinnish ? 'Finnish' : 'English'}.`,
         {
           role: 'user',
           content: `User request: ${message}
-Intent: ${input.route.intent}
 Relevant memory: ${relevantMemories.length ? relevantMemories.join(' | ') : 'none'}
 Tool outputs present: ${input.execution.steps.length > 0 ? 'yes' : 'no'}
-Give a direct final answer.`,
+If the request is ambiguous, ask one short clarifying question. Otherwise give a direct final answer.`,
         },
       ],
     });
 
     const modelReply = completion.choices[0]?.message?.content?.trim();
-    if (modelReply) answerDraft = modelReply;
+    if (modelReply) answerDraft = stripTemplateLanguage(modelReply);
   } catch {
     // keep fallback draft
   }
