@@ -3,39 +3,71 @@ import { createClient as createSupabaseServerClient } from '@/lib/supabase/serve
 import {
   analyzeFinancialEmailsWithAI,
   computeMonthlyTotal,
-  decryptToken,
-  encryptToken,
   fetchFinancialEmails,
+  getUsableAccessTokenFromIntegration,
   mergeSubscriptionSignals,
+  parseIntegrationState,
+  verifyGmailAccessToken,
 } from '@/lib/integrations/gmail';
-import { generateProactiveInsights } from '@/services/proactive-service';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
+
+const FALLBACK_ERROR = 'Unable to sync Gmail right now. Please reconnect and try again.';
+
+type FinanceProfileRecord = {
+  user_id: string;
+  active_subscriptions: Array<Record<string, unknown>> | null;
+  total_monthly_cost: number | null;
+  estimated_savings: number | null;
+  currency: string | null;
+  memory_summary: string | null;
+  last_analysis: Record<string, unknown> | null;
+};
 
 function asObject(value: unknown): Record<string, unknown> {
   return typeof value === 'object' && value !== null ? (value as Record<string, unknown>) : {};
 }
 
-function resolveTokenExpiry(value: unknown): number | null {
-  const raw = String(value || '');
-  const date = new Date(raw);
-  return Number.isNaN(date.getTime()) ? null : date.getTime();
+function asArrayOfObjects(value: unknown): Array<Record<string, unknown>> {
+  return Array.isArray(value) ? value.filter((item): item is Record<string, unknown> => !!item && typeof item === 'object') : [];
 }
 
-const FALLBACK_ERROR = 'Unable to sync Gmail right now. Please reconnect and try again.';
+function toNumber(value: unknown, fallback = 0): number {
+  return typeof value === 'number' && Number.isFinite(value) ? value : fallback;
+}
 
-async function writeOrThrow(
-  label: string,
-  operation: () => Promise<{ error: unknown }>,
+async function loadFinanceProfile(supabase: Awaited<ReturnType<typeof createSupabaseServerClient>>, userId: string): Promise<FinanceProfileRecord | null> {
+  const { data } = await supabase
+    .from('finance_profiles')
+    .select('user_id,active_subscriptions,total_monthly_cost,estimated_savings,currency,memory_summary,last_analysis')
+    .eq('user_id', userId)
+    .maybeSingle();
+
+  return (data as FinanceProfileRecord | null) || null;
+}
+
+async function saveFinanceProfile(
+  supabase: Awaited<ReturnType<typeof createSupabaseServerClient>>,
   payload: Record<string, unknown>,
+  label: string,
 ) {
-  console.log('Saving to Supabase:', { label, data: payload });
-  const result = await operation();
-  if (result.error) {
-    console.error(`${label}_WRITE_ERROR`, result.error);
-    throw result.error;
-  }
+  const result = await supabase.from('finance_profiles').upsert(payload, { onConflict: 'user_id' });
+  console.log('GMAIL_IMPORT_DB_WRITE_RESULT', { label, hasError: Boolean(result.error) });
+  if (result.error) throw result.error;
+}
+
+function buildBaseProfilePayload(userId: string, profile: FinanceProfileRecord | null) {
+  return {
+    user_id: userId,
+    active_subscriptions: asArrayOfObjects(profile?.active_subscriptions),
+    total_monthly_cost: toNumber(profile?.total_monthly_cost, 0),
+    estimated_savings: toNumber(profile?.estimated_savings, 0),
+    currency: profile?.currency || 'USD',
+    memory_summary: profile?.memory_summary || '',
+    last_analysis: asObject(profile?.last_analysis),
+    updated_at: new Date().toISOString(),
+  };
 }
 
 export async function POST() {
@@ -49,245 +81,215 @@ export async function POST() {
       return NextResponse.json({ error: 'AUTH_REQUIRED' }, { status: 401 });
     }
 
-    const { data: profile } = await supabase
-      .from('finance_profiles')
-      .select('active_subscriptions,total_monthly_cost,estimated_savings,currency,memory_summary,last_analysis')
-      .eq('user_id', userId)
-      .maybeSingle();
+    console.log('GMAIL_IMPORT_START', { userId });
 
-    const lastAnalysis = asObject(profile?.last_analysis);
-    const gmailIntegration = asObject(lastAnalysis.gmail_integration);
+    const profile = await loadFinanceProfile(supabase, userId);
+    const basePayload = buildBaseProfilePayload(userId, profile);
 
-    const encryptedAccessToken = String(gmailIntegration.access_token_encrypted || '');
-    if (!encryptedAccessToken) {
-      const missingConnectionPayload = {
-        user_id: userId,
-        active_subscriptions: Array.isArray(profile?.active_subscriptions) ? profile.active_subscriptions : [],
-        total_monthly_cost: typeof profile?.total_monthly_cost === 'number' ? profile.total_monthly_cost : 0,
-        estimated_savings: typeof profile?.estimated_savings === 'number' ? profile.estimated_savings : 0,
-        currency: profile?.currency || 'USD',
-        memory_summary: profile?.memory_summary || '',
-        last_analysis: {
-          ...lastAnalysis,
-          gmail_integration: {
-            ...gmailIntegration,
-            status: 'error',
-            last_error: 'Gmail is not connected.',
-          },
+    const lastAnalysis = asObject(basePayload.last_analysis);
+    const currentIntegration = parseIntegrationState(lastAnalysis.gmail_integration);
+
+    if (!currentIntegration.access_token_encrypted) {
+      const erroredAnalysis = {
+        ...lastAnalysis,
+        gmail_integration: {
+          ...currentIntegration,
+          status: 'error',
+          last_error: 'Gmail is not connected.',
         },
-        updated_at: new Date().toISOString(),
       };
 
-      await writeOrThrow(
-        'finance_profiles_missing_gmail_connection',
-        () => supabase.from('finance_profiles').upsert(missingConnectionPayload, { onConflict: 'user_id' }),
-        missingConnectionPayload,
+      await saveFinanceProfile(
+        supabase,
+        {
+          ...basePayload,
+          last_analysis: erroredAnalysis,
+          updated_at: new Date().toISOString(),
+        },
+        'missing_gmail_connection',
       );
 
       return NextResponse.json({ error: 'GMAIL_NOT_CONNECTED', message: 'Connect Gmail before syncing.' }, { status: 400 });
     }
 
-    const syncedAt = new Date().toISOString();
+    const syncStartedAt = new Date().toISOString();
 
-    const syncingPayload = {
-      user_id: userId,
-      active_subscriptions: Array.isArray(profile?.active_subscriptions) ? profile.active_subscriptions : [],
-      total_monthly_cost: typeof profile?.total_monthly_cost === 'number' ? profile.total_monthly_cost : 0,
-      estimated_savings: typeof profile?.estimated_savings === 'number' ? profile.estimated_savings : 0,
-      currency: profile?.currency || 'USD',
-      memory_summary: profile?.memory_summary || '',
-      last_analysis: {
-        ...lastAnalysis,
-        gmail_integration: {
-          ...gmailIntegration,
-          status: 'syncing',
-          last_error: null,
-          sync_started_at: new Date().toISOString(),
+    await saveFinanceProfile(
+      supabase,
+      {
+        ...basePayload,
+        last_analysis: {
+          ...lastAnalysis,
+          gmail_integration: {
+            ...currentIntegration,
+            status: 'syncing',
+            sync_started_at: syncStartedAt,
+            last_error: null,
+          },
         },
+        updated_at: syncStartedAt,
       },
-      updated_at: new Date().toISOString(),
-    };
-
-    await writeOrThrow(
-      'finance_profiles_syncing',
-      () => supabase.from('finance_profiles').upsert(syncingPayload, { onConflict: 'user_id' }),
-      syncingPayload,
+      'syncing_state',
     );
 
-    let accessToken = decryptToken(encryptedAccessToken);
-    const refreshEncrypted = String(gmailIntegration.refresh_token_encrypted || '');
-    const expiryAt = resolveTokenExpiry(gmailIntegration.expires_at);
+    let integrationForSave = { ...currentIntegration };
+    let accessToken: string;
 
-    if (expiryAt && expiryAt < Date.now() + 45_000 && refreshEncrypted) {
-      const { refreshAccessToken } = await import('@/lib/integrations/gmail');
-      const refreshed = await refreshAccessToken(decryptToken(refreshEncrypted));
-      accessToken = refreshed.accessToken;
-      gmailIntegration.access_token_encrypted = encryptToken(refreshed.accessToken);
-      if (refreshed.expiryDate) {
-        gmailIntegration.expires_at = new Date(refreshed.expiryDate).toISOString();
-      }
-      gmailIntegration.status = 'connected';
-      gmailIntegration.last_error = null;
+    try {
+      const tokenState = await getUsableAccessTokenFromIntegration(currentIntegration);
+      accessToken = tokenState.accessToken;
+      integrationForSave = tokenState.nextIntegration;
+      console.log('GMAIL_IMPORT_REFRESH_RESULT', {
+        userId,
+        refreshApplied: tokenState.refreshApplied,
+        expiresAt: tokenState.nextIntegration.expires_at || null,
+      });
+    } catch (refreshError) {
+      const errorMessage = refreshError instanceof Error ? refreshError.message : 'Unknown token error';
+      const failedIntegration = {
+        ...currentIntegration,
+        status: 'error',
+        last_error: `Token refresh failed: ${errorMessage}`,
+      };
+
+      await saveFinanceProfile(
+        supabase,
+        {
+          ...basePayload,
+          last_analysis: {
+            ...lastAnalysis,
+            gmail_integration: failedIntegration,
+          },
+          updated_at: new Date().toISOString(),
+        },
+        'refresh_failed',
+      );
+
+      console.log('GMAIL_IMPORT_REFRESH_RESULT', { userId, refreshApplied: false, error: errorMessage });
+      return NextResponse.json({ status: 'error', error: 'GMAIL_TOKEN_INVALID', message: FALLBACK_ERROR }, { status: 400 });
     }
 
-    const emails = await fetchFinancialEmails(accessToken, 75);
-    const analysis = await analyzeFinancialEmailsWithAI(emails);
+    let profileValidationError: string | null = null;
+    try {
+      await verifyGmailAccessToken(accessToken);
+    } catch (profileError) {
+      profileValidationError = profileError instanceof Error ? profileError.message : 'Gmail profile validation failed';
+    }
 
-    const incomingSignals = [...analysis.subscriptions, ...analysis.recurringPayments];
-    const subscriptionsCount = analysis.subscriptions.length;
-    const existingSubscriptions = Array.isArray(profile?.active_subscriptions)
-      ? (profile.active_subscriptions as Array<Record<string, unknown>>)
-      : [];
+    const emails = await fetchFinancialEmails(accessToken, 100);
+    console.log('GMAIL_IMPORT_FETCH_RESULT', { userId, emailsFetched: emails.length, profileValidationError });
 
+    const aiAnalysis = await analyzeFinancialEmailsWithAI(emails);
+
+    const incomingSignals = [...aiAnalysis.subscriptions, ...aiAnalysis.recurringPayments];
+    const existingSubscriptions = asArrayOfObjects(basePayload.active_subscriptions);
     const mergedSubscriptions = mergeSubscriptionSignals(existingSubscriptions, incomingSignals);
-    const monthlyTotal = computeMonthlyTotal(mergedSubscriptions);
-    const currency = profile?.currency || incomingSignals.find((signal) => signal.currency)?.currency || 'USD';
 
-    const aiSummary =
-      analysis.summary ||
-      `I analyzed ${emails.length} recent finance-related emails and detected ${incomingSignals.length} recurring payment signals.`;
-    const chatReadySummary = `I analyzed your recent emails and found ${subscriptionsCount} subscriptions costing ${monthlyTotal.toFixed(2)} ${currency}/month.`;
+    const monthlyTotal = computeMonthlyTotal(mergedSubscriptions);
+    const currency = basePayload.currency || incomingSignals.find((item) => item.currency)?.currency || 'USD';
+    const subscriptionsFound = aiAnalysis.subscriptions.length;
+    const recurringPaymentsFound = aiAnalysis.recurringPayments.length;
     const savingsEstimate =
-      typeof profile?.estimated_savings === 'number'
-        ? profile.estimated_savings
+      toNumber(basePayload.estimated_savings, 0) > 0
+        ? toNumber(basePayload.estimated_savings, 0)
         : Math.round(monthlyTotal * 0.15 * 100) / 100;
 
-    const nextLastAnalysis = {
-      ...lastAnalysis,
-      gmail_integration: {
-        ...gmailIntegration,
-        status: 'connected',
-        last_synced_at: syncedAt,
-        last_sync_emails_analyzed: emails.length,
-        last_sync_subscriptions_found: subscriptionsCount,
-        chat_ready_summary: chatReadySummary,
-        trial_risks: analysis.trialRisks,
-        savings_opportunities: analysis.savingsOpportunities,
-        last_error: null,
-      },
-    };
+    const summary =
+      aiAnalysis.summary ||
+      (emails.length === 0
+        ? 'Gmail is connected, but no recent finance emails were found in the configured search window.'
+        : `Analyzed ${emails.length} finance-related emails and extracted ${incomingSignals.length} recurring payment signals.`);
 
-    const financeProfilePayload = {
-      user_id: userId,
-      active_subscriptions: mergedSubscriptions,
-      total_monthly_cost: monthlyTotal,
-      estimated_savings: savingsEstimate,
-      currency,
-      memory_summary: aiSummary,
-      last_analysis: nextLastAnalysis,
-      updated_at: syncedAt,
-    };
-
-    await writeOrThrow(
-      'finance_profiles_sync_complete',
-      () => supabase.from('finance_profiles').upsert(financeProfilePayload, { onConflict: 'user_id' }),
-      financeProfilePayload,
-    );
-
-    const profilePayload = {
-      id: userId,
-      gmail_connected: true,
-      gmail_last_sync_at: syncedAt,
-      updated_at: syncedAt,
-    };
-
-    await writeOrThrow(
-      'profiles_gmail_sync_complete',
-      () => supabase.from('profiles').upsert(profilePayload, { onConflict: 'id' }),
-      profilePayload,
-    );
-
-    const emailImportPayload = {
-      user_id: userId,
-      event_type: 'email_import',
-      title: 'Gmail sync completed',
-      summary: `Analyzed ${emails.length} relevant emails and extracted ${incomingSignals.length} financial signals.`,
-      metadata: {
-        action_type: 'email_import',
-        source: 'gmail',
-        status: 'success',
-        emails_analyzed: emails.length,
-        subscriptions_found: subscriptionsCount,
-        trial_risks: analysis.trialRisks,
-        savings_opportunities: analysis.savingsOpportunities,
-        chat_ready_summary: chatReadySummary,
-        structured_data: {
-          merchants: analysis.merchants,
-          subscriptions: analysis.subscriptions,
-          recurringPayments: analysis.recurringPayments,
-        },
-      },
-      created_at: new Date().toISOString(),
-    };
-
-    await writeOrThrow(
-      'finance_history_email_import',
-      () => supabase.from('finance_history').insert(emailImportPayload),
-      emailImportPayload,
-    );
-
-    const { data: recentHistory } = await supabase
-      .from('finance_history')
-      .select('event_type,title,summary,metadata,created_at')
-      .eq('user_id', userId)
-      .order('created_at', { ascending: false })
-      .limit(20);
-
-    const proactiveInsights = generateProactiveInsights({
-      profile: {
-        ...(profile || {}),
-        active_subscriptions: mergedSubscriptions,
-        estimated_savings: savingsEstimate,
-        last_analysis: nextLastAnalysis,
-      },
-      history: (recentHistory || []) as Array<Record<string, unknown>>,
+    console.log('GMAIL_IMPORT_ANALYSIS_RESULT', {
+      userId,
+      emailsAnalyzed: emails.length,
+      subscriptionsFound,
+      recurringPaymentsFound,
+      merchants: aiAnalysis.merchants.length,
+      monthlyTotal,
+      estimatedSavings: savingsEstimate,
     });
 
-    const proactiveInsightPayload = {
-      user_id: userId,
-      event_type: 'proactive_insight',
-      title: 'Money Brain refreshed after Gmail sync',
-      summary: proactiveInsights.length
-        ? `Top insight: ${proactiveInsights[0].title}`
-        : 'No high-value proactive insights detected.',
-      metadata: {
-        key: proactiveInsights[0]?.id || 'none',
-        source: 'gmail_import',
-        insight_ids: proactiveInsights.map((insight) => insight.id),
-        status: 'generated',
+    const syncedAt = new Date().toISOString();
+    const updatedLastAnalysis = {
+      ...lastAnalysis,
+      gmail_integration: {
+        ...integrationForSave,
+        status: profileValidationError ? 'error' : 'connected',
+        last_synced_at: syncedAt,
+        last_sync_emails_analyzed: emails.length,
+        last_sync_subscriptions_found: subscriptionsFound,
+        last_error: profileValidationError,
       },
-      created_at: new Date().toISOString(),
+      gmail_import: {
+        ...(asObject(lastAnalysis.gmail_import) || {}),
+        last_synced_at: syncedAt,
+        emails_analyzed: emails.length,
+        subscriptions_found: subscriptionsFound,
+        recurring_payments_found: recurringPaymentsFound,
+        summary,
+        merchants: aiAnalysis.merchants,
+        trial_risks: aiAnalysis.trialRisks,
+        savings_opportunities: aiAnalysis.savingsOpportunities,
+      },
     };
 
-    await writeOrThrow(
-      'finance_history_proactive_insight',
-      () => supabase.from('finance_history').insert(proactiveInsightPayload),
-      proactiveInsightPayload,
+    const memorySummary =
+      emails.length === 0
+        ? 'Gmail sync complete. No clear finance emails were found yet, so no recurring charges were added.'
+        : summary;
+
+    await saveFinanceProfile(
+      supabase,
+      {
+        ...basePayload,
+        active_subscriptions: mergedSubscriptions,
+        total_monthly_cost: monthlyTotal,
+        estimated_savings: savingsEstimate,
+        currency,
+        memory_summary: memorySummary,
+        last_analysis: updatedLastAnalysis,
+        updated_at: syncedAt,
+      },
+      'sync_complete',
     );
 
-    const memorySummaryPayload = {
-      user_id: userId,
-      summary_type: 'finance',
-      summary_text: aiSummary.slice(0, 320),
-      source: 'gmail_import',
-      updated_at: new Date().toISOString(),
-    };
-
-    await writeOrThrow(
-      'memory_summaries_finance',
-      () => supabase.from('memory_summaries').upsert(memorySummaryPayload, { onConflict: 'user_id,summary_type' }),
-      memorySummaryPayload,
+    const profileWrite = await supabase.from('profiles').upsert(
+      {
+        id: userId,
+        gmail_connected: true,
+        gmail_last_sync_at: syncedAt,
+        updated_at: syncedAt,
+      },
+      { onConflict: 'id' },
     );
 
-    return NextResponse.json({
-      status: 'connected',
-      lastSyncedAt: nextLastAnalysis.gmail_integration.last_synced_at,
+    console.log('GMAIL_IMPORT_DB_WRITE_RESULT', { label: 'profiles_sync', hasError: Boolean(profileWrite.error) });
+    if (profileWrite.error) throw profileWrite.error;
+
+    const responsePayload = {
+      status: profileValidationError ? 'error' : 'connected',
+      lastSyncedAt: syncedAt,
       emailsAnalyzed: emails.length,
-      subscriptionsFound: subscriptionsCount,
-      recurringPaymentsFound: analysis.recurringPayments.length,
+      subscriptionsFound,
+      recurringPaymentsFound,
       monthlyTotal,
       estimatedMonthlySavings: savingsEstimate,
-      summary: chatReadySummary,
+      summary,
+      subscriptions: mergedSubscriptions,
+      warning: profileValidationError,
+    };
+
+    console.log('GMAIL_IMPORT_DB_WRITE_RESULT', {
+      label: 'final_response',
+      userId,
+      emailsAnalyzed: responsePayload.emailsAnalyzed,
+      subscriptionsFound: responsePayload.subscriptionsFound,
+      status: responsePayload.status,
+    });
+
+    return NextResponse.json(responsePayload, {
+      status: profileValidationError ? 207 : 200,
     });
   } catch (error) {
     console.error('GMAIL_IMPORT_ERROR', error);
@@ -296,39 +298,29 @@ export async function POST() {
     const userId = auth.user?.id;
 
     if (userId) {
-      const { data: profile } = await supabase
-        .from('finance_profiles')
-        .select('active_subscriptions,total_monthly_cost,estimated_savings,currency,memory_summary,last_analysis')
-        .eq('user_id', userId)
-        .maybeSingle();
-      const lastAnalysis = asObject(profile?.last_analysis);
-      const gmailIntegration = asObject(lastAnalysis.gmail_integration);
+      const profile = await loadFinanceProfile(supabase, userId);
+      const basePayload = buildBaseProfilePayload(userId, profile);
+      const lastAnalysis = asObject(basePayload.last_analysis);
+      const integration = parseIntegrationState(lastAnalysis.gmail_integration);
 
-      const syncErrorPayload = {
-        user_id: userId,
-        active_subscriptions: Array.isArray(profile?.active_subscriptions) ? profile.active_subscriptions : [],
-        total_monthly_cost: typeof profile?.total_monthly_cost === 'number' ? profile.total_monthly_cost : 0,
-        estimated_savings: typeof profile?.estimated_savings === 'number' ? profile.estimated_savings : 0,
-        currency: profile?.currency || 'USD',
-        memory_summary: profile?.memory_summary || '',
-        last_analysis: {
-          ...lastAnalysis,
-          gmail_integration: {
-            ...gmailIntegration,
-            status: 'error',
-            last_error: FALLBACK_ERROR,
+      await saveFinanceProfile(
+        supabase,
+        {
+          ...basePayload,
+          last_analysis: {
+            ...lastAnalysis,
+            gmail_integration: {
+              ...integration,
+              status: 'error',
+              last_error: FALLBACK_ERROR,
+            },
           },
+          updated_at: new Date().toISOString(),
         },
-        updated_at: new Date().toISOString(),
-      };
-
-      await writeOrThrow(
-        'finance_profiles_sync_error_state',
-        () => supabase.from('finance_profiles').upsert(syncErrorPayload, { onConflict: 'user_id' }),
-        syncErrorPayload,
+        'sync_error_state',
       );
     }
 
-    return NextResponse.json({ error: 'GMAIL_IMPORT_FAILED', message: FALLBACK_ERROR }, { status: 500 });
+    return NextResponse.json({ status: 'error', error: 'GMAIL_IMPORT_FAILED', message: FALLBACK_ERROR }, { status: 500 });
   }
 }

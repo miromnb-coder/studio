@@ -1,8 +1,8 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { AlertTriangle, CircleDollarSign, TrendingUp, WalletCards } from 'lucide-react';
+import { AlertTriangle, CircleDollarSign, Mail, TrendingUp, WalletCards } from 'lucide-react';
 import { useAppStore } from '../store/app-store';
 
 type DashboardPayload = {
@@ -35,6 +35,13 @@ type DashboardPayload = {
     type: string;
   }>;
   profileSummary: string;
+  gmailImport: {
+    lastSyncedAt: string | null;
+    emailsAnalyzed: number;
+    subscriptionsFound: number;
+    recurringPaymentsFound: number;
+    summary: string;
+  };
 };
 
 const emptyState: DashboardPayload = {
@@ -44,6 +51,13 @@ const emptyState: DashboardPayload = {
   proactiveInsights: [],
   timeline: [],
   profileSummary: '',
+  gmailImport: {
+    lastSyncedAt: null,
+    emailsAnalyzed: 0,
+    subscriptionsFound: 0,
+    recurringPaymentsFound: 0,
+    summary: '',
+  },
 };
 
 const formatDate = (iso: string) => {
@@ -60,34 +74,39 @@ export default function MoneyPage() {
   const [data, setData] = useState<DashboardPayload>(emptyState);
   const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
-    let mounted = true;
-    const load = async () => {
-      if (!user?.id) {
-        if (mounted) {
-          setData(emptyState);
-          setLoading(false);
-        }
-        return;
-      }
-      setLoading(true);
-      const response = await fetch(`/api/finance/dashboard?userId=${encodeURIComponent(user.id)}`, { cache: 'no-store' });
-      if (!mounted) return;
-      if (!response.ok) {
-        setData(emptyState);
-        setLoading(false);
-        return;
-      }
-      const payload = (await response.json()) as DashboardPayload;
-      setData({ ...emptyState, ...payload });
+  const load = useCallback(async () => {
+    if (!user?.id) {
+      setData(emptyState);
       setLoading(false);
+      return;
+    }
+
+    setLoading(true);
+    const response = await fetch(`/api/finance/dashboard?userId=${encodeURIComponent(user.id)}`, { cache: 'no-store' });
+    if (!response.ok) {
+      setData(emptyState);
+      setLoading(false);
+      return;
+    }
+    const payload = (await response.json()) as DashboardPayload;
+    setData({ ...emptyState, ...payload, gmailImport: { ...emptyState.gmailImport, ...(payload.gmailImport || {}) } });
+    setLoading(false);
+  }, [user?.id]);
+
+  useEffect(() => {
+    void load();
+  }, [load]);
+
+  useEffect(() => {
+    const refresh = () => {
+      void load();
     };
 
-    void load();
+    window.addEventListener('finance:data-updated', refresh as EventListener);
     return () => {
-      mounted = false;
+      window.removeEventListener('finance:data-updated', refresh as EventListener);
     };
-  }, [user?.id]);
+  }, [load]);
 
   const headline = useMemo(() => {
     if (loading) return 'Loading finance intelligence…';
@@ -112,6 +131,17 @@ export default function MoneyPage() {
         <article className="card-elevated p-5">
           <p className="text-xs font-semibold uppercase tracking-wide text-[#c9ced6]">Finance Summary</p>
           <p className="mt-2 text-sm text-secondary">{headline}</p>
+        </article>
+
+        <article className="card-surface p-5">
+          <div className="flex items-center gap-2 text-xs text-secondary"><Mail className="h-4 w-4" /> Gmail import status</div>
+          <p className="mt-2 text-sm text-primary">
+            Last sync: {data.gmailImport.lastSyncedAt ? formatDate(data.gmailImport.lastSyncedAt) : 'Never'} · Emails analyzed: {data.gmailImport.emailsAnalyzed}
+          </p>
+          <p className="mt-1 text-xs text-secondary">
+            Subscriptions found: {data.gmailImport.subscriptionsFound} · Recurring payments: {data.gmailImport.recurringPaymentsFound}
+          </p>
+          {data.gmailImport.summary ? <p className="mt-2 text-xs text-secondary">{data.gmailImport.summary}</p> : null}
         </article>
 
         <div className="grid grid-cols-2 gap-3">
