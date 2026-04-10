@@ -1,6 +1,7 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import type { ReactNode } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { Bell, LogOut } from 'lucide-react';
@@ -24,6 +25,34 @@ const emptyState: DashboardPayload = {
   profileSummary: '',
 };
 
+class DashboardSectionBoundary extends React.Component<{ title: string; children: ReactNode }, { hasError: boolean }> {
+  constructor(props: { title: string; children: ReactNode }) {
+    super(props);
+    this.state = { hasError: false };
+  }
+
+  static getDerivedStateFromError() {
+    return { hasError: true };
+  }
+
+  componentDidCatch(error: unknown) {
+    console.error(`DASHBOARD_SECTION_ERROR:${this.props.title}`, error);
+  }
+
+  render() {
+    if (this.state.hasError) {
+      return (
+        <section className="card-surface dashboard-reveal p-4">
+          <h2 className="text-base font-semibold text-primary">{this.props.title}</h2>
+          <p className="mt-2 text-sm text-secondary">This section is temporarily unavailable. Try refreshing the page.</p>
+        </section>
+      );
+    }
+
+    return this.props.children;
+  }
+}
+
 export default function HomePage() {
   const router = useRouter();
   const hydrated = useAppStore((s) => s.hydrated);
@@ -36,6 +65,7 @@ export default function HomePage() {
 
   const [data, setData] = useState<DashboardPayload>(emptyState);
   const [loading, setLoading] = useState(true);
+  const [dashboardError, setDashboardError] = useState<string | null>(null);
 
   useEffect(() => {
     if (!hydrated) hydrate();
@@ -48,24 +78,35 @@ export default function HomePage() {
       if (!user?.id) {
         if (mounted) {
           setData(emptyState);
+          setDashboardError(null);
           setLoading(false);
         }
         return;
       }
 
-      setLoading(true);
-      const response = await fetch(`/api/finance/dashboard?userId=${encodeURIComponent(user.id)}`, { cache: 'no-store' });
-      if (!mounted) return;
+      try {
+        setLoading(true);
+        setDashboardError(null);
+        const response = await fetch(`/api/finance/dashboard?userId=${encodeURIComponent(user.id)}`, { cache: 'no-store' });
+        if (!mounted) return;
 
-      if (!response.ok) {
-        setData(emptyState);
+        if (!response.ok) {
+          setData(emptyState);
+          setDashboardError('We could not load your dashboard data right now.');
+          setLoading(false);
+          return;
+        }
+
+        const payload = (await response.json()) as DashboardPayload;
+        setData({ ...emptyState, ...payload });
         setLoading(false);
-        return;
+      } catch (error) {
+        console.error('HOME_DASHBOARD_FETCH_ERROR:', error);
+        if (!mounted) return;
+        setData(emptyState);
+        setDashboardError('We could not load your dashboard data right now.');
+        setLoading(false);
       }
-
-      const payload = (await response.json()) as DashboardPayload;
-      setData({ ...emptyState, ...payload });
-      setLoading(false);
     };
 
     void loadDashboard();
@@ -117,6 +158,7 @@ export default function HomePage() {
   const openOpportunity = (item: OpportunityItem) => openInChat(item.contextPrompt);
 
   const hasData = data.subscriptions.length > 0 || data.recentActions.length > 0 || data.proactiveInsights.length > 0;
+  const showLoadingState = Boolean(user?.id) && loading;
 
   return (
     <main className="screen app-bg pb-24">
@@ -137,6 +179,23 @@ export default function HomePage() {
           <p className="mt-2 text-sm text-secondary">Your subscriptions and savings intelligence load from your secure Supabase profile.</p>
           <Link href="/login" className="btn-primary mt-4 inline-flex px-4 py-2 text-sm">Go to login</Link>
         </section>
+      ) : showLoadingState ? (
+        <section className="card-elevated dashboard-reveal space-y-3 p-6 text-center">
+          <h1 className="text-2xl font-semibold tracking-tight text-primary">Loading your dashboard…</h1>
+          <p className="text-sm text-secondary">Pulling your subscriptions, opportunities, and recent activity.</p>
+        </section>
+      ) : dashboardError ? (
+        <section className="card-elevated dashboard-reveal space-y-4 p-6 text-center">
+          <h1 className="text-2xl font-semibold tracking-tight text-primary">Dashboard unavailable</h1>
+          <p className="text-sm text-secondary">{dashboardError}</p>
+          <button
+            type="button"
+            className="btn-primary mx-auto inline-flex px-4 py-2 text-sm"
+            onClick={() => window.location.reload()}
+          >
+            Retry loading dashboard
+          </button>
+        </section>
       ) : !hasData && !loading ? (
         <section className="card-elevated dashboard-reveal space-y-4 p-6 text-center">
           <h1 className="text-2xl font-semibold tracking-tight text-primary">Your dashboard is ready for first analysis</h1>
@@ -151,22 +210,39 @@ export default function HomePage() {
         </section>
       ) : (
         <section className="space-y-4">
-          <DashboardHero
-            monthlySavings={data.stats.estimatedSavings}
-            monthlyCost={data.stats.monthlyTotal}
-            activeSubscriptions={data.stats.activeSubscriptions}
-            loading={loading}
-          />
+          <DashboardSectionBoundary title="Control center summary">
+            <DashboardHero
+              monthlySavings={data.stats.estimatedSavings}
+              monthlyCost={data.stats.monthlyTotal}
+              activeSubscriptions={data.stats.activeSubscriptions}
+              loading={loading}
+            />
+          </DashboardSectionBoundary>
 
-          <ProactiveInsights insights={data.proactiveInsights} onOpenInsight={openInsight} />
+          <DashboardSectionBoundary title="Proactive insights">
+            <ProactiveInsights insights={data.proactiveInsights} onOpenInsight={openInsight} />
+          </DashboardSectionBoundary>
 
-          <SubscriptionsList subscriptions={data.subscriptions} onOpenSubscription={openSubscription} />
+          <DashboardSectionBoundary title="Active subscriptions">
+            <SubscriptionsList subscriptions={data.subscriptions} onOpenSubscription={openSubscription} />
+          </DashboardSectionBoundary>
 
-          <SavingsChart points={data.savingsSeries} />
+          <DashboardSectionBoundary title="Savings over time">
+            <SavingsChart
+              points={data.savingsSeries.map((point) => ({
+                date: point.label,
+                savings: point.value,
+              }))}
+            />
+          </DashboardSectionBoundary>
 
-          <OpportunitiesList opportunities={data.topOpportunities} onOpenOpportunity={openOpportunity} />
+          <DashboardSectionBoundary title="Top opportunities">
+            <OpportunitiesList opportunities={data.topOpportunities} onOpenOpportunity={openOpportunity} />
+          </DashboardSectionBoundary>
 
-          <RecentActivity actions={data.recentActions} />
+          <DashboardSectionBoundary title="Recent activity">
+            <RecentActivity actions={data.recentActions} />
+          </DashboardSectionBoundary>
         </section>
       )}
     </main>
