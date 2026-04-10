@@ -261,6 +261,23 @@ export async function GET(req: Request) {
     return response;
   } catch (callbackError) {
     console.error('GMAIL_CALLBACK_ERROR', callbackError);
-    return failRedirect('callback_exception');
+
+    const message =
+      callbackError instanceof Error
+        ? callbackError.message
+        : typeof callbackError === 'string'
+          ? callbackError
+          : 'unknown_callback_error';
+
+    const target = new URL('/profile', appOrigin);
+    target.searchParams.set('gmail', 'error');
+    target.searchParams.set('reason', `callback_exception:${message}`);
+
+    console.log('GMAIL_CALLBACK_REDIRECT', {
+      reason: `callback_exception:${message}`,
+      redirect: target.pathname + target.search,
+    });
+
+    return NextResponse.redirect(target);
   }
 }
