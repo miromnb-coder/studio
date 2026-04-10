@@ -13,6 +13,33 @@ export interface GmailTokenBundle {
   tokenType?: string;
 }
 
+
+export const GMAIL_READONLY_SCOPE = 'https://www.googleapis.com/auth/gmail.readonly';
+
+export function hasGmailReadonlyScope(scope: string | null | undefined): boolean {
+  if (!scope) return false;
+  return scope.split(/\s+/).includes(GMAIL_READONLY_SCOPE);
+}
+
+export async function verifyGmailAccessToken(accessToken: string): Promise<{ emailAddress: string | null; messagesTotal: number | null; }> {
+  const response = await fetch('https://gmail.googleapis.com/gmail/v1/users/me/profile', {
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+    },
+    cache: 'no-store',
+  });
+
+  if (!response.ok) {
+    throw new Error(`Gmail profile request failed (${response.status}).`);
+  }
+
+  const payload = (await response.json()) as { emailAddress?: string; messagesTotal?: number };
+
+  return {
+    emailAddress: payload.emailAddress || null,
+    messagesTotal: typeof payload.messagesTotal === 'number' ? payload.messagesTotal : null,
+  };
+}
 export interface ParsedFinancialEmail {
   sender: string;
   subject: string;
@@ -147,7 +174,7 @@ export async function exchangeCodeForToken(code: string, redirectUri: string): P
     accessToken: payload.access_token,
     refreshToken: payload.refresh_token,
     expiryDate: payload.expires_in ? Date.now() + payload.expires_in * 1000 : undefined,
-    scope: payload.scope,
+    scope: payload.scope || GMAIL_READONLY_SCOPE,
     tokenType: payload.token_type,
   };
 }
@@ -189,7 +216,7 @@ export async function refreshAccessToken(refreshToken: string): Promise<GmailTok
   return {
     accessToken: payload.access_token,
     expiryDate: payload.expires_in ? Date.now() + payload.expires_in * 1000 : undefined,
-    scope: payload.scope,
+    scope: payload.scope || GMAIL_READONLY_SCOPE,
     tokenType: payload.token_type,
   };
 }
