@@ -15,22 +15,17 @@ import {
   persistSmartMemory,
   type RetrievedMemoryContext,
 } from '@/lib/memory/smart-memory';
+import {
+  getUserPlanAndUsage,
+  incrementUsage,
+  isAdminBypass,
+  isDevUnlimitedMode,
+  PLAN_LIMITS,
+  toUsageEnvelope,
+} from '@/lib/usage/usage';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
-
-type UserPlan = 'FREE' | 'PREMIUM';
-
-type UsageSnapshot = {
-  agentRuns: number;
-  premiumActionRuns: number;
-  usageDate: string;
-};
-
-const PLAN_LIMITS: Record<UserPlan, { dailyAgentRuns: number }> = {
-  FREE: { dailyAgentRuns: 10 },
-  PREMIUM: { dailyAgentRuns: 1000 },
-};
 
 const SAFE_AGENT_FALLBACK: AgentResponse = {
   reply: 'I ran into an issue, but here’s what I could analyze so far.',
@@ -47,11 +42,6 @@ const SAFE_AGENT_FALLBACK: AgentResponse = {
   },
 };
 
-function todayKey() {
-  return new Date().toISOString().slice(0, 10);
-}
-
-
 function safeJsonResponse(payload: unknown, status = 200) {
   return NextResponse.json(payload, { status });
 }
@@ -65,87 +55,6 @@ function parseActionType(raw: unknown): FinanceActionType | null {
     return raw;
   }
   return null;
-}
-
-function normalizePlan(value: unknown): UserPlan {
-  const upper = String(value || 'FREE').toUpperCase();
-  return upper === 'PREMIUM' || upper === 'PRO' ? 'PREMIUM' : 'FREE';
-}
-
-async function getUserPlanAndUsage(supabase: any, userId: string): Promise<{
-  plan: UserPlan;
-  usage: UsageSnapshot;
-}> {
-  const usageDate = todayKey();
-
-  const [profileResult, usageResult] = await Promise.all([
-    supabase.from('profiles').select('plan').eq('id', userId).maybeSingle(),
-    supabase
-      .from('usage_daily')
-      .select('agent_runs,premium_action_runs,usage_date')
-      .eq('user_id', userId)
-      .eq('usage_date', usageDate)
-      .maybeSingle(),
-  ]);
-
-  if (profileResult.error) {
-    console.error('SUPABASE_PROFILE_READ_ERROR:', profileResult.error);
-  }
-
-  if (usageResult.error) {
-    console.error('SUPABASE_USAGE_READ_ERROR:', usageResult.error);
-  }
-
-  const plan = normalizePlan(profileResult.data?.plan);
-
-  return {
-    plan,
-    usage: {
-      agentRuns: typeof usageResult.data?.agent_runs === 'number' ? usageResult.data.agent_runs : 0,
-      premiumActionRuns:
-        typeof usageResult.data?.premium_action_runs === 'number'
-          ? usageResult.data.premium_action_runs
-          : 0,
-      usageDate,
-    },
-  };
-}
-
-async function incrementUsage(
-  supabase: any,
-  userId: string,
-  currentUsage: UsageSnapshot,
-  kind: 'agent' | 'premium_action' = 'agent',
-): Promise<UsageSnapshot> {
-  const nextUsage: UsageSnapshot = {
-    usageDate: currentUsage.usageDate || todayKey(),
-    agentRuns: currentUsage.agentRuns,
-    premiumActionRuns: currentUsage.premiumActionRuns,
-  };
-
-  if (kind === 'premium_action') {
-    nextUsage.premiumActionRuns += 1;
-  } else {
-    nextUsage.agentRuns += 1;
-  }
-
-  const { error } = await supabase.from('usage_daily').upsert(
-    {
-      user_id: userId,
-      usage_date: nextUsage.usageDate,
-      agent_runs: nextUsage.agentRuns,
-      premium_action_runs: nextUsage.premiumActionRuns,
-      updated_at: new Date().toISOString(),
-    },
-    { onConflict: 'user_id,usage_date' },
-  );
-
-  if (error) {
-    console.error('SUPABASE_USAGE_UPSERT_ERROR:', error);
-    return currentUsage;
-  }
-
-  return nextUsage;
 }
 
 export async function POST(req: Request) {
@@ -195,7 +104,8 @@ export async function POST(req: Request) {
       return safeJsonResponse(SAFE_AGENT_FALLBACK);
     }
 
-    const { plan, usage } = await getUserPlanAndUsage(supabase, userId);
+    const { plan, usage, email } = await getUserPlanAndUsage(supabase, userId);
+    const unlimitedReason = isDevUnlimitedMode() ? 'dev' : isAdminBypass(email) ? 'admin' : null;
 
     if (actionType && plan !== 'PREMIUM') {
       return safeJsonResponse(
@@ -208,14 +118,21 @@ export async function POST(req: Request) {
       );
     }
 
+    const usageBeforeRun = toUsageEnvelope({ plan, usage, unlimitedReason });
     const limit = PLAN_LIMITS[plan].dailyAgentRuns;
 
-    if (usage.agentRuns >= limit) {
+    if (!usageBeforeRun.unlimited && usageBeforeRun.current >= limit) {
       return safeJsonResponse(
         {
           error: 'LIMIT_REACHED',
           message: 'Daily limit reached',
-          usage: { current: usage.agentRuns, limit, remaining: 0 },
+          usage: {
+            current: usageBeforeRun.current,
+            limit: usageBeforeRun.limit,
+            remaining: usageBeforeRun.remaining,
+            unlimited: usageBeforeRun.unlimited,
+            unlimitedReason: usageBeforeRun.unlimitedReason,
+          },
           plan,
         },
         403,
@@ -257,9 +174,9 @@ export async function POST(req: Request) {
       productState: {
         plan,
         usage: {
-          current: usage.agentRuns,
-          limit,
-          remaining: Math.max(limit - usage.agentRuns, 0),
+          current: usageBeforeRun.current,
+          limit: usageBeforeRun.limit,
+          remaining: usageBeforeRun.remaining,
         },
         gmailConnected: Boolean((retrievedMemory as any)?.gmailConnected),
       },
@@ -320,6 +237,12 @@ export async function POST(req: Request) {
         });
       }
 
+      const usageAfterRun = toUsageEnvelope({
+        plan,
+        usage: updatedUsage,
+        unlimitedReason,
+      });
+
       return safeJsonResponse({
         reply: actionResult.summary,
         metadata: {
@@ -341,9 +264,11 @@ export async function POST(req: Request) {
           iterationCount: 1,
         },
         usage: {
-          current: updatedUsage.agentRuns,
-          limit,
-          remaining: Math.max(limit - updatedUsage.agentRuns, 0),
+          current: usageAfterRun.current,
+          limit: usageAfterRun.limit,
+          remaining: usageAfterRun.remaining,
+          unlimited: usageAfterRun.unlimited,
+          unlimitedReason: usageAfterRun.unlimitedReason,
         },
         plan,
       });
@@ -384,8 +309,14 @@ export async function POST(req: Request) {
       }
     }
 
+    const usageAfterRun = toUsageEnvelope({
+      plan,
+      usage: updatedUsage,
+      unlimitedReason,
+    });
+
     const payload: AgentResponse & {
-      usage: { current: number; limit: number; remaining: number };
+      usage: { current: number; limit: number; remaining: number; unlimited: boolean; unlimitedReason: 'dev' | 'admin' | null };
       plan: string;
     } = {
       reply: reply || SAFE_AGENT_FALLBACK.reply,
@@ -411,9 +342,11 @@ export async function POST(req: Request) {
         iterationCount: Array.isArray(agentResult.metadata?.steps) ? agentResult.metadata.steps.length : 0,
       },
       usage: {
-        current: updatedUsage.agentRuns,
-        limit,
-        remaining: Math.max(limit - updatedUsage.agentRuns, 0),
+        current: usageAfterRun.current,
+        limit: usageAfterRun.limit,
+        remaining: usageAfterRun.remaining,
+        unlimited: usageAfterRun.unlimited,
+        unlimitedReason: usageAfterRun.unlimitedReason,
       },
       plan,
     };

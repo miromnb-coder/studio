@@ -285,7 +285,7 @@ function providerSafeErrorMessage(raw: string): string {
   return 'I ran into an issue, but here’s what I could analyze so far.';
 }
 
-function emitUsageUpdate(payload: { usage?: { current: number; limit: number; remaining: number }; plan?: string }) {
+function emitUsageUpdate(payload: { usage?: { current: number; limit: number; remaining: number; unlimited?: boolean; unlimitedReason?: 'dev' | 'admin' | null }; plan?: string }) {
   if (typeof window === 'undefined') return;
   window.dispatchEvent(
     new CustomEvent('kivo-usage-updated', {
@@ -315,6 +315,21 @@ async function streamAssistantResponse(requestId: string, assistantMessageId: st
     const reason = await response.json().catch(() => null);
     const errorCode = reason?.error;
     if (errorCode === 'LIMIT_REACHED') {
+      if (reason?.usage) {
+        emitUsageUpdate({
+          usage: {
+            current: typeof reason.usage.current === 'number' ? reason.usage.current : 0,
+            limit: typeof reason.usage.limit === 'number' ? reason.usage.limit : 10,
+            remaining: typeof reason.usage.remaining === 'number' ? reason.usage.remaining : 0,
+            unlimited: Boolean(reason.usage.unlimited),
+            unlimitedReason:
+              reason.usage.unlimitedReason === 'dev' || reason.usage.unlimitedReason === 'admin'
+                ? reason.usage.unlimitedReason
+                : null,
+          },
+          plan: reason?.plan,
+        });
+      }
       throw new Error(`LIMIT_REACHED:${JSON.stringify(reason?.usage ?? {})}`);
     }
     if (errorCode === 'AUTH_REQUIRED') {
@@ -325,7 +340,7 @@ async function streamAssistantResponse(requestId: string, assistantMessageId: st
 
   const raw = (await response.json()) as Partial<AgentResponse>;
   const rawWithUsage = raw as Partial<AgentResponse> & {
-    usage?: { current?: number; limit?: number; remaining?: number };
+    usage?: { current?: number; limit?: number; remaining?: number; unlimited?: boolean; unlimitedReason?: 'dev' | 'admin' | null };
     plan?: string;
   };
   if (
@@ -338,6 +353,11 @@ async function streamAssistantResponse(requestId: string, assistantMessageId: st
         current: rawWithUsage.usage.current,
         limit: rawWithUsage.usage.limit,
         remaining: rawWithUsage.usage.remaining,
+        unlimited: Boolean(rawWithUsage.usage.unlimited),
+        unlimitedReason:
+          rawWithUsage.usage.unlimitedReason === 'dev' || rawWithUsage.usage.unlimitedReason === 'admin'
+            ? rawWithUsage.usage.unlimitedReason
+            : null,
       },
       plan: rawWithUsage.plan,
     });
@@ -736,7 +756,7 @@ const actions: AppActions = {
 
       const result = normalizeAgentResponse(reason as Partial<AgentResponse>);
       const reasonWithUsage = reason as Partial<AgentResponse> & {
-        usage?: { current?: number; limit?: number; remaining?: number };
+        usage?: { current?: number; limit?: number; remaining?: number; unlimited?: boolean; unlimitedReason?: 'dev' | 'admin' | null };
         plan?: string;
       };
       if (
@@ -749,6 +769,11 @@ const actions: AppActions = {
             current: reasonWithUsage.usage.current,
             limit: reasonWithUsage.usage.limit,
             remaining: reasonWithUsage.usage.remaining,
+            unlimited: Boolean(reasonWithUsage.usage.unlimited),
+            unlimitedReason:
+              reasonWithUsage.usage.unlimitedReason === 'dev' || reasonWithUsage.usage.unlimitedReason === 'admin'
+                ? reasonWithUsage.usage.unlimitedReason
+                : null,
           },
           plan: reasonWithUsage.plan,
         });

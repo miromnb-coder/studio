@@ -89,7 +89,7 @@ export default function SettingsPage() {
 
         <div className="mt-4 rounded-xl border border-black/10 bg-[#f2f2f2] p-4 text-sm text-secondary">
           <p>Current plan: <span className="font-medium text-primary">{plan}</span></p>
-          <p>Daily usage: {usage.current} / {usage.limit}</p>
+          <p>Daily usage: {usage.unlimited ? 'Unlimited (Dev Mode)' : `${usage.current} / ${usage.limit}`}</p>
         </div>
 
         <Link href="/upgrade" className="btn-primary tap-feedback mt-4 inline-flex px-4 py-2 text-sm">
