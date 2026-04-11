@@ -11,6 +11,83 @@ function buildStep(
   return { id, title, tool, description, input, required };
 }
 
+function parseMoney(raw: string): number | null {
+  const cleaned = raw.replace(/[$,]/g, '').trim();
+  const parsed = Number(cleaned);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : null;
+}
+
+function extractCompareOptions(message: string) {
+  const normalized = message.replace(/\s+/g, ' ').trim();
+  const pairs = normalized.match(/([^?.,\n]+?)\s+(?:vs|versus)\s+([^?.,\n]+)/i);
+  if (!pairs) return [];
+
+  const fromSegment = (segment: string, index: number) => {
+    const monthlyMatch = segment.match(/\$?\s?(\d[\d,.]*)\s*(?:\/?\s?(?:month|mo|monthly))/i);
+    const yearlyMatch = segment.match(/\$?\s?(\d[\d,.]*)\s*(?:\/?\s?(?:year|yr|yearly|annual))/i);
+    const genericMoney = segment.match(/\$+\s?(\d[\d,.]*)/i) || segment.match(/\b(\d[\d,.]*)\b/);
+    const label = segment
+      .replace(/\$?\s?\d[\d,.]*\s*(?:\/?\s?(?:month|mo|monthly|year|yr|yearly|annual))?/gi, '')
+      .replace(/\b(vs|versus|or)\b/gi, '')
+      .trim()
+      .replace(/\s{2,}/g, ' ');
+
+    return {
+      id: `option_${index + 1}`,
+      label: label || `Option ${index + 1}`,
+      monthlyCost: parseMoney(monthlyMatch?.[1] || ''),
+      annualCost: parseMoney(yearlyMatch?.[1] || ''),
+      switchingCost: 0,
+      valueScore: null as number | null,
+      inferredFromMessage: Boolean(monthlyMatch || yearlyMatch || genericMoney),
+      fallbackAmount: parseMoney(genericMoney?.[1] || ''),
+    };
+  };
+
+  const options = [fromSegment(pairs[1], 0), fromSegment(pairs[2], 1)].map((item) => {
+    if (!item.monthlyCost && !item.annualCost && item.fallbackAmount) {
+      return { ...item, monthlyCost: item.fallbackAmount };
+    }
+    return item;
+  });
+
+  return options;
+}
+
+function extractSavingsInputs(message: string) {
+  const lower = message.toLowerCase();
+  const money = Array.from(message.matchAll(/\$?\s?(\d[\d,.]*)/g)).map((m) => parseMoney(m[1])).filter((n): n is number => Boolean(n));
+  const timelineMonths = message.match(/(\d+)\s*(month|months|mo)\b/i);
+  const timelineYears = message.match(/(\d+)\s*(year|years|yr)\b/i);
+  const explicitTarget = message.match(/save\s+\$?\s?(\d[\d,.]*)/i) || message.match(/target\s+\$?\s?(\d[\d,.]*)/i);
+  const incomeMatch = message.match(/income[^$\d]*(\$?\s?\d[\d,.]*)/i) || message.match(/make[^$\d]*(\$?\s?\d[\d,.]*)\s*(?:\/?\s?(?:month|mo|monthly))?/i);
+  const expensesMatch = message.match(/expenses?[^$\d]*(\$?\s?\d[\d,.]*)/i) || message.match(/spend[^$\d]*(\$?\s?\d[\d,.]*)\s*(?:\/?\s?(?:month|mo|monthly))?/i);
+  const desiredSavings = message.match(/(?:save|saving)[^$\d]*(\$?\s?\d[\d,.]*)\s*(?:\/?\s?(?:month|mo|monthly))?/i);
+
+  const deadlineMonths = timelineMonths
+    ? Number(timelineMonths[1])
+    : timelineYears
+      ? Number(timelineYears[1]) * 12
+      : null;
+  const targetAmount = parseMoney(explicitTarget?.[1] || '') || (money.length === 1 ? money[0] : null);
+
+  return {
+    targetAmount,
+    deadlineMonths,
+    monthlyIncome: parseMoney(incomeMatch?.[1] || ''),
+    monthlyExpenses: parseMoney(expensesMatch?.[1] || ''),
+    desiredMonthlySavings: parseMoney(desiredSavings?.[1] || ''),
+    profile: /\bstudent\b/.test(lower) ? 'student' : /\bfamily|kids\b/.test(lower) ? 'family' : 'general',
+  };
+}
+
+function inferCancellationService(message: string): string | null {
+  const match = message.match(/\b(cancel|stop|end|unsubscribe)\b(?:\s+my|\s+the)?\s+([a-z0-9][a-z0-9+ .&-]{1,40})/i);
+  if (!match) return null;
+  const service = match[2].replace(/\b(subscription|plan|membership)\b/gi, '').trim();
+  return service.length > 1 ? service : null;
+}
+
 export function createPlanV8(route: RouteResultV8, message: string): ExecutionPlanV8 {
   const mapSubtypeToModes = (): PlanModeV8[] => {
     switch (route.subtype) {
@@ -33,6 +110,9 @@ export function createPlanV8(route: RouteResultV8, message: string): ExecutionPl
   };
 
   const planModes = mapSubtypeToModes();
+  const compareOptions = route.subtype === 'compare_options' ? extractCompareOptions(message) : [];
+  const savingsInputs = route.subtype === 'savings_audit' || route.subtype === 'budgeting' ? extractSavingsInputs(message) : null;
+  const cancellationService = route.subtype === 'subscriptions' ? inferCancellationService(message) : null;
   const complexitySignals = [
     message.split(/\s+/).length > 22,
     /\b(compare|tradeoff|roadmap|plan|optimi[sz]e|prioriti[sz]e)\b/i.test(message),
@@ -41,10 +121,12 @@ export function createPlanV8(route: RouteResultV8, message: string): ExecutionPl
   ].filter(Boolean).length;
   const depth: ExecutionPlanV8['depth'] = complexitySignals >= 3 ? 'deep' : complexitySignals >= 1 ? 'standard' : 'light';
   const needsClarification = route.intent === 'finance'
-    && (route.subtype === 'compare_options' || route.subtype === 'budgeting')
-    && !/\$|\d/.test(message);
+    && ((route.subtype === 'compare_options' && compareOptions.length < 2)
+      || ((route.subtype === 'budgeting' || route.subtype === 'savings_audit') && !/\$|\d/.test(message)));
   const clarificationQuestion = needsClarification
-    ? 'What is one concrete number I should optimize around (monthly budget, debt payment, or target savings)?'
+    ? route.subtype === 'compare_options'
+      ? 'Which two options should I compare, and what are their monthly or annual prices?'
+      : 'What is one concrete number I should optimize around (monthly budget, debt payment, or target savings)?'
     : undefined;
 
   if (route.intent === 'finance' && route.needsFinanceData) {
@@ -100,7 +182,12 @@ export function createPlanV8(route: RouteResultV8, message: string): ExecutionPl
         'Compare financial options',
         'finance_compare_options',
         'Compare user options by cost/value and select the strongest choice with assumptions.',
-        { query: message, useFinanceBaseline: true },
+        {
+          query: message,
+          useFinanceBaseline: true,
+          options: compareOptions,
+          requiresUserClarification: compareOptions.length < 2,
+        },
         true,
       ));
     }
@@ -112,7 +199,10 @@ export function createPlanV8(route: RouteResultV8, message: string): ExecutionPl
         'Build savings plan',
         'savings_plan_generator',
         'Generate a realistic monthly savings plan from available constraints and recurring costs.',
-        { query: message },
+        {
+          query: message,
+          ...(savingsInputs || {}),
+        },
         false,
       ));
     }
@@ -123,7 +213,10 @@ export function createPlanV8(route: RouteResultV8, message: string): ExecutionPl
         'Draft subscription cancellation',
         'subscription_cancel_draft',
         'Prepare ready-to-send cancellation language and checklist for a target service.',
-        { service: 'subscription from recent recurring charges' },
+        {
+          service: cancellationService || 'subscription from recent recurring charges',
+          requiresServiceDisambiguation: !cancellationService,
+        },
         false,
       ));
     }

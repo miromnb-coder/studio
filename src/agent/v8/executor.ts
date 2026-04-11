@@ -23,6 +23,74 @@ const registry: Partial<Record<ToolNameV8, ToolHandler>> = {
   price_change_detector: priceChangeDetectorTool,
 };
 
+function asRecord(value: unknown): Record<string, unknown> {
+  return value && typeof value === 'object' ? (value as Record<string, unknown>) : {};
+}
+
+function asNumber(value: unknown): number | null {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : null;
+}
+
+function mergeStepInput(
+  tool: ToolNameV8,
+  input: Record<string, unknown>,
+  context: AgentContextV8,
+  structuredData: Record<string, unknown>,
+): Record<string, unknown> {
+  if (tool === 'finance_compare_options') {
+    const currentOptions = Array.isArray(input.options) ? input.options : [];
+    if (currentOptions.length >= 2) return input;
+
+    const message = context.user.message;
+    const pairs = message.match(/([^?.,\n]+?)\s+(?:vs|versus)\s+([^?.,\n]+)/i);
+    if (!pairs) return input;
+    const options = [pairs[1], pairs[2]].map((segment, index) => ({
+      id: `option_${index + 1}`,
+      label: segment.replace(/\$?\s?\d[\d,.]*/g, '').trim() || `Option ${index + 1}`,
+      monthlyCost: asNumber((segment.match(/(\d[\d,.]*)\s*(?:\/?\s?(?:month|mo|monthly))/i) || [])[1]),
+      annualCost: asNumber((segment.match(/(\d[\d,.]*)\s*(?:\/?\s?(?:year|yr|annual|yearly))/i) || [])[1]),
+      switchingCost: 0,
+      valueScore: 5,
+    }));
+    return { ...input, options };
+  }
+
+  if (tool === 'savings_plan_generator') {
+    const financeRead = asRecord(structuredData.finance_read);
+    const profile = asRecord(financeRead.profile);
+    const monthlyIncome = asNumber(input.monthlyIncome ?? profile.monthly_income);
+    const monthlyExpenses = asNumber(input.monthlyExpenses ?? profile.monthly_expenses ?? profile.total_monthly_cost);
+    return {
+      ...input,
+      monthlyIncome,
+      monthlyExpenses,
+      targetAmount: asNumber(input.targetAmount),
+      deadlineMonths: asNumber(input.deadlineMonths),
+      desiredMonthlySavings: asNumber(input.desiredMonthlySavings),
+    };
+  }
+
+  if (tool === 'subscription_cancel_draft') {
+    const financeRead = asRecord(structuredData.finance_read);
+    const profile = asRecord(financeRead.profile);
+    const subscriptions = Array.isArray(profile.subscriptions) ? profile.subscriptions : [];
+    const fallbackService = subscriptions
+      .map((item) => asRecord(item))
+      .map((item) => String(item.name || item.service || '').trim())
+      .find(Boolean);
+    const currentService = String(input.service || '').trim();
+    return {
+      ...input,
+      service: currentService && !/recent recurring charges/i.test(currentService) ? currentService : (fallbackService || currentService),
+      recurringCandidates: subscriptions.slice(0, 5),
+      gmailSummary: context.intelligence.gmailFinanceSummary,
+    };
+  }
+
+  return input;
+}
+
 export async function executePlanV8(plan: ExecutionPlanV8, context: AgentContextV8): Promise<ExecutionResultV8> {
   const steps: ExecutionStepResultV8[] = [];
   let structuredData: Record<string, unknown> = {};
@@ -31,7 +99,8 @@ export async function executePlanV8(plan: ExecutionPlanV8, context: AgentContext
     try {
       const handler = registry[planStep.tool];
       if (!handler) throw new Error(`Tool not registered: ${planStep.tool}`);
-      const result = await handler(planStep.input, context);
+      const resolvedInput = mergeStepInput(planStep.tool, planStep.input, context, structuredData);
+      const result = await handler(resolvedInput, context);
 
       if (!result.ok && !planStep.required) {
         steps.push({
@@ -40,7 +109,7 @@ export async function executePlanV8(plan: ExecutionPlanV8, context: AgentContext
           tool: planStep.tool,
           status: 'skipped',
           summary: `${planStep.description} (optional step skipped)`,
-          input: planStep.input,
+          input: resolvedInput,
           output: result.output,
           error: result.error,
         });
@@ -53,7 +122,7 @@ export async function executePlanV8(plan: ExecutionPlanV8, context: AgentContext
         tool: planStep.tool,
         status: result.ok ? 'completed' : 'failed',
         summary: planStep.description,
-        input: planStep.input,
+        input: resolvedInput,
         output: result.output,
         error: result.error,
       });

@@ -9,6 +9,11 @@ function asNumber(value: unknown): number {
   return Number.isFinite(parsed) ? parsed : 0;
 }
 
+function parseAmountFromText(text: string): number {
+  const match = text.match(/\$?\s?(\d[\d,.]*)/);
+  return asNumber(match?.[1] || 0);
+}
+
 function normalizeEvents(context: AgentContextV8): Array<Record<string, unknown>> {
   return Array.isArray(context.memory.financeEvents)
     ? context.memory.financeEvents.filter((event): event is Record<string, unknown> => !!event && typeof event === 'object').slice(0, 40)
@@ -45,7 +50,23 @@ export async function financeCompareOptionsTool(
   context: AgentContextV8,
 ): Promise<ToolResultV8> {
   const rawOptions = Array.isArray(input.options) ? input.options : [];
+  const query = String(input.query || context.user.message || '').trim();
+  const fallbackFromQuery = rawOptions.length
+    ? []
+    : (() => {
+      const pair = query.match(/([^?.,\n]+?)\s+(?:vs|versus)\s+([^?.,\n]+)/i);
+      if (!pair) return [];
+      return [pair[1], pair[2]].map((segment, index) => ({
+        id: `option_${index + 1}`,
+        label: segment.replace(/\$?\s?\d[\d,.]*/g, '').trim() || `Option ${index + 1}`,
+        monthlyCost: asNumber((segment.match(/(\d[\d,.]*)\s*(?:\/?\s?(?:month|mo|monthly))/i) || [])[1]) || parseAmountFromText(segment),
+        annualCost: asNumber((segment.match(/(\d[\d,.]*)\s*(?:\/?\s?(?:year|yr|annual|yearly))/i) || [])[1]),
+        switchingCost: 0,
+        valueScore: 5,
+      }));
+    })();
   const options = rawOptions
+    .concat(fallbackFromQuery)
     .map((item) => asRecord(item))
     .map((item, index) => {
       const monthlyCost = asNumber(item.monthlyCost ?? item.monthly_cost ?? item.cost ?? item.price);
@@ -75,6 +96,7 @@ export async function financeCompareOptionsTool(
       output: {
         compared: 0,
         recommendation: null,
+        clarificationQuestion: 'Please share the two options and at least one price (monthly or annual) for each.',
       },
       error: 'Need at least two options with cost inputs to compare.',
     };
@@ -95,6 +117,7 @@ export async function financeCompareOptionsTool(
         reason: `${winner.label} has the strongest value-to-cost ratio based on provided assumptions.`,
       },
       assumptions: ['Costs and value scores were taken from user-provided option data.'],
+      clarificationQuestion: null,
     },
   };
 }
@@ -103,8 +126,9 @@ export async function savingsPlanGeneratorTool(
   input: Record<string, unknown>,
   context: AgentContextV8,
 ): Promise<ToolResultV8> {
-  const monthlyIncome = asNumber(input.monthlyIncome ?? input.monthly_income);
-  const monthlyExpenses = asNumber(input.monthlyExpenses ?? input.monthly_expenses);
+  const profile = asRecord(context.memory.financeProfile);
+  const monthlyIncome = asNumber(input.monthlyIncome ?? input.monthly_income ?? profile.monthly_income);
+  const monthlyExpenses = asNumber(input.monthlyExpenses ?? input.monthly_expenses ?? profile.monthly_expenses ?? profile.total_monthly_cost);
   const targetAmount = asNumber(input.targetAmount ?? input.target_amount);
   const deadlineMonths = Math.max(1, Math.floor(asNumber((input.deadlineMonths ?? input.deadline_months) || 6)));
   const desiredMonthlySavings = targetAmount > 0 ? targetAmount / deadlineMonths : asNumber(input.desiredMonthlySavings ?? input.desired_monthly_savings);
@@ -112,7 +136,12 @@ export async function savingsPlanGeneratorTool(
   const recurringCharges = extractRecurringCharges(context);
   const baselineRecurring = recurringCharges.reduce((sum, item) => sum + item.amount, 0);
   const availableCapacity = Math.max(0, monthlyIncome - monthlyExpenses);
-  const feasibleMonthlySavings = Math.max(0, Math.min(desiredMonthlySavings || availableCapacity * 0.6, availableCapacity));
+  const fallbackStarterSavings = monthlyIncome > 0
+    ? monthlyIncome * 0.1
+    : baselineRecurring > 0
+      ? baselineRecurring * 0.15
+      : 100;
+  const feasibleMonthlySavings = Math.max(0, Math.min(desiredMonthlySavings || availableCapacity * 0.6 || fallbackStarterSavings, availableCapacity || fallbackStarterSavings));
 
   const topCuts = recurringCharges
     .sort((a, b) => b.amount - a.amount)
@@ -137,15 +166,30 @@ export async function savingsPlanGeneratorTool(
       ],
       topCuts,
       constraintsUsed: context.decisionContext.knownConstraints,
+      assumptions: [
+        monthlyIncome > 0 ? 'Monthly income provided or inferred from profile.' : 'Monthly income missing; starter plan uses conservative defaults.',
+        monthlyExpenses > 0 ? 'Monthly expenses provided or inferred from profile.' : 'Monthly expenses missing; recurring-charge baseline used for starter plan.',
+      ],
     },
   };
 }
 
 export async function subscriptionCancelDraftTool(
   input: Record<string, unknown>,
+  context: AgentContextV8,
 ): Promise<ToolResultV8> {
-  const service = String(input.service || input.subscription || 'the subscription').trim();
+  const explicitService = String(input.service || input.subscription || '').trim();
+  const recurringCandidatesRaw = Array.isArray(input.recurringCandidates) ? input.recurringCandidates : [];
+  const recurringCandidates = recurringCandidatesRaw
+    .map((item) => asRecord(item))
+    .map((item) => String(item.name || item.service || '').trim())
+    .filter(Boolean);
+  const message = String(context.user.message || '').trim();
+  const mentionedService = message.match(/\b(cancel|stop|end|unsubscribe)\b(?:\s+my|\s+the)?\s+([a-z0-9][a-z0-9+ .&-]{1,40})/i)?.[2]?.trim();
+  const inferredService = mentionedService || recurringCandidates[0] || explicitService || 'the subscription';
+  const service = inferredService.replace(/\b(subscription|plan|membership)\b/gi, '').trim();
   const reason = String(input.reason || 'I no longer use this service enough to justify the cost.').trim();
+  const needsClarification = !mentionedService && recurringCandidates.length > 1 && !explicitService;
 
   const draft = [
     'Subject: Cancellation request',
@@ -166,10 +210,14 @@ export async function subscriptionCancelDraftTool(
     output: {
       service,
       draft,
+      clarificationQuestion: needsClarification
+        ? `I found multiple candidates (${recurringCandidates.slice(0, 3).join(', ')}). Which one should I cancel first?`
+        : null,
       checklist: [
         'Take a screenshot of cancellation confirmation.',
         'Remove stored payment method if no longer needed.',
         'Check statement in 30 days for any residual charge.',
+        'Set a calendar reminder 3 days before the next billing date to confirm cancellation was applied.',
       ],
     },
   };

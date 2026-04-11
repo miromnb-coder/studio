@@ -29,6 +29,7 @@ function inferDecisionContext(params: {
   relevantMemories: AgentContextV8['memory']['relevantMemories'];
   conversation: AgentMessageV8[];
   recommendations: AgentContextV8['intelligence']['recommendations'];
+  outcomes: AgentContextV8['intelligence']['outcomes'];
   financeProfile: Record<string, unknown> | null;
 }): DecisionContextV8 {
   const memoryTexts = params.relevantMemories.map((item) => String(item.content || ''));
@@ -55,6 +56,16 @@ function inferDecisionContext(params: {
     .map((rec) => rec.title)
     .filter(Boolean)
     .slice(0, 4);
+  const successfulRecommendationIds = params.outcomes
+    .filter((item) => item.status === 'accepted' || item.status === 'completed')
+    .map((item) => item.recommendation_id)
+    .filter(Boolean)
+    .slice(0, 8);
+  const deprioritizedRecommendationIds = params.outcomes
+    .filter((item) => item.status === 'ignored')
+    .map((item) => item.recommendation_id)
+    .filter(Boolean)
+    .slice(0, 8);
 
   const pressureFromProfile = Number(params.financeProfile?.total_monthly_cost || 0) > Number(params.financeProfile?.monthly_income || 0)
     ? 'high'
@@ -81,9 +92,37 @@ function inferDecisionContext(params: {
     recentActions,
     decisionHistory,
     previousRecommendations,
+    successfulRecommendationIds,
+    deprioritizedRecommendationIds,
     currentFinancialPressure,
     userPreferences,
   };
+}
+
+function rankRecommendationsFromOutcomes(
+  recommendations: AgentContextV8['intelligence']['recommendations'],
+  outcomes: AgentContextV8['intelligence']['outcomes'],
+) {
+  if (!recommendations.length || !outcomes.length) return recommendations;
+  const scoreByRecommendation = outcomes.reduce<Record<string, number>>((acc, outcome) => {
+    if (!outcome.recommendation_id) return acc;
+    const delta = outcome.status === 'completed' || outcome.status === 'accepted'
+      ? 2
+      : outcome.status === 'postponed'
+        ? -0.5
+        : outcome.status === 'ignored'
+          ? -2
+          : 0;
+    acc[outcome.recommendation_id] = (acc[outcome.recommendation_id] || 0) + delta;
+    return acc;
+  }, {});
+
+  return [...recommendations].sort((a, b) => {
+    const aScore = scoreByRecommendation[a.id] || 0;
+    const bScore = scoreByRecommendation[b.id] || 0;
+    if (aScore !== bScore) return bScore - aScore;
+    return (b.estimated_impact.monthly_savings || 0) - (a.estimated_impact.monthly_savings || 0);
+  });
 }
 
 export async function buildContextV8(params: {
@@ -131,9 +170,10 @@ export async function buildContextV8(params: {
       limit: 5,
     })
     : [];
-  const recommendations = rawRecommendations.filter(
+  const unsortedRecommendations = rawRecommendations.filter(
     (item) => !shouldSuppressRecommendation({ recommendationId: item.id, outcomes }),
   );
+  const recommendations = rankRecommendationsFromOutcomes(unsortedRecommendations, outcomes);
 
   const conversation = sanitizeHistory(params.history);
   const memorySummary = typeof safeMemory.summary === 'string' ? safeMemory.summary : 'No prior context available.';
@@ -167,6 +207,7 @@ export async function buildContextV8(params: {
       relevantMemories: filteredRelevantMemories,
       conversation,
       recommendations,
+      outcomes,
       financeProfile: (financeProfile as Record<string, unknown> | null) || null,
     }),
     environment: {

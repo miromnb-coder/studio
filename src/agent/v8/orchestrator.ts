@@ -22,6 +22,7 @@ export async function runAgentV8(input: AgentRunInputV8): Promise<AgentResponseV
     route,
     productState: input.productState,
     operatorAlerts: input.operatorAlerts,
+    outcomes: input.outcomes,
     userProfileIntelligence: input.userProfileIntelligence || null,
   });
 
