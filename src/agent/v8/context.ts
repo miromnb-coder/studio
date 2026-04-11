@@ -22,6 +22,20 @@ function asObject(value: unknown): Record<string, unknown> | null {
   return value && typeof value === 'object' ? (value as Record<string, unknown>) : null;
 }
 
+function rankMemoriesByUsefulness(memories: AgentContextV8['memory']['relevantMemories'], query: string) {
+  const q = query.toLowerCase();
+  return [...memories]
+    .map((item) => {
+      const text = item.content.toLowerCase();
+      const lexicalBoost = q.split(/\s+/).filter((token) => token.length > 3 && text.includes(token)).length * 0.07;
+      const importance = Number(item.importance || 0.5);
+      const relevance = Number(item.relevanceScore || 0.6);
+      return { ...item, score: relevance * 0.65 + importance * 0.35 + lexicalBoost };
+    })
+    .sort((a, b) => b.score - a.score)
+    .slice(0, 8);
+}
+
 function inferDecisionContext(params: {
   route: RouteResultV8;
   message: string;
@@ -156,9 +170,10 @@ export async function buildContextV8(params: {
     }).catch(() => [])
     : [];
 
+  const rankedMemories = rankMemoriesByUsefulness(relevantMemories, params.message);
   const filteredRelevantMemories = includeFinance || params.route.intent === 'memory'
-    ? relevantMemories
-    : relevantMemories.filter((item) => (item.relevanceScore || 0) >= 0.82).slice(0, 3);
+    ? rankedMemories
+    : rankedMemories.filter((item) => (item.relevanceScore || 0) >= 0.78).slice(0, 4);
 
   const financeProfile = includeFinance ? safeMemory.financeProfile || null : null;
   const financeEvents = includeFinance ? safeMemory.financeEvents || [] : [];

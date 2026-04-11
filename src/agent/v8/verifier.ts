@@ -99,6 +99,8 @@ export function verifyExecutionV8(input: AgentCriticInputV8): CriticResultV8 {
   const hasHonesty = /confidence:|assumptions:|missing|unknown|estimate/i.test(refinedReply);
   const hasClarity = /summary:|next step:/i.test(refinedReply);
   const hasToolGrounding = input.usedTools.length > 0 || Object.keys(input.structuredData || {}).length > 0;
+  const hasRiskAndPriority = /top priority:|biggest risk:|fastest win:/i.test(refinedReply);
+  const hasConcreteNext = /next step:\s*(reply|share|send|confirm|run|execute)/i.test(refinedReply);
   const conciseEnough = refinedReply.split(/\s+/).length <= 280;
   const relevant = input.intent === 'finance'
     ? /savings|spend|bill|subscription|cash|risk|monthly/i.test(refinedReply)
@@ -111,8 +113,10 @@ export function verifyExecutionV8(input: AgentCriticInputV8): CriticResultV8 {
     + scoreDimension(hasPersonalization, 12)
     + scoreDimension(hasHonesty, 12)
     + scoreDimension(hasClarity, 12)
-    + scoreDimension(hasNumbers || !hasToolGrounding, 11)
-    + scoreDimension(conciseEnough, 11),
+    + scoreDimension(hasNumbers || !hasToolGrounding, 10)
+    + scoreDimension(hasRiskAndPriority, 8)
+    + scoreDimension(hasConcreteNext, 8)
+    + scoreDimension(conciseEnough, 10),
   );
 
   const needsRewrite = score < 82;

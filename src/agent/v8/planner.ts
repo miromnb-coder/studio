@@ -156,9 +156,12 @@ export function createPlanV8(route: RouteResultV8, message: string): ExecutionPl
     message.split(/\s+/).length > 22,
     /\b(compare|tradeoff|roadmap|plan|optimi[sz]e|prioriti[sz]e|strategy)\b/i.test(message),
     route.goal.urgency === 'high',
+    route.goal.riskLevel === 'high',
+    route.goal.blockerLevel === 'high',
     route.goal.hiddenOpportunities.length >= 2,
     route.responseMode === 'operator',
     route.responseMode === 'coach',
+    route.ambiguity > 0.55,
   ].filter(Boolean).length;
 
   const depth: ExecutionPlanV8['depth'] =
@@ -173,12 +176,14 @@ export function createPlanV8(route: RouteResultV8, message: string): ExecutionPl
     && !savingsInputs.monthlyExpenses
     && !savingsInputs.desiredMonthlySavings;
 
-  const needsClarification = route.intent === 'finance' && (compareNeedsClarification || savingsNeedsClarification);
+  const needsClarification = route.shouldClarify || (route.intent === 'finance' && (compareNeedsClarification || savingsNeedsClarification));
 
   const clarificationQuestion = needsClarification
-    ? compareNeedsClarification
+      ? compareNeedsClarification
       ? 'Which two options should I compare, and what are their monthly or annual prices?'
-      : 'What is one concrete number I should optimize around: monthly budget, target savings, or a recurring cost?'
+      : route.ambiguity > 0.65
+        ? 'Should I focus first on reducing recurring costs, improving cashflow safety, or comparing options?'
+        : 'What is one concrete number I should optimize around: monthly budget, target savings, or a recurring cost?'
     : undefined;
 
   let planModes = mapSubtypeToModes();
@@ -234,7 +239,7 @@ export function createPlanV8(route: RouteResultV8, message: string): ExecutionPl
             query: message,
             subtype: route.subtype,
           },
-          route.subtype === 'bills' || route.subtype === 'alerts_review',
+          route.subtype === 'bills' || route.subtype === 'alerts_review' || route.goal.riskLevel === 'high',
         ),
       );
     }

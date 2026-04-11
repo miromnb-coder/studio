@@ -177,9 +177,11 @@ export function synthesizeResponseV8(input: SynthesisInputV8): AgentResponseV8 {
           suggestedModules: buildOperatorModules(input).map((item) => item.title),
           metadata: {
             routeConfidence: input.route.confidence,
+            routeAmbiguity: input.route.ambiguity,
             criticScore: input.critic.criticScore,
             verificationPassed: input.verificationPassed,
             memoryUsed: input.context.memory.relevantMemories.length > 0,
+            partialSuccess: input.execution.partialSuccess,
           },
         },
         ...(input.context.intelligence.recommendations.length

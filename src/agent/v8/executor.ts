@@ -22,6 +22,8 @@ const registry: Partial<Record<ToolNameV8, ToolHandler>> = {
   cashflow_summary: cashflowSummaryTool,
   price_change_detector: priceChangeDetectorTool,
 };
+const TOOL_TIMEOUT_MS = 8000;
+const MAX_RETRIES = 1;
 
 function asRecord(value: unknown): Record<string, unknown> {
   return value && typeof value === 'object' ? (value as Record<string, unknown>) : {};
@@ -94,13 +96,37 @@ function mergeStepInput(
 export async function executePlanV8(plan: ExecutionPlanV8, context: AgentContextV8): Promise<ExecutionResultV8> {
   const steps: ExecutionStepResultV8[] = [];
   let structuredData: Record<string, unknown> = {};
+  let completedRequired = 0;
+  let totalRequired = 0;
 
   for (const planStep of plan.steps) {
+    if (planStep.required) totalRequired += 1;
     try {
       const handler = registry[planStep.tool];
       if (!handler) throw new Error(`Tool not registered: ${planStep.tool}`);
       const resolvedInput = mergeStepInput(planStep.tool, planStep.input, context, structuredData);
-      const result = await handler(resolvedInput, context);
+      let result: ToolResultV8 | null = null;
+      let lastError = '';
+
+      for (let attempt = 0; attempt <= MAX_RETRIES; attempt += 1) {
+        try {
+          const timedResult = await Promise.race([
+            handler(resolvedInput, context),
+            new Promise<ToolResultV8>((_, reject) => {
+              setTimeout(() => reject(new Error(`Timed out after ${TOOL_TIMEOUT_MS}ms`)), TOOL_TIMEOUT_MS);
+            }),
+          ]);
+          result = timedResult;
+          if (timedResult.ok || planStep.required || attempt === MAX_RETRIES) break;
+        } catch (error) {
+          lastError = error instanceof Error ? error.message : 'Unknown execution error';
+          if (attempt === MAX_RETRIES) break;
+        }
+      }
+
+      if (!result) {
+        throw new Error(lastError || 'Tool returned no result');
+      }
 
       if (!result.ok && !planStep.required) {
         steps.push({
@@ -131,6 +157,7 @@ export async function executePlanV8(plan: ExecutionPlanV8, context: AgentContext
         ...structuredData,
         [planStep.tool]: result.output,
       };
+      if (planStep.required && result.ok) completedRequired += 1;
     } catch (error) {
       steps.push({
         stepId: planStep.id,
@@ -145,5 +172,9 @@ export async function executePlanV8(plan: ExecutionPlanV8, context: AgentContext
     }
   }
 
-  return { steps, structuredData };
+  return {
+    steps,
+    structuredData,
+    partialSuccess: totalRequired > 0 ? completedRequired < totalRequired : steps.some((item) => item.status !== 'failed'),
+  };
 }

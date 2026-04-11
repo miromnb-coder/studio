@@ -112,6 +112,7 @@ export async function runFinanceAgent(input: FinanceAgentInput): Promise<Finance
   const relevantMemories = input.context.memory.relevantMemories.map((item) => item.content).filter(Boolean);
   const acceptedIds = new Set(decision.successfulRecommendationIds);
   const ignoredIds = new Set(decision.deprioritizedRecommendationIds);
+  const repeatedFailureMode = decision.deprioritizedRecommendationIds.length >= 3;
 
   const actionCandidates: ActionCandidate[] = [];
 
@@ -192,6 +193,18 @@ export async function runFinanceAgent(input: FinanceAgentInput): Promise<Finance
       urgency: 0.62,
       ease: 0.72,
       confidence: 0.56,
+      category: 'execution',
+    });
+  }
+
+  if (repeatedFailureMode) {
+    actionCandidates.push({
+      title: 'Switch strategy: one tiny commitment + automation',
+      rationale: 'Past recommendations were often ignored, so success probability improves with a smaller first action.',
+      impact: 0.51,
+      urgency: 0.71,
+      ease: 0.9,
+      confidence: 0.76,
       category: 'execution',
     });
   }
@@ -280,6 +293,7 @@ export async function runFinanceAgent(input: FinanceAgentInput): Promise<Finance
     noResultsRecovery.length ? `Recovery Plan: ${noResultsRecovery.join(' ')}` : '',
     cancelDraft.draft ? `Execution Asset: Cancellation draft is ready for ${String(cancelDraft.service || 'the selected service')}.` : '',
     `Confidence: ${confidence}.`,
+    `Data Quality: ${groundedSignals >= 4 ? 'Strong' : groundedSignals >= 2 ? 'Moderate' : 'Limited'}.`,
     assumptions.length ? `Assumptions: ${assumptions.join(' ')}` : 'Assumptions: Minimal assumptions; most guidance is grounded in available signals.',
     `Suggested Modules: ${moduleHints.join(', ') || 'subscription_audit, savings_plan'}.`,
     relevantMemories[0] ? `Personalization Signal: ${relevantMemories[0]}` : '',

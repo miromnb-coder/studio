@@ -65,7 +65,7 @@ export async function runAgentV8(input: AgentRunInputV8): Promise<AgentResponseV
       subtype: route.subtype,
       error: error instanceof Error ? error.message : 'Unknown execution failure',
     });
-    return { steps: [], structuredData: {} };
+    return { steps: [], structuredData: {}, partialSuccess: false };
   });
 
   let draftReply = '';
