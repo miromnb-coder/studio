@@ -35,9 +35,9 @@ export function AssistantResponseSurface({
       initial={{ opacity: 0, y: 8 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.24, ease: 'easeOut' }}
-      className="max-w-[95%] space-y-3"
+      className="max-w-[96%] space-y-2.5"
     >
-      <div className="rounded-[20px] border border-white/10 bg-white/[0.05] px-4 py-3 text-[15px] leading-7 tracking-[-0.01em] text-zinc-100 shadow-[0_12px_28px_rgba(0,0,0,0.28)] backdrop-blur">
+      <div className="rounded-[22px] border border-white/8 bg-white/[0.04] px-4 py-3 text-[15px] leading-7 tracking-[-0.01em] text-zinc-100 shadow-[0_14px_28px_rgba(0,0,0,0.27)] backdrop-blur">
         {message.content || (message.isStreaming ? ' ' : '')}
       </div>
 
@@ -48,34 +48,31 @@ export function AssistantResponseSurface({
             initial={{ opacity: 0, y: 8 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: 8 }}
-            transition={{ duration: 0.22 }}
+            transition={{ duration: 0.2 }}
             className="space-y-2"
           >
             {metadata.suggestedActions?.length ? (
-              <details className="group rounded-xl border border-white/10 bg-white/[0.03] px-3 py-2">
-                <summary className="cursor-pointer list-none text-xs font-medium text-zinc-400">Optional actions</summary>
-                <div className="mt-2 flex flex-wrap gap-2">
-                  {metadata.suggestedActions.slice(0, 3).map((item) => {
-                    const actionType = item.payload?.actionType;
-                    if (!isFinanceAction(actionType)) return null;
-                    return (
-                      <button
-                        key={item.id}
-                        type="button"
-                        onClick={() => onAction(actionType)}
-                        className="rounded-full rounded-full border border-white/20 bg-white/[0.08] px-2.5 py-1 text-[11px] font-medium text-zinc-200"
-                      >
-                        {item.label}
-                      </button>
-                    );
-                  })}
-                </div>
-              </details>
+              <div className="flex flex-wrap gap-2">
+                {metadata.suggestedActions.slice(0, 3).map((item) => {
+                  const actionType = item.payload?.actionType;
+                  if (!isFinanceAction(actionType)) return null;
+                  return (
+                    <button
+                      key={item.id}
+                      type="button"
+                      onClick={() => onAction(actionType)}
+                      className="rounded-full border border-white/16 bg-white/[0.08] px-3 py-1 text-[11px] font-medium text-zinc-200"
+                    >
+                      {item.label}
+                    </button>
+                  );
+                })}
+              </div>
             ) : null}
 
             {hasToolDetails ? (
-              <details className="group rounded-xl border border-white/10 bg-white/[0.03] px-3 py-2">
-                <summary className="cursor-pointer list-none text-xs font-medium text-zinc-400">Execution details</summary>
+              <details className="rounded-xl border border-white/8 bg-white/[0.03] px-3 py-2">
+                <summary className="cursor-pointer list-none text-[11px] font-medium tracking-wide text-zinc-400">Execution details</summary>
                 <div className="mt-2 space-y-2 text-xs text-zinc-300">
                   {metadata.plan ? <p>{metadata.plan}</p> : null}
                   {metadata.steps?.length ? (
@@ -90,8 +87,8 @@ export function AssistantResponseSurface({
             ) : null}
 
             {metadata.structuredData?.finance ? (
-              <details className="group rounded-xl border border-white/10 bg-white/[0.03] px-3 py-2">
-                <summary className="cursor-pointer list-none text-xs font-medium text-zinc-400">Expand financial details</summary>
+              <details className="rounded-xl border border-white/8 bg-white/[0.03] px-3 py-2">
+                <summary className="cursor-pointer list-none text-[11px] font-medium tracking-wide text-zinc-400">Financial breakdown</summary>
                 <div className="mt-2">
                   <FinanceResultCard
                     data={metadata.structuredData.finance}
@@ -103,9 +100,10 @@ export function AssistantResponseSurface({
                 </div>
               </details>
             ) : null}
+
             {metadata.structuredData?.actionResult ? (
-              <details className="group rounded-xl border border-white/10 bg-white/[0.03] px-3 py-2">
-                <summary className="cursor-pointer list-none text-xs font-medium text-zinc-400">View breakdown</summary>
+              <details className="rounded-xl border border-white/8 bg-white/[0.03] px-3 py-2">
+                <summary className="cursor-pointer list-none text-[11px] font-medium tracking-wide text-zinc-400">Result details</summary>
                 <div className="mt-2">
                   <FinanceActionResultCard result={metadata.structuredData.actionResult} />
                 </div>
