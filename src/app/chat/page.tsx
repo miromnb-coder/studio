@@ -13,7 +13,6 @@ import { ChatComposerPremium } from './components/ChatComposerPremium';
 import { ConversationSwitcherSheet } from './components/ConversationSwitcherSheet';
 import type { ExecutionStep } from './components/AgentExecutionTimeline';
 import { AppShell } from '../components/premium-ui';
-import { LivingAIPresence } from './components/LivingAIPresence';
 
 const PREMIUM_UPLOAD_MESSAGE = 'File upload is a Premium feature. Upgrade to attach files.';
 const THINKING_STEPS = ['Understanding request', 'Gathering context', 'Thinking deeper', 'Writing response'];
@@ -33,8 +32,6 @@ const formatConversationTime = (iso: string) => {
 
 const formatUsageLine = (current: number, limit: number, unlimited: boolean) =>
   unlimited ? 'Unlimited (Dev Mode)' : `${Math.max(limit - current, 0)} / ${limit} uses left today`;
-
-const SUGGESTION_PROMPTS = ['Find savings opportunities', 'Analyze this week', 'Plan priorities', 'Review Gmail risks', 'Think deeper'];
 
 export default function ChatPage() {
   const router = useRouter();
@@ -57,7 +54,7 @@ export default function ChatPage() {
   const renameConversation = useAppStore((s) => s.renameConversation);
   const runFinanceAction = useAppStore((s) => s.runFinanceAction);
   const activeSteps = useAppStore((s) => s.activeSteps);
-  const { plan, usage, isPremium, isLimitReached, isUnlimited, refresh } = useUserEntitlements();
+  const { usage, isPremium, isLimitReached, isUnlimited, refresh } = useUserEntitlements();
 
   const [draft, setDraft] = useState('');
   const [openPanel, setOpenPanel] = useState<'add' | 'conversations' | null>(null);
@@ -127,8 +124,8 @@ export default function ChatPage() {
   useEffect(() => {
     if (!textareaRef.current) return;
     textareaRef.current.style.height = 'auto';
-    textareaRef.current.style.height = `${Math.min(textareaRef.current.scrollHeight, 132)}px`;
-    textareaRef.current.style.overflowY = textareaRef.current.scrollHeight > 132 ? 'auto' : 'hidden';
+    textareaRef.current.style.height = `${Math.min(textareaRef.current.scrollHeight, 128)}px`;
+    textareaRef.current.style.overflowY = textareaRef.current.scrollHeight > 128 ? 'auto' : 'hidden';
   }, [draft]);
 
   useEffect(() => {
@@ -288,24 +285,25 @@ export default function ChatPage() {
     : derivedExecutionSteps.find((step) => step.status === 'running')?.label || 'Preparing response';
 
   return (
-    <AppShell className="pb-56">
-      <header className="sticky top-0 z-20 mb-4 border-b border-white/10 bg-black/50 pb-3 pt-1 backdrop-blur-xl">
-        <div className="flex items-center justify-between gap-3 px-1">
-          <div>
+    <AppShell className="pb-60">
+      <header className="sticky top-0 z-20 mb-3 rounded-[24px] border border-white/10 bg-black/35 px-3 py-2.5 backdrop-blur-2xl">
+        <div className="flex items-center justify-between gap-3">
+          <div className="min-w-0">
             <div className="flex items-center gap-2">
-              <h1 className="text-[17px] font-semibold tracking-[-0.01em] text-zinc-100">Kivo AI</h1>
-              <span className="inline-flex items-center gap-1.5 rounded-full border border-white/10 bg-white/[0.06] px-2.5 py-1 text-[10px] font-medium text-zinc-200">
-                <span className={`h-1.5 w-1.5 rounded-full ${isAgentResponding ? 'animate-pulse bg-zinc-200' : 'bg-zinc-400'}`} />
-                {isAgentResponding ? 'Thinking' : 'Ready'}
+              <h1 className="text-[17px] font-semibold tracking-[-0.02em] text-zinc-100">Kivo</h1>
+              <span className="inline-flex items-center gap-1.5 rounded-full border border-white/10 bg-white/[0.04] px-2 py-0.5 text-[10px] font-medium text-zinc-300">
+                <span className={`h-1.5 w-1.5 rounded-full ${isAgentResponding ? 'animate-pulse bg-zinc-200' : 'bg-zinc-500'}`} />
+                {isAgentResponding ? 'Working' : 'Ready'}
               </span>
             </div>
-            <p className="text-[11px] text-zinc-400">{formatUsageLine(usage.current, usage.limit, usage.unlimited)}</p>
+            <p className="mt-0.5 truncate text-[11px] text-zinc-500">{formatUsageLine(usage.current, usage.limit, usage.unlimited)}</p>
           </div>
+
           <button
             type="button"
             onClick={() => setOpenPanel((prev) => (prev === 'conversations' ? null : 'conversations'))}
-            className="inline-flex h-9 w-9 items-center justify-center rounded-full border border-white/15 bg-white/[0.06] text-zinc-300 shadow-[0_8px_20px_rgba(0,0,0,0.3)]"
-            aria-label="Open options"
+            className="inline-flex h-9 w-9 items-center justify-center rounded-full border border-white/10 bg-white/[0.03] text-zinc-400"
+            aria-label="Open conversations"
           >
             <MoreHorizontal className="h-4 w-4" />
           </button>
@@ -331,60 +329,49 @@ export default function ChatPage() {
       </header>
 
       <LayoutGroup>
-        <section ref={listRef} className="relative z-10 max-h-[calc(100vh-272px)] space-y-5 overflow-y-auto pb-3">
+        <section ref={listRef} className="relative z-10 max-h-[calc(100vh-260px)] overflow-y-auto pb-4">
           <AnimatePresence mode="wait">
             {empty ? (
               <motion.div
-                key="chat-hero"
-                initial={{ opacity: 0, y: 14 }}
+                key="chat-empty"
+                initial={{ opacity: 0, y: 10 }}
                 animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, y: -20, transition: { duration: 0.28, ease: 'easeInOut' } }}
-                className="flex min-h-[56vh] flex-col items-center justify-center px-5 text-center"
+                exit={{ opacity: 0, y: -10 }}
+                className="flex min-h-[62vh] flex-col items-center justify-center px-8 text-center"
               >
-                <LivingAIPresence className="mb-7" />
-                <h2 className="text-[34px] font-semibold tracking-[-0.03em] text-zinc-100">Ask Kivo anything.</h2>
-                <p className="mt-2 max-w-sm text-sm leading-6 text-zinc-400">Kivo turns questions into actions, insights, and high-leverage next steps.</p>
-                <div className="mt-7 grid w-full max-w-[320px] grid-cols-2 gap-2.5">
-                  {SUGGESTION_PROMPTS.map((prompt) => (
-                    <button
-                      key={prompt}
-                      type="button"
-                      onClick={() => applyTemplate(prompt, 'Prompt added.')}
-                      className="rounded-full border border-white/14 bg-white/[0.05] px-3 py-1.5 text-xs font-medium text-zinc-200 shadow-[0_8px_16px_rgba(0,0,0,0.35)] transition hover:-translate-y-0.5 hover:bg-white/[0.08]"
-                    >
-                      {prompt}
-                    </button>
-                  ))}
-                </div>
+                <h2 className="text-[33px] font-semibold tracking-[-0.03em] text-zinc-100">How can Kivo help today?</h2>
+                <p className="mt-2 text-sm text-zinc-500">Start with a question or a task. Kivo will handle the next steps.</p>
               </motion.div>
             ) : null}
           </AnimatePresence>
 
-          {messages
-            .filter((message) => !(message.role === 'assistant' && message.isStreaming && isAgentResponding))
-            .map((message) => (
-              <motion.div
-                key={message.id}
-                initial={{ opacity: 0, y: 11 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.25, ease: 'easeOut' }}
-                className={`max-w-[96%] ${message.role === 'user' ? 'ml-auto' : ''}`}
-              >
-                {message.role === 'user' ? (
-                  <div className="ml-auto max-w-[88%] rounded-[20px] border border-white/14 bg-white/[0.09] px-4 py-2.5 text-[15px] leading-6 tracking-[-0.01em] text-zinc-100 shadow-[0_12px_30px_rgba(0,0,0,0.32)] backdrop-blur">
-                    {message.content}
-                  </div>
-                ) : (
-                  <AssistantResponseSurface
-                    message={message}
-                    isPremium={isPremium}
-                    actionLoading={financeActionLoadingForMessage[message.id] || null}
-                    onAction={(actionType) => void handleFinanceAction(message.id, actionType)}
-                    onPremiumRequired={() => setShowPaywall(true)}
-                  />
-                )}
-              </motion.div>
-            ))}
+          <div className="space-y-5 px-1 pb-2">
+            {messages
+              .filter((message) => !(message.role === 'assistant' && message.isStreaming && isAgentResponding))
+              .map((message) => (
+                <motion.div
+                  key={message.id}
+                  initial={{ opacity: 0, y: 10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ duration: 0.22, ease: 'easeOut' }}
+                  className={`max-w-[96%] ${message.role === 'user' ? 'ml-auto' : ''}`}
+                >
+                  {message.role === 'user' ? (
+                    <div className="ml-auto max-w-[84%] rounded-[22px] border border-white/12 bg-white/[0.1] px-4 py-3 text-[15px] leading-6 tracking-[-0.01em] text-zinc-100 shadow-[0_16px_30px_rgba(0,0,0,0.35)]">
+                      {message.content}
+                    </div>
+                  ) : (
+                    <AssistantResponseSurface
+                      message={message}
+                      isPremium={isPremium}
+                      actionLoading={financeActionLoadingForMessage[message.id] || null}
+                      onAction={(actionType) => void handleFinanceAction(message.id, actionType)}
+                      onPremiumRequired={() => setShowPaywall(true)}
+                    />
+                  )}
+                </motion.div>
+              ))}
+          </div>
 
           <AnimatePresence mode="wait">
             {showThinkingSurface ? (
@@ -394,6 +381,7 @@ export default function ChatPage() {
                 animate={{ opacity: 1, y: 0 }}
                 exit={{ opacity: 0, y: -8 }}
                 transition={{ duration: 0.24 }}
+                className="px-1"
               >
                 <AgentThinkingSurface statusText={thinkingStatus} steps={derivedExecutionSteps} />
               </motion.div>
@@ -401,7 +389,7 @@ export default function ChatPage() {
           </AnimatePresence>
 
           {streamError && !streamError.startsWith('LIMIT_REACHED:') && !streamError.startsWith('AUTH_REQUIRED:') && !streamError.startsWith('PREMIUM_REQUIRED:') ? (
-            <div className="rounded-xl border border-white/10 bg-white/[0.04] px-3 py-2.5 text-sm text-zinc-300">
+            <div className="mx-1 mt-4 rounded-xl border border-white/10 bg-white/[0.04] px-3 py-2.5 text-sm text-zinc-300">
               We hit a processing issue, but your conversation is still safe.
               <button type="button" onClick={() => void retryLastPrompt()} className="btn-secondary ml-2 inline-flex items-center gap-1 px-2 py-1 text-xs">
                 <RefreshCw className="h-3 w-3" /> Retry
@@ -448,7 +436,7 @@ export default function ChatPage() {
       />
 
       {isLimitReached && !isUnlimited ? (
-        <div className="fixed bottom-[calc(156px+env(safe-area-inset-bottom))] left-1/2 z-20 w-full max-w-md -translate-x-1/2 px-4">
+        <div className="fixed bottom-[calc(165px+env(safe-area-inset-bottom))] left-1/2 z-20 w-full max-w-md -translate-x-1/2 px-4">
           <div className="rounded-2xl border border-white/10 bg-black/70 px-3 py-2.5 text-xs text-zinc-300 shadow-[0_14px_28px_rgba(0,0,0,0.4)]">
             You&apos;ve reached your daily limit. Upgrade for higher limits and file tools.
             <button type="button" onClick={openUpgrade} className="ml-2 inline-flex rounded-full border border-white/20 bg-white/[0.05] px-2 py-0.5 text-[11px] font-medium">
