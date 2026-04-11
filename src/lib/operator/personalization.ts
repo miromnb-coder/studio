@@ -47,7 +47,14 @@ function toFocusLevel(score: number): FocusLevel {
 function inferLanguage(input: string): { language: string; confidence: number } {
   const lowered = input.toLowerCase();
 
-  const explicitMatch = lowered.match(/\b(reply|respond|answer|speak|write)\s+(in\s+)?([a-z\-]{2,20})\b/i);
+  if (/\b(vastaa suomeksi|kirjoita suomeksi|vaihda kieli suomeksi)\b/i.test(lowered)) {
+    return { language: 'fi', confidence: 0.97 };
+  }
+  if (/\b(vastaa englanniksi|kirjoita englanniksi|vaihda kieli englanniksi)\b/i.test(lowered)) {
+    return { language: 'en', confidence: 0.97 };
+  }
+
+  const explicitMatch = lowered.match(/\b(reply|respond|answer|speak|write|vastaa|kirjoita)\s+(in\s+)?([a-z\-]{2,20})\b/i);
   if (explicitMatch?.[3]) {
     return { language: explicitMatch[3].slice(0, 8), confidence: 0.95 };
   }
@@ -56,7 +63,14 @@ function inferLanguage(input: string): { language: string; confidence: number } 
     if (option.pattern.test(input)) return { language: option.language, confidence: 0.82 };
   }
 
-  return { language: 'en', confidence: 0.55 };
+  const hasLatinText = /[a-zåäö]/i.test(lowered);
+  return { language: existingLanguageFallback(lowered, hasLatinText), confidence: hasLatinText ? 0.45 : 0.4 };
+}
+
+function existingLanguageFallback(input: string, hasLatinText: boolean): string {
+  if (/\b(kiitos|mitä|mita|voinko|haluan|minä|mina)\b/i.test(input)) return 'fi';
+  if (!hasLatinText) return 'en';
+  return 'en';
 }
 
 function inferVerbosityPreference(input: string): VerbosityPreference {

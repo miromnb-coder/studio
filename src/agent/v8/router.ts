@@ -63,6 +63,12 @@ const EXPLICIT_MEMORY_PATTERNS = [
   /\b(mitä muistat minusta|mita muistat minusta|mitä tiedät minusta|mita tiedat minusta)\b/i,
 ];
 
+const LANGUAGE_SWITCH_PATTERNS = [
+  /\b(vastaa suomeksi|kirjoita suomeksi|vaihda kieli suomeksi)\b/i,
+  /\b(vastaa englanniksi|kirjoita englanniksi|vaihda kieli englanniksi)\b/i,
+  /\b(reply|respond|answer|write)\s+(in\s+)?(finnish|english|suomi|englanti)\b/i,
+];
+
 const EXPLICIT_CODING_PATTERNS = [
   /\b(code|debug|error|bug|refactor|compile|unit test|stack trace|typescript|javascript|python|sql)\b/i,
   /\b(api|endpoint|function|class)\b.{0,24}\b(error|issue|bug|fail|broken)\b/i,
@@ -116,6 +122,7 @@ export function routeIntentV8(message: string, history: AgentMessageV8[] = []): 
   const explicitGmail = hasAnyPattern(EXPLICIT_GMAIL_PATTERNS, normalizedMessage);
   const explicitCoding = hasAnyPattern(EXPLICIT_CODING_PATTERNS, normalizedMessage);
   const explicitMemory = hasAnyPattern(EXPLICIT_MEMORY_PATTERNS, normalizedMessage);
+  const explicitLanguageSwitch = hasAnyPattern(LANGUAGE_SWITCH_PATTERNS, normalizedMessage);
   const wantsRecommendations = hasAnyPattern(RECOMMENDATION_PATTERNS, normalizedMessage);
   const hasFinanceStem = hasAnyStem(['money', 'budget', 'spend', 'subscript', 'raha', 'sääst', 'saast', 'tilaus', 'kulu'], corpus);
   const hasGmailStem = hasAnyStem(['email', 'gmail', 'inbox', 'mail', 'sähköpost', 'sahkopost', 'correo', 'courriel'], corpus);
@@ -126,7 +133,10 @@ export function routeIntentV8(message: string, history: AgentMessageV8[] = []): 
   let intent: AgentIntentV8 = 'general';
   let reason = 'General chat is the default path.';
 
-  if (explicitMemory || (memoryScore >= 1 && hasMemoryVerbStem)) {
+  if (explicitLanguageSwitch) {
+    intent = 'general';
+    reason = 'Explicit language-control command.';
+  } else if (explicitMemory || (memoryScore >= 1 && hasMemoryVerbStem)) {
     intent = 'memory';
     reason = 'User explicitly asks to store or retrieve memory.';
   } else if ((explicitFinance || hasFinanceStem) && (explicitGmail || hasGmailStem)) {

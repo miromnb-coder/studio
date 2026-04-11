@@ -1,14 +1,14 @@
-import { runAgentV7 } from './v7/orchestrator';
+import { runAgentV8 } from './v8/orchestrator';
+import { createClient as createSupabaseServerClient } from '@/lib/supabase/server';
 
 /**
- * @fileOverview Standard Agent Entry Point (Engine V7).
- * This file is the definitive bridge to the latest reasoning engine.
+ * @fileOverview Legacy Agent Entry Point.
+ * Keeps backward compatibility while delegating runtime intelligence to v8.
  */
-
-export async function runAgent(input: string, history: any[] = [], memory: any = null, imageUri?: string) {
-  const userId = memory?.userId || 'system_anonymous';
-
-  console.log('[AGENT_SYSTEM] Routing to Engine V7...');
+export async function runAgent(input: string, history: any[] = [], memory: any = null, _imageUri?: string) {
+  const supabase = await createSupabaseServerClient();
+  const auth = await supabase.auth.getUser();
+  const userId = auth.data.user?.id || memory?.userId || 'system_anonymous';
 
   const safeHistory = (history || [])
     .filter((m) => m && typeof m.content === 'string' && m.content.trim().length > 0)
@@ -17,35 +17,29 @@ export async function runAgent(input: string, history: any[] = [], memory: any =
       content: m.content.trim(),
     }));
 
-  const { stream, metadata, steps, structuredData } = await runAgentV7(
-    input,
+  const result = await runAgentV8({
+    supabase,
+    input: input || 'Analysis Request',
     userId,
-    safeHistory,
-    imageUri,
-    memory,
-  );
-
-  let content = '';
-  if (stream) {
-    try {
-      for await (const chunk of stream as any) {
-        content += chunk.choices?.[0]?.delta?.content || '';
-      }
-    } catch (e) {
-      console.error('[AGENT_SYSTEM] Stream accumulation failed:', e);
-    }
-  }
+    history: safeHistory,
+    memory: memory || null,
+    productState: {
+      plan: 'FREE',
+      usage: { current: 0, limit: 10, remaining: 10 },
+      gmailConnected: Boolean(memory?.gmailConnected),
+    },
+  });
 
   return {
-    content: content || 'Analysis finalized.',
+    content: result.reply || 'Analysis finalized.',
     data: {
-      title: metadata.intent.toUpperCase() + ' Audit',
-      strategy: metadata.planSummary || 'Proceed with caution.',
-      steps,
-      structuredData,
+      title: String(result.metadata.intent || 'general').toUpperCase() + ' Audit',
+      strategy: result.metadata.plan || 'Proceed with caution.',
+      steps: result.metadata.steps || [],
+      structuredData: result.metadata.structuredData || {},
     },
-    intent: metadata.intent,
-    mode: metadata.intent === 'finance' ? 'analyst' : 'general',
+    intent: result.metadata.intent,
+    mode: result.metadata.intent === 'finance' ? 'analyst' : 'general',
     isActionable: true,
   };
 }

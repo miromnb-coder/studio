@@ -3,13 +3,13 @@ export const runtime = 'nodejs';
 
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient as createSupabaseServerClient } from '@/lib/supabase/server';
-import { runAgentV7 } from '@/agent/v7/orchestrator';
+import { runAgentV8 } from '@/agent/v8/orchestrator';
 import { scanForSignals } from '@/services/proactive-service';
 
 /**
  * @fileOverview Inbound Email Webhook.
  * Maps incoming magic-forwarded emails to profiles via inbound_email_address.
- * Now triggers Engine V7 for deep analysis.
+ * Uses the unified v8 runtime for deep analysis.
  */
 
 async function resolveUserIdByInboundAddress(supabase: Awaited<ReturnType<typeof createSupabaseServerClient>>, toAddress: string) {
@@ -84,31 +84,30 @@ export async function POST(req: NextRequest) {
       console.warn('INBOUND_EVENT_INSERT_FAILED', inboundEvent.error);
     }
 
-    console.log(`[WEBHOOK] Initializing Agent v7 for User ${userId}...`);
-    const { stream, metadata, structuredData } = await runAgentV7(
-      `Autonomous Inbound Audit: [Subject: ${subject}] [Content: ${body}]`,
+    console.log(`[WEBHOOK] Initializing Agent v8 for User ${userId}...`);
+    const agentResult = await runAgentV8({
+      supabase,
+      input: `Autonomous Inbound Audit: [Subject: ${subject}] [Content: ${body}]`,
       userId,
-      [],
-    );
-
-    let assistantContent = '';
-    if (stream) {
-      for await (const chunk of stream) {
-        assistantContent += (chunk as any).choices?.[0]?.delta?.content || '';
-      }
-    }
+      history: [],
+      productState: {
+        plan: 'FREE',
+        usage: { current: 0, limit: 10, remaining: 10 },
+        gmailConnected: true,
+      },
+    });
 
     const analysisEvent = await supabase
       .from('finance_history')
       .insert({
         user_id: userId,
         event_type: 'inbound_email_analysis',
-        title: `${String(metadata.intent || 'analysis').toUpperCase()}: ${subject}`,
-        summary: assistantContent,
+        title: `${String(agentResult.metadata.intent || 'analysis').toUpperCase()}: ${subject}`,
+        summary: agentResult.reply,
         metadata: {
           source: 'email',
           input_method: 'email',
-          estimated_monthly_savings: (structuredData?.detect_leaks as any)?.estimatedMonthlySavings || 0,
+          estimated_monthly_savings: ((agentResult.metadata.structuredData?.detect_leaks as any)?.estimatedMonthlySavings || 0),
           input_content: body,
           inbound_event_id: inboundEvent.data?.id ?? null,
         },
@@ -124,7 +123,7 @@ export async function POST(req: NextRequest) {
 
     return NextResponse.json({
       success: true,
-      intent: metadata.intent,
+      intent: agentResult.metadata.intent,
       operationId: userId.slice(0, 8),
     });
   } catch (error: any) {
