@@ -177,12 +177,12 @@ export default function HomePage() {
 
   return (
     <AppShell>
-      <header className="mb-4 rounded-2xl border border-white/10 bg-white/[0.03] p-4 shadow-[0_16px_34px_rgba(0,0,0,0.35)] backdrop-blur-xl">
+      <header className="mb-4 rounded-[26px] border border-white/12 bg-white/[0.04] p-4 shadow-[0_20px_40px_rgba(0,0,0,0.4)] backdrop-blur-xl">
         <div className="flex items-start justify-between gap-3">
           <div>
             <p className="text-xs text-zinc-400">Welcome back, {user?.name || 'there'}</p>
-            <h1 className="text-3xl font-semibold tracking-tight text-zinc-100">Kivo command center</h1>
-            <button onClick={editName} type="button" className="mt-1 text-xs text-zinc-300">Edit profile name</button>
+            <h1 className="text-3xl font-semibold tracking-[-0.03em] text-zinc-100">Kivo command center</h1>
+            <button onClick={editName} type="button" className="mt-1 text-xs text-zinc-400">Edit profile name</button>
           </div>
           <div className="flex items-center gap-1">
             <Link href="/alerts" className="rounded-full border border-white/15 bg-white/[0.04] p-2 text-zinc-300"><Bell className="h-4 w-4" /></Link>

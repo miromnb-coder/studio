@@ -37,7 +37,7 @@ export function AssistantResponseSurface({
       transition={{ duration: 0.24, ease: 'easeOut' }}
       className="max-w-[96%] space-y-2.5"
     >
-      <div className="rounded-[22px] border border-white/8 bg-white/[0.04] px-4 py-3 text-[15px] leading-7 tracking-[-0.01em] text-zinc-100 shadow-[0_14px_28px_rgba(0,0,0,0.27)] backdrop-blur">
+      <div className="px-0.5 text-[15px] leading-8 tracking-[-0.01em] text-zinc-100/95">
         {message.content || (message.isStreaming ? ' ' : '')}
       </div>
 
@@ -52,7 +52,7 @@ export function AssistantResponseSurface({
             className="space-y-2"
           >
             {metadata.suggestedActions?.length ? (
-              <div className="flex flex-wrap gap-2">
+              <div className="flex flex-wrap gap-2 pt-1">
                 {metadata.suggestedActions.slice(0, 3).map((item) => {
                   const actionType = item.payload?.actionType;
                   if (!isFinanceAction(actionType)) return null;
@@ -61,7 +61,7 @@ export function AssistantResponseSurface({
                       key={item.id}
                       type="button"
                       onClick={() => onAction(actionType)}
-                      className="rounded-full border border-white/16 bg-white/[0.08] px-3 py-1 text-[11px] font-medium text-zinc-200"
+                      className="rounded-full border border-white/14 bg-white/[0.06] px-3 py-1 text-[11px] font-medium text-zinc-200 transition hover:bg-white/[0.1]"
                     >
                       {item.label}
                     </button>
@@ -71,8 +71,8 @@ export function AssistantResponseSurface({
             ) : null}
 
             {hasToolDetails ? (
-              <details className="rounded-xl border border-white/8 bg-white/[0.03] px-3 py-2">
-                <summary className="cursor-pointer list-none text-[11px] font-medium tracking-wide text-zinc-400">Execution details</summary>
+              <details className="rounded-2xl border border-white/10 bg-white/[0.03] px-3.5 py-2.5">
+                <summary className="cursor-pointer list-none text-[11px] font-medium tracking-[0.11em] text-zinc-400">TOIMENPITEET</summary>
                 <div className="mt-2 space-y-2 text-xs text-zinc-300">
                   {metadata.plan ? <p>{metadata.plan}</p> : null}
                   {metadata.steps?.length ? (
@@ -87,8 +87,8 @@ export function AssistantResponseSurface({
             ) : null}
 
             {metadata.structuredData?.finance ? (
-              <details className="rounded-xl border border-white/8 bg-white/[0.03] px-3 py-2">
-                <summary className="cursor-pointer list-none text-[11px] font-medium tracking-wide text-zinc-400">Financial breakdown</summary>
+              <details className="rounded-2xl border border-white/10 bg-white/[0.03] px-3.5 py-2.5">
+                <summary className="cursor-pointer list-none text-[11px] font-medium tracking-[0.11em] text-zinc-400">DATA / ANALYYSI</summary>
                 <div className="mt-2">
                   <FinanceResultCard
                     data={metadata.structuredData.finance}
@@ -102,8 +102,8 @@ export function AssistantResponseSurface({
             ) : null}
 
             {metadata.structuredData?.actionResult ? (
-              <details className="rounded-xl border border-white/8 bg-white/[0.03] px-3 py-2">
-                <summary className="cursor-pointer list-none text-[11px] font-medium tracking-wide text-zinc-400">Result details</summary>
+              <details className="rounded-2xl border border-white/10 bg-white/[0.03] px-3.5 py-2.5">
+                <summary className="cursor-pointer list-none text-[11px] font-medium tracking-[0.11em] text-zinc-400">TARKEMMAT TIEDOT</summary>
                 <div className="mt-2">
                   <FinanceActionResultCard result={metadata.structuredData.actionResult} />
                 </div>

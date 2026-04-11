@@ -21,7 +21,7 @@ export function BottomNav() {
 
   return (
     <nav className="fixed bottom-[max(10px,env(safe-area-inset-bottom))] left-1/2 z-40 w-full max-w-md -translate-x-1/2 px-4">
-      <div className="grid grid-cols-5 rounded-[28px] border border-white/10 bg-[#0d0d0e]/88 px-1.5 py-1.5 shadow-[0_22px_46px_rgba(0,0,0,0.58)] backdrop-blur-2xl">
+      <div className="grid grid-cols-5 rounded-[28px] border border-white/12 bg-[#0b0c0f]/84 px-1.5 py-1.5 shadow-[0_26px_48px_rgba(0,0,0,0.62)] backdrop-blur-2xl">
         {tabs.map(({ label, href, icon: Icon }) => {
           const active = pathname === href;
           return (
@@ -36,7 +36,7 @@ export function BottomNav() {
               {active ? (
                 <motion.span
                   layoutId="active-tab"
-                  className="absolute inset-0 rounded-[16px] border border-white/12 bg-white/[0.1]"
+                  className="absolute inset-0 rounded-[16px] border border-white/16 bg-white/[0.12]"
                   transition={{ type: 'spring', stiffness: 300, damping: 28 }}
                 />
               ) : null}

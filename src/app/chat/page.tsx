@@ -286,7 +286,7 @@ export default function ChatPage() {
 
   return (
     <AppShell className="pb-60">
-      <header className="sticky top-0 z-20 mb-3 rounded-[24px] border border-white/10 bg-black/35 px-3 py-2.5 backdrop-blur-2xl">
+      <header className="sticky top-0 z-20 mb-4 rounded-[24px] border border-white/12 bg-[#0b0c0f]/78 px-3.5 py-3 backdrop-blur-2xl">
         <div className="flex items-center justify-between gap-3">
           <div className="min-w-0">
             <div className="flex items-center gap-2">
@@ -302,7 +302,7 @@ export default function ChatPage() {
           <button
             type="button"
             onClick={() => setOpenPanel((prev) => (prev === 'conversations' ? null : 'conversations'))}
-            className="inline-flex h-9 w-9 items-center justify-center rounded-full border border-white/10 bg-white/[0.03] text-zinc-400"
+            className="inline-flex h-9 w-9 items-center justify-center rounded-full border border-white/12 bg-white/[0.05] text-zinc-300"
             aria-label="Open conversations"
           >
             <MoreHorizontal className="h-4 w-4" />
@@ -345,7 +345,7 @@ export default function ChatPage() {
             ) : null}
           </AnimatePresence>
 
-          <div className="space-y-5 px-1 pb-2">
+          <div className="space-y-7 px-1 pb-2">
             {messages
               .filter((message) => !(message.role === 'assistant' && message.isStreaming && isAgentResponding))
               .map((message) => (
@@ -354,10 +354,10 @@ export default function ChatPage() {
                   initial={{ opacity: 0, y: 10 }}
                   animate={{ opacity: 1, y: 0 }}
                   transition={{ duration: 0.22, ease: 'easeOut' }}
-                  className={`max-w-[96%] ${message.role === 'user' ? 'ml-auto' : ''}`}
+                  className={`max-w-[98%] ${message.role === 'user' ? 'ml-auto' : ''}`}
                 >
                   {message.role === 'user' ? (
-                    <div className="ml-auto max-w-[84%] rounded-[22px] border border-white/12 bg-white/[0.1] px-4 py-3 text-[15px] leading-6 tracking-[-0.01em] text-zinc-100 shadow-[0_16px_30px_rgba(0,0,0,0.35)]">
+                    <div className="ml-auto max-w-[86%] rounded-[22px] border border-white/14 bg-white/[0.1] px-4 py-3 text-[15px] leading-7 tracking-[-0.01em] text-zinc-100 shadow-[0_18px_34px_rgba(0,0,0,0.36)]">
                       {message.content}
                     </div>
                   ) : (

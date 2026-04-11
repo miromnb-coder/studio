@@ -34,8 +34,8 @@ export function SectionHeader({
   return (
     <div className="mb-3 flex items-end justify-between gap-3">
       <div>
-        <h2 className="text-base font-semibold tracking-[-0.01em] text-zinc-100">{title}</h2>
-        {subtitle ? <p className="text-xs text-zinc-400">{subtitle}</p> : null}
+        <h2 className="text-base font-semibold tracking-[-0.015em] text-zinc-100">{title}</h2>
+        {subtitle ? <p className="text-xs text-zinc-500">{subtitle}</p> : null}
       </div>
       {action}
     </div>
@@ -50,7 +50,7 @@ export function SmartButton({
 }: React.ButtonHTMLAttributes<HTMLButtonElement> & { variant?: 'primary' | 'secondary' | 'ghost' }) {
   const base = 'tap-feedback inline-flex items-center justify-center rounded-[14px] px-4 py-2.5 text-sm font-medium';
   const variants = {
-    primary: 'border border-white/20 bg-white/[0.14] text-zinc-100 hover:bg-white/[0.2] shadow-[0_8px_22px_rgba(0,0,0,0.35)]',
+    primary: 'border border-white/30 bg-white text-zinc-900 hover:bg-zinc-100 shadow-[0_8px_22px_rgba(0,0,0,0.35)]',
     secondary: 'border border-white/10 bg-white/[0.04] text-zinc-200 hover:bg-white/[0.07]',
     ghost: 'text-zinc-300 hover:bg-white/[0.05]',
   } as const;
