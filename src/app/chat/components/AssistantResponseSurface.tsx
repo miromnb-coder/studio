@@ -37,7 +37,7 @@ export function AssistantResponseSurface({
       transition={{ duration: 0.24, ease: 'easeOut' }}
       className="max-w-[95%] space-y-3"
     >
-      <div className="rounded-[20px] border border-[#E7EAF4] bg-white/90 px-4 py-3 text-[15px] leading-7 tracking-[-0.01em] text-[#0F172A] shadow-[0_10px_26px_rgba(42,58,120,0.08)] backdrop-blur">
+      <div className="rounded-[20px] border border-white/10 bg-white/[0.05] px-4 py-3 text-[15px] leading-7 tracking-[-0.01em] text-slate-100 shadow-[0_12px_28px_rgba(0,0,0,0.28)] backdrop-blur">
         {message.content || (message.isStreaming ? ' ' : '')}
       </div>
 
@@ -52,8 +52,8 @@ export function AssistantResponseSurface({
             className="space-y-2"
           >
             {metadata.suggestedActions?.length ? (
-              <details className="group rounded-xl border border-[#E5E7EB] bg-[#F8FAFC] px-3 py-2">
-                <summary className="cursor-pointer list-none text-xs font-medium text-[#64748B]">Optional actions</summary>
+              <details className="group rounded-xl border border-white/10 bg-white/[0.03] px-3 py-2">
+                <summary className="cursor-pointer list-none text-xs font-medium text-slate-400">Optional actions</summary>
                 <div className="mt-2 flex flex-wrap gap-2">
                   {metadata.suggestedActions.slice(0, 3).map((item) => {
                     const actionType = item.payload?.actionType;
@@ -63,7 +63,7 @@ export function AssistantResponseSurface({
                         key={item.id}
                         type="button"
                         onClick={() => onAction(actionType)}
-                        className="rounded-full border border-[#D5DBFF] bg-white px-2.5 py-1 text-[11px] font-medium text-[#4B4CE6]"
+                        className="rounded-full border border-[#7F89FF]/40 bg-[#7B84FF]/15 px-2.5 py-1 text-[11px] font-medium text-[#C7CCFF]"
                       >
                         {item.label}
                       </button>
@@ -74,9 +74,9 @@ export function AssistantResponseSurface({
             ) : null}
 
             {hasToolDetails ? (
-              <details className="group rounded-xl border border-[#E5E7EB] bg-[#F8FAFC] px-3 py-2">
-                <summary className="cursor-pointer list-none text-xs font-medium text-[#64748B]">Execution details</summary>
-                <div className="mt-2 space-y-2 text-xs text-[#475569]">
+              <details className="group rounded-xl border border-white/10 bg-white/[0.03] px-3 py-2">
+                <summary className="cursor-pointer list-none text-xs font-medium text-slate-400">Execution details</summary>
+                <div className="mt-2 space-y-2 text-xs text-slate-300">
                   {metadata.plan ? <p>{metadata.plan}</p> : null}
                   {metadata.steps?.length ? (
                     <ul className="space-y-1">
@@ -90,8 +90,8 @@ export function AssistantResponseSurface({
             ) : null}
 
             {metadata.structuredData?.finance ? (
-              <details className="group rounded-xl border border-[#E5E7EB] bg-[#F8FAFC] px-3 py-2">
-                <summary className="cursor-pointer list-none text-xs font-medium text-[#64748B]">Expand financial details</summary>
+              <details className="group rounded-xl border border-white/10 bg-white/[0.03] px-3 py-2">
+                <summary className="cursor-pointer list-none text-xs font-medium text-slate-400">Expand financial details</summary>
                 <div className="mt-2">
                   <FinanceResultCard
                     data={metadata.structuredData.finance}
@@ -104,8 +104,8 @@ export function AssistantResponseSurface({
               </details>
             ) : null}
             {metadata.structuredData?.actionResult ? (
-              <details className="group rounded-xl border border-[#E5E7EB] bg-[#F8FAFC] px-3 py-2">
-                <summary className="cursor-pointer list-none text-xs font-medium text-[#64748B]">View breakdown</summary>
+              <details className="group rounded-xl border border-white/10 bg-white/[0.03] px-3 py-2">
+                <summary className="cursor-pointer list-none text-xs font-medium text-slate-400">View breakdown</summary>
                 <div className="mt-2">
                   <FinanceActionResultCard result={metadata.structuredData.actionResult} />
                 </div>
