@@ -16,10 +16,17 @@ export type MemoryAgentOutput = {
 
 function classifyMemory(content: string, intent: string): { type: UserMemoryTypeV8; importance: number } {
   const lower = content.toLowerCase();
-  if (intent === 'finance' || /\b(subscription|budget|saving|expense|debt|income|money|finance|raha|sääst|saast|tilaus|kulu|lasku|talous)\b/.test(lower)) {
+  if (
+    intent === 'finance' ||
+    /\b(subscription|budget|saving|expense|debt|income|money|finance|raha|sääst|saast|tilaus|kulu|lasku|talous|sijoit|hinta|halpa)\b/.test(lower)
+  ) {
     return { type: 'finance', importance: 0.88 };
   }
-  if (/\bprefer|like|language|suomeksi|always|never|pidän|pidan|tykkään|tykkaan|haluan vastaukset|prefiero|preferisco\b/.test(lower)) {
+  if (
+    /\b(prefer|like|language|suomeksi|always|never|pidän|pidan|tykkään|tykkaan|haluan vastaukset|vastaa suomeksi|lyhy(?:t|istä)|prefiero|preferisco)\b/.test(
+      lower,
+    )
+  ) {
     return { type: 'preference', importance: 0.82 };
   }
   if (/\b(goal|plan to|want to|target|deadline|haluan|aion|rakennan|tavoite|quiero|voglio|je veux)\b/.test(lower)) {
@@ -34,9 +41,13 @@ function classifyMemory(content: string, intent: string): { type: UserMemoryType
 function isHighSignalMemorySentence(message: string): boolean {
   const lower = message.toLowerCase();
   const firstPersonSignal =
-    /\b(i|i'm|my|me|minä|mina|minun|mä|ma|yo|je|ich|io|mi|mon)\b/.test(lower);
+    /\b(i|i'm|my|me|minä|mina|minun|mä|ma|yo|je|ich|io|mi|mon|haluan|tykkään|tykkaan|pidän|pidan|rakennan|aion|säästän|saastan)\b/.test(
+      lower,
+    );
   const preferenceGoalSignal =
-    /\b(like|prefer|want|need|always|never|remember|muista|haluan|tykkään|pidän|rakennan|quiero|prefiero|j'aime)\b/.test(lower);
+    /\b(like|prefer|want|need|always|never|remember|muista|haluan|tykkään|tykkaan|pidän|pidan|rakennan|lyhy(?:t|istä)|suomeksi|quiero|prefiero|j'aime)\b/.test(
+      lower,
+    );
   return firstPersonSignal && preferenceGoalSignal;
 }
 
@@ -62,7 +73,21 @@ export async function runMemoryAgent(input: MemoryAgentInput): Promise<MemoryAge
   const stored: Array<{ content: string; type: UserMemoryTypeV8; importance: number }> = [];
 
   for (const candidate of candidates) {
+    console.info('MEMORY_CANDIDATE_FOUND', {
+      userId: input.userId,
+      intent: input.intent,
+      candidate,
+    });
+
     const { type, importance } = classifyMemory(candidate, input.intent);
+    console.info('MEMORY_CLASSIFIED', {
+      userId: input.userId,
+      intent: input.intent,
+      candidate,
+      type,
+      importance,
+    });
+
     if (importance < 0.7) continue;
 
     const saved = await upsertUserMemory({
