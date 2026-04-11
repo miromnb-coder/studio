@@ -33,9 +33,31 @@ function buildSuggestedActions(input: SynthesisInputV8): SuggestedActionV8[] {
       }));
     }
 
+    const financeRead = (execution.structuredData.finance_read || {}) as Record<string, unknown>;
+    const profile = (financeRead.profile || {}) as Record<string, unknown>;
+    const hasRecurringBaseline = Number(profile.active_subscriptions || 0) > 0 || Number(profile.total_monthly_cost || 0) > 0;
+    const gmailFetch = (execution.structuredData.gmail_fetch || {}) as Record<string, unknown>;
+    const hasGmailData = Number(gmailFetch.emailsAnalyzed || 0) > 0;
+    const noGmailFinanceSignals = hasGmailData
+      && Number(gmailFetch.subscriptionsFound || 0) === 0
+      && Number(gmailFetch.recurringPaymentsFound || 0) === 0;
+
+    if (noGmailFinanceSignals) {
+      return [
+        { id: 'act_widen_email_window', label: 'Expand email scan (90d)', kind: 'finance' },
+        { id: 'act_scan_receipt_keywords', label: 'Include receipt keywords', kind: 'finance' },
+      ];
+    }
+    if (hasRecurringBaseline) {
+      return [
+        { id: 'act_rank_cancellations', label: 'Rank cancellation targets', kind: 'finance' },
+        { id: 'act_review_recurring', label: 'Review recurring charges', kind: 'finance' },
+      ];
+    }
+
     return [
-      { id: 'act_budget_review', label: 'Review recurring payments', kind: 'finance' },
-      { id: 'act_cut_one', label: 'Cut one subscription', kind: 'finance' },
+      { id: 'act_share_expense', label: 'Share one monthly expense', kind: 'finance' },
+      { id: 'act_start_savings_plan', label: 'Build quick savings plan', kind: 'finance' },
     ];
   }
 
