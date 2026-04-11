@@ -414,6 +414,9 @@ async function streamAssistantResponse(requestId: string, assistantMessageId: st
 
 function migrateState(parsed: Partial<AppState>, sessionDraft: string): AppState {
   const legacyMessages = Array.isArray(parsed.messages) ? parsed.messages : [];
+  const rawConversationRecords = Array.isArray((parsed as Record<string, unknown>).conversations)
+    ? ((parsed as Record<string, unknown>).conversations as Array<Record<string, unknown>>)
+    : [];
   const hasV5State = Array.isArray(parsed.conversationList) && parsed.messageState && typeof parsed.messageState === 'object';
 
   if (hasV5State) {
@@ -447,6 +450,57 @@ function migrateState(parsed: Partial<AppState>, sessionDraft: string): AppState
     }
 
     return syncActiveConversationView(ensureConversationInState(next));
+  }
+
+  if (rawConversationRecords.length) {
+    const hydratedConversations = rawConversationRecords.map((record) => {
+      const messages = Array.isArray(record.messages) ? (record.messages as Message[]) : [];
+      const id = typeof record.id === 'string' && record.id.trim() ? record.id : createId();
+      const createdAt = typeof record.createdAt === 'string' && record.createdAt ? record.createdAt : nowIso();
+      const updatedAt = typeof record.updatedAt === 'string' && record.updatedAt
+        ? record.updatedAt
+        : messages.at(-1)?.createdAt ?? createdAt;
+
+      const conversation: Conversation = {
+        id,
+        title:
+          typeof record.title === 'string' && record.title.trim()
+            ? record.title.trim()
+            : deriveTitleFromPrompt(messages.find((message) => message.role === 'user')?.content ?? ''),
+        createdAt,
+        updatedAt,
+        lastMessagePreview: summarizePreview(messages),
+        messageCount: messages.length,
+      };
+
+      return { conversation, messages };
+    });
+
+    const conversationList = sortConversations(hydratedConversations.map((entry) => entry.conversation));
+    const messageState = hydratedConversations.reduce<Record<string, Message[]>>((acc, entry) => {
+      acc[entry.conversation.id] = entry.messages;
+      return acc;
+    }, {});
+    const activeConversationId =
+      typeof parsed.activeConversationId === 'string' && conversationList.some((item) => item.id === parsed.activeConversationId)
+        ? parsed.activeConversationId
+        : conversationList[0]?.id ?? createConversation().id;
+
+    const migrated: AppState = {
+      ...initialState,
+      ...parsed,
+      hydrated: true,
+      agents: parsed.agents ?? defaultAgents(),
+      alerts: parsed.alerts ?? initialState.alerts,
+      conversationList,
+      activeConversationId,
+      messageState,
+      draftState: { [activeConversationId]: sessionDraft },
+      messages: [],
+      draftPrompt: '',
+    };
+
+    return syncActiveConversationView(ensureConversationInState(migrated));
   }
 
   const migratedConversation = createConversation(legacyMessages.length ? deriveTitleFromPrompt(legacyMessages[0]?.content ?? '') : DEFAULT_NEW_CHAT_TITLE);
