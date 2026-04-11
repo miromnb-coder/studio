@@ -35,9 +35,9 @@ export function AssistantResponseSurface({
       initial={{ opacity: 0, y: 8 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.24, ease: 'easeOut' }}
-      className="max-w-[94%] space-y-3"
+      className="max-w-[95%] space-y-3"
     >
-      <div className="rounded-2xl border border-[#E5E7EB] bg-white px-4 py-3 text-[15px] leading-7 text-[#0F172A] shadow-[0_4px_16px_rgba(15,23,42,0.04)]">
+      <div className="rounded-[20px] border border-[#E7EAF4] bg-white/90 px-4 py-3 text-[15px] leading-7 tracking-[-0.01em] text-[#0F172A] shadow-[0_10px_26px_rgba(42,58,120,0.08)] backdrop-blur">
         {message.content || (message.isStreaming ? ' ' : '')}
       </div>
 
