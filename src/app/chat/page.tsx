@@ -13,14 +13,14 @@ import { ChatComposerPremium } from './components/ChatComposerPremium';
 import { ConversationSwitcherSheet } from './components/ConversationSwitcherSheet';
 import { AgentActivityBadge } from './components/AgentActivityBadge';
 import type { ExecutionStep } from './components/AgentExecutionTimeline';
+import { AIOrb, AppShell, PremiumCard, SmartButton } from '../components/premium-ui';
 
 const PREMIUM_UPLOAD_MESSAGE = 'File upload is a Premium feature. Upgrade to attach files.';
 const THINKING_STEPS = [
   'Understanding request',
-  'Loading memory',
-  'Connecting context',
-  'Evaluating options',
-  'Preparing response',
+  'Checking data',
+  'Analyzing options',
+  'Preparing answer',
 ];
 
 const formatConversationTime = (iso: string) => {
@@ -304,7 +304,7 @@ export default function ChatPage() {
     : derivedExecutionSteps.find((step) => step.status === 'running')?.label || 'Preparing response';
 
   return (
-    <main className="screen app-bg pb-56">
+    <AppShell className="pb-56">
       <header className="mb-3 space-y-2 px-1 pt-1">
         <div className="flex items-center justify-between gap-3">
           <div className="flex items-center gap-2">
@@ -358,7 +358,20 @@ export default function ChatPage() {
       </header>
 
       <section ref={listRef} className="relative z-10 max-h-[calc(100vh-340px)] space-y-4 overflow-y-auto pb-3 pr-1">
-        {empty ? <div className="px-1 py-6 text-sm text-secondary">Ask anything to start. Kivo defaults to direct assistant mode and uses tools only when needed.</div> : null}
+        {empty ? (
+          <PremiumCard className="space-y-4 p-6 text-center">
+            <AIOrb />
+            <h2 className="text-3xl font-semibold tracking-tight text-slate-900">Ask anything.</h2>
+            <p className="text-sm text-slate-500">Your operator turns questions into actions, insights, and next steps.</p>
+            <div className="grid grid-cols-1 gap-2 text-left">
+              {['Help me save money', 'Check my subscriptions', 'What should I improve?', 'Plan my next move'].map((prompt) => (
+                <SmartButton key={prompt} variant="secondary" className="justify-start text-xs" onClick={() => applyTemplate(prompt, 'Prompt added.')}>
+                  {prompt}
+                </SmartButton>
+              ))}
+            </div>
+          </PremiumCard>
+        ) : null}
 
         {messages
           .filter((message) => !(message.role === 'assistant' && message.isStreaming && isAgentResponding))
@@ -513,6 +526,6 @@ export default function ChatPage() {
           </div>
         </div>
       ) : null}
-    </main>
+    </AppShell>
   );
 }
