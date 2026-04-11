@@ -2,6 +2,13 @@ import { ExecutionPlanV8, ExecutionResultV8, ExecutionStepResultV8, ToolNameV8, 
 import { financeReadTool } from './tools/finance';
 import { gmailFetchTool } from './tools/gmail';
 import { generateRecommendationsTool } from './tools/recommendations';
+import {
+  cashflowSummaryTool,
+  financeCompareOptionsTool,
+  priceChangeDetectorTool,
+  savingsPlanGeneratorTool,
+  subscriptionCancelDraftTool,
+} from './tools/finance-operator';
 
 type ToolHandler = (input: Record<string, unknown>, context: AgentContextV8) => Promise<ToolResultV8>;
 
@@ -9,6 +16,11 @@ const registry: Partial<Record<ToolNameV8, ToolHandler>> = {
   finance_read: financeReadTool,
   gmail_fetch: gmailFetchTool,
   generate_recommendations: generateRecommendationsTool,
+  finance_compare_options: financeCompareOptionsTool,
+  savings_plan_generator: savingsPlanGeneratorTool,
+  subscription_cancel_draft: subscriptionCancelDraftTool,
+  cashflow_summary: cashflowSummaryTool,
+  price_change_detector: priceChangeDetectorTool,
 };
 
 export async function executePlanV8(plan: ExecutionPlanV8, context: AgentContextV8): Promise<ExecutionResultV8> {

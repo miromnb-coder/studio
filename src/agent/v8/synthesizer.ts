@@ -6,6 +6,7 @@ import {
   RouteResultV8,
   SuggestedActionV8,
   SystemStateV8,
+  CriticResultV8,
 } from './types';
 
 export type SynthesisInputV8 = {
@@ -15,6 +16,7 @@ export type SynthesisInputV8 = {
   context: AgentContextV8;
   verificationPassed: boolean;
   refinedReply: string;
+  critic: CriticResultV8;
 };
 
 function buildSuggestedActions(input: SynthesisInputV8): SuggestedActionV8[] {
@@ -76,6 +78,12 @@ export function synthesizeResponseV8(input: SynthesisInputV8): AgentResponseV8 {
       suggestedActions: buildSuggestedActions(input),
       memoryUsed: input.context.memory.relevantMemories.length > 0,
       verificationPassed: input.verificationPassed,
+      critic: {
+        criticScore: input.critic.criticScore,
+        passed: input.critic.passed,
+        needsRewrite: input.critic.needsRewrite,
+        qualityNotes: input.critic.qualityNotes,
+      },
       state,
     },
   };

@@ -1,5 +1,5 @@
 import { generateOperatorRecommendations } from '@/lib/operator/recommendations';
-import { AgentContextV8, AgentMessageV8, MemoryEnvelopeV8, ProductStateV8, RouteResultV8 } from './types';
+import { AgentContextV8, AgentMessageV8, DecisionContextV8, MemoryEnvelopeV8, ProductStateV8, RouteResultV8 } from './types';
 import { fetchRelevantUserMemory } from './tools/memory-store';
 import type { SupabaseClient } from '@supabase/supabase-js';
 
@@ -19,6 +19,70 @@ function sanitizeHistory(history: unknown[] = []): AgentMessageV8[] {
 
 function asObject(value: unknown): Record<string, unknown> | null {
   return value && typeof value === 'object' ? (value as Record<string, unknown>) : null;
+}
+
+function inferDecisionContext(params: {
+  route: RouteResultV8;
+  message: string;
+  memorySummary: string;
+  relevantMemories: AgentContextV8['memory']['relevantMemories'];
+  conversation: AgentMessageV8[];
+  recommendations: AgentContextV8['intelligence']['recommendations'];
+  financeProfile: Record<string, unknown> | null;
+}): DecisionContextV8 {
+  const memoryTexts = params.relevantMemories.map((item) => String(item.content || ''));
+  const corpus = [params.message, params.memorySummary, ...memoryTexts].join(' ').toLowerCase();
+
+  const activeGoal = memoryTexts.find((text) => /save|sääst|saast|budget|debt payoff|emergency fund/i.test(text))
+    || (/\bsave|budget|reduce spending|pay off\b/i.test(params.message) ? params.message.trim() : null);
+
+  const knownConstraints = memoryTexts
+    .filter((text) => /student|family|rent|income|fixed|tight|low budget|constraint|freelancer/i.test(text))
+    .slice(0, 4);
+
+  const recentActions = params.conversation
+    .filter((item) => item.role === 'assistant' || item.role === 'user')
+    .map((item) => item.content)
+    .filter((text) => /cancel|downgrade|switched|reduced|cut|paid|saved/i.test(text))
+    .slice(-3);
+
+  const decisionHistory = memoryTexts
+    .filter((text) => /prefer|chose|choice|long-term|cheap|stable|avoid risk/i.test(text))
+    .slice(0, 4);
+
+  const previousRecommendations = params.recommendations
+    .map((rec) => rec.title)
+    .filter(Boolean)
+    .slice(0, 4);
+
+  const pressureFromProfile = Number(params.financeProfile?.total_monthly_cost || 0) > Number(params.financeProfile?.monthly_income || 0)
+    ? 'high'
+    : 'unknown';
+
+  const currentFinancialPressure: DecisionContextV8['currentFinancialPressure'] =
+    /urgent|behind|late fee|overdrawn|stress|can't pay|cannot pay/.test(corpus)
+      ? 'high'
+      : /tight|careful|watch spending|constrained/.test(corpus)
+        ? 'medium'
+        : pressureFromProfile === 'high'
+          ? 'high'
+          : /comfortable|stable/.test(corpus)
+            ? 'low'
+            : 'unknown';
+
+  const userPreferences = memoryTexts
+    .filter((text) => /prefer|like|avoid|monthly|yearly|automation|manual/i.test(text))
+    .slice(0, 5);
+
+  return {
+    activeGoal,
+    knownConstraints,
+    recentActions,
+    decisionHistory,
+    previousRecommendations,
+    currentFinancialPressure,
+    userPreferences,
+  };
 }
 
 export async function buildContextV8(params: {
@@ -65,15 +129,18 @@ export async function buildContextV8(params: {
     })
     : [];
 
+  const conversation = sanitizeHistory(params.history);
+  const memorySummary = typeof safeMemory.summary === 'string' ? safeMemory.summary : 'No prior context available.';
+
   return {
     supabase: params.supabase,
     user: {
       id: params.userId,
       message: params.message,
     },
-    conversation: sanitizeHistory(params.history),
+    conversation,
     memory: {
-      summary: typeof safeMemory.summary === 'string' ? safeMemory.summary : 'No prior context available.',
+      summary: memorySummary,
       summaryType: safeMemory.summaryType === 'finance' ? 'finance' : 'general',
       financeProfile,
       financeEvents,
@@ -86,6 +153,15 @@ export async function buildContextV8(params: {
       userProfile: params.userProfileIntelligence || null,
       gmailFinanceSummary,
     },
+    decisionContext: inferDecisionContext({
+      route: params.route,
+      message: params.message,
+      memorySummary,
+      relevantMemories: filteredRelevantMemories,
+      conversation,
+      recommendations,
+      financeProfile: (financeProfile as Record<string, unknown> | null) || null,
+    }),
     environment: {
       gmailConnected: params.productState.gmailConnected,
       productState: params.productState,

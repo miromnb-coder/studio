@@ -66,6 +66,16 @@ export type UserMemoryItemV8 = {
   updatedAt?: string;
 };
 
+export type DecisionContextV8 = {
+  activeGoal: string | null;
+  knownConstraints: string[];
+  recentActions: string[];
+  decisionHistory: string[];
+  previousRecommendations: string[];
+  currentFinancialPressure: 'low' | 'medium' | 'high' | 'unknown';
+  userPreferences: string[];
+};
+
 export type AgentContextV8 = {
   supabase: SupabaseClient;
   user: {
@@ -87,6 +97,7 @@ export type AgentContextV8 = {
     userProfile: UserProfileIntelligence | null;
     gmailFinanceSummary: Record<string, unknown> | null;
   };
+  decisionContext: DecisionContextV8;
   environment: {
     gmailConnected: boolean;
     productState: ProductStateV8;
@@ -108,6 +119,11 @@ export type RouteResultV8 = {
 export type ToolNameV8 =
   | 'gmail_fetch'
   | 'finance_read'
+  | 'finance_compare_options'
+  | 'savings_plan_generator'
+  | 'subscription_cancel_draft'
+  | 'cashflow_summary'
+  | 'price_change_detector'
   | 'generate_recommendations'
   | 'detect_leaks'
   | 'create_savings_plan'
@@ -173,6 +189,14 @@ export type SuggestedActionV8 = {
 
 export type SystemStateV8 = 'idle' | 'understanding' | 'planning' | 'executing' | 'responding';
 
+export type CriticResultV8 = {
+  criticScore: number;
+  passed: boolean;
+  needsRewrite: boolean;
+  qualityNotes: string[];
+  refinedReply: string;
+};
+
 export type AgentResponseV8 = {
   reply: string;
   metadata: {
@@ -186,6 +210,7 @@ export type AgentResponseV8 = {
     suggestedActions: SuggestedActionV8[];
     memoryUsed: boolean;
     verificationPassed: boolean;
+    critic: Omit<CriticResultV8, 'refinedReply'>;
     state: SystemStateV8;
   };
 };
@@ -207,4 +232,5 @@ export type AgentCriticInputV8 = {
   reply: string;
   usedTools: ToolNameV8[];
   plan: ExecutionPlanV8;
+  structuredData?: Record<string, unknown>;
 };
