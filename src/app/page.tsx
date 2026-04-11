@@ -174,6 +174,9 @@ export default function HomePage() {
 
   const hasData = data.subscriptions.length > 0 || data.recentActions.length > 0 || data.proactiveInsights.length > 0;
   const showLoadingState = Boolean(user?.id) && loading;
+  const primaryPrompt = hasData
+    ? 'Continue from my highest impact opportunity and tell me the fastest next step.'
+    : 'Analyze my subscriptions and create my first savings plan.';
 
   return (
     <AppShell>
@@ -221,13 +224,15 @@ export default function HomePage() {
           <PremiumCard className="space-y-4 p-4">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-xs uppercase tracking-wide text-zinc-400">Potential monthly savings</p>
+                <p className="text-xs uppercase tracking-wide text-zinc-400">Start here</p>
+                <p className="mt-1 text-sm text-zinc-300">One tap to get your next best financial move.</p>
+                <p className="mt-3 text-xs uppercase tracking-wide text-zinc-500">Potential monthly savings</p>
                 <AnimatedNumber value={data.stats.estimatedSavings} />
               </div>
               <AIOrb className="h-16 w-16" />
             </div>
             <p className="text-sm text-zinc-400">Top recommendation: Review your highest monthly subscription stack and remove duplicates.</p>
-            <SmartButton onClick={() => openInChat('What should I optimize first this week?')}>Open next recommendation</SmartButton>
+            <SmartButton onClick={() => openInChat(primaryPrompt)}>Open next recommendation</SmartButton>
           </PremiumCard>
 
           <div className="grid grid-cols-2 gap-3">

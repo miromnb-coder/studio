@@ -20,15 +20,15 @@ export function BottomNav() {
   if (hiddenOn.includes(pathname)) return null;
 
   return (
-    <nav className="fixed bottom-[max(10px,env(safe-area-inset-bottom))] left-1/2 z-40 w-full max-w-md -translate-x-1/2 px-4">
-      <div className="grid grid-cols-5 rounded-[28px] border border-white/12 bg-[#0b0c0f]/84 px-1.5 py-1.5 shadow-[0_26px_48px_rgba(0,0,0,0.62)] backdrop-blur-2xl">
+    <nav className="fixed bottom-[max(10px,env(safe-area-inset-bottom))] left-1/2 z-40 w-full max-w-md -translate-x-1/2 px-4 pb-[max(2px,env(safe-area-inset-bottom)/3)]">
+      <div className="grid grid-cols-5 rounded-[28px] border border-white/12 bg-[#0b0c0f]/88 px-1.5 py-1.5 shadow-[0_26px_48px_rgba(0,0,0,0.62)] backdrop-blur-2xl">
         {tabs.map(({ label, href, icon: Icon }) => {
           const active = pathname === href;
           return (
             <Link
               key={label}
               href={href}
-              className={`relative flex flex-col items-center gap-1 rounded-[18px] py-2 text-[11px] font-medium transition ${
+              className={`relative flex min-h-[52px] flex-col items-center justify-center gap-1 rounded-[18px] py-2 text-[11px] font-medium transition ${
                 active ? 'text-zinc-100' : 'text-zinc-500 hover:text-zinc-300'
               }`}
               aria-current={active ? 'page' : undefined}
@@ -42,6 +42,7 @@ export function BottomNav() {
               ) : null}
               <Icon className="relative z-10 h-[18px] w-[18px] stroke-[2]" />
               <span className="relative z-10">{label}</span>
+              {active ? <span className="relative z-10 h-1 w-1 rounded-full bg-zinc-100/80" /> : null}
             </Link>
           );
         })}
