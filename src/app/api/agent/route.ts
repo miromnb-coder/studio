@@ -11,6 +11,7 @@ import { createClient as createSupabaseServerClient } from '@/lib/supabase/serve
 import { getUserProfileIntelligence, updateUserProfileIntelligence } from '@/lib/operator/personalization';
 import type { OperatorAlertType } from '@/lib/operator/alerts';
 import { fetchRelevantUserMemory } from '@/agent/v8/tools/memory-store';
+import { fetchRecentRecommendationOutcomes } from '@/lib/operator/outcomes';
 import {
   getUserPlanAndUsage,
   incrementUsage,
@@ -250,6 +251,10 @@ export async function POST(req: Request) {
       console.error('USER_PROFILE_INTELLIGENCE_FETCH_ERROR:', error);
       return null;
     });
+    const recommendationOutcomes = await fetchRecentRecommendationOutcomes(supabase, userId).catch((error) => {
+      console.error('RECOMMENDATION_OUTCOMES_FETCH_ERROR:', error);
+      return [];
+    });
 
     const summaryType = inferMemorySummaryType(safeInput || 'Continue');
     const relevantMemories = await fetchRelevantUserMemory({
@@ -314,6 +319,7 @@ export async function POST(req: Request) {
       history: safeHistory,
       memory: memoryEnvelope,
       operatorAlerts: operatorAlertsContext,
+      outcomes: recommendationOutcomes,
       userProfileIntelligence,
       productState: {
         plan,

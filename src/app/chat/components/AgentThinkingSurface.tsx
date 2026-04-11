@@ -1,7 +1,7 @@
 'use client';
 
 import { ThinkingIndicator } from './ThinkingIndicator';
-import { type ExecutionStep } from './AgentExecutionTimeline';
+import { AgentExecutionTimeline, type ExecutionStep } from './AgentExecutionTimeline';
 
 type AgentThinkingSurfaceProps = {
   statusText: string;
@@ -14,8 +14,9 @@ export function AgentThinkingSurface({ statusText, steps }: AgentThinkingSurface
   const phase = failed?.label || running?.label || statusText;
 
   return (
-    <div className="max-w-[80%]">
+    <div className="max-w-[92%] space-y-2">
       <ThinkingIndicator phase={phase} />
+      <AgentExecutionTimeline steps={steps} />
     </div>
   );
 }

@@ -1,4 +1,5 @@
 import { generateOperatorRecommendations } from '@/lib/operator/recommendations';
+import { shouldSuppressRecommendation } from '@/lib/operator/outcomes';
 import { AgentContextV8, AgentMessageV8, DecisionContextV8, MemoryEnvelopeV8, ProductStateV8, RouteResultV8 } from './types';
 import { fetchRelevantUserMemory } from './tools/memory-store';
 import type { SupabaseClient } from '@supabase/supabase-js';
@@ -94,6 +95,7 @@ export async function buildContextV8(params: {
   route: RouteResultV8;
   productState: ProductStateV8;
   operatorAlerts?: AgentContextV8['intelligence']['operatorAlerts'];
+  outcomes?: AgentContextV8['intelligence']['outcomes'];
   userProfileIntelligence?: AgentContextV8['intelligence']['userProfile'];
 }): Promise<AgentContextV8> {
   const safeMemory = params.memory || {};
@@ -118,7 +120,8 @@ export async function buildContextV8(params: {
   const financeProfile = includeFinance ? safeMemory.financeProfile || null : null;
   const financeEvents = includeFinance ? safeMemory.financeEvents || [] : [];
   const gmailFinanceSummary = asObject(asObject(asObject(financeProfile)?.last_analysis)?.gmail_import);
-  const recommendations = params.route.wantsRecommendations
+  const outcomes = params.outcomes || [];
+  const rawRecommendations = params.route.wantsRecommendations
     ? generateOperatorRecommendations({
       userId: params.userId,
       operatorAlerts: params.operatorAlerts || [],
@@ -128,6 +131,9 @@ export async function buildContextV8(params: {
       limit: 5,
     })
     : [];
+  const recommendations = rawRecommendations.filter(
+    (item) => !shouldSuppressRecommendation({ recommendationId: item.id, outcomes }),
+  );
 
   const conversation = sanitizeHistory(params.history);
   const memorySummary = typeof safeMemory.summary === 'string' ? safeMemory.summary : 'No prior context available.';
@@ -150,6 +156,7 @@ export async function buildContextV8(params: {
     intelligence: {
       operatorAlerts: params.operatorAlerts || [],
       recommendations,
+      outcomes,
       userProfile: params.userProfileIntelligence || null,
       gmailFinanceSummary,
     },

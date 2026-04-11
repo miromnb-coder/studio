@@ -65,7 +65,7 @@ export type UserProfile = {
 export type AgentStep = {
   id: string;
   label: string;
-  status: 'running' | 'completed';
+  status: 'running' | 'completed' | 'failed';
 };
 
 type AppState = {
@@ -276,8 +276,11 @@ function normalizeAgentResponse(result: Partial<AgentResponse>): AgentResponse {
       plan: metadata?.plan ?? 'No plan provided.',
       steps: Array.isArray(metadata?.steps) ? metadata!.steps : [],
       structuredData: metadata?.structuredData,
+      suggestedActions: Array.isArray(metadata?.suggestedActions) ? metadata.suggestedActions : [],
+      operatorModules: Array.isArray(metadata?.operatorModules) ? metadata.operatorModules : [],
       memoryUsed: metadata?.memoryUsed,
       iterationCount: metadata?.iterationCount,
+      verificationPassed: metadata?.verificationPassed,
     },
   };
 }
@@ -390,7 +393,7 @@ async function streamAssistantResponse(requestId: string, assistantMessageId: st
       activeSteps: (result.metadata?.steps || []).map((step) => ({
         id: createId(),
         label: step.action,
-        status: step.status === 'failed' ? 'completed' : step.status === 'running' ? 'running' : 'completed',
+        status: step.status === 'failed' ? 'failed' : step.status === 'running' ? 'running' : 'completed',
       })),
       messageState: {
         ...prev.messageState,

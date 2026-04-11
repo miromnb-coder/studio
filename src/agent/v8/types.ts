@@ -1,4 +1,5 @@
 import { OperatorAlertRecord } from '@/lib/operator/alerts';
+import { RecommendationOutcomeRecord } from '@/lib/operator/outcomes';
 import { OperatorRecommendation } from '@/lib/operator/recommendations';
 import { UserProfileIntelligence } from '@/lib/operator/personalization';
 import type { SupabaseClient } from '@supabase/supabase-js';
@@ -94,6 +95,7 @@ export type AgentContextV8 = {
   intelligence: {
     operatorAlerts: OperatorAlertRecord[];
     recommendations: OperatorRecommendation[];
+    outcomes: RecommendationOutcomeRecord[];
     userProfile: UserProfileIntelligence | null;
     gmailFinanceSummary: Record<string, unknown> | null;
   };
@@ -187,6 +189,15 @@ export type SuggestedActionV8 = {
   payload?: Record<string, unknown>;
 };
 
+export type OperatorModuleV8 = {
+  id: string;
+  title: 'Best Next Action' | 'Fastest Saving Opportunity' | 'Risk To Watch' | 'What I Need From You' | 'Recommended This Week';
+  summary: string;
+  impactLabel?: string;
+  recommendationId?: string;
+  priority?: 'low' | 'medium' | 'high' | 'critical';
+};
+
 export type SystemStateV8 = 'idle' | 'understanding' | 'planning' | 'executing' | 'responding';
 
 export type CriticResultV8 = {
@@ -208,6 +219,7 @@ export type AgentResponseV8 = {
     steps: ExecutionStepResultV8[];
     structuredData: Record<string, unknown>;
     suggestedActions: SuggestedActionV8[];
+    operatorModules?: OperatorModuleV8[];
     memoryUsed: boolean;
     verificationPassed: boolean;
     critic: Omit<CriticResultV8, 'refinedReply'>;
@@ -222,6 +234,7 @@ export type AgentRunInputV8 = {
   history?: unknown[];
   memory?: MemoryEnvelopeV8 | null;
   operatorAlerts?: OperatorAlertRecord[];
+  outcomes?: RecommendationOutcomeRecord[];
   userProfileIntelligence?: UserProfileIntelligence | null;
   productState: ProductStateV8;
 };
