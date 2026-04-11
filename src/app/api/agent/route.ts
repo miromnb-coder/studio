@@ -247,6 +247,7 @@ export async function POST(req: Request) {
 
     const summaryType = inferMemorySummaryType(safeInput || 'Continue');
     const relevantMemories = await fetchRelevantUserMemory({
+      supabase,
       userId,
       query: safeInput || 'Continue',
       limit: summaryType === 'finance' ? 8 : 6,
@@ -301,6 +302,7 @@ export async function POST(req: Request) {
     });
 
     const agentResult = await runAgentV8({
+      supabase,
       input: safeInput || 'Continue',
       userId,
       history: safeHistory,

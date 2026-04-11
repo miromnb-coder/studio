@@ -1,6 +1,7 @@
 import { generateOperatorRecommendations } from '@/lib/operator/recommendations';
 import { AgentContextV8, AgentMessageV8, MemoryEnvelopeV8, ProductStateV8, RouteResultV8 } from './types';
 import { fetchRelevantUserMemory } from './tools/memory-store';
+import type { SupabaseClient } from '@supabase/supabase-js';
 
 function sanitizeHistory(history: unknown[] = []): AgentMessageV8[] {
   return history
@@ -21,6 +22,7 @@ function asObject(value: unknown): Record<string, unknown> | null {
 }
 
 export async function buildContextV8(params: {
+  supabase: SupabaseClient;
   userId: string;
   message: string;
   history?: unknown[];
@@ -37,6 +39,7 @@ export async function buildContextV8(params: {
 
   const relevantMemories = shouldFetchRelevantMemories
     ? await fetchRelevantUserMemory({
+      supabase: params.supabase,
       userId: params.userId,
       query: params.message,
       limit: includeFinance ? 8 : 4,

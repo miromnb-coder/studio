@@ -1,7 +1,9 @@
 import { upsertUserMemory } from '../tools/memory-store';
 import { AgentContextV8, UserMemoryTypeV8 } from '../types';
+import type { SupabaseClient } from '@supabase/supabase-js';
 
 export type MemoryAgentInput = {
+  supabase: SupabaseClient;
   userId: string;
   userMessage: string;
   assistantReply: string;
@@ -91,6 +93,7 @@ export async function runMemoryAgent(input: MemoryAgentInput): Promise<MemoryAge
     if (importance < 0.7) continue;
 
     const saved = await upsertUserMemory({
+      supabase: input.supabase,
       userId: input.userId,
       content: candidate,
       type,
