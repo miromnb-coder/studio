@@ -9,8 +9,13 @@ export type AgentIntentV8 =
   | 'finance'
   | 'gmail'
   | 'productivity'
+  | 'planning'
   | 'coding'
   | 'memory'
+  | 'comparison'
+  | 'decision'
+  | 'emotional_support'
+  | 'research'
   | 'unknown';
 
 export type FinanceIntentSubtypeV8 =
@@ -27,6 +32,7 @@ export type FinanceIntentSubtypeV8 =
 export type PlanModeV8 = 'audit' | 'compare' | 'recommend' | 'act' | 'monitor' | 'clarify' | 'verify';
 
 export type AgentModeV8 = 'general' | 'finance' | 'gmail' | 'productivity' | 'coding' | 'memory';
+export type AgentRouteDepthV8 = 'light' | 'standard' | 'deep';
 
 
 export type ResponseModeV8 = 'analyst' | 'coach' | 'operator' | 'researcher';
@@ -35,6 +41,11 @@ export type GoalUnderstandingV8 = {
   explicitRequest: string;
   inferredGoal: string;
   urgency: 'low' | 'medium' | 'high';
+  blockerLevel: 'none' | 'some' | 'high';
+  riskLevel: 'low' | 'medium' | 'high';
+  effortTolerance: 'low' | 'medium' | 'high';
+  horizon: 'immediate' | 'short_term' | 'long_term';
+  preferredStyle: 'concise' | 'structured' | 'detailed' | 'supportive';
   category: 'cashflow' | 'savings' | 'debt' | 'subscriptions' | 'planning' | 'general';
   hiddenOpportunities: string[];
   emotionalTone: 'neutral' | 'stressed' | 'overwhelmed' | 'motivated';
@@ -126,6 +137,13 @@ export type RouteResultV8 = {
   subtype: FinanceIntentSubtypeV8;
   mode: AgentModeV8;
   confidence: number;
+  ambiguity: number;
+  shouldClarify: boolean;
+  userState: {
+    stress: number;
+    urgency: number;
+    confusion: number;
+  };
   reason: string;
   responseMode: ResponseModeV8;
   goal: GoalUnderstandingV8;
@@ -172,7 +190,7 @@ export type ExecutionPlanV8 = {
   mode: AgentModeV8;
   planModes: PlanModeV8[];
   summary: string;
-  depth: 'light' | 'standard' | 'deep';
+  depth: AgentRouteDepthV8;
   clarificationQuestion?: string;
   steps: PlanStepV8[];
 };
@@ -198,6 +216,7 @@ export type ExecutionStepResultV8 = {
 export type ExecutionResultV8 = {
   steps: ExecutionStepResultV8[];
   structuredData: Record<string, unknown>;
+  partialSuccess: boolean;
 };
 
 export type SuggestedActionV8 = {
