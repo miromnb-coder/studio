@@ -35,7 +35,7 @@ function scoreDimension(condition: boolean, weight: number): number {
 
 function ensureNextStep(reply: string): string {
   if (/next step:/i.test(reply)) return reply;
-  return `${reply}\n\nNext Step: Choose one action above and I can turn it into a concrete checklist.`.trim();
+  return `${reply}\n\nNext Step: Share one concrete expense or say "widen search to 90 days" so I can produce a targeted plan.`.trim();
 }
 
 function ensureConfidence(reply: string): string {
@@ -72,8 +72,8 @@ export function verifyExecutionV8(input: AgentCriticInputV8): CriticResultV8 {
   const hasAssumptionsOrConfidence = /confidence:|assumption|estimate|based on/i.test(refinedReply);
 
   if (!hasActions) {
-    refinedReply = `${refinedReply}\n\nTop Actions:\n- Start with the highest-impact recurring cost and reduce it this week.`.trim();
-    notes.push('Added explicit actionability block.');
+    refinedReply = `${refinedReply}\n\nBest Investigation Steps:\n- Share one monthly expense so I can build a grounded savings plan.\n- If Gmail is connected, widen search to 90 days including receipt keywords.`.trim();
+    notes.push('Added context-safe investigation steps instead of generic actions.');
   }
 
   refinedReply = ensureNextStep(refinedReply);

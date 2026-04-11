@@ -31,6 +31,11 @@ function safeLower(text: unknown): string {
   return String(text || '').toLowerCase();
 }
 
+function looksLikeNoFinanceSummary(summary: string): boolean {
+  if (!summary) return false;
+  return /(no (recent )?(finance|financial|billing|receipt|bill)|none found|no useful|not found)/i.test(summary);
+}
+
 function estimateConfidence(
   hasGroundedFinanceData: boolean,
   recommendations: Array<Record<string, unknown>>,
@@ -89,6 +94,14 @@ export async function runFinanceAgent(input: FinanceAgentInput): Promise<Finance
   const emailSubscriptionsFound = Number(gmailData.subscriptionsFound || 0);
   const gmailEmailsAnalyzed = Number(gmailData.emailsAnalyzed || 0);
   const gmailRecurringPaymentsFound = Number(gmailData.recurringPaymentsFound || 0);
+  const gmailNoFinanceSignals =
+    (gmailConnected || Boolean(gmailData.connected))
+    && gmailEmailsAnalyzed > 0
+    && emailSubscriptionsFound === 0
+    && gmailRecurringPaymentsFound === 0
+    && gmailSavingsOpportunities.length === 0
+    && gmailTrialRisks.length === 0
+    && looksLikeNoFinanceSummary(gmailSummary);
 
   const toolResultKeys = Object.keys(input.execution.structuredData || {});
   const toolsUsed = input.execution.steps.filter((s) => s.status === 'completed').map((s) => s.tool);
@@ -187,12 +200,26 @@ export async function runFinanceAgent(input: FinanceAgentInput): Promise<Finance
   if (cancelDraftData.draft) actionCandidates.push({ text: `Cancellation draft prepared for ${String(cancelDraftData.service || 'your selected service')}.`, impact: 20, effort: 1, risk: 1 });
   if (cancelDraftData.clarificationQuestion) actionCandidates.push({ text: String(cancelDraftData.clarificationQuestion), impact: 10, effort: 1, risk: 1 });
   if (!actionCandidates.length && activeSubscriptions > 0) actionCandidates.push({ text: `Review your top ${Math.min(activeSubscriptions, 3)} subscriptions for low-usage services.`, impact: 20, effort: 2, risk: 1 });
-  if (!actionCandidates.length) actionCandidates.push({ text: 'Sync Gmail or finance profile, then re-run savings audit.', impact: 15, effort: 1, risk: 1 });
+  if (!actionCandidates.length && totalMonthlyCost > 0) {
+    actionCandidates.push({ text: 'Run a no-email savings audit from recurring charges and rank cancel targets.', impact: 22, effort: 1, risk: 1 });
+  }
 
-  const actionLines = actionCandidates
+  const rankedActions = actionCandidates
     .sort((a, b) => (b.impact - b.effort - b.risk) - (a.impact - a.effort - a.risk))
-    .slice(0, 3)
-    .map((item) => item.text);
+    .slice(0, 3);
+  const actionLines = rankedActions.map((item) => item.text);
+  const hasStrongActions = rankedActions.some((item) => item.impact >= 25);
+
+  const noResultsReasons: string[] = [];
+  if (gmailNoFinanceSignals) {
+    noResultsReasons.push('Search window may be too narrow for monthly or quarterly billing cycles.');
+    noResultsReasons.push('Vendors may send from unexpected domains, so merchant names do not match obvious keywords.');
+    noResultsReasons.push('Some receipts avoid words like "bill", "subscription", or "renewal", reducing keyword recall.');
+    noResultsReasons.push('Charges may appear mostly in card/bank apps instead of Gmail receipts.');
+    if (gmailEmailsAnalyzed >= 20) {
+      noResultsReasons.push('There may genuinely be no recent billing activity in the scanned period.');
+    }
+  }
 
   const estimatedImpact = topRecImpact > 0
     ? `${formatMoney(topRecImpact)}/month (recommendation estimate)`
@@ -205,11 +232,17 @@ export async function runFinanceAgent(input: FinanceAgentInput): Promise<Finance
     ? `based on ${evidenceParts.join(', ')}`
     : 'grounded evidence was limited this turn';
 
-  const nextStep = input.route.responseMode === 'operator'
-    ? 'Reply "execute action 1" and I will turn the top action into a ready-to-send checklist/message.'
-    : gmailConnected
-      ? 'Tell me “run a focused subscription audit” and I will rank cut candidates with expected impact.'
-      : 'Connect Gmail for receipt/bill evidence, then ask me to run a savings audit.';
+  const nextStep = hasStrongActions
+    ? (input.route.responseMode === 'operator'
+      ? 'Reply "execute action 1" and I will turn the top action into a ready-to-send checklist/message.'
+      : 'Say "rank my top cancellation targets" and I will prioritize the highest-value cuts now.')
+    : gmailNoFinanceSignals
+      ? 'Expand Gmail search to 90 days and include receipt terms ("invoice", "payment", "order", "renewal").'
+      : activeSubscriptions > 0 || totalMonthlyCost > 0
+        ? 'I can run a no-email subscription audit now and rank your top cancellation targets.'
+        : gmailConnected
+          ? 'Share one known monthly expense and I will build a targeted savings plan while we widen the inbox scan.'
+          : 'Share one monthly expense and I will build your top 3 savings moves without Gmail.';
 
   const personalizationHint = decisionContext.activeGoal
     ? `Goal in focus: ${decisionContext.activeGoal}.`
@@ -222,9 +255,22 @@ export async function runFinanceAgent(input: FinanceAgentInput): Promise<Finance
     [
       ...(toneLead ? [toneLead] : []),
       `Summary: ${summary.join(' ')}`,
+      ...(gmailNoFinanceSignals
+        ? [`No-Results Analysis: ${noResultsReasons.slice(0, 3).join(' ')}`]
+        : []),
       `Biggest Opportunity: ${biggestOpportunity}`,
-      `Top Actions:`,
-      ...actionLines.slice(0, 3).map((line) => `- ${line}`),
+      hasStrongActions ? 'Top Actions:' : 'Best Investigation Steps:',
+      ...(hasStrongActions
+        ? actionLines.slice(0, 3).map((line) => `- ${line}`)
+        : [
+          ...(gmailNoFinanceSignals
+            ? ['- Widen Gmail scan to 90 days with receipt + merchant variants.']
+            : []),
+          ...(activeSubscriptions > 0 || totalMonthlyCost > 0
+            ? ['- Rank recurring charges by monthly impact and cancellation friction.']
+            : ['- Share one monthly expense so I can build a concrete savings plan.']),
+          '- Confirm whether charges are tracked mainly in card/bank apps instead of email receipts.',
+        ]),
       `Estimated Monthly Impact: ${estimatedImpact}`,
       `Confidence: ${confidenceLevel} (${confidenceReason}).`,
       `Assumptions: Estimates use recurring-cost patterns, recommendation signals, and available billing evidence.`,
