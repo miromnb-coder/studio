@@ -181,9 +181,11 @@ export async function runFinanceAgent(input: FinanceAgentInput): Promise<Finance
   if (gmailSavingsOpportunities[0]) actionCandidates.push({ text: `Review Gmail signal: ${gmailSavingsOpportunities[0]}`, impact: 40, effort: 2, risk: 1 });
   if (gmailTrialRisks[0]) actionCandidates.push({ text: `Cancel or downgrade trial risk: ${gmailTrialRisks[0]}`, impact: 35, effort: 1, risk: 2 });
   if (compareOptionsData.recommendation) actionCandidates.push({ text: `Preferred option: ${String(asRecord(compareOptionsData.recommendation).label || 'best-ranked option')}.`, impact: 30, effort: 2, risk: 1 });
+  if (compareOptionsData.clarificationQuestion) actionCandidates.push({ text: `Comparison needs one detail: ${String(compareOptionsData.clarificationQuestion)}.`, impact: 10, effort: 1, risk: 1 });
   if (savingsPlanData.recommendedMonthlySavings) actionCandidates.push({ text: `Auto-save ${formatMoney(Number(savingsPlanData.recommendedMonthlySavings))}/month based on current constraints.`, impact: Number(savingsPlanData.recommendedMonthlySavings), effort: 1, risk: 1 });
   if (Number(priceChangeData.suspiciousCount || 0) > 0) actionCandidates.push({ text: `Investigate ${String(priceChangeData.suspiciousCount)} unusual price increases.`, impact: 25, effort: 2, risk: 3 });
-  if (cancelDraftData.draft) actionCandidates.push({ text: 'Cancellation draft is ready for immediate use.', impact: 20, effort: 1, risk: 1 });
+  if (cancelDraftData.draft) actionCandidates.push({ text: `Cancellation draft prepared for ${String(cancelDraftData.service || 'your selected service')}.`, impact: 20, effort: 1, risk: 1 });
+  if (cancelDraftData.clarificationQuestion) actionCandidates.push({ text: String(cancelDraftData.clarificationQuestion), impact: 10, effort: 1, risk: 1 });
   if (!actionCandidates.length && activeSubscriptions > 0) actionCandidates.push({ text: `Review your top ${Math.min(activeSubscriptions, 3)} subscriptions for low-usage services.`, impact: 20, effort: 2, risk: 1 });
   if (!actionCandidates.length) actionCandidates.push({ text: 'Sync Gmail or finance profile, then re-run savings audit.', impact: 15, effort: 1, risk: 1 });
 

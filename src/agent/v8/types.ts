@@ -85,6 +85,8 @@ export type DecisionContextV8 = {
   recentActions: string[];
   decisionHistory: string[];
   previousRecommendations: string[];
+  successfulRecommendationIds: string[];
+  deprioritizedRecommendationIds: string[];
   currentFinancialPressure: 'low' | 'medium' | 'high' | 'unknown';
   userPreferences: string[];
 };
