@@ -168,53 +168,53 @@ function ProfilePageContent() {
       <PremiumCard className="space-y-4 p-5">
         <SectionHeader title="Profile" subtitle="Manage your identity, integrations, and operator preferences." />
 
-        <PremiumCard className="bg-[#F8FAFF] p-4">
-          <p className="text-xs uppercase tracking-wide text-slate-500">Identity</p>
+        <PremiumCard className="bg-white/[0.02] p-4">
+          <p className="text-xs uppercase tracking-wide text-zinc-400">Identity</p>
           <div className="mt-2 flex items-center gap-3">
-            <div className="inline-flex h-12 w-12 items-center justify-center rounded-full bg-[#EEF0FF] text-base font-semibold text-[#5B5CF0]">
+            <div className="inline-flex h-12 w-12 items-center justify-center rounded-full bg-white/[0.08] text-base font-semibold text-zinc-200">
               {(fullName || user?.name || 'U').slice(0, 1).toUpperCase()}
             </div>
             <div>
-              <p className="text-base font-semibold text-slate-900">{fullName || 'User'}</p>
-              <p className="text-sm text-slate-500">{email || 'No email'}</p>
+              <p className="text-base font-semibold text-zinc-100">{fullName || 'User'}</p>
+              <p className="text-sm text-zinc-400">{email || 'No email'}</p>
             </div>
           </div>
         </PremiumCard>
 
         <form onSubmit={saveProfile} className="space-y-3">
           <label className="block text-sm">
-            <span className="mb-1 block text-slate-500">Display name</span>
+            <span className="mb-1 block text-zinc-400">Display name</span>
             <input value={fullName} onChange={(event) => setFullName(event.target.value)} className="system-input w-full bg-white px-3 py-2" placeholder="Your name" required />
           </label>
 
           <label className="block text-sm">
-            <span className="mb-1 block text-slate-500">Email</span>
+            <span className="mb-1 block text-zinc-400">Email</span>
             <input value={email} disabled className="system-input w-full bg-white px-3 py-2 opacity-70" />
           </label>
 
-          {error ? <p className="rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-600">{error}</p> : null}
-          {status ? <p className="rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-600">{status}</p> : null}
+          {error ? <p className="rounded-xl border border-red-500/30 bg-red-500/10 px-3 py-2 text-sm text-red-300">{error}</p> : null}
+          {status ? <p className="rounded-xl border border-emerald-500/30 bg-emerald-500/10 px-3 py-2 text-sm text-emerald-300">{status}</p> : null}
 
           <SmartButton type="submit" className="w-full" disabled={isSaving || !fullName.trim()}>{isSaving ? 'Saving…' : 'Save profile'}</SmartButton>
         </form>
 
         <PremiumCard className="p-4">
-          <p className="text-sm font-semibold text-slate-900">Connected tools</p>
-          <p className="mt-1 text-sm text-slate-500">Google sign-in: {signedInWithGoogle ? 'Connected' : 'Not connected'}</p>
-          <p className="text-sm text-slate-500">Gmail access: {gmailConnected ? 'Connected' : 'Not connected'}</p>
+          <p className="text-sm font-semibold text-zinc-100">Connected tools</p>
+          <p className="mt-1 text-sm text-zinc-400">Google sign-in: {signedInWithGoogle ? 'Connected' : 'Not connected'}</p>
+          <p className="text-sm text-zinc-400">Gmail access: {gmailConnected ? 'Connected' : 'Not connected'}</p>
         </PremiumCard>
 
         <PremiumCard className="p-4">
-          <p className="text-sm font-semibold text-slate-900">Preferences</p>
-          <p className="mt-1 text-sm text-slate-500">Language: English</p>
-          <p className="text-sm text-slate-500">Theme: Premium Intelligence</p>
-          <p className="text-sm text-slate-500">Response style: Strategic + concise</p>
+          <p className="text-sm font-semibold text-zinc-100">Preferences</p>
+          <p className="mt-1 text-sm text-zinc-400">Language: English</p>
+          <p className="text-sm text-zinc-400">Theme: Premium Intelligence</p>
+          <p className="text-sm text-zinc-400">Response style: Strategic + concise</p>
         </PremiumCard>
 
         <PremiumCard className="p-4">
-          <p className="text-sm font-semibold text-slate-900">Plan</p>
-          <p className="mt-1 text-sm text-slate-500">Current plan: {plan}</p>
-          <p className="text-sm text-slate-500">Usage today: {usage.unlimited ? 'Unlimited (Dev Mode)' : `${usage.current} / ${usage.limit}`}</p>
+          <p className="text-sm font-semibold text-zinc-100">Plan</p>
+          <p className="mt-1 text-sm text-zinc-400">Current plan: {plan}</p>
+          <p className="text-sm text-zinc-400">Usage today: {usage.unlimited ? 'Unlimited (Dev Mode)' : `${usage.current} / ${usage.limit}`}</p>
           <Link href="/upgrade" className="mt-3 inline-flex"><SmartButton variant="secondary" className="text-xs">Upgrade</SmartButton></Link>
         </PremiumCard>
 

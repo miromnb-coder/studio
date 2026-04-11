@@ -3,14 +3,14 @@
 @tailwind utilities;
 
  :root {
-  --bg-base: #040712;
-  --bg-surface: #0B1224;
-  --bg-card: #0E152D;
+  --bg-base: #060606;
+  --bg-surface: #121212;
+  --bg-card: #171717;
   --border-subtle: rgba(255,255,255,0.1);
-  --text-primary: #E2E8F0;
-  --text-secondary: #94A3B8;
-  --accent-steel: #7D87FF;
-  --accent-steel-strong: #9AA2FF;
+  --text-primary: #F3F4F6;
+  --text-secondary: #A1A1AA;
+  --accent-steel: #D4D4D8;
+  --accent-steel-strong: #FAFAFA;
   --surface-radius: 18px;
   --surface-shadow: 0 10px 30px rgba(15, 23, 42, 0.06);
   --surface-elevated-shadow: 0 20px 45px rgba(15, 23, 42, 0.08);
@@ -106,8 +106,8 @@ body {
 
 .system-input:focus {
   outline: none;
-  border-color: rgba(145, 153, 255, 0.45);
-  box-shadow: 0 0 0 3px rgba(124, 133, 255, 0.15);
+  border-color: rgba(255,255,255,0.35);
+  box-shadow: 0 0 0 3px rgba(255,255,255,0.14);
 }
 
 .btn-primary,
@@ -218,8 +218,8 @@ body {
 }
 
 .composer-icon-btn-active {
-  background: rgba(123, 132, 255, 0.2);
-  color: #c5cbff;
+  background: rgba(255,255,255,0.15);
+  color: #f4f4f5;
 }
 
 .composer-send-btn {
@@ -229,9 +229,9 @@ body {
   align-items: center;
   justify-content: center;
   border-radius: 999px;
-  border: 1px solid rgba(151,160,255,0.4);
-  background: linear-gradient(145deg, #7A84FF, #636DFF);
-  box-shadow: 0 8px 18px rgba(89, 96, 227, 0.36);
+  border: 1px solid rgba(255,255,255,0.24);
+  background: rgba(255,255,255,0.14);
+  box-shadow: 0 8px 18px rgba(0, 0, 0, 0.38);
   color: #ffffff;
   transition: transform 0.16s ease, background-color 0.16s ease;
 }
@@ -253,7 +253,7 @@ body {
   gap: 0.6rem;
   border-radius: 12px;
   padding: 0.62rem 0.7rem;
-  color: #CBD5E1;
+  color: #d4d4d8;
   font-size: 13px;
   transition: background-color 0.16s ease;
 }
@@ -353,16 +353,16 @@ body {
 
 .premium-bg {
   background:
-    radial-gradient(circle at 12% -4%, rgba(120, 131, 255, 0.28), transparent 34%),
-    radial-gradient(circle at 88% 0%, rgba(77, 156, 255, 0.18), transparent 28%),
-    linear-gradient(180deg, #060A19 0%, #040712 100%);
+    radial-gradient(circle at 50% -12%, rgba(255,255,255,0.08), transparent 45%),
+    radial-gradient(circle at 8% 20%, rgba(255,255,255,0.04), transparent 35%),
+    linear-gradient(180deg, #0b0b0b 0%, #060606 100%);
 }
 
 .premium-card {
-  border-radius: 18px;
-  border: 1px solid rgba(255,255,255,0.10);
-  background: linear-gradient(160deg, rgba(255,255,255,0.04), rgba(255,255,255,0.02));
-  box-shadow: 0 14px 28px rgba(0, 0, 0, 0.32);
+  border-radius: 20px;
+  border: 1px solid rgba(255,255,255,0.12);
+  background: linear-gradient(180deg, rgba(255,255,255,0.06), rgba(255,255,255,0.03));
+  box-shadow: 0 12px 30px rgba(0, 0, 0, 0.4), inset 0 1px 0 rgba(255,255,255,0.06);
 }
 
 .premium-card-hover {
@@ -488,8 +488,8 @@ body {
   height: 100%;
   width: 100%;
   border-radius: 999px;
-  background: radial-gradient(circle at 28% 24%, #a3b1ff 0%, #7b82ff 34%, #5b5cf0 75%);
-  box-shadow: 0 0 0 10px rgba(91, 92, 240, 0.08), 0 20px 45px rgba(91, 92, 240, 0.38);
+  background: radial-gradient(circle at 28% 24%, #fafafa 0%, #d4d4d8 35%, #71717a 78%);
+  box-shadow: 0 0 0 10px rgba(255,255,255,0.06), 0 20px 45px rgba(0, 0, 0, 0.38);
   animation: aiBreath 3.2s ease-in-out infinite;
 }
 
@@ -497,7 +497,7 @@ body {
   position: absolute;
   inset: -9px;
   border-radius: 999px;
-  border: 1px solid rgba(91, 92, 240, 0.35);
+  border: 1px solid rgba(255,255,255,0.25);
   animation: aiPulse 3.2s ease-in-out infinite;
 }
 

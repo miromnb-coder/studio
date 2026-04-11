@@ -21,11 +21,11 @@ export function DashboardHero({ monthlySavings, monthlyCost, activeSubscriptions
       </p>
 
       <div className="mt-4 grid grid-cols-2 gap-3">
-        <div className="rounded-2xl bg-[#f2f2f2] px-3 py-3">
+        <div className="rounded-2xl bg-white/[0.04] px-3 py-3">
           <p className="text-[11px] uppercase tracking-wide text-secondary">Current monthly cost</p>
           <p className="mt-1 text-lg font-semibold text-primary">{loading ? '…' : `$${Math.round(monthlyCost)}`}</p>
         </div>
-        <div className="rounded-2xl bg-[#f2f2f2] px-3 py-3">
+        <div className="rounded-2xl bg-white/[0.04] px-3 py-3">
           <p className="text-[11px] uppercase tracking-wide text-secondary">Active subscriptions</p>
           <p className="mt-1 text-lg font-semibold text-primary">{loading ? '…' : activeSubscriptions}</p>
         </div>

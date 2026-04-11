@@ -12,7 +12,7 @@ export function OpportunitiesList({ opportunities, onOpenOpportunity }: Opportun
       <h2 className="mb-2 text-base font-semibold text-primary">Top opportunities</h2>
       <div className="space-y-2">
         {opportunities.map((item) => (
-          <article key={item.id} className="rounded-2xl bg-[#f2f2f2] px-3 py-3">
+          <article key={item.id} className="rounded-2xl bg-white/[0.04] px-3 py-3">
             <p className="text-sm font-semibold text-primary">{item.title}</p>
             <p className="mt-1 text-xs text-secondary">{item.detail}</p>
             <button

@@ -16,7 +16,7 @@ export function SubscriptionsList({ subscriptions, onOpenSubscription }: Subscri
             key={subscription.id}
             type="button"
             onClick={() => onOpenSubscription(subscription)}
-            className="card-interactive flex w-full items-center justify-between rounded-2xl bg-[#f2f2f2] px-3 py-3 text-left"
+            className="card-interactive flex w-full items-center justify-between rounded-2xl bg-white/[0.04] px-3 py-3 text-left"
           >
             <div>
               <p className="text-sm font-medium text-primary">{subscription.name}</p>

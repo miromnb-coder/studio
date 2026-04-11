@@ -27,7 +27,7 @@ function formatMoney(value: number, currency = 'EUR') {
 export function SavingsChart({ points, currency = 'EUR' }: SavingsChartProps) {
   if (!points || points.length === 0) {
     return (
-      <div className="rounded-[24px] border border-white/70 bg-white/70 p-5 text-sm text-slate-500">
+      <div className="rounded-[24px] border border-white/10 bg-white/[0.04] p-5 text-sm text-zinc-400">
         No savings data yet.
       </div>
     );
@@ -50,18 +50,18 @@ export function SavingsChart({ points, currency = 'EUR' }: SavingsChartProps) {
   const path = `M ${chartPoints.join(' L ')}`;
 
   return (
-    <div className="rounded-[28px] border border-white/70 bg-white/75 p-5 shadow-sm backdrop-blur-xl">
+    <div className="rounded-[28px] border border-white/10 bg-white/[0.04] p-5 shadow-sm backdrop-blur-xl">
       <div className="mb-4 flex items-center justify-between">
         <div>
-          <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">
+          <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-zinc-400">
             Savings over time
           </p>
-          <h3 className="mt-1 text-base font-semibold text-slate-950">
+          <h3 className="mt-1 text-base font-semibold text-zinc-100">
             Your savings growth
           </h3>
         </div>
 
-        <div className="text-sm text-slate-500">
+        <div className="text-sm text-zinc-400">
           {formatMoney(points[points.length - 1].savings, currency)}
         </div>
       </div>
@@ -69,7 +69,7 @@ export function SavingsChart({ points, currency = 'EUR' }: SavingsChartProps) {
       <div className="relative h-40 w-full">
         {/* Glow background */}
         <motion.div
-          className="absolute inset-0 rounded-2xl bg-white/50 blur-xl"
+          className="absolute inset-0 rounded-2xl bg-white/[0.06] blur-xl"
           animate={{ opacity: [0.3, 0.6, 0.3] }}
           transition={{ duration: 4, repeat: Infinity }}
         />
@@ -83,7 +83,7 @@ export function SavingsChart({ points, currency = 'EUR' }: SavingsChartProps) {
           <motion.path
             d={path}
             fill="none"
-            stroke="rgba(15,23,42,0.8)"
+            stroke="rgba(255,255,255,0.75)"
             strokeWidth="1.8"
             initial={{ pathLength: 0 }}
             animate={{ pathLength: 1 }}
@@ -93,7 +93,7 @@ export function SavingsChart({ points, currency = 'EUR' }: SavingsChartProps) {
           {/* Area fill */}
           <motion.path
             d={`${path} L 100,100 L 0,100 Z`}
-            fill="rgba(15,23,42,0.06)"
+            fill="rgba(255,255,255,0.12)"
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             transition={{ delay: 0.3, duration: 0.6 }}
@@ -108,7 +108,7 @@ export function SavingsChart({ points, currency = 'EUR' }: SavingsChartProps) {
           return (
             <motion.div
               key={i}
-              className="absolute h-2 w-2 rounded-full bg-slate-900"
+              className="absolute h-2 w-2 rounded-full bg-zinc-200"
               style={{
                 left: `${x}%`,
                 top: `${y}%`,
@@ -123,7 +123,7 @@ export function SavingsChart({ points, currency = 'EUR' }: SavingsChartProps) {
       </div>
 
       {/* Labels */}
-      <div className="mt-3 flex justify-between text-xs text-slate-400">
+      <div className="mt-3 flex justify-between text-xs text-zinc-500">
         <span>{points[0].date}</span>
         <span>{points[points.length - 1].date}</span>
       </div>
