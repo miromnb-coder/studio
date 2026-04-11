@@ -30,6 +30,16 @@ function safeLower(text: unknown): string {
   return String(text || '').toLowerCase();
 }
 
+function estimateConfidence(
+  hasGroundedFinanceData: boolean,
+  recommendations: Array<Record<string, unknown>>,
+  gmailEmailsAnalyzed: number,
+): 'High' | 'Medium' | 'Low' {
+  if (hasGroundedFinanceData && recommendations.length >= 2 && gmailEmailsAnalyzed >= 10) return 'High';
+  if (hasGroundedFinanceData) return 'Medium';
+  return 'Low';
+}
+
 export async function runFinanceAgent(input: FinanceAgentInput): Promise<FinanceAgentOutput> {
   const financeData = asRecord(input.execution.structuredData.finance_read);
   const profile = asRecord(financeData.profile);
@@ -117,46 +127,6 @@ export async function runFinanceAgent(input: FinanceAgentInput): Promise<Finance
   const responseParts: string[] = [];
   const evidenceParts: string[] = [];
 
-  if (userFocusOnSavings) {
-    responseParts.push('Since your memory profile indicates you prefer saving money, prioritize actions that reduce recurring costs first.');
-  } else if (memoryHighlights.length) {
-    responseParts.push(`From your memory context: ${memoryHighlights[0]}.`);
-  }
-
-  if (asksCount && activeSubscriptions > 0) {
-    responseParts.push(`You currently have ${activeSubscriptions} active subscriptions.`);
-    evidenceParts.push('finance_profile.active_subscriptions');
-  }
-  if (asksTotal && totalMonthlyCost > 0) {
-    responseParts.push(`Your recurring monthly spend is about ${formatMoney(totalMonthlyCost)}.`);
-    evidenceParts.push('finance_profile.total_monthly_cost');
-  }
-
-  if ((asksSavings || asksNextAction || responseParts.length === 0) && topRecTitle) {
-    responseParts.push(
-      `${topRecTitle}${topRecSummary ? ` — ${topRecSummary}` : ''}${topRecImpact > 0 ? ` Estimated impact: ${formatMoney(topRecImpact)}/month.` : '.'}`,
-    );
-    evidenceParts.push('recommendations.top');
-  }
-
-  if (asksEmailCheck || asksSavings || asksNextAction) {
-    if (gmailData.connected) {
-      const emailInsight = emailSubscriptionsFound > 0 || gmailRecurringPaymentsFound > 0
-        ? `Gmail tool found ${emailSubscriptionsFound} subscription and ${gmailRecurringPaymentsFound} recurring payment signals from ${gmailEmailsAnalyzed} analyzed emails.`
-        : `Gmail tool executed${gmailEmailsAnalyzed > 0 ? ` on ${gmailEmailsAnalyzed} emails` : ''}, but returned no strong finance signal.`;
-      responseParts.push(emailInsight);
-      evidenceParts.push('gmail_fetch');
-
-      if (gmailSummary) responseParts.push(`Email summary: ${gmailSummary}`);
-      if (gmailSavingsOpportunities[0]) responseParts.push(`Top Gmail savings opportunity: ${gmailSavingsOpportunities[0]}.`);
-      if (gmailTrialRisks[0]) responseParts.push(`Trial risk to review: ${gmailTrialRisks[0]}.`);
-    } else if (gmailConnected) {
-      responseParts.push('Gmail is connected, but no gmail_fetch data was returned for this turn, so I cannot make email-grounded claims yet.');
-    } else {
-      responseParts.push('Gmail is not connected in your current environment, so recommendations are based on available finance memory and profile data.');
-    }
-  }
-
   const hasGroundedFinanceData =
     activeSubscriptions > 0 ||
     totalMonthlyCost > 0 ||
@@ -166,24 +136,66 @@ export async function runFinanceAgent(input: FinanceAgentInput): Promise<Finance
     recommendations.length > 0;
 
   if (!hasGroundedFinanceData) {
-    responseParts.length = 0;
-    responseParts.push(
-      'I do not currently have grounded finance evidence for invoices, amounts, due dates, or obligations.',
-      'If you want, I can re-run analysis after fresh Gmail import or updated finance profile data.',
-    );
+    responseParts.push('No grounded finance evidence yet (amounts, due dates, or recurring obligations are missing).');
+  }
+  if (activeSubscriptions > 0) evidenceParts.push('finance_profile.active_subscriptions');
+  if (totalMonthlyCost > 0) evidenceParts.push('finance_profile.total_monthly_cost');
+  if (gmailEmailsAnalyzed > 0 || gmailSummary) evidenceParts.push('gmail_fetch');
+  if (recommendations.length > 0) evidenceParts.push('recommendations.top');
+
+  const summary: string[] = [];
+  if (asksCount && activeSubscriptions > 0) summary.push(`${activeSubscriptions} active subscriptions detected.`);
+  if (asksTotal && totalMonthlyCost > 0) summary.push(`Recurring spend is ~${formatMoney(totalMonthlyCost)}/month.`);
+  if (!summary.length && totalMonthlyCost > 0) summary.push(`Current recurring spend baseline: ${formatMoney(totalMonthlyCost)}/month.`);
+  if (!summary.length && activeSubscriptions > 0) summary.push(`${activeSubscriptions} recurring services identified.`);
+  if (!summary.length) summary.push('I can provide sharper estimates after fresh finance data sync.');
+
+  let biggestOpportunity = 'Connect more transaction evidence to identify highest-impact savings.';
+  if (topRecTitle) {
+    biggestOpportunity = `${topRecTitle}${topRecImpact > 0 ? ` (${formatMoney(topRecImpact)}/month estimated)` : ''}.`;
+  } else if (estimatedSavings > 0) {
+    biggestOpportunity = `Known optimization in profile: ${formatMoney(estimatedSavings)}/month potential.`;
   }
 
-  if (!responseParts.length) {
-    responseParts.push('I do not have enough finance data yet to answer precisely. Ask me to analyze subscriptions or monthly recurring spend.');
+  const actionLines: string[] = [];
+  if (topRecSummary) actionLines.push(topRecSummary);
+  if (gmailSavingsOpportunities[0]) actionLines.push(`Review Gmail signal: ${gmailSavingsOpportunities[0]}`);
+  if (gmailTrialRisks[0]) actionLines.push(`Cancel or downgrade trial risk: ${gmailTrialRisks[0]}`);
+  if (!actionLines.length && activeSubscriptions > 0) actionLines.push(`Review your top ${Math.min(activeSubscriptions, 3)} subscriptions for low-usage services.`);
+  if (!actionLines.length) actionLines.push('Sync Gmail or finance profile, then re-run savings audit.');
+
+  const estimatedImpact = topRecImpact > 0
+    ? `${formatMoney(topRecImpact)}/month (recommendation estimate)`
+    : estimatedSavings > 0
+      ? `${formatMoney(estimatedSavings)}/month (profile estimate)`
+      : 'Unknown (insufficient grounded pricing data)';
+
+  const confidenceLevel = estimateConfidence(hasGroundedFinanceData, recommendations, gmailEmailsAnalyzed);
+  const confidenceReason = evidenceParts.length
+    ? `based on ${evidenceParts.join(', ')}`
+    : 'grounded evidence was limited this turn';
+
+  const nextStep = gmailConnected
+    ? 'Tell me “run a focused subscription audit” and I will rank cut candidates with expected impact.'
+    : 'Connect Gmail for receipt/bill evidence, then ask me to run a savings audit.';
+
+  responseParts.push(
+    [
+      `Summary: ${summary.join(' ')}`,
+      `Biggest Opportunity: ${biggestOpportunity}`,
+      `Top Actions:`,
+      ...actionLines.slice(0, 3).map((line) => `- ${line}`),
+      `Estimated Monthly Impact: ${estimatedImpact}`,
+      `Confidence: ${confidenceLevel} (${confidenceReason}).`,
+      `Next Step: ${nextStep}`,
+    ].join('\n'),
+  );
+
+  if (userFocusOnSavings && !asksTotal && !asksCount) {
+    responseParts.push('I prioritized recurring-cost reductions because your memory profile suggests savings-first decisions.');
   }
 
-  if (evidenceParts.length) {
-    responseParts.push(`Confidence: medium, based on ${evidenceParts.join(', ')}.`);
-  } else {
-    responseParts.push('Confidence: low, because grounded data was limited this turn.');
-  }
-
-  const answerDraft = responseParts.join(' ').replace(/\s{2,}/g, ' ').trim();
+  const answerDraft = responseParts.join('\n\n').replace(/\n{3,}/g, '\n\n').trim();
 
   const memoryUsed = userFocusOnSavings || memoryHighlights.length > 0 || memorySummary.length > 0;
   const toolResultUsed = toolResultKeys.length > 0 && (gmailSummary.length > 0 || activeSubscriptions > 0 || totalMonthlyCost > 0 || toolsUsed.length > 0);

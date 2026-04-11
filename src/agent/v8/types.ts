@@ -12,6 +12,19 @@ export type AgentIntentV8 =
   | 'memory'
   | 'unknown';
 
+export type FinanceIntentSubtypeV8 =
+  | 'subscriptions'
+  | 'bills'
+  | 'savings_audit'
+  | 'compare_options'
+  | 'budgeting'
+  | 'cashflow'
+  | 'alerts_review'
+  | 'general_finance'
+  | 'none';
+
+export type PlanModeV8 = 'audit' | 'compare' | 'recommend' | 'act' | 'monitor';
+
 export type AgentModeV8 = 'general' | 'finance' | 'gmail' | 'productivity' | 'coding' | 'memory';
 
 export type AgentRole = 'system' | 'assistant' | 'user';
@@ -83,6 +96,7 @@ export type AgentContextV8 = {
 
 export type RouteResultV8 = {
   intent: AgentIntentV8;
+  subtype: FinanceIntentSubtypeV8;
   mode: AgentModeV8;
   confidence: number;
   reason: string;
@@ -120,7 +134,9 @@ export type PlanStepV8 = {
 
 export type ExecutionPlanV8 = {
   intent: AgentIntentV8;
+  subtype: FinanceIntentSubtypeV8;
   mode: AgentModeV8;
+  planModes: PlanModeV8[];
   summary: string;
   steps: PlanStepV8[];
 };
@@ -161,8 +177,10 @@ export type AgentResponseV8 = {
   reply: string;
   metadata: {
     intent: AgentIntentV8;
+    subtype: FinanceIntentSubtypeV8;
     mode: AgentModeV8;
     plan: string;
+    planModes: PlanModeV8[];
     steps: ExecutionStepResultV8[];
     structuredData: Record<string, unknown>;
     suggestedActions: SuggestedActionV8[];
