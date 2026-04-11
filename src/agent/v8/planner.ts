@@ -84,11 +84,56 @@ export function createPlanV8(route: RouteResultV8, message: string): ExecutionPl
     if (planModes.includes('compare')) {
       steps.push(buildStep(
         nextStep(),
-        'Compare options',
-        'find_alternatives',
-        'Compare user options by estimated cost and value using available evidence.',
+        'Compare financial options',
+        'finance_compare_options',
+        'Compare user options by cost/value and select the strongest choice with assumptions.',
         { query: message, useFinanceBaseline: true },
         true,
+      ));
+    }
+
+
+    if (route.subtype === 'savings_audit' || route.subtype === 'budgeting') {
+      steps.push(buildStep(
+        nextStep(),
+        'Build savings plan',
+        'savings_plan_generator',
+        'Generate a realistic monthly savings plan from available constraints and recurring costs.',
+        { query: message },
+        false,
+      ));
+    }
+
+    if (route.subtype === 'subscriptions') {
+      steps.push(buildStep(
+        nextStep(),
+        'Draft subscription cancellation',
+        'subscription_cancel_draft',
+        'Prepare ready-to-send cancellation language and checklist for a target service.',
+        { service: 'subscription from recent recurring charges' },
+        false,
+      ));
+    }
+
+    if (route.subtype === 'cashflow' || route.subtype === 'budgeting') {
+      steps.push(buildStep(
+        nextStep(),
+        'Summarize cashflow health',
+        'cashflow_summary',
+        'Summarize inflows/outflows, net pressure, and immediate actions.',
+        { period: 'monthly' },
+        true,
+      ));
+    }
+
+    if (route.subtype === 'subscriptions' || route.subtype === 'bills' || route.subtype === 'alerts_review') {
+      steps.push(buildStep(
+        nextStep(),
+        'Detect suspicious price changes',
+        'price_change_detector',
+        'Detect unusual recurring price increases and suspicious changes.',
+        { sensitivity: 'standard' },
+        false,
       ));
     }
 

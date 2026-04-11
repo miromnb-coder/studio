@@ -47,6 +47,7 @@ export async function runAgentV8(input: AgentRunInputV8): Promise<AgentResponseV
     reply: draftReply,
     usedTools: execution.steps.filter((s) => s.status === 'completed').map((s) => s.tool),
     plan,
+    structuredData: execution.structuredData,
   });
 
   await runMemoryAgent({
@@ -66,6 +67,7 @@ export async function runAgentV8(input: AgentRunInputV8): Promise<AgentResponseV
     context,
     verificationPassed: critic.passed,
     refinedReply: critic.refinedReply,
+    critic,
   });
 
   return {

@@ -47,6 +47,13 @@ export async function runFinanceAgent(input: FinanceAgentInput): Promise<Finance
   const gmailData = asRecord(input.execution.structuredData.gmail_fetch);
   const recommendations = resolveRecommendations(input).slice(0, 3);
 
+  const compareOptionsData = asRecord(input.execution.structuredData.finance_compare_options);
+  const savingsPlanData = asRecord(input.execution.structuredData.savings_plan_generator);
+  const cancelDraftData = asRecord(input.execution.structuredData.subscription_cancel_draft);
+  const cashflowData = asRecord(input.execution.structuredData.cashflow_summary);
+  const priceChangeData = asRecord(input.execution.structuredData.price_change_detector);
+  const decisionContext = input.context.decisionContext;
+
   const activeSubscriptionsRaw = profile.active_subscriptions;
   const activeSubscriptions = Array.isArray(activeSubscriptionsRaw)
     ? activeSubscriptionsRaw.length
@@ -100,6 +107,9 @@ export async function runFinanceAgent(input: FinanceAgentInput): Promise<Finance
   if (recommendations.length) {
     findings.push(`Generated ${recommendations.length} ranked recommendations.`);
   }
+
+  if (cashflowData.net !== undefined) findings.push(`Cashflow net estimate: ${String(cashflowData.net)}.`);
+  if (Number(priceChangeData.suspiciousCount || 0) > 0) findings.push(`Detected ${String(priceChangeData.suspiciousCount)} suspicious price changes.`);
 
   const message = safeLower(input.context.user.message);
   const asksTotal = /\b(total|monthly|spend|cost|amount|rahaa|kulutus|kulut|kuukaudessa|kokonais|gasto|mensual)\b/.test(message);
@@ -161,6 +171,10 @@ export async function runFinanceAgent(input: FinanceAgentInput): Promise<Finance
   if (topRecSummary) actionLines.push(topRecSummary);
   if (gmailSavingsOpportunities[0]) actionLines.push(`Review Gmail signal: ${gmailSavingsOpportunities[0]}`);
   if (gmailTrialRisks[0]) actionLines.push(`Cancel or downgrade trial risk: ${gmailTrialRisks[0]}`);
+  if (compareOptionsData.recommendation) actionLines.push(`Preferred option: ${String(asRecord(compareOptionsData.recommendation).label || 'best-ranked option')}.`);
+  if (savingsPlanData.recommendedMonthlySavings) actionLines.push(`Auto-save ${formatMoney(Number(savingsPlanData.recommendedMonthlySavings))}/month based on current constraints.`);
+  if (Number(priceChangeData.suspiciousCount || 0) > 0) actionLines.push(`Investigate ${String(priceChangeData.suspiciousCount)} unusual price increases.`);
+  if (cancelDraftData.draft) actionLines.push('Cancellation draft is ready for immediate use.');
   if (!actionLines.length && activeSubscriptions > 0) actionLines.push(`Review your top ${Math.min(activeSubscriptions, 3)} subscriptions for low-usage services.`);
   if (!actionLines.length) actionLines.push('Sync Gmail or finance profile, then re-run savings audit.');
 
@@ -179,6 +193,13 @@ export async function runFinanceAgent(input: FinanceAgentInput): Promise<Finance
     ? 'Tell me “run a focused subscription audit” and I will rank cut candidates with expected impact.'
     : 'Connect Gmail for receipt/bill evidence, then ask me to run a savings audit.';
 
+  const personalizationHint = decisionContext.activeGoal
+    ? `Goal in focus: ${decisionContext.activeGoal}.`
+    : '';
+  const pressureHint = decisionContext.currentFinancialPressure !== 'unknown'
+    ? `Financial pressure: ${decisionContext.currentFinancialPressure}.`
+    : '';
+
   responseParts.push(
     [
       `Summary: ${summary.join(' ')}`,
@@ -187,6 +208,8 @@ export async function runFinanceAgent(input: FinanceAgentInput): Promise<Finance
       ...actionLines.slice(0, 3).map((line) => `- ${line}`),
       `Estimated Monthly Impact: ${estimatedImpact}`,
       `Confidence: ${confidenceLevel} (${confidenceReason}).`,
+      ...(pressureHint ? [pressureHint] : []),
+      ...(personalizationHint ? [personalizationHint] : []),
       `Next Step: ${nextStep}`,
     ].join('\n'),
   );
