@@ -16,6 +16,11 @@ import { AppShell } from '../components/premium-ui';
 
 const PREMIUM_UPLOAD_MESSAGE = 'File upload is a Premium feature. Upgrade to attach files.';
 const THINKING_STEPS = ['Understanding request', 'Gathering context', 'Thinking deeper', 'Writing response'];
+const QUICK_START_PROMPTS = [
+  'Review my monthly subscriptions and tell me what to cancel first.',
+  'Create a 30-day savings plan based on my current spending.',
+  'Check my recent billing risks and suggest next actions.',
+];
 
 const formatConversationTime = (iso: string) => {
   const timestamp = new Date(iso);
@@ -64,6 +69,8 @@ export default function ChatPage() {
   const [voiceSupported, setVoiceSupported] = useState(true);
   const [financeActionLoadingForMessage, setFinanceActionLoadingForMessage] = useState<Record<string, FinanceActionType | null>>({});
   const [simulatedStepIndex, setSimulatedStepIndex] = useState(0);
+  const [isSending, setIsSending] = useState(false);
+  const [isNearBottom, setIsNearBottom] = useState(true);
 
   const listRef = useRef<HTMLDivElement>(null);
   const composerRef = useRef<HTMLDivElement>(null);
@@ -117,9 +124,30 @@ export default function ChatPage() {
   }, [draftPrompt, activeConversationId]);
 
   useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const persisted = window.sessionStorage.getItem('nova-operator-chat-draft');
+    if (persisted && !draftPrompt) {
+      setDraft(persisted);
+      setDraftPrompt(persisted);
+    }
+  }, [draftPrompt, setDraftPrompt]);
+
+  useEffect(() => {
     if (!listRef.current) return;
     listRef.current.scrollTop = listRef.current.scrollHeight;
   }, [messages, isAgentResponding, activeConversationId, simulatedStepIndex]);
+
+  useEffect(() => {
+    const listEl = listRef.current;
+    if (!listEl) return;
+    const onScroll = () => {
+      const distance = listEl.scrollHeight - listEl.scrollTop - listEl.clientHeight;
+      setIsNearBottom(distance < 90);
+    };
+    onScroll();
+    listEl.addEventListener('scroll', onScroll, { passive: true });
+    return () => listEl.removeEventListener('scroll', onScroll);
+  }, []);
 
   useEffect(() => {
     if (!textareaRef.current) return;
@@ -175,6 +203,7 @@ export default function ChatPage() {
     const nextValue = draft ? `${draft}\n${template}` : template;
     setDraft(nextValue);
     setDraftPrompt(nextValue);
+    if (typeof window !== 'undefined') window.sessionStorage.setItem('nova-operator-chat-draft', nextValue);
     setComposerNotice(notice);
     setOpenPanel(null);
   };
@@ -186,7 +215,12 @@ export default function ChatPage() {
       return;
     }
     if (!draft.trim() || isAgentResponding) return;
-    await sendMessage(draft);
+    setIsSending(true);
+    try {
+      await sendMessage(draft);
+    } finally {
+      setIsSending(false);
+    }
     setDraftPrompt('');
     setDraft('');
     if (typeof window !== 'undefined') window.sessionStorage.removeItem('nova-operator-chat-draft');
@@ -284,6 +318,11 @@ export default function ChatPage() {
     ? activeSteps.find((step) => step.status === 'running')?.label || 'Processing execution steps'
     : derivedExecutionSteps.find((step) => step.status === 'running')?.label || 'Preparing response';
 
+  const jumpToBottom = () => {
+    if (!listRef.current) return;
+    listRef.current.scrollTo({ top: listRef.current.scrollHeight, behavior: 'smooth' });
+  };
+
   return (
     <AppShell className="pb-60">
       <header className="sticky top-0 z-20 mb-5 rounded-[22px] border border-white/8 bg-[#0b0c0f]/68 px-4 py-3.5 shadow-[0_14px_34px_rgba(0,0,0,0.35)] backdrop-blur-2xl">
@@ -341,6 +380,18 @@ export default function ChatPage() {
               >
                 <h2 className="text-[34px] font-semibold leading-[1.08] tracking-[-0.036em] text-zinc-100">How can Kivo help today?</h2>
                 <p className="mt-3 max-w-[26ch] text-sm leading-6 text-zinc-500">Start with a question or a task. Kivo will handle the next steps.</p>
+                <div className="mt-6 flex w-full max-w-sm flex-col gap-2">
+                  {QUICK_START_PROMPTS.map((prompt) => (
+                    <button
+                      key={prompt}
+                      type="button"
+                      onClick={() => applyTemplate(prompt, 'Prompt added. You can edit before sending.')}
+                      className="rounded-2xl border border-white/10 bg-white/[0.03] px-3.5 py-3 text-left text-xs leading-5 text-zinc-300 transition hover:border-white/20 hover:bg-white/[0.06]"
+                    >
+                      {prompt}
+                    </button>
+                  ))}
+                </div>
               </motion.div>
             ) : null}
           </AnimatePresence>
@@ -396,6 +447,16 @@ export default function ChatPage() {
               </button>
             </div>
           ) : null}
+
+          {!isNearBottom && !empty ? (
+            <button
+              type="button"
+              onClick={jumpToBottom}
+              className="sticky bottom-3 left-1/2 z-20 ml-auto mr-2 block rounded-full border border-white/12 bg-black/55 px-3 py-1.5 text-xs text-zinc-200 backdrop-blur"
+            >
+              Jump to latest
+            </button>
+          ) : null}
         </section>
       </LayoutGroup>
 
@@ -408,12 +469,14 @@ export default function ChatPage() {
         openPanel={openPanel === 'conversations' ? null : openPanel}
         voiceSupported={voiceSupported}
         isAgentResponding={isAgentResponding}
+        isSending={isSending}
         isLimitReached={isLimitReached}
         userPresent={Boolean(user)}
         onDraftChange={(value) => {
           if (requireAuth()) return;
           setDraft(value);
           setDraftPrompt(value);
+          if (typeof window !== 'undefined') window.sessionStorage.setItem('nova-operator-chat-draft', value);
         }}
         onSend={() => void handleSend()}
         onTextareaFocus={() => {

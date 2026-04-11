@@ -23,6 +23,7 @@ type ChatComposerPremiumProps = {
   openPanel: ComposerPanel;
   voiceSupported: boolean;
   isAgentResponding: boolean;
+  isSending: boolean;
   isLimitReached: boolean;
   userPresent: boolean;
   onDraftChange: (value: string) => void;
@@ -46,6 +47,7 @@ export function ChatComposerPremium(props: ChatComposerPremiumProps) {
     openPanel,
     voiceSupported,
     isAgentResponding,
+    isSending,
     isLimitReached,
     userPresent,
     onDraftChange,
@@ -170,7 +172,11 @@ export function ChatComposerPremium(props: ChatComposerPremiumProps) {
             className="composer-send-btn h-10 w-10 shrink-0 disabled:opacity-45"
             aria-label="Send message"
           >
-            <ArrowUp className="h-4 w-4" />
+            {isSending ? (
+              <span className="h-4 w-4 animate-spin rounded-full border-2 border-zinc-700/50 border-t-zinc-900" />
+            ) : (
+              <ArrowUp className="h-4 w-4" />
+            )}
           </button>
         </div>
 
