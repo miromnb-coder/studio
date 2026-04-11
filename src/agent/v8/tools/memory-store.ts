@@ -1,6 +1,8 @@
 import { createClient as createSupabaseClient } from '../../../lib/supabase/server';
 import { UserMemoryItemV8, UserMemoryTypeV8 } from '../types';
 
+const MEMORY_TABLE = 'memory';
+
 function toType(raw: unknown): UserMemoryTypeV8 {
   if (raw === 'preference' || raw === 'fact' || raw === 'goal' || raw === 'finance') return raw;
   return 'other';
@@ -16,7 +18,7 @@ export async function fetchRelevantUserMemory(params: {
   const queryTokens = params.query.toLowerCase().split(/\s+/).filter(Boolean);
 
   let base = supabase
-    .from('user_memory')
+    .from(MEMORY_TABLE)
     .select('id,user_id,content,type,importance,created_at,updated_at')
     .eq('user_id', params.userId)
     .order('importance', { ascending: false })
@@ -63,19 +65,33 @@ export async function upsertUserMemory(params: {
 
   const supabase = await createSupabaseClient();
   const { data: existing } = await supabase
-    .from('user_memory')
+    .from(MEMORY_TABLE)
     .select('id,importance')
     .eq('user_id', params.userId)
     .eq('content', normalizedContent)
     .maybeSingle();
 
   if (existing?.id) {
+    console.info('MEMORY_WRITE_START', {
+      table: MEMORY_TABLE,
+      mode: 'update',
+      userId: params.userId,
+      type: params.type,
+      importance: params.importance,
+    });
+
     const { error } = await supabase
-      .from('user_memory')
+      .from(MEMORY_TABLE)
       .update({ importance: Math.max(Number(existing.importance || 0), params.importance), updated_at: new Date().toISOString() })
       .eq('id', existing.id);
 
-    return error ? { ok: false, reason: error.message } : { ok: true, id: existing.id };
+    if (error) {
+      console.error('MEMORY_WRITE_ERROR', { table: MEMORY_TABLE, mode: 'update', userId: params.userId, reason: error.message });
+      return { ok: false, reason: error.message };
+    }
+
+    console.info('MEMORY_WRITE_SUCCESS', { table: MEMORY_TABLE, mode: 'update', userId: params.userId, id: existing.id });
+    return { ok: true, id: existing.id };
   }
 
   const payload = {
@@ -85,8 +101,21 @@ export async function upsertUserMemory(params: {
     importance: Number(params.importance.toFixed(2)),
   };
 
-  const { data, error } = await supabase.from('user_memory').insert(payload).select('id').maybeSingle();
-  if (error) return { ok: false, reason: error.message };
+  console.info('MEMORY_WRITE_START', {
+    table: MEMORY_TABLE,
+    mode: 'insert',
+    userId: params.userId,
+    type: params.type,
+    importance: payload.importance,
+  });
+
+  const { data, error } = await supabase.from(MEMORY_TABLE).insert(payload).select('id').maybeSingle();
+  if (error) {
+    console.error('MEMORY_WRITE_ERROR', { table: MEMORY_TABLE, mode: 'insert', userId: params.userId, reason: error.message });
+    return { ok: false, reason: error.message };
+  }
+
+  console.info('MEMORY_WRITE_SUCCESS', { table: MEMORY_TABLE, mode: 'insert', userId: params.userId, id: data?.id });
 
   return { ok: true, id: data?.id };
 }
