@@ -137,6 +137,8 @@ export function synthesizeResponseV8(input: SynthesisInputV8): AgentResponseV8 {
       intent: input.route.intent,
       subtype: input.route.subtype,
       mode: input.route.mode,
+      responseMode: input.route.responseMode,
+      goal: input.route.goal,
       plan: input.plan.summary,
       planModes: input.plan.planModes,
       steps: input.execution.steps,

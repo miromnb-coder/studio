@@ -1,8 +1,9 @@
-import { AgentContextV8, ExecutionResultV8, RouteResultV8 } from '../types';
+import { AgentContextV8, ExecutionPlanV8, ExecutionResultV8, RouteResultV8 } from '../types';
 
 export type FinanceAgentInput = {
   route: RouteResultV8;
   context: AgentContextV8;
+  plan: ExecutionPlanV8;
   execution: ExecutionResultV8;
 };
 
@@ -53,6 +54,14 @@ export async function runFinanceAgent(input: FinanceAgentInput): Promise<Finance
   const cashflowData = asRecord(input.execution.structuredData.cashflow_summary);
   const priceChangeData = asRecord(input.execution.structuredData.price_change_detector);
   const decisionContext = input.context.decisionContext;
+  const toneLead =
+    input.route.goal.emotionalTone === 'overwhelmed'
+      ? 'You are not behind — we will keep this simple and high-impact.'
+      : input.route.goal.emotionalTone === 'stressed'
+        ? 'Let’s reduce pressure with one immediate win first.'
+        : input.route.goal.emotionalTone === 'motivated'
+          ? 'Great momentum — let’s convert it into measurable savings.'
+          : '';
 
   const activeSubscriptionsRaw = profile.active_subscriptions;
   const activeSubscriptions = Array.isArray(activeSubscriptionsRaw)
@@ -167,16 +176,21 @@ export async function runFinanceAgent(input: FinanceAgentInput): Promise<Finance
     biggestOpportunity = `Known optimization in profile: ${formatMoney(estimatedSavings)}/month potential.`;
   }
 
-  const actionLines: string[] = [];
-  if (topRecSummary) actionLines.push(topRecSummary);
-  if (gmailSavingsOpportunities[0]) actionLines.push(`Review Gmail signal: ${gmailSavingsOpportunities[0]}`);
-  if (gmailTrialRisks[0]) actionLines.push(`Cancel or downgrade trial risk: ${gmailTrialRisks[0]}`);
-  if (compareOptionsData.recommendation) actionLines.push(`Preferred option: ${String(asRecord(compareOptionsData.recommendation).label || 'best-ranked option')}.`);
-  if (savingsPlanData.recommendedMonthlySavings) actionLines.push(`Auto-save ${formatMoney(Number(savingsPlanData.recommendedMonthlySavings))}/month based on current constraints.`);
-  if (Number(priceChangeData.suspiciousCount || 0) > 0) actionLines.push(`Investigate ${String(priceChangeData.suspiciousCount)} unusual price increases.`);
-  if (cancelDraftData.draft) actionLines.push('Cancellation draft is ready for immediate use.');
-  if (!actionLines.length && activeSubscriptions > 0) actionLines.push(`Review your top ${Math.min(activeSubscriptions, 3)} subscriptions for low-usage services.`);
-  if (!actionLines.length) actionLines.push('Sync Gmail or finance profile, then re-run savings audit.');
+  const actionCandidates: Array<{ text: string; impact: number; effort: number; risk: number }> = [];
+  if (topRecSummary) actionCandidates.push({ text: topRecSummary, impact: Math.max(topRecImpact, 30), effort: 2, risk: 1 });
+  if (gmailSavingsOpportunities[0]) actionCandidates.push({ text: `Review Gmail signal: ${gmailSavingsOpportunities[0]}`, impact: 40, effort: 2, risk: 1 });
+  if (gmailTrialRisks[0]) actionCandidates.push({ text: `Cancel or downgrade trial risk: ${gmailTrialRisks[0]}`, impact: 35, effort: 1, risk: 2 });
+  if (compareOptionsData.recommendation) actionCandidates.push({ text: `Preferred option: ${String(asRecord(compareOptionsData.recommendation).label || 'best-ranked option')}.`, impact: 30, effort: 2, risk: 1 });
+  if (savingsPlanData.recommendedMonthlySavings) actionCandidates.push({ text: `Auto-save ${formatMoney(Number(savingsPlanData.recommendedMonthlySavings))}/month based on current constraints.`, impact: Number(savingsPlanData.recommendedMonthlySavings), effort: 1, risk: 1 });
+  if (Number(priceChangeData.suspiciousCount || 0) > 0) actionCandidates.push({ text: `Investigate ${String(priceChangeData.suspiciousCount)} unusual price increases.`, impact: 25, effort: 2, risk: 3 });
+  if (cancelDraftData.draft) actionCandidates.push({ text: 'Cancellation draft is ready for immediate use.', impact: 20, effort: 1, risk: 1 });
+  if (!actionCandidates.length && activeSubscriptions > 0) actionCandidates.push({ text: `Review your top ${Math.min(activeSubscriptions, 3)} subscriptions for low-usage services.`, impact: 20, effort: 2, risk: 1 });
+  if (!actionCandidates.length) actionCandidates.push({ text: 'Sync Gmail or finance profile, then re-run savings audit.', impact: 15, effort: 1, risk: 1 });
+
+  const actionLines = actionCandidates
+    .sort((a, b) => (b.impact - b.effort - b.risk) - (a.impact - a.effort - a.risk))
+    .slice(0, 3)
+    .map((item) => item.text);
 
   const estimatedImpact = topRecImpact > 0
     ? `${formatMoney(topRecImpact)}/month (recommendation estimate)`
@@ -189,9 +203,11 @@ export async function runFinanceAgent(input: FinanceAgentInput): Promise<Finance
     ? `based on ${evidenceParts.join(', ')}`
     : 'grounded evidence was limited this turn';
 
-  const nextStep = gmailConnected
-    ? 'Tell me “run a focused subscription audit” and I will rank cut candidates with expected impact.'
-    : 'Connect Gmail for receipt/bill evidence, then ask me to run a savings audit.';
+  const nextStep = input.route.responseMode === 'operator'
+    ? 'Reply "execute action 1" and I will turn the top action into a ready-to-send checklist/message.'
+    : gmailConnected
+      ? 'Tell me “run a focused subscription audit” and I will rank cut candidates with expected impact.'
+      : 'Connect Gmail for receipt/bill evidence, then ask me to run a savings audit.';
 
   const personalizationHint = decisionContext.activeGoal
     ? `Goal in focus: ${decisionContext.activeGoal}.`
@@ -202,14 +218,17 @@ export async function runFinanceAgent(input: FinanceAgentInput): Promise<Finance
 
   responseParts.push(
     [
+      ...(toneLead ? [toneLead] : []),
       `Summary: ${summary.join(' ')}`,
       `Biggest Opportunity: ${biggestOpportunity}`,
       `Top Actions:`,
       ...actionLines.slice(0, 3).map((line) => `- ${line}`),
       `Estimated Monthly Impact: ${estimatedImpact}`,
       `Confidence: ${confidenceLevel} (${confidenceReason}).`,
+      `Assumptions: Estimates use recurring-cost patterns, recommendation signals, and available billing evidence.`,
       ...(pressureHint ? [pressureHint] : []),
       ...(personalizationHint ? [personalizationHint] : []),
+      ...(input.plan?.clarificationQuestion ? [`Question: ${input.plan.clarificationQuestion}`] : []),
       `Next Step: ${nextStep}`,
     ].join('\n'),
   );
