@@ -1,4 +1,4 @@
-import { AgentIntentV8, AgentModeV8, AgentMessageV8, RouteResultV8 } from './types';
+import { AgentIntentV8, AgentModeV8, AgentMessageV8, FinanceIntentSubtypeV8, RouteResultV8 } from './types';
 
 const FINANCE_TOKENS = [
   'budget', 'spend', 'expense', 'subscription', 'bill', 'savings', 'money', 'debt', 'income', 'payment',
@@ -96,11 +96,64 @@ function pickMode(intent: AgentIntentV8): AgentModeV8 {
   return 'general';
 }
 
+function detectFinanceSubtype(message: string): FinanceIntentSubtypeV8 {
+  const subtypePatterns: Array<{ subtype: FinanceIntentSubtypeV8; patterns: RegExp[] }> = [
+    {
+      subtype: 'subscriptions',
+      patterns: [
+        /\b(subscription|subscriptions|recurring charge|trial|cancel subscription|member(ship)?|tilaus|tilaukset|peruuta tilaus)\b/i,
+      ],
+    },
+    {
+      subtype: 'bills',
+      patterns: [
+        /\b(bill|bills|invoice|due date|utility bill|lasku|laskut|eräpäivä|erapaiva|maksamaton)\b/i,
+      ],
+    },
+    {
+      subtype: 'savings_audit',
+      patterns: [
+        /\b(save money|savings audit|reduce spending|cut costs|lower my expenses|sääst|saast|kulukarsinta|säästö)\b/i,
+      ],
+    },
+    {
+      subtype: 'compare_options',
+      patterns: [
+        /\b(compare|comparison|which is cheaper|best value|option a|option b|cheaper|vs\.?|halvempi|vertaa|kumpi on halvempi)\b/i,
+      ],
+    },
+    {
+      subtype: 'budgeting',
+      patterns: [
+        /\b(budget|budgeting|budget plan|spending plan|allocate|budjet|budjetti|kuukausibudjetti)\b/i,
+      ],
+    },
+    {
+      subtype: 'cashflow',
+      patterns: [
+        /\b(cash flow|cashflow|income vs expenses|runway|burn rate|kassavirta|tulot ja menot|saldo)\b/i,
+      ],
+    },
+    {
+      subtype: 'alerts_review',
+      patterns: [
+        /\b(alert|alerts|notification review|risk alert|anomaly|hälytys|halytys|varoitus|ilmoitus)\b/i,
+      ],
+    },
+  ];
+
+  for (const rule of subtypePatterns) {
+    if (rule.patterns.some((pattern) => pattern.test(message))) return rule.subtype;
+  }
+  return 'general_finance';
+}
+
 export function routeIntentV8(message: string, history: AgentMessageV8[] = []): RouteResultV8 {
   const normalizedMessage = message.trim().toLowerCase();
   if (!normalizedMessage) {
     return {
       intent: 'unknown',
+      subtype: 'none',
       mode: 'general',
       confidence: 0.35,
       reason: 'Empty input.',
@@ -131,6 +184,7 @@ export function routeIntentV8(message: string, history: AgentMessageV8[] = []): 
   const hasProductivityStem = hasAnyStem(['task', 'todo', 'schedule', 'calendar', 'plan', 'teht', 'kalenteri', 'suunnitel'], corpus);
 
   let intent: AgentIntentV8 = 'general';
+  let subtype: FinanceIntentSubtypeV8 = 'none';
   let reason = 'General chat is the default path.';
 
   if (explicitLanguageSwitch) {
@@ -141,12 +195,14 @@ export function routeIntentV8(message: string, history: AgentMessageV8[] = []): 
     reason = 'User explicitly asks to store or retrieve memory.';
   } else if ((explicitFinance || hasFinanceStem) && (explicitGmail || hasGmailStem)) {
     intent = 'finance';
+    subtype = detectFinanceSubtype(corpus);
     reason = 'Finance request that explicitly depends on email/Gmail context.';
   } else if ((explicitGmail || hasGmailStem) && !(explicitFinance || hasFinanceStem)) {
     intent = 'gmail';
     reason = 'Explicit email/Gmail request.';
   } else if (explicitFinance || financeScore >= 2 || hasFinanceStem) {
     intent = 'finance';
+    subtype = detectFinanceSubtype(corpus);
     reason = 'Clear money/subscription/expense intent.';
   } else if (explicitCoding || (codingScore >= 1 && hasCodingStem)) {
     intent = 'coding';
@@ -162,13 +218,15 @@ export function routeIntentV8(message: string, history: AgentMessageV8[] = []): 
   );
 
   const needsGmail = intent === 'gmail' || (intent === 'finance' && (explicitGmail || hasGmailStem));
+  const financeNeedsGmailBySubtype = subtype === 'subscriptions' || subtype === 'bills' || subtype === 'alerts_review';
 
   return {
     intent,
+    subtype,
     mode: pickMode(intent),
     confidence,
     reason,
-    needsGmail,
+    needsGmail: needsGmail || (intent === 'finance' && financeNeedsGmailBySubtype && explicitGmail),
     needsFinanceData: intent === 'finance',
     wantsRecommendations: wantsRecommendations || intent === 'finance',
   };
