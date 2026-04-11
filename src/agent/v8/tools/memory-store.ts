@@ -1,4 +1,4 @@
-import { createClient as createSupabaseClient } from '../../../lib/supabase/server';
+import type { SupabaseClient } from '@supabase/supabase-js';
 import { UserMemoryItemV8, UserMemoryTypeV8 } from '../types';
 
 const MEMORY_TABLE = 'memory';
@@ -9,12 +9,13 @@ function toType(raw: unknown): UserMemoryTypeV8 {
 }
 
 export async function fetchRelevantUserMemory(params: {
+  supabase: SupabaseClient;
   userId: string;
   query: string;
   limit: number;
   financeOnly?: boolean;
 }): Promise<UserMemoryItemV8[]> {
-  const supabase = await createSupabaseClient();
+  const { supabase } = params;
   const queryTokens = params.query.toLowerCase().split(/\s+/).filter(Boolean);
 
   let base = supabase
@@ -55,6 +56,7 @@ export async function fetchRelevantUserMemory(params: {
 }
 
 export async function upsertUserMemory(params: {
+  supabase: SupabaseClient;
   userId: string;
   content: string;
   type: UserMemoryTypeV8;
@@ -63,13 +65,27 @@ export async function upsertUserMemory(params: {
   const normalizedContent = params.content.trim();
   if (!normalizedContent) return { ok: false, reason: 'empty_content' };
 
-  const supabase = await createSupabaseClient();
-  const { data: existing } = await supabase
+  const { supabase } = params;
+  const { data: existing, error: existingError } = await supabase
     .from(MEMORY_TABLE)
     .select('id,importance')
     .eq('user_id', params.userId)
     .eq('content', normalizedContent)
     .maybeSingle();
+
+  if (existingError) {
+    console.error('MEMORY_WRITE_ERROR', {
+      table: MEMORY_TABLE,
+      mode: 'lookup',
+      userId: params.userId,
+      error: {
+        message: existingError.message,
+        code: existingError.code,
+        details: existingError.details,
+      },
+    });
+    return { ok: false, reason: existingError.message };
+  }
 
   if (existing?.id) {
     console.info('MEMORY_WRITE_START', {
@@ -86,7 +102,16 @@ export async function upsertUserMemory(params: {
       .eq('id', existing.id);
 
     if (error) {
-      console.error('MEMORY_WRITE_ERROR', { table: MEMORY_TABLE, mode: 'update', userId: params.userId, reason: error.message });
+      console.error('MEMORY_WRITE_ERROR', {
+        table: MEMORY_TABLE,
+        mode: 'update',
+        userId: params.userId,
+        error: {
+          message: error.message,
+          code: error.code,
+          details: error.details,
+        },
+      });
       return { ok: false, reason: error.message };
     }
 
@@ -111,7 +136,16 @@ export async function upsertUserMemory(params: {
 
   const { data, error } = await supabase.from(MEMORY_TABLE).insert(payload).select('id').maybeSingle();
   if (error) {
-    console.error('MEMORY_WRITE_ERROR', { table: MEMORY_TABLE, mode: 'insert', userId: params.userId, reason: error.message });
+    console.error('MEMORY_WRITE_ERROR', {
+      table: MEMORY_TABLE,
+      mode: 'insert',
+      userId: params.userId,
+      error: {
+        message: error.message,
+        code: error.code,
+        details: error.details,
+      },
+    });
     return { ok: false, reason: error.message };
   }
 

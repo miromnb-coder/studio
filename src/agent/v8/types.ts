@@ -1,6 +1,7 @@
 import { OperatorAlertRecord } from '@/lib/operator/alerts';
 import { OperatorRecommendation } from '@/lib/operator/recommendations';
 import { UserProfileIntelligence } from '@/lib/operator/personalization';
+import type { SupabaseClient } from '@supabase/supabase-js';
 
 export type AgentIntentV8 =
   | 'general'
@@ -171,6 +172,7 @@ export type AgentResponseV8 = {
 };
 
 export type AgentRunInputV8 = {
+  supabase: SupabaseClient;
   input: string;
   userId: string;
   history?: unknown[];

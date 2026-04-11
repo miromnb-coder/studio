@@ -14,6 +14,7 @@ export async function runAgentV8(input: AgentRunInputV8): Promise<AgentResponseV
   const route = routeIntentV8(input.input, (input.history || []) as any);
 
   const context = await buildContextV8({
+    supabase: input.supabase,
     userId: input.userId,
     message: input.input,
     history: input.history,
@@ -49,6 +50,7 @@ export async function runAgentV8(input: AgentRunInputV8): Promise<AgentResponseV
   });
 
   await runMemoryAgent({
+    supabase: input.supabase,
     userId: input.userId,
     userMessage: input.input,
     assistantReply: critic.refinedReply,
