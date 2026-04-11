@@ -38,12 +38,13 @@ export function ConversationSwitcherSheet({
       />
 
       <motion.aside
-        initial={{ x: '-102%' }}
-        animate={{ x: 0 }}
-        exit={{ x: '-102%' }}
-        transition={{ type: 'spring', damping: 28, stiffness: 280 }}
-        className="fixed inset-y-0 left-0 z-50 flex w-[88vw] max-w-sm flex-col border-r border-white/10 bg-[#0f1014]/96 p-3 shadow-[0_18px_42px_rgba(0,0,0,0.35)] backdrop-blur-xl"
+        initial={{ y: '-104%', opacity: 0.7 }}
+        animate={{ y: 0, opacity: 1 }}
+        exit={{ y: '-104%', opacity: 0.7 }}
+        transition={{ type: 'spring', damping: 32, stiffness: 300 }}
+        className="fixed inset-x-0 top-0 z-50 mx-auto flex max-h-[82vh] w-full max-w-xl flex-col rounded-b-[26px] border-b border-white/10 bg-[#0f1014]/96 px-3 pb-3 pt-2.5 shadow-[0_22px_40px_rgba(0,0,0,0.42)] backdrop-blur-xl"
       >
+        <div className="mx-auto mb-2 h-1 w-10 rounded-full bg-white/20" />
         <div className="mb-3 flex items-center justify-between">
           <div className="inline-flex items-center gap-2 text-sm font-medium text-zinc-100">
             <MessageSquare className="h-4 w-4" /> Conversations

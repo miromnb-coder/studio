@@ -80,6 +80,10 @@ export default function ChatPage() {
   const activeAssistantMessage = [...messages].reverse().find((m) => m.role === 'assistant');
   const showThinkingSurface = isAgentResponding;
   const empty = useMemo(() => messages.length === 0, [messages]);
+  const activeConversation = useMemo(
+    () => conversationList.find((conversation) => conversation.id === activeConversationId) ?? null,
+    [conversationList, activeConversationId],
+  );
 
   const derivedExecutionSteps = useMemo<ExecutionStep[]>(() => {
     if (activeAssistantMessage?.agentMetadata?.steps?.length) {
@@ -341,10 +345,12 @@ export default function ChatPage() {
           <button
             type="button"
             onClick={() => setOpenPanel((prev) => (prev === 'conversations' ? null : 'conversations'))}
-            className="inline-flex h-9 w-9 items-center justify-center rounded-full border border-white/10 bg-white/[0.04] text-zinc-300 transition-all duration-200 hover:-translate-y-[1px] hover:bg-white/[0.08]"
+            className="inline-flex min-w-0 max-w-[56vw] items-center gap-2 rounded-full border border-white/10 bg-white/[0.04] px-3 py-1.5 text-zinc-300 transition-all duration-200 hover:-translate-y-[1px] hover:bg-white/[0.08]"
             aria-label="Open conversations"
           >
-            <MoreHorizontal className="h-4 w-4" />
+            <span className="truncate text-xs font-medium text-zinc-200">{activeConversation?.title || 'Conversations'}</span>
+            <span className="rounded-full border border-white/10 bg-white/[0.04] px-1.5 py-0.5 text-[10px] text-zinc-400">{conversationList.length}</span>
+            <MoreHorizontal className="h-4 w-4 shrink-0" />
           </button>
         </div>
 
