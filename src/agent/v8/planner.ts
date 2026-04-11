@@ -158,6 +158,7 @@ export function createPlanV8(route: RouteResultV8, message: string): ExecutionPl
     route.goal.urgency === 'high',
     route.goal.hiddenOpportunities.length >= 2,
     route.responseMode === 'operator',
+    route.responseMode === 'coach',
   ].filter(Boolean).length;
 
   const depth: ExecutionPlanV8['depth'] =
@@ -216,7 +217,12 @@ export function createPlanV8(route: RouteResultV8, message: string): ExecutionPl
       ),
     );
 
-    if (route.needsGmail) {
+    const financeOnlyButNoNeedForEmail =
+      route.intent === 'finance'
+      && !/\b(email|gmail|inbox|mail|receipt|invoice)\b/i.test(message)
+      && (route.subtype === 'compare_options' || route.subtype === 'budgeting' || route.subtype === 'cashflow');
+
+    if (route.needsGmail && !financeOnlyButNoNeedForEmail) {
       steps.push(
         buildStep(
           nextStep(),
@@ -302,6 +308,26 @@ export function createPlanV8(route: RouteResultV8, message: string): ExecutionPl
       );
     }
 
+    const addedRoadmapStep =
+      route.subtype === 'savings_audit' || route.subtype === 'cashflow' || route.subtype === 'general_finance';
+    if (addedRoadmapStep) {
+      steps.push(
+        buildStep(
+          nextStep(),
+          'Build ranked 30-day roadmap',
+          'generate_recommendations',
+          'Create a staged plan with immediate wins, weekly actions, and risk controls.',
+          {
+            limit: 6,
+            includeRoadmap: true,
+            horizonDays: 30,
+            responseMode: route.responseMode,
+          },
+          false,
+        ),
+      );
+    }
+
     if (route.subtype === 'cashflow' || route.subtype === 'budgeting' || route.subtype === 'bills') {
       steps.push(
         buildStep(
@@ -333,7 +359,7 @@ export function createPlanV8(route: RouteResultV8, message: string): ExecutionPl
       );
     }
 
-    if (route.wantsRecommendations || planModes.includes('recommend') || planModes.includes('monitor')) {
+    if ((route.wantsRecommendations || planModes.includes('recommend') || planModes.includes('monitor')) && !addedRoadmapStep) {
       steps.push(
         buildStep(
           nextStep(),

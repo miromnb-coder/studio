@@ -85,6 +85,12 @@ const CLARIFICATION_PATTERNS = [
   /\b(can you check|voiko tarkistaa|voitko tarkistaa)\b/i,
 ];
 
+const HIDDEN_FINANCE_INTENT_PATTERNS = [
+  /\b(i need more money|more money left|too little left|living paycheck to paycheck)\b/i,
+  /\b(can't keep up|cannot keep up|always broke|my money disappears)\b/i,
+  /\b(netflix\s*\d+.*(vs|versus).*\d+)\b/i,
+];
+
 function countTokenMatches(tokens: string[], text: string): number {
   return tokens.reduce((sum, token) => (text.includes(token) ? sum + 1 : sum), 0);
 }
@@ -132,6 +138,8 @@ function detectResponseMode(message: string, intent: AgentIntentV8): ResponseMod
   ) {
     return 'operator';
   }
+
+  if (intent === 'finance' && /\b(overwhelmed|stressed|confused|too much)\b/i.test(message)) return 'coach';
 
   if (
     intent === 'coding'
@@ -357,6 +365,7 @@ export function routeIntentV8(message: string, history: AgentMessageV8[] = []): 
   scores.memory += countTokenMatches(MEMORY_TOKENS, corpus);
 
   if (hasAnyPattern(EXPLICIT_FINANCE_PATTERNS, normalizedMessage)) scores.finance += 4;
+  if (hasAnyPattern(HIDDEN_FINANCE_INTENT_PATTERNS, normalizedMessage)) scores.finance += 5;
   if (hasAnyPattern(EXPLICIT_GMAIL_PATTERNS, normalizedMessage)) scores.gmail += 4;
   if (hasAnyPattern(EXPLICIT_CODING_PATTERNS, normalizedMessage)) scores.coding += 4;
   if (hasAnyPattern(EXPLICIT_MEMORY_PATTERNS, normalizedMessage)) scores.memory += 4;
@@ -388,6 +397,9 @@ export function routeIntentV8(message: string, history: AgentMessageV8[] = []): 
 
   if (scores.finance > 0 && scores.gmail > 0) {
     scores.finance += 2;
+  }
+  if (shortFollowUp && /\b(this|that|same|other one|cheaper one|kumpi|entä)\b/i.test(normalizedMessage) && historyIntent === 'finance') {
+    scores.finance += 3;
   }
 
   let intent: AgentIntentV8 = 'general';

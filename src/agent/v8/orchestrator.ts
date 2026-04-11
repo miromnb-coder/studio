@@ -59,7 +59,14 @@ export async function runAgentV8(input: AgentRunInputV8): Promise<AgentResponseV
   const plan = createPlanV8(route, input.input);
 
   state = 'executing';
-  const execution = await executePlanV8(plan, context);
+  const execution = await executePlanV8(plan, context).catch((error) => {
+    console.error('PLAN_EXECUTION_FAILURE', {
+      intent: route.intent,
+      subtype: route.subtype,
+      error: error instanceof Error ? error.message : 'Unknown execution failure',
+    });
+    return { steps: [], structuredData: {} };
+  });
 
   let draftReply = '';
 
@@ -103,11 +110,20 @@ export async function runAgentV8(input: AgentRunInputV8): Promise<AgentResponseV
           clarificationQuestion: plan.clarificationQuestion,
         });
 
+  const safeReply =
+    route.intent === 'finance' && finalReply.split(/\s+/).length < 18
+      ? buildSafeFallbackReply({
+          userMessage: input.input,
+          intent: route.intent,
+          clarificationQuestion: plan.clarificationQuestion,
+        })
+      : finalReply;
+
   await runMemoryAgent({
     supabase: input.supabase,
     userId: input.userId,
     userMessage: input.input,
-    assistantReply: finalReply,
+    assistantReply: safeReply,
     context,
     intent: route.intent,
   }).catch((error) => {
@@ -126,7 +142,7 @@ export async function runAgentV8(input: AgentRunInputV8): Promise<AgentResponseV
     execution,
     context,
     verificationPassed: critic.passed,
-    refinedReply: finalReply,
+    refinedReply: safeReply,
     critic,
   });
 

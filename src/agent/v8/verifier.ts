@@ -6,11 +6,18 @@ const GENERIC_PATTERNS = [
   /let me know if you need anything else/i,
   /prepared response/i,
   /i understood your request/i,
-  /operator/i,
-  /^sure[,!]\s*/i,
-  /^absolutely[,!]\s*/i,
+  /^sure[,!]?\s*/i,
+  /^absolutely[,!]?\s*/i,
   /^great question[.!]?\s*/i,
 ];
+
+function clamp(value: number, min = 0, max = 100): number {
+  return Math.max(min, Math.min(max, value));
+}
+
+function scoreDimension(test: boolean, weight: number): number {
+  return test ? weight : 0;
+}
 
 function removeRepeatedSentences(text: string): string {
   const parts = text
@@ -20,97 +27,112 @@ function removeRepeatedSentences(text: string): string {
 
   const seen = new Set<string>();
   const unique: string[] = [];
+
   for (const part of parts) {
     const key = part.toLowerCase();
     if (seen.has(key)) continue;
     seen.add(key);
     unique.push(part);
   }
+
   return unique.join(' ').trim();
 }
 
-function scoreDimension(condition: boolean, weight: number): number {
-  return condition ? weight : 0;
+function enforceStructure(reply: string): string {
+  let refined = reply;
+  if (!/summary:/i.test(refined)) {
+    refined = `Summary: ${refined}`;
+  }
+  if (!/ranked actions:|top actions:/i.test(refined)) {
+    refined = `${refined}\n\nRanked Actions:\n- 1. Execute the highest-impact cost or risk action now.\n- 2. Complete one fast win in under 15 minutes.`;
+  }
+  if (!/next step:/i.test(refined)) {
+    refined = `${refined}\nNext Step: Confirm action 1 and I will convert it into a checklist.`;
+  }
+  if (!/confidence:/i.test(refined)) {
+    refined = `${refined}\nConfidence: Medium (grounded in available data, but precision improves with one concrete number).`;
+  }
+  if (!/assumptions:/i.test(refined)) {
+    refined = `${refined}\nAssumptions: Baseline amounts and billing windows may be incomplete.`;
+  }
+  return refined;
 }
 
-function ensureNextStep(reply: string): string {
-  if (/next step:/i.test(reply)) return reply;
-  return `${reply}\n\nNext Step: Share one concrete expense or say "widen search to 90 days" so I can produce a targeted plan.`.trim();
-}
-
-function ensureConfidence(reply: string): string {
-  if (/confidence:/i.test(reply)) return reply;
-  return `${reply}\nConfidence: Medium (estimated from available context; share one key number to improve precision).`;
-}
-
-function normalizeConfidenceLanguage(reply: string, notes: string[]): string {
-  const hasOverclaim = /guaranteed|definitely|certainly|100%|always/i.test(reply);
-  if (!hasOverclaim) return reply;
-  notes.push('Reduced certainty to keep confidence honest and assumption-aware.');
+function softenOverconfidence(reply: string, notes: string[]): string {
+  if (!/guaranteed|definitely|certainly|100%|always/gi.test(reply)) return reply;
+  notes.push('Softened unsupported certainty claims.');
   return reply.replace(/guaranteed|definitely|certainly|100%|always/gi, 'likely');
+}
+
+function composeFallback(question?: string): string {
+  return [
+    'Summary: I do not have enough validated data for a precise answer yet.',
+    'Ranked Actions:',
+    '- 1. Share one monthly bill, recurring charge, or savings target.',
+    '- 2. If Gmail is connected, run a 90-day receipt scan with invoice/payment/renewal keywords.',
+    `Question: ${question || 'Which single expense should we optimize first?'}`,
+    'Confidence: Low (missing numeric anchor).',
+    'Assumptions: Current data is partial and may miss key transactions.',
+    'Next Step: Send one concrete number and I will build a prioritized plan.',
+  ].join('\n');
 }
 
 export function verifyExecutionV8(input: AgentCriticInputV8): CriticResultV8 {
   const notes: string[] = [];
-  let refinedReply = input.reply.trim();
+  let refinedReply = String(input.reply || '').trim();
 
   for (const pattern of GENERIC_PATTERNS) {
     if (pattern.test(refinedReply)) {
       refinedReply = refinedReply.replace(pattern, '').replace(/\s{2,}/g, ' ').trim();
-      notes.push('Removed generic assistant phrasing.');
+      notes.push('Removed generic phrasing.');
     }
   }
 
   refinedReply = removeRepeatedSentences(refinedReply);
-  refinedReply = normalizeConfidenceLanguage(refinedReply, notes);
-  refinedReply = ensureConfidence(refinedReply);
+  refinedReply = softenOverconfidence(refinedReply, notes);
+  refinedReply = enforceStructure(refinedReply);
 
-  const hasToolEvidence = input.usedTools.length > 0 || Object.keys(input.structuredData || {}).length > 0;
   const hasNumbers = /\$?\d+[\d,.]*/.test(refinedReply);
-  const hasActions = /top actions:|\n- |should|cancel|review|reduce|switch|next step:/i.test(refinedReply);
-  const hasClarityStructure = /summary:|confidence:|next step:/i.test(refinedReply);
-  const hasAssumptionsOrConfidence = /confidence:|assumption|estimate|based on/i.test(refinedReply);
+  const hasPersonalization = /goal|you|your|memory|profile|pressure|preference/i.test(refinedReply);
+  const hasPrioritization = /ranked actions:|top priority:|fastest win:|biggest risk:/i.test(refinedReply);
+  const hasActionability = /-\s*1\.|checklist|reply\s+"|execute|cancel|switch|downgrade/i.test(refinedReply);
+  const hasHonesty = /confidence:|assumptions:|missing|unknown|estimate/i.test(refinedReply);
+  const hasClarity = /summary:|next step:/i.test(refinedReply);
+  const hasToolGrounding = input.usedTools.length > 0 || Object.keys(input.structuredData || {}).length > 0;
+  const conciseEnough = refinedReply.split(/\s+/).length <= 280;
+  const relevant = input.intent === 'finance'
+    ? /savings|spend|bill|subscription|cash|risk|monthly/i.test(refinedReply)
+    : true;
 
-  if (!hasActions) {
-    refinedReply = `${refinedReply}\n\nBest Investigation Steps:\n- Share one monthly expense so I can build a grounded savings plan.\n- If Gmail is connected, widen search to 90 days including receipt keywords.`.trim();
-    notes.push('Added context-safe investigation steps instead of generic actions.');
-  }
+  const score = clamp(
+    scoreDimension(relevant, 14)
+    + scoreDimension(hasActionability, 14)
+    + scoreDimension(hasPrioritization, 14)
+    + scoreDimension(hasPersonalization, 12)
+    + scoreDimension(hasHonesty, 12)
+    + scoreDimension(hasClarity, 12)
+    + scoreDimension(hasNumbers || !hasToolGrounding, 11)
+    + scoreDimension(conciseEnough, 11),
+  );
 
-  refinedReply = ensureNextStep(refinedReply);
-  if (input.plan.clarificationQuestion && !/question:|\?/.test(refinedReply.toLowerCase())) {
-    refinedReply = `${refinedReply}\nQuestion: ${input.plan.clarificationQuestion}`;
-    notes.push('Added one high-value clarification question due to missing numeric anchor.');
-  }
-
-  if (!refinedReply) {
-    refinedReply = 'I need one concrete detail to give a precise answer. Next Step: Share one transaction, one bill, or one target amount.';
-    notes.push('Inserted fallback because draft reply was empty.');
-  }
-
-  if (input.intent !== 'gmail' && input.usedTools.includes('gmail_fetch')) {
-    notes.push('Gmail tool executed outside explicit Gmail intent.');
-  }
-
-  const usefulness = scoreDimension(refinedReply.split(/\s+/).length >= 18, 15);
-  const actionability = scoreDimension(hasActions, 15);
-  const confidenceHonesty = scoreDimension(hasAssumptionsOrConfidence, 14);
-  const logicalConsistency = scoreDimension(!/but\s+not\s+enough\s+data/i.test(refinedReply) || hasToolEvidence, 12);
-  const numericalConsistency = scoreDimension(!hasToolEvidence || hasNumbers, 12);
-  const prioritizationQuality = scoreDimension(/biggest opportunity|top actions|priority/i.test(refinedReply), 12);
-  const clarity = scoreDimension(hasClarityStructure, 10);
-  const groundedness = scoreDimension(hasToolEvidence || /insufficient grounded/i.test(refinedReply), 10);
-
-  const criticScore = usefulness + actionability + confidenceHonesty + logicalConsistency + numericalConsistency + prioritizationQuality + clarity + groundedness;
-  const needsRewrite = criticScore < 70 || notes.some((note) => note.includes('outside explicit Gmail intent'));
-  const passed = !needsRewrite;
+  const needsRewrite = score < 82;
 
   if (needsRewrite) {
-    notes.push('Reply required tightening due to quality threshold miss (<70).');
+    notes.push(`Quality threshold miss (${score}/100). Applied strict rewrite fallback.`);
+    refinedReply = composeFallback(input.plan.clarificationQuestion);
+  } else if (input.plan.clarificationQuestion && !/question:/i.test(refinedReply)) {
+    refinedReply = `${refinedReply}\nQuestion: ${input.plan.clarificationQuestion}`;
+    notes.push('Added high-value clarification question.');
+  }
+
+  if (!refinedReply.trim()) {
+    refinedReply = composeFallback(input.plan.clarificationQuestion);
+    notes.push('Inserted empty-reply fallback.');
   }
 
   return {
-    criticScore,
-    passed,
+    criticScore: score,
+    passed: !needsRewrite,
     needsRewrite,
     qualityNotes: notes,
     refinedReply,

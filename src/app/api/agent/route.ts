@@ -468,6 +468,8 @@ export async function POST(req: Request) {
           : [],
         structuredData: {
           ...(agentResult.metadata?.structuredData || {}),
+          ...(agentResult.metadata?.goal ? { goal_understanding: agentResult.metadata.goal } : {}),
+          ...(agentResult.metadata?.responseMode ? { response_mode: agentResult.metadata.responseMode } : {}),
           ...(shouldAttachFinance ? { finance: normalizedFinance } : {}),
           ...(operatorAlertsStructured.length ? { operator_alerts: operatorAlertsStructured } : {}),
         },

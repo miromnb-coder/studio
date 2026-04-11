@@ -84,6 +84,7 @@ function existingLanguageFallback(input: string, hasLatinText: boolean): string 
 
 function inferVerbosityPreference(input: string): VerbosityPreference {
   const text = input.toLowerCase();
+  if (/\b(overwhelmed|stressed|simple|just steps|one step at a time)\b/.test(text)) return 'short';
   if (/\b(short|brief|concise|tldr|quick)\b/.test(text)) return 'short';
   if (/\b(detailed|deep|thorough|step-by-step|comprehensive)\b/.test(text)) return 'detailed';
   return 'medium';
@@ -93,6 +94,7 @@ function inferDecisionStyle(input: string): DecisionStyle {
   const text = input.toLowerCase();
   if (/\b(maximum|aggressive|optimi[sz]e hard|high growth|move fast|highest return)\b/.test(text)) return 'aggressive';
   if (/\b(safe|stable|minimi[sz]e risk|careful|conservative)\b/.test(text)) return 'conservative';
+  if (/\b(overwhelmed|busy|no time|simple)\b/.test(text)) return 'balanced';
   return 'balanced';
 }
 
@@ -110,6 +112,7 @@ function inferSavingsFocus(input: string): FocusLevel {
   const score = [
     /\b(save money|cut costs|reduce spend|lower bill|cancel subscription)\b/.test(text) ? 0.5 : 0,
     /\b(biggest savings|as much as possible|optimi[sz]e spending)\b/.test(text) ? 0.3 : 0,
+    /\b(need more money monthly|more money left each month|paycheck to paycheck)\b/.test(text) ? 0.35 : 0,
     /\b(just curious|general question|not about savings)\b/.test(text) ? -0.3 : 0,
   ].reduce((sum, value) => sum + value, 0.3);
 
