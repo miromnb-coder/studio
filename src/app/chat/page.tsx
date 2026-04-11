@@ -286,23 +286,23 @@ export default function ChatPage() {
 
   return (
     <AppShell className="pb-60">
-      <header className="sticky top-0 z-20 mb-4 rounded-[24px] border border-white/12 bg-[#0b0c0f]/78 px-3.5 py-3 backdrop-blur-2xl">
+      <header className="sticky top-0 z-20 mb-5 rounded-[22px] border border-white/8 bg-[#0b0c0f]/68 px-4 py-3.5 shadow-[0_14px_34px_rgba(0,0,0,0.35)] backdrop-blur-2xl">
         <div className="flex items-center justify-between gap-3">
           <div className="min-w-0">
             <div className="flex items-center gap-2">
-              <h1 className="text-[17px] font-semibold tracking-[-0.02em] text-zinc-100">Kivo</h1>
+              <h1 className="text-[18px] font-semibold tracking-[-0.024em] text-zinc-100">Kivo</h1>
               <span className="inline-flex items-center gap-1.5 rounded-full border border-white/10 bg-white/[0.04] px-2 py-0.5 text-[10px] font-medium text-zinc-300">
                 <span className={`h-1.5 w-1.5 rounded-full ${isAgentResponding ? 'animate-pulse bg-zinc-200' : 'bg-zinc-500'}`} />
                 {isAgentResponding ? 'Working' : 'Ready'}
               </span>
             </div>
-            <p className="mt-0.5 truncate text-[11px] text-zinc-500">{formatUsageLine(usage.current, usage.limit, usage.unlimited)}</p>
+            <p className="mt-1 truncate text-[11px] tracking-[0.01em] text-zinc-500">{formatUsageLine(usage.current, usage.limit, usage.unlimited)}</p>
           </div>
 
           <button
             type="button"
             onClick={() => setOpenPanel((prev) => (prev === 'conversations' ? null : 'conversations'))}
-            className="inline-flex h-9 w-9 items-center justify-center rounded-full border border-white/12 bg-white/[0.05] text-zinc-300"
+            className="inline-flex h-9 w-9 items-center justify-center rounded-full border border-white/10 bg-white/[0.04] text-zinc-300 transition-all duration-200 hover:-translate-y-[1px] hover:bg-white/[0.08]"
             aria-label="Open conversations"
           >
             <MoreHorizontal className="h-4 w-4" />
@@ -339,13 +339,13 @@ export default function ChatPage() {
                 exit={{ opacity: 0, y: -10 }}
                 className="flex min-h-[62vh] flex-col items-center justify-center px-8 text-center"
               >
-                <h2 className="text-[33px] font-semibold tracking-[-0.03em] text-zinc-100">How can Kivo help today?</h2>
-                <p className="mt-2 text-sm text-zinc-500">Start with a question or a task. Kivo will handle the next steps.</p>
+                <h2 className="text-[34px] font-semibold leading-[1.08] tracking-[-0.036em] text-zinc-100">How can Kivo help today?</h2>
+                <p className="mt-3 max-w-[26ch] text-sm leading-6 text-zinc-500">Start with a question or a task. Kivo will handle the next steps.</p>
               </motion.div>
             ) : null}
           </AnimatePresence>
 
-          <div className="space-y-7 px-1 pb-2">
+          <div className="space-y-8 px-1 pb-2">
             {messages
               .filter((message) => !(message.role === 'assistant' && message.isStreaming && isAgentResponding))
               .map((message) => (
@@ -357,7 +357,7 @@ export default function ChatPage() {
                   className={`max-w-[98%] ${message.role === 'user' ? 'ml-auto' : ''}`}
                 >
                   {message.role === 'user' ? (
-                    <div className="ml-auto max-w-[86%] rounded-[22px] border border-white/14 bg-white/[0.1] px-4 py-3 text-[15px] leading-7 tracking-[-0.01em] text-zinc-100 shadow-[0_18px_34px_rgba(0,0,0,0.36)]">
+                    <div className="ml-auto max-w-[86%] rounded-[21px] border border-white/10 bg-[linear-gradient(150deg,rgba(255,255,255,0.14),rgba(255,255,255,0.08))] px-4 py-3 text-[15px] leading-7 tracking-[-0.01em] text-zinc-100 shadow-[0_14px_28px_rgba(0,0,0,0.3)]">
                       {message.content}
                     </div>
                   ) : (
