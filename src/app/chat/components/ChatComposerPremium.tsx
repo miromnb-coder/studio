@@ -85,7 +85,7 @@ export function ChatComposerPremium(props: ChatComposerPremiumProps) {
             initial={{ opacity: 0, y: 10 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: 6 }}
-            className="mb-2 rounded-[18px] border border-white/10 bg-[#0f1014]/90 p-1.5 shadow-[0_22px_46px_rgba(0,0,0,0.52)] backdrop-blur-3xl"
+            className="mb-2 rounded-[18px] border border-white/6 bg-[#0f1014]/90 p-1.5 shadow-[0_24px_52px_rgba(0,0,0,0.58)] backdrop-blur-3xl"
           >
             <button
               type="button"
