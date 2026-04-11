@@ -249,7 +249,7 @@ body {
   }
 }
 
-.living-ai-face {
+.living-ai-signal {
   position: relative;
   display: grid;
   place-items: center;
@@ -257,79 +257,35 @@ body {
   height: 106px;
 }
 
-.living-ai-face-compact {
+.living-ai-signal-compact {
   width: 30px;
   height: 30px;
 }
 
-.living-ai-face-glow {
+.living-ai-signal-ring {
   position: absolute;
-  inset: -11px;
+  inset: 2px;
   border-radius: 999px;
-  background: radial-gradient(circle at 50% 50%, rgba(110, 115, 140, 0.28), rgba(99, 99, 110, 0.12) 55%, rgba(255, 255, 255, 0.08) 72%);
-  filter: blur(1.5px);
+  border: 1px solid rgba(212, 212, 216, 0.38);
+  box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.04), 0 0 16px rgba(212, 212, 216, 0.18);
 }
 
-.living-ai-face-shell {
+.living-ai-signal-dot {
   position: relative;
-  width: 100%;
-  height: 100%;
+  width: 36%;
+  height: 36%;
   border-radius: 999px;
-  border: 1px solid rgba(225, 225, 232, 0.78);
-  background: linear-gradient(152deg, rgba(255, 255, 255, 0.95) 5%, rgba(232, 232, 238, 0.94) 56%, rgba(205, 205, 214, 0.96) 100%);
-  box-shadow: 0 18px 38px rgba(30, 31, 39, 0.28), inset 0 1px 0 rgba(255, 255, 255, 0.86);
+  background: radial-gradient(circle at 30% 30%, rgba(255, 255, 255, 0.95), rgba(228, 228, 231, 0.82) 40%, rgba(113, 113, 122, 0.7) 100%);
+  box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.14), 0 0 14px rgba(161, 161, 170, 0.4);
 }
 
-.living-ai-face-shell::after {
-  content: '';
-  position: absolute;
-  inset: 12px;
-  border-radius: inherit;
-  background: radial-gradient(circle at 30% 24%, rgba(255, 255, 255, 0.95), rgba(255, 255, 255, 0.26));
-  opacity: 0.75;
+.living-ai-signal-compact .living-ai-signal-ring {
+  inset: 1px;
 }
 
-.living-ai-eyes {
-  position: absolute;
-  top: 39%;
-  left: 50%;
-  transform: translateX(-50%);
-  display: flex;
-  align-items: center;
-  gap: 15px;
-  z-index: 1;
-}
-
-.living-ai-eye {
-  width: 9px;
-  height: 9px;
-  border-radius: 999px;
-  background: linear-gradient(160deg, #1f2937, #374151 60%, #111827);
-  box-shadow: 0 0 0 4px rgba(44, 49, 62, 0.16);
-}
-
-.living-ai-face-compact .living-ai-face-glow {
-  inset: -3px;
-  filter: blur(0);
-}
-
-.living-ai-face-compact .living-ai-face-shell {
-  box-shadow: 0 6px 14px rgba(34, 36, 45, 0.2), inset 0 1px 0 rgba(255, 255, 255, 0.7);
-}
-
-.living-ai-face-compact .living-ai-face-shell::after {
-  inset: 4px;
-}
-
-.living-ai-face-compact .living-ai-eyes {
-  top: 41%;
-  gap: 4px;
-}
-
-.living-ai-face-compact .living-ai-eye {
-  width: 3px;
-  height: 3px;
-  box-shadow: 0 0 0 2px rgba(30, 31, 38, 0.16);
+.living-ai-signal-compact .living-ai-signal-dot {
+  width: 34%;
+  height: 34%;
 }
 
 .ai-orb {
