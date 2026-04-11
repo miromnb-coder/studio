@@ -52,7 +52,7 @@ export function ChatComposerPremium(props: ChatComposerPremiumProps) {
   } = props;
 
   return (
-    <div ref={composerRef} className="fixed bottom-[calc(78px+env(safe-area-inset-bottom))] left-1/2 z-30 w-full max-w-md -translate-x-1/2 px-4 pb-2">
+    <div ref={composerRef} className="fixed bottom-[calc(76px+env(safe-area-inset-bottom))] left-1/2 z-30 w-full max-w-md -translate-x-1/2 px-4 pb-3">
       <AnimatePresence>
         {notice ? (
           <motion.p
@@ -72,7 +72,7 @@ export function ChatComposerPremium(props: ChatComposerPremiumProps) {
             initial={{ opacity: 0, y: 10 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: 6 }}
-            className="mb-2 rounded-[20px] border border-white/12 bg-[#111216]/94 p-1.5 shadow-[0_24px_42px_rgba(0,0,0,0.52)] backdrop-blur-2xl"
+            className="mb-2 rounded-[18px] border border-white/10 bg-[#0f1014]/90 p-1.5 shadow-[0_22px_46px_rgba(0,0,0,0.52)] backdrop-blur-3xl"
           >
             <button type="button" onClick={onAttachFile} className="composer-menu-btn"><Paperclip className="h-4 w-4" /> Attach file</button>
             <button type="button" onClick={onAddImagePrompt} className="composer-menu-btn"><ImagePlus className="h-4 w-4" /> Use image context</button>
@@ -82,8 +82,8 @@ export function ChatComposerPremium(props: ChatComposerPremiumProps) {
         ) : null}
       </AnimatePresence>
 
-      <div className="rounded-[30px] border border-white/12 bg-[#0b0c0e]/92 p-2 shadow-[0_20px_60px_rgba(0,0,0,0.62)] backdrop-blur-2xl">
-        <div className="rounded-[24px] border border-white/12 bg-black/35 px-3 py-2">
+      <div className="chat-composer-shell rounded-[28px] px-3 py-2.5">
+        <div className="flex items-end gap-2.5 px-1">
           <input
             ref={fileInputRef}
             type="file"
@@ -108,24 +108,24 @@ export function ChatComposerPremium(props: ChatComposerPremiumProps) {
             }}
             rows={1}
             placeholder={userPresent ? 'Ask anything, assign a task, or draft an action…' : 'Sign in to start chatting'}
-            className="system-input max-h-[128px] min-h-[42px] w-full resize-none border-none bg-transparent px-1 py-1.5 text-[15px] leading-6 tracking-[-0.01em]"
+            className="chat-composer-input max-h-[128px] min-h-[44px] w-full resize-none border-none bg-transparent py-1.5 text-[15px] leading-6 tracking-[-0.01em]"
           />
+          <button
+            type="button"
+            onClick={onSend}
+            className="composer-send-btn h-10 w-10 shrink-0 disabled:opacity-45"
+            disabled={!draft.trim() || isAgentResponding || isLimitReached}
+            aria-label="Send message"
+          >
+            <ArrowUp className="h-4 w-4" />
+          </button>
+        </div>
 
-          <div className="mt-1.5 flex items-center justify-between">
+          <div className="mt-2 flex items-center justify-between">
             <div className="flex items-center gap-1">
               <button type="button" className="composer-icon-btn" aria-label="Open add menu" onClick={() => onTogglePanel('add')}><Plus className="h-4 w-4" /></button>
               <button type="button" className={`composer-icon-btn ${!voiceSupported ? 'opacity-35' : ''}`} aria-label="Start speech to text" onClick={onSpeechToText} disabled={!voiceSupported}><Mic className="h-4 w-4" /></button>
             </div>
-
-            <button
-              type="button"
-              onClick={onSend}
-              className="composer-send-btn h-10 w-10 disabled:opacity-45"
-              disabled={!draft.trim() || isAgentResponding || isLimitReached}
-              aria-label="Send message"
-            >
-              <ArrowUp className="h-4 w-4" />
-            </button>
           </div>
         </div>
       </div>
