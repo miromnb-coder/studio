@@ -33,6 +33,19 @@ export function createPlanV8(route: RouteResultV8, message: string): ExecutionPl
   };
 
   const planModes = mapSubtypeToModes();
+  const complexitySignals = [
+    message.split(/\s+/).length > 22,
+    /\b(compare|tradeoff|roadmap|plan|optimi[sz]e|prioriti[sz]e)\b/i.test(message),
+    route.goal.urgency === 'high',
+    route.goal.hiddenOpportunities.length >= 2,
+  ].filter(Boolean).length;
+  const depth: ExecutionPlanV8['depth'] = complexitySignals >= 3 ? 'deep' : complexitySignals >= 1 ? 'standard' : 'light';
+  const needsClarification = route.intent === 'finance'
+    && (route.subtype === 'compare_options' || route.subtype === 'budgeting')
+    && !/\$|\d/.test(message);
+  const clarificationQuestion = needsClarification
+    ? 'What is one concrete number I should optimize around (monthly budget, debt payment, or target savings)?'
+    : undefined;
 
   if (route.intent === 'finance' && route.needsFinanceData) {
     const steps: PlanStepV8[] = [];
@@ -148,11 +161,18 @@ export function createPlanV8(route: RouteResultV8, message: string): ExecutionPl
       ));
     }
 
+    if (needsClarification) {
+      planModes.push('clarify');
+    }
+    planModes.push('verify');
+
     return {
       intent: route.intent,
       subtype: route.subtype,
       mode: route.mode,
       planModes,
+      depth,
+      clarificationQuestion,
       summary: route.needsGmail
         ? `Finance ${route.subtype} workflow using finance baseline plus minimal Gmail evidence when justified.`
         : `Finance ${route.subtype} workflow using grounded baseline only. Keep toolchain minimal.`,
@@ -165,7 +185,8 @@ export function createPlanV8(route: RouteResultV8, message: string): ExecutionPl
       intent: route.intent,
       subtype: route.subtype,
       mode: route.mode,
-      planModes: ['act'],
+      planModes: ['act', 'verify'],
+      depth: 'standard',
       summary: 'Handle explicit Gmail request using email tool only.',
       steps: [
         buildStep(
@@ -184,7 +205,8 @@ export function createPlanV8(route: RouteResultV8, message: string): ExecutionPl
     intent: route.intent,
     subtype: route.subtype,
     mode: route.mode,
-    planModes: [],
+    planModes: ['verify'],
+    depth: 'light',
     summary: 'Direct response path. No tools required.',
     steps: [],
   };

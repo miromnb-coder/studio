@@ -64,7 +64,11 @@ export async function runResearchAgent(input: ResearchAgentInput): Promise<Resea
   const topRecommendation = input.context.intelligence.recommendations[0];
 
   const modeHint =
-    input.route.intent === 'coding'
+    input.route.responseMode === 'operator'
+      ? 'Focus on concrete actions, checklists, and executable next steps.'
+      : input.route.responseMode === 'coach'
+        ? 'Use calm, supportive, low-friction language and reduce option overload.'
+        : input.route.intent === 'coding'
       ? 'Focus on concrete debugging/coding guidance and specific next steps.'
       : input.route.intent === 'productivity'
         ? 'Focus on practical planning, prioritization, and action sequencing.'
@@ -126,6 +130,7 @@ gmail_fetch structured output: ${gmailGroundingBlock}
 Top recommendation: ${topRecommendation ? `${topRecommendation.title} (${topRecommendation.priority})` : 'none'}
 Environment: ${environmentSummary}
 Grounding evidence available: ${groundingEvidence.join(', ')}
+Goal understanding: inferred_goal=${input.route.goal.inferredGoal}; urgency=${input.route.goal.urgency}; category=${input.route.goal.category}; tone=${input.route.goal.emotionalTone}
 You must ground your answer in at least one of: memory, tool outputs, recommendation, or environment.
 If the request is ambiguous, ask one short clarifying question. Otherwise give a direct final answer.`,
         },

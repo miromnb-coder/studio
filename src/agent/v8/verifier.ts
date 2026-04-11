@@ -38,6 +38,11 @@ function ensureNextStep(reply: string): string {
   return `${reply}\n\nNext Step: Choose one action above and I can turn it into a concrete checklist.`.trim();
 }
 
+function ensureConfidence(reply: string): string {
+  if (/confidence:/i.test(reply)) return reply;
+  return `${reply}\nConfidence: Medium (estimated from available context; share one key number to improve precision).`;
+}
+
 function normalizeConfidenceLanguage(reply: string, notes: string[]): string {
   const hasOverclaim = /guaranteed|definitely|certainly|100%|always/i.test(reply);
   if (!hasOverclaim) return reply;
@@ -58,6 +63,7 @@ export function verifyExecutionV8(input: AgentCriticInputV8): CriticResultV8 {
 
   refinedReply = removeRepeatedSentences(refinedReply);
   refinedReply = normalizeConfidenceLanguage(refinedReply, notes);
+  refinedReply = ensureConfidence(refinedReply);
 
   const hasToolEvidence = input.usedTools.length > 0 || Object.keys(input.structuredData || {}).length > 0;
   const hasNumbers = /\$?\d+[\d,.]*/.test(refinedReply);
@@ -71,6 +77,10 @@ export function verifyExecutionV8(input: AgentCriticInputV8): CriticResultV8 {
   }
 
   refinedReply = ensureNextStep(refinedReply);
+  if (input.plan.clarificationQuestion && !/question:|\?/.test(refinedReply.toLowerCase())) {
+    refinedReply = `${refinedReply}\nQuestion: ${input.plan.clarificationQuestion}`;
+    notes.push('Added one high-value clarification question due to missing numeric anchor.');
+  }
 
   if (!refinedReply) {
     refinedReply = 'I need one concrete detail to give a precise answer. Next Step: Share one transaction, one bill, or one target amount.';

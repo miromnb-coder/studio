@@ -34,7 +34,7 @@ export async function runAgentV8(input: AgentRunInputV8): Promise<AgentResponseV
   let draftReply = '';
 
   if (route.intent === 'finance') {
-    const financeOutput = await runFinanceAgent({ route, context, execution });
+    const financeOutput = await runFinanceAgent({ route, context, plan, execution });
     draftReply = financeOutput.answerDraft;
   } else {
     const researchOutput = await runResearchAgent({ route, context, execution });

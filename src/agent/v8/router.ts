@@ -1,4 +1,4 @@
-import { AgentIntentV8, AgentModeV8, AgentMessageV8, FinanceIntentSubtypeV8, RouteResultV8 } from './types';
+import { AgentIntentV8, AgentMessageV8, FinanceIntentSubtypeV8, GoalUnderstandingV8, ResponseModeV8, RouteResultV8 } from './types';
 
 const FINANCE_TOKENS = [
   'budget', 'spend', 'expense', 'subscription', 'bill', 'savings', 'money', 'debt', 'income', 'payment',
@@ -87,13 +87,82 @@ function hasAnyStem(stems: string[], text: string): boolean {
   return stems.some((stem) => text.includes(stem));
 }
 
-function pickMode(intent: AgentIntentV8): AgentModeV8 {
+function pickDomainMode(intent: AgentIntentV8): RouteResultV8['mode'] {
   if (intent === 'finance') return 'finance';
   if (intent === 'gmail') return 'gmail';
   if (intent === 'productivity') return 'productivity';
   if (intent === 'coding') return 'coding';
   if (intent === 'memory') return 'memory';
   return 'general';
+}
+
+function detectResponseMode(message: string, intent: AgentIntentV8): ResponseModeV8 {
+  if (/\b(overwhelmed|stressed|anxious|worried|panic|i'm behind|behind on bills)\b/i.test(message)) return 'coach';
+  if (/\b(do it|draft|write the email|checklist|action plan|execute|next actions?)\b/i.test(message)) return 'operator';
+  if (intent === 'coding' || /\b(research|explore|compare many options|pros and cons)\b/i.test(message)) return 'researcher';
+  return intent === 'finance' ? 'analyst' : 'researcher';
+}
+
+function buildGoalUnderstanding(message: string, subtype: FinanceIntentSubtypeV8): GoalUnderstandingV8 {
+  const cleanMessage = message.trim();
+  const urgency: GoalUnderstandingV8['urgency'] =
+    /\b(urgent|asap|today|immediately|late fee|behind|overdue|can't pay|cannot pay)\b/i.test(cleanMessage)
+      ? 'high'
+      : /\b(this week|soon|quickly|tight)\b/i.test(cleanMessage)
+        ? 'medium'
+        : 'low';
+  const emotionalTone: GoalUnderstandingV8['emotionalTone'] =
+    /\b(overwhelmed|too much|confused)\b/i.test(cleanMessage)
+      ? 'overwhelmed'
+      : /\b(stressed|anxious|worried|scared)\b/i.test(cleanMessage)
+        ? 'stressed'
+        : /\b(ready|let's do this|motivated|serious)\b/i.test(cleanMessage)
+          ? 'motivated'
+          : 'neutral';
+
+  const category: GoalUnderstandingV8['category'] =
+    subtype === 'subscriptions'
+      ? 'subscriptions'
+      : subtype === 'cashflow' || subtype === 'bills'
+        ? 'cashflow'
+        : /\b(debt|loan|credit card)\b/i.test(cleanMessage)
+          ? 'debt'
+          : /\b(budget|plan|roadmap|weekly|monthly)\b/i.test(cleanMessage)
+            ? 'planning'
+            : /\b(save|cut costs|reduce spending)\b/i.test(cleanMessage)
+              ? 'savings'
+              : 'general';
+
+  const hiddenOpportunities = [
+    /\b(subscription|recurring|trial)\b/i.test(cleanMessage) ? 'Audit recurring subscriptions for low-value spend.' : '',
+    /\b(bills?|due|late)\b/i.test(cleanMessage) ? 'Set due-date sequencing to avoid fees and smooth cashflow.' : '',
+    /\b(save|savings|more money left)\b/i.test(cleanMessage) ? 'Auto-transfer savings right after payday to lock progress.' : '',
+    /\b(compare|which is better|vs)\b/i.test(cleanMessage) ? 'Compare by total cost of ownership, not price alone.' : '',
+  ].filter(Boolean);
+
+  const inferredGoal =
+    subtype === 'savings_audit'
+      ? 'Increase monthly free cash by cutting low-value spending.'
+      : subtype === 'compare_options'
+        ? 'Choose the best financial option with tradeoffs made explicit.'
+        : subtype === 'subscriptions'
+          ? 'Reduce recurring spend and remove unused services.'
+          : subtype === 'budgeting'
+            ? 'Create a realistic monthly plan that is sustainable.'
+            : subtype === 'cashflow'
+              ? 'Improve monthly cashflow stability and lower short-term risk.'
+              : cleanMessage.length > 0
+                ? `Improve financial outcomes for: ${cleanMessage.slice(0, 120)}`
+                : 'Clarify the user objective and deliver the most helpful next action.';
+
+  return {
+    explicitRequest: cleanMessage || 'No explicit request provided.',
+    inferredGoal,
+    urgency,
+    category,
+    hiddenOpportunities: hiddenOpportunities.slice(0, 3),
+    emotionalTone,
+  };
 }
 
 function detectFinanceSubtype(message: string): FinanceIntentSubtypeV8 {
@@ -157,6 +226,8 @@ export function routeIntentV8(message: string, history: AgentMessageV8[] = []): 
       mode: 'general',
       confidence: 0.35,
       reason: 'Empty input.',
+      responseMode: 'researcher',
+      goal: buildGoalUnderstanding('', 'none'),
       needsGmail: false,
       needsFinanceData: false,
       wantsRecommendations: false,
@@ -223,9 +294,11 @@ export function routeIntentV8(message: string, history: AgentMessageV8[] = []): 
   return {
     intent,
     subtype,
-    mode: pickMode(intent),
+    mode: pickDomainMode(intent),
     confidence,
     reason,
+    responseMode: detectResponseMode(normalizedMessage, intent),
+    goal: buildGoalUnderstanding(message, subtype),
     needsGmail: needsGmail || (intent === 'finance' && financeNeedsGmailBySubtype && explicitGmail),
     needsFinanceData: intent === 'finance',
     wantsRecommendations: wantsRecommendations || intent === 'finance',

@@ -24,9 +24,21 @@ export type FinanceIntentSubtypeV8 =
   | 'general_finance'
   | 'none';
 
-export type PlanModeV8 = 'audit' | 'compare' | 'recommend' | 'act' | 'monitor';
+export type PlanModeV8 = 'audit' | 'compare' | 'recommend' | 'act' | 'monitor' | 'clarify' | 'verify';
 
 export type AgentModeV8 = 'general' | 'finance' | 'gmail' | 'productivity' | 'coding' | 'memory';
+
+
+export type ResponseModeV8 = 'analyst' | 'coach' | 'operator' | 'researcher';
+
+export type GoalUnderstandingV8 = {
+  explicitRequest: string;
+  inferredGoal: string;
+  urgency: 'low' | 'medium' | 'high';
+  category: 'cashflow' | 'savings' | 'debt' | 'subscriptions' | 'planning' | 'general';
+  hiddenOpportunities: string[];
+  emotionalTone: 'neutral' | 'stressed' | 'overwhelmed' | 'motivated';
+};
 
 export type AgentRole = 'system' | 'assistant' | 'user';
 
@@ -113,6 +125,8 @@ export type RouteResultV8 = {
   mode: AgentModeV8;
   confidence: number;
   reason: string;
+  responseMode: ResponseModeV8;
+  goal: GoalUnderstandingV8;
   needsGmail: boolean;
   needsFinanceData: boolean;
   wantsRecommendations: boolean;
@@ -156,6 +170,8 @@ export type ExecutionPlanV8 = {
   mode: AgentModeV8;
   planModes: PlanModeV8[];
   summary: string;
+  depth: 'light' | 'standard' | 'deep';
+  clarificationQuestion?: string;
   steps: PlanStepV8[];
 };
 
@@ -214,6 +230,8 @@ export type AgentResponseV8 = {
     intent: AgentIntentV8;
     subtype: FinanceIntentSubtypeV8;
     mode: AgentModeV8;
+    responseMode: ResponseModeV8;
+    goal: GoalUnderstandingV8;
     plan: string;
     planModes: PlanModeV8[];
     steps: ExecutionStepResultV8[];
