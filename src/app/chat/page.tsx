@@ -15,7 +15,15 @@ import type { ExecutionStep } from './components/AgentExecutionTimeline';
 import { AppShell } from '../components/premium-ui';
 
 const PREMIUM_UPLOAD_MESSAGE = 'File upload is a Premium feature. Upgrade to attach files.';
-const THINKING_STEPS = ['Understanding request', 'Gathering context', 'Thinking deeper', 'Writing response'];
+const THINKING_STEPS = [
+  'Understanding request',
+  'Reading finance data',
+  'Checking subscriptions',
+  'Comparing options',
+  'Building recommendations',
+  'Verifying answer',
+  'Finalizing response',
+];
 const QUICK_START_PROMPTS = [
   'Review my monthly subscriptions and tell me what to cancel first.',
   'Create a 30-day savings plan based on my current spending.',
@@ -197,7 +205,7 @@ export default function ChatPage() {
     setSimulatedStepIndex(0);
     const interval = window.setInterval(() => {
       setSimulatedStepIndex((current) => (current >= THINKING_STEPS.length - 1 ? current : current + 1));
-    }, 1100);
+    }, 850);
 
     return () => window.clearInterval(interval);
   }, [isAgentResponding, activeConversationId]);

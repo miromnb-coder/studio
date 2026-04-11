@@ -1,6 +1,7 @@
 'use client';
 
 import { AnimatePresence, motion } from 'framer-motion';
+import { useState } from 'react';
 import FinanceResultCard from '@/components/chat/FinanceResultCard';
 import FinanceActionResultCard from '@/components/chat/FinanceActionResultCard';
 import type { Message } from '@/app/store/app-store';
@@ -21,6 +22,7 @@ export function AssistantResponseSurface({
   onAction,
   onPremiumRequired,
 }: AssistantResponseSurfaceProps) {
+  const [savingOutcomeFor, setSavingOutcomeFor] = useState<string | null>(null);
   const metadata = message.agentMetadata;
   const isFinanceIntent = metadata?.intent === 'finance';
   const isGmailIntent = metadata?.intent === 'gmail';
@@ -29,6 +31,22 @@ export function AssistantResponseSurface({
   const showOperatorDetails = isFinanceIntent || isGmailIntent || hasFinanceVisuals;
   const isFinanceAction = (value: unknown): value is FinanceActionType =>
     value === 'create_savings_plan' || value === 'find_alternatives' || value === 'draft_cancellation';
+  const operatorModules = metadata?.operatorModules || [];
+
+  const saveOutcome = async (module: NonNullable<typeof metadata>['operatorModules'][number], status: 'accepted' | 'ignored' | 'postponed' | 'completed') => {
+    if (!module?.recommendationId) return;
+    setSavingOutcomeFor(module.id);
+    await fetch('/api/operator/outcomes', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        recommendationId: module.recommendationId,
+        recommendedAction: module.summary,
+        status,
+      }),
+    }).catch(() => null);
+    setSavingOutcomeFor(null);
+  };
 
   return (
     <motion.section
@@ -67,6 +85,26 @@ export function AssistantResponseSurface({
                     </button>
                   );
                 })}
+              </div>
+            ) : null}
+            {operatorModules.length ? (
+              <div className="space-y-2">
+                {operatorModules.slice(0, 4).map((module) => (
+                  <div key={module.id} className="rounded-2xl border border-white/10 bg-[linear-gradient(160deg,rgba(255,255,255,0.07),rgba(255,255,255,0.02))] px-3.5 py-3">
+                    <div className="flex items-center justify-between gap-2">
+                      <p className="text-[11px] font-medium uppercase tracking-[0.12em] text-zinc-400">{module.title}</p>
+                      {module.impactLabel ? <span className="text-[10px] text-emerald-300">{module.impactLabel}</span> : null}
+                    </div>
+                    <p className="mt-1 text-sm leading-6 text-zinc-100/90">{module.summary}</p>
+                    {module.recommendationId ? (
+                      <div className="mt-2 flex flex-wrap gap-1.5">
+                        <button type="button" disabled={savingOutcomeFor === module.id} onClick={() => void saveOutcome(module, 'completed')} className="rounded-full border border-white/15 px-2.5 py-1 text-[10px] text-zinc-300">Done</button>
+                        <button type="button" disabled={savingOutcomeFor === module.id} onClick={() => void saveOutcome(module, 'postponed')} className="rounded-full border border-white/15 px-2.5 py-1 text-[10px] text-zinc-300">Later</button>
+                        <button type="button" disabled={savingOutcomeFor === module.id} onClick={() => void saveOutcome(module, 'ignored')} className="rounded-full border border-white/15 px-2.5 py-1 text-[10px] text-zinc-500">Ignore</button>
+                      </div>
+                    ) : null}
+                  </div>
+                ))}
               </div>
             ) : null}
 

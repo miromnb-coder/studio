@@ -27,6 +27,14 @@ export type AgentResponseMetadata = {
     kind: 'finance' | 'gmail' | 'productivity' | 'general' | 'premium';
     payload?: Record<string, unknown>;
   }>;
+  operatorModules?: Array<{
+    id: string;
+    title: 'Best Next Action' | 'Fastest Saving Opportunity' | 'Risk To Watch' | 'What I Need From You' | 'Recommended This Week';
+    summary: string;
+    impactLabel?: string;
+    recommendationId?: string;
+    priority?: 'low' | 'medium' | 'high' | 'critical';
+  }>;
   memoryUsed?: boolean;
   verificationPassed?: boolean;
   iterationCount?: number;
