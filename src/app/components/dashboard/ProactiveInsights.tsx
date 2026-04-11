@@ -17,7 +17,7 @@ export function ProactiveInsights({ insights, onOpenInsight }: ProactiveInsights
           key={insight.id}
           type="button"
           onClick={() => onOpenInsight(insight)}
-          className="card-interactive w-full rounded-2xl bg-[#f7f7f7] p-4 text-left"
+          className="card-interactive w-full rounded-2xl bg-white/[0.04] p-4 text-left"
         >
           <div className="flex items-start justify-between gap-3">
             <div>
