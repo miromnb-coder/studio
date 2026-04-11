@@ -6,9 +6,13 @@ type AlertStatus = 'active' | 'dismissed' | 'completed';
 export type OperatorAlertType =
   | 'duplicate_subscription'
   | 'trial_ending'
+  | 'upcoming_bill'
   | 'price_increase'
   | 'unusual_recurring_charge'
   | 'possible_unused_subscription'
+  | 'cashflow_pressure'
+  | 'renewal_window'
+  | 'better_alternative'
   | 'stale_gmail_sync'
   | 'savings_opportunity'
   | 'spending_concentration';
@@ -99,10 +103,35 @@ function safeDate(input: unknown): Date | null {
   return Number.isNaN(d.getTime()) ? null : d;
 }
 
+function clamp(value: number, min: number, max: number) {
+  return Math.min(max, Math.max(min, value));
+}
+
 function getSeverityFromAmount(amount: number): AlertSeverity {
   if (amount >= 50) return 'high';
   if (amount >= 20) return 'medium';
   return 'low';
+}
+
+function enrichAlertMetadata(
+  metadata: Record<string, unknown>,
+  params: {
+    whyItMatters: string;
+    estimatedImpact: string;
+    confidence: number;
+    predictedRiskScore?: number;
+  },
+) {
+  return {
+    ...metadata,
+    why_it_matters: params.whyItMatters,
+    estimated_impact: params.estimatedImpact,
+    confidence: Math.round(clamp(params.confidence, 0.35, 0.99) * 100) / 100,
+    predicted_risk_score:
+      typeof params.predictedRiskScore === 'number' && Number.isFinite(params.predictedRiskScore)
+        ? Math.round(clamp(params.predictedRiskScore, 0, 1) * 100) / 100
+        : null,
+  };
 }
 
 export async function evaluateOperatorAlertsForUser(supabase: SupabaseClient, userId: string) {
@@ -223,11 +252,51 @@ export function generateOperatorAlertsFromFinanceData(params: {
       suggested_action: 'Review the trial now and cancel before renewal if you do not plan to keep it.',
       source: 'finance_profiles.last_analysis.gmail_import.trial_risks',
       dedupe_key: `trial:${merchant.toLowerCase()}:${endDate.toISOString().slice(0, 10)}`,
-      metadata: {
+      metadata: enrichAlertMetadata(
+        {
         merchant,
         trial_end_date: endDate.toISOString(),
         days_left: daysLeft,
-      },
+        },
+        {
+          whyItMatters: 'Trials that auto-renew become recurring spend if no action is taken before the deadline.',
+          estimatedImpact: 'Avoids a likely new recurring charge.',
+          confidence: daysLeft <= 3 ? 0.91 : 0.84,
+          predictedRiskScore: daysLeft <= 3 ? 0.92 : 0.76,
+        },
+      ),
+    });
+  }
+
+  for (const sub of normalized) {
+    const nextBillDate = safeDate(sub.raw.next_billing_date || sub.raw.renewal_date || sub.raw.next_payment_date);
+    if (!nextBillDate) continue;
+    const daysToBill = Math.round((nextBillDate.getTime() - Date.now()) / (1000 * 60 * 60 * 24));
+    if (daysToBill < 0 || daysToBill > 7) continue;
+    if (sub.monthlyAmount < 12) continue;
+
+    alerts.push({
+      type: 'upcoming_bill',
+      severity: daysToBill <= 2 && sub.monthlyAmount >= 30 ? 'high' : getSeverityFromAmount(sub.monthlyAmount),
+      title: `Upcoming bill: ${sub.merchant}`,
+      summary: `${sub.merchant} is expected to charge about $${sub.monthlyAmount.toFixed(2)} in ${daysToBill} day${daysToBill === 1 ? '' : 's'}.`,
+      suggested_action: 'Confirm this service is still worth it before the billing date, then keep, downgrade, or cancel.',
+      source: 'finance_profiles.active_subscriptions',
+      dedupe_key: `upcoming_bill:${sub.merchant.toLowerCase()}:${nextBillDate.toISOString().slice(0, 10)}`,
+      metadata: enrichAlertMetadata(
+        {
+          merchant: sub.merchant,
+          next_billing_date: nextBillDate.toISOString(),
+          days_to_bill: daysToBill,
+          monthly_amount: sub.monthlyAmount,
+        },
+        {
+          whyItMatters: 'Pre-bill decisions prevent avoidable spend before the charge lands.',
+          estimatedImpact: `~$${sub.monthlyAmount.toFixed(0)} this cycle if cancelled or downgraded in time.`,
+          confidence: 0.8,
+          predictedRiskScore: Math.min(1, sub.monthlyAmount / 60 + (daysToBill <= 2 ? 0.25 : 0.05)),
+        },
+      ),
     });
   }
 
@@ -243,11 +312,19 @@ export function generateOperatorAlertsFromFinanceData(params: {
       suggested_action: 'Check plan details and ask for retention pricing or downgrade options.',
       source: 'finance_profiles.active_subscriptions',
       dedupe_key: `price_increase:${sub.merchant.toLowerCase()}`,
-      metadata: {
+      metadata: enrichAlertMetadata(
+        {
         merchant: sub.merchant,
         previous_amount: previous,
         current_amount: sub.monthlyAmount,
-      },
+        },
+        {
+          whyItMatters: 'Price drift compounds over time unless renegotiated or switched.',
+          estimatedImpact: `~$${(sub.monthlyAmount - previous).toFixed(2)}/month extra spend is currently at risk.`,
+          confidence: 0.85,
+          predictedRiskScore: Math.min(1, (sub.monthlyAmount - previous) / 18 + 0.35),
+        },
+      ),
     });
   }
 
@@ -323,6 +400,95 @@ export function generateOperatorAlertsFromFinanceData(params: {
   }
 
   const monthlyTotal = toNumber(financeProfile?.total_monthly_cost, 0);
+  const monthlyBudget = toNumber((asObject(lastAnalysis.cashflow).monthly_budget), Number.NaN);
+  if (Number.isFinite(monthlyBudget) && monthlyBudget > 0 && monthlyTotal > monthlyBudget * 0.75) {
+    const pressureRatio = monthlyTotal / monthlyBudget;
+    const overAmount = monthlyTotal - monthlyBudget;
+    alerts.push({
+      type: 'cashflow_pressure',
+      severity: pressureRatio >= 1 ? 'high' : 'medium',
+      title: 'Cashflow pressure is approaching',
+      summary: `Recurring monthly commitments are about $${monthlyTotal.toFixed(2)} against a budget of $${monthlyBudget.toFixed(2)}.`,
+      suggested_action: 'Reduce at least one non-essential recurring cost this week to avoid next-month pressure.',
+      source: 'finance_profiles.total_monthly_cost + last_analysis.cashflow.monthly_budget',
+      dedupe_key: 'cashflow_pressure:recurring_ratio',
+      metadata: enrichAlertMetadata(
+        {
+          monthly_total: monthlyTotal,
+          monthly_budget: monthlyBudget,
+          pressure_ratio: Math.round(pressureRatio * 100) / 100,
+          over_amount: Math.round(overAmount * 100) / 100,
+        },
+        {
+          whyItMatters: 'When recurring obligations consume most of budget, small surprises become high-stress decisions.',
+          estimatedImpact: overAmount > 0 ? `Currently over budget by ~$${overAmount.toFixed(0)}/month.` : 'Lower flexibility next month if spend rises.',
+          confidence: 0.79,
+          predictedRiskScore: Math.min(1, pressureRatio - 0.55),
+        },
+      ),
+    });
+  }
+
+  for (const sub of normalized) {
+    const renewal = safeDate(sub.raw.contract_renewal_date || sub.raw.annual_renewal_date);
+    if (!renewal) continue;
+    const daysToRenewal = Math.round((renewal.getTime() - Date.now()) / (1000 * 60 * 60 * 24));
+    if (daysToRenewal < 0 || daysToRenewal > 30) continue;
+
+    alerts.push({
+      type: 'renewal_window',
+      severity: daysToRenewal <= 10 ? 'high' : 'medium',
+      title: `${sub.merchant} renewal window is open`,
+      summary: `Renewal expected in ${daysToRenewal} days. This is usually the best negotiation window.`,
+      suggested_action: 'Ask for retention pricing or switch to an alternative before renewal finalizes.',
+      source: 'finance_profiles.active_subscriptions',
+      dedupe_key: `renewal_window:${sub.merchant.toLowerCase()}:${renewal.toISOString().slice(0, 10)}`,
+      metadata: enrichAlertMetadata(
+        {
+          merchant: sub.merchant,
+          renewal_date: renewal.toISOString(),
+          days_to_renewal: daysToRenewal,
+          monthly_amount: sub.monthlyAmount,
+        },
+        {
+          whyItMatters: 'Savings opportunities are highest right before renewal lock-in.',
+          estimatedImpact: `Potential renegotiation value around $${Math.max(3, sub.monthlyAmount * 0.15).toFixed(0)}/month.`,
+          confidence: 0.76,
+          predictedRiskScore: Math.min(1, (30 - daysToRenewal) / 30 + sub.monthlyAmount / 120),
+        },
+      ),
+    });
+  }
+
+  for (const sub of normalized) {
+    const altSavings = toNumber(sub.raw.alternative_monthly_amount, Number.NaN);
+    if (!Number.isFinite(altSavings) || altSavings <= 0 || sub.monthlyAmount - altSavings < 8) continue;
+    const betterBy = sub.monthlyAmount - altSavings;
+    alerts.push({
+      type: 'better_alternative',
+      severity: betterBy >= 20 ? 'high' : 'medium',
+      title: `Better alternative available for ${sub.merchant}`,
+      summary: `Comparable options may reduce this cost from $${sub.monthlyAmount.toFixed(2)} to about $${altSavings.toFixed(2)}/month.`,
+      suggested_action: 'Run a switch check and migrate if feature coverage is acceptable.',
+      source: 'finance_profiles.active_subscriptions',
+      dedupe_key: `better_alternative:${sub.merchant.toLowerCase()}`,
+      metadata: enrichAlertMetadata(
+        {
+          merchant: sub.merchant,
+          monthly_amount: sub.monthlyAmount,
+          alternative_monthly_amount: altSavings,
+          monthly_delta: Math.round(betterBy * 100) / 100,
+        },
+        {
+          whyItMatters: 'Switch opportunities create savings without sacrificing outcomes when fit is equivalent.',
+          estimatedImpact: `~$${betterBy.toFixed(0)}/month potential savings.`,
+          confidence: 0.72,
+          predictedRiskScore: Math.min(1, betterBy / 40 + 0.2),
+        },
+      ),
+    });
+  }
+
   const expensiveAtRisk = alerts
     .filter((alert) => ['possible_unused_subscription', 'duplicate_subscription', 'price_increase'].includes(alert.type))
     .reduce((sum, alert) => sum + toNumber(alert.metadata.monthly_amount, toNumber(alert.metadata.monthly_total, 0)), 0);
@@ -386,7 +552,23 @@ export function generateOperatorAlertsFromFinanceData(params: {
     });
   }
 
-  return alerts;
+  return alerts
+    .map((alert) => {
+      const risk = toNumber(asObject(alert.metadata).predicted_risk_score, 0.5);
+      const confidence = toNumber(asObject(alert.metadata).confidence, 0.65);
+      const amount = toNumber(asObject(alert.metadata).potential_monthly_savings, toNumber(asObject(alert.metadata).monthly_amount, 0));
+      const rankScore = (alert.severity === 'high' ? 1 : alert.severity === 'medium' ? 0.6 : 0.35) * 0.45 + risk * 0.35 + Math.min(1, amount / 90) * 0.2;
+      return {
+        ...alert,
+        metadata: {
+          ...asObject(alert.metadata),
+          confidence: Math.round(confidence * 100) / 100,
+          rank_score: Math.round(rankScore * 1000) / 1000,
+        },
+      };
+    })
+    .sort((a, b) => toNumber(asObject(b.metadata).rank_score, 0) - toNumber(asObject(a.metadata).rank_score, 0))
+    .slice(0, 12);
 }
 
 export async function dedupeAndPersistAlerts(

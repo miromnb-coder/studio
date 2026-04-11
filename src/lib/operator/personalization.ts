@@ -16,6 +16,15 @@ export type UserProfileIntelligence = {
   last_updated: string;
 };
 
+export type PersonalizationSnapshot = {
+  price_sensitivity: FocusLevel;
+  preferred_tone: 'supportive' | 'direct' | 'analytical';
+  completion_behavior: 'executor' | 'explorer' | 'needs_nudges';
+  reminder_timing: 'morning' | 'afternoon' | 'evening';
+  focus_categories: string[];
+  profile_summary: string;
+};
+
 type ProfileIntelligenceRow = UserProfileIntelligence;
 
 const LANGUAGE_KEYWORDS: Array<{ language: string; pattern: RegExp }> = [
@@ -121,6 +130,61 @@ export function buildBehaviorSummary(profile: Omit<UserProfileIntelligence, 'beh
     `Verbosity: ${profile.verbosity_preference}`,
     `Risk tolerance: ${profile.risk_tolerance}`,
   ].join(' | ');
+}
+
+export function buildPersonalizationSnapshot(params: {
+  profile: UserProfileIntelligence | null;
+  outcomes: Array<Record<string, unknown>>;
+  financeProfile: Record<string, unknown> | null;
+}): PersonalizationSnapshot {
+  const profile = params.profile;
+  const outcomes = Array.isArray(params.outcomes) ? params.outcomes : [];
+  const completed = outcomes.filter((item) => String(item.status || '') === 'completed').length;
+  const postponed = outcomes.filter((item) => String(item.status || '') === 'postponed').length;
+  const ignored = outcomes.filter((item) => String(item.status || '') === 'ignored').length;
+  const total = Math.max(1, outcomes.length);
+
+  const completionRate = completed / total;
+  const deferralRate = postponed / total;
+
+  const monthlyTotal = typeof params.financeProfile?.total_monthly_cost === 'number' ? params.financeProfile.total_monthly_cost : 0;
+  const estimatedSavings = typeof params.financeProfile?.estimated_savings === 'number' ? params.financeProfile.estimated_savings : 0;
+  const savingsRatio = monthlyTotal > 0 ? estimatedSavings / monthlyTotal : 0;
+
+  const activeSubscriptions = Array.isArray(params.financeProfile?.active_subscriptions)
+    ? params.financeProfile.active_subscriptions
+    : [];
+  const categories = activeSubscriptions
+    .map((item) => String((item as Record<string, unknown>).category || '').trim().toLowerCase())
+    .filter(Boolean);
+  const uniqueCategories = [...new Set(categories)].slice(0, 4);
+
+  const priceSensitivity: FocusLevel = savingsRatio >= 0.35 ? 'high' : savingsRatio >= 0.16 ? 'medium' : 'low';
+  const preferredTone: PersonalizationSnapshot['preferred_tone'] =
+    profile?.verbosity_preference === 'detailed' ? 'analytical' : profile?.decision_style === 'aggressive' ? 'direct' : 'supportive';
+  const completionBehavior: PersonalizationSnapshot['completion_behavior'] =
+    completionRate >= 0.45 ? 'executor' : deferralRate >= 0.28 || ignored >= completed ? 'needs_nudges' : 'explorer';
+  const reminderTiming: PersonalizationSnapshot['reminder_timing'] =
+    completionBehavior === 'executor' ? 'morning' : completionBehavior === 'explorer' ? 'afternoon' : 'evening';
+
+  const summary = [
+    `Price sensitivity: ${priceSensitivity}`,
+    `Tone: ${preferredTone}`,
+    `Action style: ${completionBehavior}`,
+    `Best reminder window: ${reminderTiming}`,
+    uniqueCategories.length ? `Top categories: ${uniqueCategories.join(', ')}` : null,
+  ]
+    .filter(Boolean)
+    .join(' | ');
+
+  return {
+    price_sensitivity: priceSensitivity,
+    preferred_tone: preferredTone,
+    completion_behavior: completionBehavior,
+    reminder_timing: reminderTiming,
+    focus_categories: uniqueCategories,
+    profile_summary: summary,
+  };
 }
 
 export async function getUserProfileIntelligence(

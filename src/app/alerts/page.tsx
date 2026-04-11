@@ -36,6 +36,13 @@ function parseSavings(alert: OperatorAlert): number {
   return Number.isFinite(direct) ? Math.max(0, direct) : 0;
 }
 
+function metadataText(alert: OperatorAlert, key: string, fallback: string) {
+  const value = alert.metadata?.[key];
+  if (typeof value === 'string' && value.trim()) return value;
+  if (typeof value === 'number' && Number.isFinite(value)) return String(value);
+  return fallback;
+}
+
 export default function AlertsPage() {
   const [alerts, setAlerts] = useState<OperatorAlert[]>([]);
   const [loading, setLoading] = useState(true);
@@ -159,7 +166,12 @@ export default function AlertsPage() {
                   <ActionRow title={alert.title} description={alert.summary} icon={<TriangleAlert className="h-4 w-4" />} />
                   <span className={`rounded-full border px-2 py-1 text-[11px] font-semibold uppercase ${severityStyle[alert.severity]}`}>{alert.severity}</span>
                 </div>
-                <p className="text-xs text-zinc-400"><span className="font-semibold text-zinc-200">Next action:</span> {alert.suggested_action}</p>
+                <div className="grid gap-1.5 text-xs text-zinc-300">
+                  <p><span className="font-semibold text-zinc-100">Why it matters:</span> {metadataText(alert, 'why_it_matters', alert.summary)}</p>
+                  <p><span className="font-semibold text-zinc-100">Estimated impact:</span> {metadataText(alert, 'estimated_impact', 'Impact estimate unavailable')}</p>
+                  <p><span className="font-semibold text-zinc-100">Suggested action:</span> {alert.suggested_action}</p>
+                  <p><span className="font-semibold text-zinc-100">Confidence:</span> {metadataText(alert, 'confidence', '0.65')}</p>
+                </div>
                 <div className="grid grid-cols-2 gap-2 text-xs font-semibold">
                   <SmartButton variant="secondary" onClick={() => void handleStatus(alert.id, 'dismiss')} disabled={busyAlertId === alert.id} className="w-full">
                     <XCircle className="mr-1.5 h-3.5 w-3.5" /> Dismiss
