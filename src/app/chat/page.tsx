@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { Crown, PanelLeft, RefreshCw } from 'lucide-react';
+import { Crown, History, RefreshCw, Settings2 } from 'lucide-react';
 import { AnimatePresence, motion } from 'framer-motion';
 import { useAppStore } from '../store/app-store';
 import { useUserEntitlements } from '../hooks/use-user-entitlements';
@@ -11,17 +11,11 @@ import { AgentThinkingSurface } from './components/AgentThinkingSurface';
 import { AssistantResponseSurface } from './components/AssistantResponseSurface';
 import { ChatComposerPremium } from './components/ChatComposerPremium';
 import { ConversationSwitcherSheet } from './components/ConversationSwitcherSheet';
-import { AgentActivityBadge } from './components/AgentActivityBadge';
 import type { ExecutionStep } from './components/AgentExecutionTimeline';
-import { AIOrb, AppShell, PremiumCard, SmartButton } from '../components/premium-ui';
+import { AppShell } from '../components/premium-ui';
 
 const PREMIUM_UPLOAD_MESSAGE = 'File upload is a Premium feature. Upgrade to attach files.';
-const THINKING_STEPS = [
-  'Understanding request',
-  'Checking data',
-  'Analyzing options',
-  'Preparing answer',
-];
+const THINKING_STEPS = ['Understanding request', 'Analyzing options', 'Writing response'];
 
 const formatConversationTime = (iso: string) => {
   const timestamp = new Date(iso);
@@ -63,8 +57,7 @@ export default function ChatPage() {
   const { plan, usage, isPremium, isLimitReached, isUnlimited, refresh } = useUserEntitlements();
 
   const [draft, setDraft] = useState('');
-  const [isVoiceMode, setIsVoiceMode] = useState(false);
-  const [openPanel, setOpenPanel] = useState<'add' | 'utility' | 'conversations' | null>(null);
+  const [openPanel, setOpenPanel] = useState<'add' | 'conversations' | null>(null);
   const [composerNotice, setComposerNotice] = useState<string | null>(null);
   const [showPaywall, setShowPaywall] = useState(false);
   const [showAuthPrompt, setShowAuthPrompt] = useState(false);
@@ -131,8 +124,8 @@ export default function ChatPage() {
   useEffect(() => {
     if (!textareaRef.current) return;
     textareaRef.current.style.height = 'auto';
-    textareaRef.current.style.height = `${Math.min(textareaRef.current.scrollHeight, 164)}px`;
-    textareaRef.current.style.overflowY = textareaRef.current.scrollHeight > 164 ? 'auto' : 'hidden';
+    textareaRef.current.style.height = `${Math.min(textareaRef.current.scrollHeight, 132)}px`;
+    textareaRef.current.style.overflowY = textareaRef.current.scrollHeight > 132 ? 'auto' : 'hidden';
   }, [draft]);
 
   useEffect(() => {
@@ -172,7 +165,7 @@ export default function ChatPage() {
     setSimulatedStepIndex(0);
     const interval = window.setInterval(() => {
       setSimulatedStepIndex((current) => (current >= THINKING_STEPS.length - 1 ? current : current + 1));
-    }, 900);
+    }, 1200);
 
     return () => window.clearInterval(interval);
   }, [isAgentResponding, activeConversationId]);
@@ -198,18 +191,6 @@ export default function ChatPage() {
     setDraft('');
     if (typeof window !== 'undefined') window.sessionStorage.removeItem('nova-operator-chat-draft');
     await refresh();
-  };
-
-  const toggleVoiceMode = () => {
-    if (!voiceSupported) {
-      setComposerNotice('Voice is unavailable on this browser.');
-      return;
-    }
-    setIsVoiceMode((prev) => {
-      const next = !prev;
-      setComposerNotice(next ? 'Voice mode ready.' : 'Voice mode turned off.');
-      return next;
-    });
   };
 
   const startSpeechToText = () => {
@@ -304,37 +285,34 @@ export default function ChatPage() {
     : derivedExecutionSteps.find((step) => step.status === 'running')?.label || 'Preparing response';
 
   return (
-    <AppShell className="pb-56">
-      <header className="mb-3 space-y-2 px-1 pt-1">
-        <div className="flex items-center justify-between gap-3">
-          <div className="flex items-center gap-2">
+    <AppShell className="pb-52">
+      <header className="sticky top-0 z-20 mb-4 border-b border-[#E5E7EB]/80 bg-[#F8FAFC]/95 pb-3 pt-1 backdrop-blur">
+        <div className="flex items-center justify-between gap-3 px-1">
+          <div>
+            <div className="flex items-center gap-2">
+              <h1 className="text-lg font-semibold text-[#0F172A]">Kivo</h1>
+              <span className="inline-flex items-center gap-1 rounded-full border border-[#D5DBFF] bg-[#EEF0FF] px-2 py-0.5 text-[10px] font-medium text-[#4B4CE6]">
+                <span className={`h-1.5 w-1.5 rounded-full ${isAgentResponding ? 'animate-pulse bg-[#5B5CF0]' : 'bg-emerald-500'}`} />
+                {isAgentResponding ? 'Live' : 'Ready'}
+              </span>
+            </div>
+            <p className="text-xs text-[#64748B]">{formatUsageLine(usage.current, usage.limit, usage.unlimited)}</p>
+          </div>
+          <div className="flex items-center gap-1.5">
             <button
               type="button"
               onClick={() => setOpenPanel((prev) => (prev === 'conversations' ? null : 'conversations'))}
-              className="inline-flex h-9 w-9 items-center justify-center rounded-full border border-black/[0.08] bg-[#f6f6f6] text-[#2b2b2b] shadow-[0_4px_12px_rgba(0,0,0,0.04)]"
-              aria-label="Open conversation menu"
+              className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-[#E5E7EB] bg-white text-[#64748B]"
+              aria-label="Conversation history"
             >
-              <PanelLeft className="h-4 w-4" />
+              <History className="h-4 w-4" />
             </button>
-            <div>
-              <h1 className="text-xl font-semibold text-primary">Kivo</h1>
-              <p className="text-sm text-secondary">AI operator workspace</p>
-            </div>
-          </div>
-          <div className="flex items-center gap-2">
-            <button type="button" onClick={openUpgrade} className="inline-flex items-center gap-1 rounded-full border border-black/10 bg-[#f6f6f6] px-3 py-1.5 text-xs font-medium text-[#232323]">
-              <Crown className="h-3.5 w-3.5" /> Upgrade
+            <button type="button" onClick={() => setComposerNotice(`Plan: ${plan}`)} className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-[#E5E7EB] bg-white text-[#64748B]" aria-label="Settings">
+              <Settings2 className="h-4 w-4" />
             </button>
-          </div>
-        </div>
-
-        <div className="rounded-2xl border border-black/[0.06] bg-[#f6f6f6]/95 px-3 py-2 shadow-[0_8px_18px_rgba(0,0,0,0.04)] backdrop-blur-xl">
-          <div className="text-right">
-            <p className="text-[11px] font-medium text-[#4c4c4c]">{plan === 'PREMIUM' ? 'Premium' : 'Free plan'}</p>
-            <p className="text-[11px] text-[#6a6a6a]">{formatUsageLine(usage.current, usage.limit, usage.unlimited)}</p>
-          </div>
-          <div className="mt-2">
-            <AgentActivityBadge isActive={isAgentResponding} label={isAgentResponding ? 'Agent actively executing' : 'Agent standing by'} />
+            <button type="button" onClick={openUpgrade} className="inline-flex items-center gap-1 rounded-full border border-[#E5E7EB] bg-white px-2.5 py-1.5 text-xs font-medium text-[#0F172A]">
+              <Crown className="h-3.5 w-3.5 text-[#5B5CF0]" /> Upgrade
+            </button>
           </div>
         </div>
 
@@ -357,58 +335,69 @@ export default function ChatPage() {
         </AnimatePresence>
       </header>
 
-      <section ref={listRef} className="relative z-10 max-h-[calc(100vh-340px)] space-y-4 overflow-y-auto pb-3 pr-1">
+      <section ref={listRef} className="relative z-10 max-h-[calc(100vh-276px)] space-y-5 overflow-y-auto pb-3">
         {empty ? (
-          <PremiumCard className="space-y-4 p-6 text-center">
-            <AIOrb />
-            <h2 className="text-3xl font-semibold tracking-tight text-slate-900">Ask anything.</h2>
-            <p className="text-sm text-slate-500">Your operator turns questions into actions, insights, and next steps.</p>
-            <div className="grid grid-cols-1 gap-2 text-left">
-              {['Help me save money', 'Check my subscriptions', 'What should I improve?', 'Plan my next move'].map((prompt) => (
-                <SmartButton key={prompt} variant="secondary" className="justify-start text-xs" onClick={() => applyTemplate(prompt, 'Prompt added.')}>
+          <div className="flex min-h-[58vh] flex-col items-center justify-center px-5 text-center">
+            <div className="mb-5 h-10 w-10 rounded-full border border-[#DDE3F7] bg-white shadow-[0_8px_25px_rgba(91,92,240,0.16)]" />
+            <h2 className="text-[34px] font-semibold tracking-tight text-[#0F172A]">Ask anything.</h2>
+            <p className="mt-2 max-w-xs text-sm leading-6 text-[#64748B]">Your operator turns questions into actions, insights, and next steps.</p>
+            <div className="mt-6 flex w-full flex-wrap items-center justify-center gap-2">
+              {['Help me save money', 'Analyze something', 'Plan my next move', 'Check Gmail', 'Think deeper'].map((prompt) => (
+                <button
+                  key={prompt}
+                  type="button"
+                  onClick={() => applyTemplate(prompt, 'Prompt added.')}
+                  className="rounded-full border border-[#E5E7EB] bg-white px-3 py-1.5 text-xs font-medium text-[#334155] shadow-[0_2px_10px_rgba(15,23,42,0.04)]"
+                >
                   {prompt}
-                </SmartButton>
+                </button>
               ))}
             </div>
-          </PremiumCard>
+          </div>
         ) : null}
 
         {messages
           .filter((message) => !(message.role === 'assistant' && message.isStreaming && isAgentResponding))
           .map((message) => (
-          <motion.div
-            key={message.id}
-            initial={{ opacity: 0, y: 8 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.2 }}
-            className={`max-w-[96%] ${message.role === 'user' ? 'ml-auto' : ''}`}
-          >
-            {message.role === 'user' ? (
-              <div className="ml-auto max-w-[90%] rounded-[18px] border border-black/[0.04] bg-[#f3f3f3] px-3.5 py-2.5 text-[15px] leading-6 text-[#1f1f1f]">
-                {message.content}
-              </div>
-            ) : (
-              <AssistantResponseSurface
-                message={message}
-                isPremium={isPremium}
-                actionLoading={financeActionLoadingForMessage[message.id] || null}
-                onAction={(actionType) => void handleFinanceAction(message.id, actionType)}
-                onPremiumRequired={() => setShowPaywall(true)}
-              />
-            )}
-          </motion.div>
-        ))}
+            <motion.div
+              key={message.id}
+              initial={{ opacity: 0, y: 8 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.2 }}
+              className={`max-w-[96%] ${message.role === 'user' ? 'ml-auto' : ''}`}
+            >
+              {message.role === 'user' ? (
+                <div className="ml-auto max-w-[88%] rounded-2xl border border-[#E2E8F0] bg-[#F1F5F9] px-4 py-2.5 text-[15px] leading-6 text-[#0F172A]">
+                  {message.content}
+                </div>
+              ) : (
+                <AssistantResponseSurface
+                  message={message}
+                  isPremium={isPremium}
+                  actionLoading={financeActionLoadingForMessage[message.id] || null}
+                  onAction={(actionType) => void handleFinanceAction(message.id, actionType)}
+                  onPremiumRequired={() => setShowPaywall(true)}
+                />
+              )}
+            </motion.div>
+          ))}
 
-        <AnimatePresence>
+        <AnimatePresence mode="wait">
           {showThinkingSurface ? (
-            <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: 6 }}>
+            <motion.div
+              key="thinking-surface"
+              initial={{ opacity: 0, y: 8 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -8 }}
+              transition={{ duration: 0.24 }}
+            >
               <AgentThinkingSurface statusText={thinkingStatus} steps={derivedExecutionSteps} />
             </motion.div>
           ) : null}
         </AnimatePresence>
 
         {streamError && !streamError.startsWith('LIMIT_REACHED:') && !streamError.startsWith('AUTH_REQUIRED:') && !streamError.startsWith('PREMIUM_REQUIRED:') ? (
-          <div className="rounded-xl border border-black/5 bg-[#f7f7f7] px-3 py-2.5 text-sm text-[#373737]">
+          <div className="rounded-xl border border-[#E5E7EB] bg-white px-3 py-2.5 text-sm text-[#334155]">
             We hit a processing issue, but your conversation is still safe.
             <button type="button" onClick={() => void retryLastPrompt()} className="btn-secondary ml-2 inline-flex items-center gap-1 px-2 py-1 text-xs">
               <RefreshCw className="h-3 w-3" /> Retry
@@ -424,7 +413,6 @@ export default function ChatPage() {
         draft={draft}
         notice={composerNotice}
         openPanel={openPanel === 'conversations' ? null : openPanel}
-        isVoiceMode={isVoiceMode}
         voiceSupported={voiceSupported}
         isAgentResponding={isAgentResponding}
         isLimitReached={isLimitReached}
@@ -439,7 +427,6 @@ export default function ChatPage() {
           if (requireAuth()) router.push('/login?next=/chat');
         }}
         onTogglePanel={(panel) => setOpenPanel((prev) => (prev === panel ? null : panel))}
-        onToggleVoiceMode={toggleVoiceMode}
         onSpeechToText={startSpeechToText}
         onAttachFile={() => {
           if (!isPremium) {
@@ -453,29 +440,13 @@ export default function ChatPage() {
         onAddImagePrompt={() => applyTemplate('Please use this image as context:', 'Image template added.')}
         onStartTaskTemplate={() => applyTemplate('Start a structured task template for: ', 'Task template added.')}
         onAddNoteTemplate={() => applyTemplate('Quick note: ', 'Note template added.')}
-        onNewChat={handleNewChat}
-        onViewConversations={() => setOpenPanel('conversations')}
-        onClearDraft={() => {
-          setDraft('');
-          setDraftPrompt('');
-          setComposerNotice('Draft cleared.');
-          setOpenPanel(null);
-        }}
-        onOpenPlanInfo={() =>
-          setComposerNotice(
-            usage.unlimited
-              ? `Usage: Unlimited (Dev Mode) • Runs today: ${usage.current} • Plan: ${plan}`
-              : `Usage: ${usage.current}/${usage.limit} • Plan: ${plan}`,
-          )
-        }
-        onUpgrade={openUpgrade}
       />
 
       {isLimitReached && !isUnlimited ? (
-        <div className="fixed bottom-[calc(160px+env(safe-area-inset-bottom))] left-1/2 z-20 w-full max-w-md -translate-x-1/2 px-4">
-          <div className="rounded-2xl border border-black/10 bg-[#f6f6f6] px-3 py-2.5 text-xs text-[#444] shadow-[0_8px_18px_rgba(0,0,0,0.05)]">
+        <div className="fixed bottom-[calc(156px+env(safe-area-inset-bottom))] left-1/2 z-20 w-full max-w-md -translate-x-1/2 px-4">
+          <div className="rounded-2xl border border-[#E5E7EB] bg-white px-3 py-2.5 text-xs text-[#475569] shadow-[0_8px_18px_rgba(15,23,42,0.08)]">
             You&apos;ve reached your daily limit. Upgrade for higher limits and file tools.
-            <button type="button" onClick={openUpgrade} className="ml-2 inline-flex rounded-full border border-black/15 px-2 py-0.5 text-[11px] font-medium">
+            <button type="button" onClick={openUpgrade} className="ml-2 inline-flex rounded-full border border-[#E5E7EB] px-2 py-0.5 text-[11px] font-medium">
               Upgrade
             </button>
           </div>
