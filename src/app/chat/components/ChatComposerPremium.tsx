@@ -72,7 +72,7 @@ export function ChatComposerPremium(props: ChatComposerPremiumProps) {
             initial={{ opacity: 0, y: 10 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: 6 }}
-            className="mb-2 rounded-[20px] border border-white/10 bg-[#111111]/96 p-1.5 shadow-[0_18px_38px_rgba(0,0,0,0.5)] backdrop-blur-2xl"
+            className="mb-2 rounded-[20px] border border-white/12 bg-[#111216]/94 p-1.5 shadow-[0_24px_42px_rgba(0,0,0,0.52)] backdrop-blur-2xl"
           >
             <button type="button" onClick={onAttachFile} className="composer-menu-btn"><Paperclip className="h-4 w-4" /> Attach file</button>
             <button type="button" onClick={onAddImagePrompt} className="composer-menu-btn"><ImagePlus className="h-4 w-4" /> Use image context</button>
@@ -82,8 +82,8 @@ export function ChatComposerPremium(props: ChatComposerPremiumProps) {
         ) : null}
       </AnimatePresence>
 
-      <div className="rounded-[30px] border border-white/10 bg-[#0f0f10]/94 p-2 shadow-[0_20px_54px_rgba(0,0,0,0.58)] backdrop-blur-2xl">
-        <div className="rounded-[24px] border border-white/10 bg-black/30 px-3 py-2">
+      <div className="rounded-[30px] border border-white/12 bg-[#0b0c0e]/92 p-2 shadow-[0_20px_60px_rgba(0,0,0,0.62)] backdrop-blur-2xl">
+        <div className="rounded-[24px] border border-white/12 bg-black/35 px-3 py-2">
           <input
             ref={fileInputRef}
             type="file"
