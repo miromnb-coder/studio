@@ -8,6 +8,7 @@ import { toFriendlyAuthMessage } from '@/lib/auth/messages';
 import { useAppStore } from '../store/app-store';
 import { useUserEntitlements } from '../hooks/use-user-entitlements';
 import { GmailIntegrationCard } from '../components/profile/GmailIntegrationCard';
+import { AppShell, PremiumCard, SectionHeader, SmartButton } from '../components/premium-ui';
 
 function ProfilePageContent() {
   const router = useRouter();
@@ -56,17 +57,9 @@ function ProfilePageContent() {
         return;
       }
 
-      const { data: profile } = await supabase
-        .from('profiles')
-        .select('full_name')
-        .eq('id', authUser.id)
-        .maybeSingle();
+      const { data: profile } = await supabase.from('profiles').select('full_name').eq('id', authUser.id).maybeSingle();
 
-      const nextName =
-        profile?.full_name ||
-        (authUser.user_metadata?.full_name as string | undefined) ||
-        authUser.email?.split('@')[0] ||
-        'User';
+      const nextName = profile?.full_name || (authUser.user_metadata?.full_name as string | undefined) || authUser.email?.split('@')[0] || 'User';
       const nextEmail = authUser.email ?? '';
 
       setFullName(nextName);
@@ -138,9 +131,7 @@ function ProfilePageContent() {
       return;
     }
 
-    const { error: metadataError } = await supabase.auth.updateUser({
-      data: { full_name: nextName },
-    });
+    const { error: metadataError } = await supabase.auth.updateUser({ data: { full_name: nextName } });
 
     if (metadataError) {
       console.error('Metadata update error', metadataError);
@@ -173,65 +164,67 @@ function ProfilePageContent() {
   const gmailCallbackState = searchParams.get('gmail');
 
   return (
-    <main className="screen app-bg">
-      <section className="card-surface p-5">
-        <h1 className="text-2xl font-semibold text-primary">Profile</h1>
-        <p className="text-sm text-secondary">Manage your Kivo account details.</p>
+    <AppShell>
+      <PremiumCard className="space-y-4 p-5">
+        <SectionHeader title="Profile" subtitle="Manage your identity, integrations, and operator preferences." />
 
-        <div className="mt-4 rounded-xl border border-black/10 bg-[#f2f2f2] p-4 text-sm">
-          <p className="text-secondary">Avatar</p>
-          <div className="mt-2 inline-flex h-12 w-12 items-center justify-center rounded-full border border-black/10 bg-[#ececec] text-base font-semibold text-primary">
-            {(fullName || user?.name || 'U').slice(0, 1).toUpperCase()}
+        <PremiumCard className="bg-[#F8FAFF] p-4">
+          <p className="text-xs uppercase tracking-wide text-slate-500">Identity</p>
+          <div className="mt-2 flex items-center gap-3">
+            <div className="inline-flex h-12 w-12 items-center justify-center rounded-full bg-[#EEF0FF] text-base font-semibold text-[#5B5CF0]">
+              {(fullName || user?.name || 'U').slice(0, 1).toUpperCase()}
+            </div>
+            <div>
+              <p className="text-base font-semibold text-slate-900">{fullName || 'User'}</p>
+              <p className="text-sm text-slate-500">{email || 'No email'}</p>
+            </div>
           </div>
-        </div>
+        </PremiumCard>
 
-        <form onSubmit={saveProfile} className="mt-4 space-y-3">
+        <form onSubmit={saveProfile} className="space-y-3">
           <label className="block text-sm">
-            <span className="mb-1 block text-secondary">Display name</span>
-            <input
-              value={fullName}
-              onChange={(event) => setFullName(event.target.value)}
-              className="system-input w-full px-3 py-2"
-              placeholder="Your name"
-              required
-            />
+            <span className="mb-1 block text-slate-500">Display name</span>
+            <input value={fullName} onChange={(event) => setFullName(event.target.value)} className="system-input w-full bg-white px-3 py-2" placeholder="Your name" required />
           </label>
 
           <label className="block text-sm">
-            <span className="mb-1 block text-secondary">Email</span>
-            <input value={email} disabled className="system-input w-full px-3 py-2 opacity-70" />
+            <span className="mb-1 block text-slate-500">Email</span>
+            <input value={email} disabled className="system-input w-full bg-white px-3 py-2 opacity-70" />
           </label>
 
-          {error ? <p className="rounded-xl border border-[#dfc9c9] bg-[#f8eded] px-3 py-2 text-sm text-[#6e3030]">{error}</p> : null}
-          {status ? <p className="rounded-xl border border-[#d7dfc9] bg-[#f3f8ed] px-3 py-2 text-sm text-[#3f5c2a]">{status}</p> : null}
+          {error ? <p className="rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-600">{error}</p> : null}
+          {status ? <p className="rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-600">{status}</p> : null}
 
-          <button type="submit" className="btn-primary tap-feedback w-full px-4 py-2 text-sm disabled:opacity-60" disabled={isSaving || !fullName.trim()}>
-            {isSaving ? 'Saving…' : 'Save profile'}
-          </button>
+          <SmartButton type="submit" className="w-full" disabled={isSaving || !fullName.trim()}>{isSaving ? 'Saving…' : 'Save profile'}</SmartButton>
         </form>
 
-        <div className="mt-4 rounded-xl border border-black/10 bg-[#f2f2f2] p-4 text-sm">
-          <p className="font-medium text-primary">Connection status</p>
-          <p className="mt-1 text-secondary">Google sign-in: {signedInWithGoogle ? 'Connected' : 'Not connected'}</p>
-          <p className="text-secondary">Gmail access: {gmailConnected ? 'Connected' : 'Not connected'}</p>
-        </div>
+        <PremiumCard className="p-4">
+          <p className="text-sm font-semibold text-slate-900">Connected tools</p>
+          <p className="mt-1 text-sm text-slate-500">Google sign-in: {signedInWithGoogle ? 'Connected' : 'Not connected'}</p>
+          <p className="text-sm text-slate-500">Gmail access: {gmailConnected ? 'Connected' : 'Not connected'}</p>
+        </PremiumCard>
 
-        <div className="mt-4 rounded-xl border border-black/10 bg-[#f2f2f2] p-4 text-sm">
-          <p className="font-medium text-primary">Subscription</p>
-          <p className="mt-1 text-secondary">Current plan: {plan}</p>
-          <p className="text-secondary">Usage today: {usage.unlimited ? 'Unlimited (Dev Mode)' : `${usage.current} / ${usage.limit}`}</p>
-          <Link href="/upgrade" className="btn-secondary tap-feedback mt-3 inline-flex px-3 py-1.5 text-xs">
-            Upgrade
-          </Link>
-        </div>
+        <PremiumCard className="p-4">
+          <p className="text-sm font-semibold text-slate-900">Preferences</p>
+          <p className="mt-1 text-sm text-slate-500">Language: English</p>
+          <p className="text-sm text-slate-500">Theme: Premium Intelligence</p>
+          <p className="text-sm text-slate-500">Response style: Strategic + concise</p>
+        </PremiumCard>
+
+        <PremiumCard className="p-4">
+          <p className="text-sm font-semibold text-slate-900">Plan</p>
+          <p className="mt-1 text-sm text-slate-500">Current plan: {plan}</p>
+          <p className="text-sm text-slate-500">Usage today: {usage.unlimited ? 'Unlimited (Dev Mode)' : `${usage.current} / ${usage.limit}`}</p>
+          <Link href="/upgrade" className="mt-3 inline-flex"><SmartButton variant="secondary" className="text-xs">Upgrade</SmartButton></Link>
+        </PremiumCard>
 
         <GmailIntegrationCard gmailCallbackState={gmailCallbackState} />
 
-        <button type="button" className="btn-secondary tap-feedback mt-3 w-full px-4 py-2 text-sm" onClick={logout} disabled={isSigningOut}>
+        <SmartButton variant="secondary" className="w-full" type="button" onClick={logout} disabled={isSigningOut}>
           {isSigningOut ? 'Signing out…' : 'Sign out'}
-        </button>
-      </section>
-    </main>
+        </SmartButton>
+      </PremiumCard>
+    </AppShell>
   );
 }
 

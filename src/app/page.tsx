@@ -4,7 +4,7 @@ import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import type { ReactNode } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { Bell, LogOut } from 'lucide-react';
+import { Bell, LogOut, Mail, Sparkles, Wallet, AlertTriangle } from 'lucide-react';
 import { useAppStore } from './store/app-store';
 import { createClient } from '@/lib/supabase/client';
 import { DashboardHero } from './components/dashboard/DashboardHero';
@@ -14,6 +14,18 @@ import { SavingsChart } from './components/dashboard/SavingsChart';
 import { OpportunitiesList } from './components/dashboard/OpportunitiesList';
 import { RecentActivity } from './components/dashboard/RecentActivity';
 import type { DashboardPayload, DashboardInsight, OpportunityItem, SubscriptionItem } from './components/dashboard/types';
+import {
+  AIOrb,
+  AIStatusPill,
+  AnimatedNumber,
+  AppShell,
+  EmptyState,
+  PremiumCard,
+  SectionHeader,
+  SmartButton,
+  StatCard,
+  ActionRow,
+} from './components/premium-ui';
 
 const emptyState: DashboardPayload = {
   stats: { monthlyTotal: 0, estimatedSavings: 0, activeSubscriptions: 0 },
@@ -42,10 +54,10 @@ class DashboardSectionBoundary extends React.Component<{ title: string; children
   render() {
     if (this.state.hasError) {
       return (
-        <section className="card-surface dashboard-reveal p-4">
-          <h2 className="text-base font-semibold text-primary">{this.props.title}</h2>
-          <p className="mt-2 text-sm text-secondary">This section is temporarily unavailable. Try refreshing the page.</p>
-        </section>
+        <PremiumCard className="p-4">
+          <h2 className="text-base font-semibold text-slate-900">{this.props.title}</h2>
+          <p className="mt-2 text-sm text-slate-500">This section is temporarily unavailable. Try refreshing the page.</p>
+        </PremiumCard>
       );
     }
 
@@ -153,103 +165,103 @@ export default function HomePage() {
   );
 
   const openInsight = (insight: DashboardInsight) => openInChat(insight.contextPrompt);
-
   const openSubscription = (subscription: SubscriptionItem) => {
     openInChat(
       `Review my ${subscription.name} subscription (${Math.round(subscription.monthlyCost)}/month, status: ${subscription.rawStatus}). Tell me if I should keep, downgrade, or cancel.`,
     );
   };
-
   const openOpportunity = (item: OpportunityItem) => openInChat(item.contextPrompt);
 
   const hasData = data.subscriptions.length > 0 || data.recentActions.length > 0 || data.proactiveInsights.length > 0;
   const showLoadingState = Boolean(user?.id) && loading;
 
   return (
-    <main className="screen app-bg pb-24">
-      <section className="mb-4 flex items-center justify-between rounded-2xl bg-[#f7f7f7] px-4 py-3">
-        <div>
-          <p className="text-lg font-semibold text-primary">Operator Dashboard</p>
-          <button onClick={editName} type="button" className="text-xs text-secondary">{user?.name || 'Set your name'}</button>
+    <AppShell>
+      <header className="mb-4 rounded-2xl border border-[#E5E7EB] bg-white/90 p-4 shadow-[0_8px_24px_rgba(15,23,42,0.06)]">
+        <div className="flex items-start justify-between gap-3">
+          <div>
+            <p className="text-xs text-slate-500">Good afternoon, {user?.name || 'there'}</p>
+            <h1 className="text-3xl font-semibold tracking-tight text-slate-900">Your operator is ready.</h1>
+            <button onClick={editName} type="button" className="mt-1 text-xs text-[#5B5CF0]">Edit name</button>
+          </div>
+          <div className="flex items-center gap-1">
+            <Link href="/alerts" className="rounded-full border border-[#E5E7EB] p-2 text-slate-500"><Bell className="h-4 w-4" /></Link>
+            <button type="button" onClick={logout} className="rounded-full border border-[#E5E7EB] p-2 text-slate-500"><LogOut className="h-4 w-4" /></button>
+          </div>
         </div>
-        <div className="flex items-center gap-1">
-          <Link href="/alerts" className="tap-feedback rounded-full p-2 text-secondary"><Bell className="h-5 w-5" /></Link>
-          <button type="button" onClick={logout} className="tap-feedback rounded-full p-2 text-secondary"><LogOut className="h-5 w-5" /></button>
-        </div>
-      </section>
+        <div className="mt-3"><AIStatusPill status={loading ? 'Analyzing' : 'Ready'} /></div>
+      </header>
 
       {!user?.id ? (
-        <section className="card-elevated p-6 text-center">
-          <h1 className="text-2xl font-semibold tracking-tight text-primary">Sign in to activate your control center</h1>
-          <p className="mt-2 text-sm text-secondary">Your subscriptions and savings intelligence load from your secure Supabase profile.</p>
-          <Link href="/login" className="btn-primary mt-4 inline-flex px-4 py-2 text-sm">Go to login</Link>
-        </section>
+        <EmptyState
+          title="Sign in to activate Premium Intelligence"
+          message="Your operator syncs signals from your secure account and surfaces your next best actions."
+          action={<Link href="/login"><SmartButton>Go to login</SmartButton></Link>}
+        />
       ) : showLoadingState ? (
-        <section className="card-elevated dashboard-reveal space-y-3 p-6 text-center">
-          <h1 className="text-2xl font-semibold tracking-tight text-primary">Loading your dashboard…</h1>
-          <p className="text-sm text-secondary">Pulling your subscriptions, opportunities, and recent activity.</p>
-        </section>
+        <PremiumCard className="shimmer space-y-2 p-6 text-center">
+          <AIOrb />
+          <h2 className="text-xl font-semibold text-slate-900">Loading mission control</h2>
+          <p className="text-sm text-slate-500">Pulling your savings, tasks, and alerts.</p>
+        </PremiumCard>
       ) : dashboardError ? (
-        <section className="card-elevated dashboard-reveal space-y-4 p-6 text-center">
-          <h1 className="text-2xl font-semibold tracking-tight text-primary">Dashboard unavailable</h1>
-          <p className="text-sm text-secondary">{dashboardError}</p>
-          <button
-            type="button"
-            className="btn-primary mx-auto inline-flex px-4 py-2 text-sm"
-            onClick={() => window.location.reload()}
-          >
-            Retry loading dashboard
-          </button>
-        </section>
+        <EmptyState
+          title="Dashboard unavailable"
+          message={dashboardError}
+          action={<SmartButton onClick={() => window.location.reload()}>Retry loading dashboard</SmartButton>}
+        />
       ) : !hasData && !loading ? (
-        <section className="card-elevated dashboard-reveal space-y-4 p-6 text-center">
-          <h1 className="text-2xl font-semibold tracking-tight text-primary">Your dashboard is ready for first analysis</h1>
-          <p className="text-sm text-secondary">Paste your subscriptions to analyze, and the operator will build savings actions automatically.</p>
-          <button
-            type="button"
-            className="btn-primary mx-auto inline-flex px-4 py-2 text-sm"
-            onClick={() => openInChat('Paste your subscriptions to analyze and build my first savings dashboard.')}
-          >
-            Paste your subscriptions to analyze
-          </button>
-        </section>
+        <EmptyState
+          title="Your first intelligence report is one step away"
+          message="Run your first analysis and we’ll generate priorities, opportunities, and savings actions instantly."
+          action={<SmartButton onClick={() => openInChat('Paste your subscriptions to analyze and build my first savings dashboard.')}>Run first analysis</SmartButton>}
+        />
       ) : (
         <section className="space-y-4">
-          <DashboardSectionBoundary title="Control center summary">
-            <DashboardHero
-              monthlySavings={data.stats.estimatedSavings}
-              monthlyCost={data.stats.monthlyTotal}
-              activeSubscriptions={data.stats.activeSubscriptions}
-              loading={loading}
-            />
-          </DashboardSectionBoundary>
+          <PremiumCard className="space-y-4 p-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-xs uppercase tracking-wide text-slate-500">Potential monthly savings</p>
+                <AnimatedNumber value={data.stats.estimatedSavings} />
+              </div>
+              <AIOrb className="h-16 w-16" />
+            </div>
+            <p className="text-sm text-slate-500">Top recommendation: Review your highest monthly subscription stack and remove duplicates.</p>
+            <SmartButton onClick={() => openInChat('What should I optimize first this week?')}>Open next recommendation</SmartButton>
+          </PremiumCard>
 
-          <DashboardSectionBoundary title="Proactive insights">
-            <ProactiveInsights insights={data.proactiveInsights} onOpenInsight={openInsight} />
-          </DashboardSectionBoundary>
+          <div className="grid grid-cols-2 gap-3">
+            <StatCard title="Total monthly spend" value={<AnimatedNumber value={data.stats.monthlyTotal} />} />
+            <StatCard title="Active subscriptions" value={<span className="text-3xl font-semibold text-slate-900">{data.stats.activeSubscriptions}</span>} />
+          </div>
 
-          <DashboardSectionBoundary title="Active subscriptions">
-            <SubscriptionsList subscriptions={data.subscriptions} onOpenSubscription={openSubscription} />
-          </DashboardSectionBoundary>
+          <PremiumCard className="p-4">
+            <SectionHeader title="Priority right now" subtitle="Top 3 moves with highest impact" />
+            <div className="space-y-2">
+              {data.topOpportunities.slice(0, 3).map((item) => (
+                <ActionRow key={item.id} title={item.title} description={item.summary} icon={<AlertTriangle className="h-4 w-4" />} onClick={() => openOpportunity(item)} />
+              ))}
+            </div>
+          </PremiumCard>
 
-          <DashboardSectionBoundary title="Savings over time">
-            <SavingsChart
-              points={data.savingsSeries.map((point) => ({
-                date: point.label,
-                savings: point.value,
-              }))}
-            />
-          </DashboardSectionBoundary>
+          <PremiumCard className="p-4">
+            <SectionHeader title="Quick actions" />
+            <div className="grid grid-cols-2 gap-2.5">
+              <ActionRow title="Check Gmail" description="Scan latest finance emails" icon={<Mail className="h-4 w-4" />} onClick={() => openInChat('Check Gmail for billing and subscription changes.')} />
+              <ActionRow title="Optimize spending" description="Find reduction opportunities" icon={<Wallet className="h-4 w-4" />} onClick={() => openInChat('Optimize my current spending and list immediate wins.')} />
+              <ActionRow title="Ask AI" description="Get strategic guidance" icon={<Sparkles className="h-4 w-4" />} onClick={() => openInChat('What should I improve this month?')} />
+              <ActionRow title="Review alerts" description="Prioritize high-risk items" icon={<Bell className="h-4 w-4" />} onClick={() => router.push('/alerts')} />
+            </div>
+          </PremiumCard>
 
-          <DashboardSectionBoundary title="Top opportunities">
-            <OpportunitiesList opportunities={data.topOpportunities} onOpenOpportunity={openOpportunity} />
-          </DashboardSectionBoundary>
-
-          <DashboardSectionBoundary title="Recent activity">
-            <RecentActivity actions={data.recentActions} />
-          </DashboardSectionBoundary>
+          <DashboardSectionBoundary title="Control center summary"><DashboardHero monthlySavings={data.stats.estimatedSavings} monthlyCost={data.stats.monthlyTotal} activeSubscriptions={data.stats.activeSubscriptions} loading={loading} /></DashboardSectionBoundary>
+          <DashboardSectionBoundary title="Proactive insights"><ProactiveInsights insights={data.proactiveInsights} onOpenInsight={openInsight} /></DashboardSectionBoundary>
+          <DashboardSectionBoundary title="Active subscriptions"><SubscriptionsList subscriptions={data.subscriptions} onOpenSubscription={openSubscription} /></DashboardSectionBoundary>
+          <DashboardSectionBoundary title="Savings over time"><SavingsChart points={data.savingsSeries.map((point) => ({ date: point.label, savings: point.value }))} /></DashboardSectionBoundary>
+          <DashboardSectionBoundary title="Top opportunities"><OpportunitiesList opportunities={data.topOpportunities} onOpenOpportunity={openOpportunity} /></DashboardSectionBoundary>
+          <DashboardSectionBoundary title="Recent activity"><RecentActivity actions={data.recentActions} /></DashboardSectionBoundary>
         </section>
       )}
-    </main>
+    </AppShell>
   );
 }

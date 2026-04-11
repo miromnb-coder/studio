@@ -3,6 +3,7 @@
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { Bell, CircleUserRound, ClipboardCheck, Home, MessageSquare } from 'lucide-react';
+import { motion } from 'framer-motion';
 
 const tabs = [
   { label: 'Home', href: '/', icon: Home },
@@ -16,28 +17,29 @@ export function BottomNav() {
   const pathname = usePathname();
   const hiddenOn = ['/login', '/signup'];
 
-  if (hiddenOn.includes(pathname)) {
-    return null;
-  }
+  if (hiddenOn.includes(pathname)) return null;
 
   return (
-    <nav className="fixed bottom-0 left-1/2 z-40 grid w-full max-w-md -translate-x-1/2 grid-cols-5 border-t border-black/10 bg-[#f7f7f7]/95 px-4 pt-3 pb-[calc(0.75rem+env(safe-area-inset-bottom))] backdrop-blur-sm">
-      {tabs.map(({ label, href, icon: Icon }) => {
-        const active = pathname === href;
-        return (
-          <Link
-            key={label}
-            href={href}
-            className={`nav-tab tap-feedback flex flex-col items-center gap-1.5 rounded-xl py-1.5 text-xs font-medium transition ${
-              active ? 'text-black' : 'text-[#666] hover:text-[#111]'
-            }`}
-            aria-current={active ? 'page' : undefined}
-          >
-            <Icon className="h-[18px] w-[18px] stroke-[1.9]" />
-            {label}
-          </Link>
-        );
-      })}
+    <nav className="fixed bottom-[max(8px,env(safe-area-inset-bottom))] left-1/2 z-40 w-full max-w-md -translate-x-1/2 px-3">
+      <div className="grid grid-cols-5 rounded-[22px] border border-[#E5E7EB]/90 bg-white/80 px-1.5 py-1.5 shadow-[0_12px_30px_rgba(15,23,42,0.10)] backdrop-blur-xl">
+        {tabs.map(({ label, href, icon: Icon }) => {
+          const active = pathname === href;
+          return (
+            <Link
+              key={label}
+              href={href}
+              className={`relative flex flex-col items-center gap-1 rounded-2xl py-2 text-[11px] font-medium transition ${
+                active ? 'text-[#5B5CF0]' : 'text-slate-500 hover:text-slate-700'
+              }`}
+              aria-current={active ? 'page' : undefined}
+            >
+              {active ? <motion.span layoutId="active-tab" className="absolute inset-0 rounded-xl bg-[#EEF0FF]" transition={{ type: 'spring', stiffness: 280, damping: 24 }} /> : null}
+              <Icon className="relative z-10 h-[18px] w-[18px] stroke-[2]" />
+              <span className="relative z-10">{label}</span>
+            </Link>
+          );
+        })}
+      </div>
     </nav>
   );
 }
