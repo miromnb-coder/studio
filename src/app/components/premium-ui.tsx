@@ -50,8 +50,8 @@ export function SmartButton({
 }: React.ButtonHTMLAttributes<HTMLButtonElement> & { variant?: 'primary' | 'secondary' | 'ghost' }) {
   const base = 'tap-feedback inline-flex items-center justify-center rounded-[14px] px-4 py-2.5 text-sm font-medium tracking-[-0.01em]';
   const variants = {
-    primary: 'border border-white/22 bg-white text-zinc-900 hover:bg-zinc-100 shadow-[0_8px_20px_rgba(0,0,0,0.32)]',
-    secondary: 'border border-white/9 bg-white/[0.04] text-zinc-200 hover:bg-white/[0.07]',
+    primary: 'border border-white/16 bg-white text-zinc-900 hover:bg-zinc-100 shadow-[0_10px_24px_rgba(0,0,0,0.38)]',
+    secondary: 'border border-white/6 bg-white/[0.03] text-zinc-200 hover:bg-white/[0.06]',
     ghost: 'text-zinc-300 hover:bg-white/[0.05]',
   } as const;
 
@@ -64,7 +64,7 @@ export function SmartButton({
 
 export function AIStatusPill({ status = 'Ready' }: { status?: string }) {
   return (
-    <div className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/[0.04] px-3 py-1.5 text-xs font-medium text-zinc-300">
+    <div className="inline-flex items-center gap-2 rounded-full border border-white/7 bg-white/[0.03] px-3 py-1.5 text-xs font-medium text-zinc-300">
       <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-zinc-200" />
       {status}
     </div>
@@ -106,7 +106,7 @@ export function EmptyState({
 }) {
   return (
     <PremiumCard className="space-y-3 p-6 text-center">
-      <div className="mx-auto inline-flex rounded-2xl border border-white/15 bg-white/[0.06] p-3 text-zinc-200"><Sparkles className="h-5 w-5" /></div>
+      <div className="mx-auto inline-flex rounded-2xl border border-white/10 bg-white/[0.05] p-3 text-zinc-200"><Sparkles className="h-5 w-5" /></div>
       <h3 className="text-lg font-semibold text-zinc-100">{title}</h3>
       <p className="text-sm text-zinc-400">{message}</p>
       {action ? <div className="pt-1">{action}</div> : null}
@@ -122,7 +122,7 @@ export function ActionRow({ title, description, icon, onClick }: { title: string
       className="premium-card premium-card-hover flex w-full items-start gap-3 p-4 text-left"
       type="button"
     >
-      <div className="rounded-xl border border-white/15 bg-white/[0.04] p-2.5 text-zinc-300">{icon}</div>
+      <div className="rounded-xl border border-white/9 bg-white/[0.03] p-2.5 text-zinc-300">{icon}</div>
       <div>
         <p className="text-sm font-semibold text-zinc-100">{title}</p>
         <p className="text-xs text-zinc-400">{description}</p>
