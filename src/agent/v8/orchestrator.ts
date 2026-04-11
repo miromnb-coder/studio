@@ -7,6 +7,35 @@ import { synthesizeResponseV8 } from './synthesizer';
 import { AgentResponseV8, AgentRunInputV8, SystemStateV8 } from './types';
 import { verifyExecutionV8 } from './verifier';
 
+function buildSafeFallbackReply(input: {
+  userMessage: string;
+  intent: string;
+  clarificationQuestion?: string;
+}): string {
+  const { intent, clarificationQuestion } = input;
+
+  if (intent === 'finance') {
+    return [
+      'Summary: I could not fully complete the financial analysis from the available evidence.',
+      'Biggest Opportunity: Start with one concrete monthly cost, bill, or subscription so I can make the next answer much more precise.',
+      'Top Actions:',
+      '- Share one recurring charge or monthly spending target.',
+      '- Ask for a subscription audit or savings plan.',
+      '- Add Gmail or finance evidence if you want deeper analysis.',
+      'Estimated Monthly Impact: Unknown until more grounded data is available.',
+      'Confidence: Low (the system did not have enough validated evidence to produce a strong financial recommendation).',
+      clarificationQuestion
+        ? `Question: ${clarificationQuestion}`
+        : 'Question: What is one concrete number I should optimize around?',
+      'Next Step: Send one bill, subscription, or monthly target and I will turn it into a more precise action plan.',
+    ].join('\n');
+  }
+
+  return clarificationQuestion
+    ? `I need one concrete detail to give a precise answer.\nQuestion: ${clarificationQuestion}`
+    : 'I need one concrete detail to give a precise answer.';
+}
+
 export async function runAgentV8(input: AgentRunInputV8): Promise<AgentResponseV8> {
   let state: SystemStateV8 = 'idle';
 
@@ -34,12 +63,26 @@ export async function runAgentV8(input: AgentRunInputV8): Promise<AgentResponseV
 
   let draftReply = '';
 
-  if (route.intent === 'finance') {
-    const financeOutput = await runFinanceAgent({ route, context, plan, execution });
-    draftReply = financeOutput.answerDraft;
-  } else {
-    const researchOutput = await runResearchAgent({ route, context, execution });
-    draftReply = researchOutput.answerDraft;
+  try {
+    if (route.intent === 'finance') {
+      const financeOutput = await runFinanceAgent({ route, context, plan, execution });
+      draftReply = financeOutput.answerDraft;
+    } else {
+      const researchOutput = await runResearchAgent({ route, context, execution });
+      draftReply = researchOutput.answerDraft;
+    }
+  } catch (error) {
+    console.error('AGENT_SPECIALIST_FAILURE', {
+      intent: route.intent,
+      subtype: route.subtype,
+      error: error instanceof Error ? error.message : 'Unknown specialist failure',
+    });
+
+    draftReply = buildSafeFallbackReply({
+      userMessage: input.input,
+      intent: route.intent,
+      clarificationQuestion: plan.clarificationQuestion,
+    });
   }
 
   const critic = verifyExecutionV8({
@@ -51,14 +94,30 @@ export async function runAgentV8(input: AgentRunInputV8): Promise<AgentResponseV
     structuredData: execution.structuredData,
   });
 
+  const finalReply =
+    critic.refinedReply && critic.refinedReply.trim().length > 0
+      ? critic.refinedReply.trim()
+      : buildSafeFallbackReply({
+          userMessage: input.input,
+          intent: route.intent,
+          clarificationQuestion: plan.clarificationQuestion,
+        });
+
   await runMemoryAgent({
     supabase: input.supabase,
     userId: input.userId,
     userMessage: input.input,
-    assistantReply: critic.refinedReply,
+    assistantReply: finalReply,
     context,
     intent: route.intent,
-  }).catch(() => ({ stored: [] }));
+  }).catch((error) => {
+    console.error('MEMORY_AGENT_FAILURE', {
+      userId: input.userId,
+      intent: route.intent,
+      error: error instanceof Error ? error.message : 'Unknown memory failure',
+    });
+    return { stored: [] };
+  });
 
   state = 'responding';
   const response = synthesizeResponseV8({
@@ -67,7 +126,7 @@ export async function runAgentV8(input: AgentRunInputV8): Promise<AgentResponseV
     execution,
     context,
     verificationPassed: critic.passed,
-    refinedReply: critic.refinedReply,
+    refinedReply: finalReply,
     critic,
   });
 
