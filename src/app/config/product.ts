@@ -1,6 +1,6 @@
-export const PRODUCT_NAME = 'Nova Operator';
+export const PRODUCT_NAME = 'Kivo';
 
 export const PRODUCT_DESCRIPTION =
-  'Premium mobile AI operator dashboard for research, analysis, and automation.';
+  'Premium mobile AI command center for analysis, automation, and proactive decision support.';
 
-export const PRODUCT_SHORT = 'Nova';
+export const PRODUCT_SHORT = 'Kivo';

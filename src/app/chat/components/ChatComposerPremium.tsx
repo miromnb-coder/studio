@@ -59,7 +59,7 @@ export function ChatComposerPremium(props: ChatComposerPremiumProps) {
             initial={{ opacity: 0, y: 6 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: 6 }}
-            className="mb-2 px-2 text-xs text-[#64748B]"
+            className="mb-2 px-2 text-xs text-slate-400"
           >
             {notice}
           </motion.p>
@@ -72,7 +72,7 @@ export function ChatComposerPremium(props: ChatComposerPremiumProps) {
             initial={{ opacity: 0, y: 10 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: 8 }}
-            className="mb-2 rounded-2xl border border-[#E5E7EB] bg-white/95 p-1.5 shadow-[0_12px_26px_rgba(15,23,42,0.08)] backdrop-blur-xl"
+            className="mb-2 rounded-2xl border border-white/10 bg-[#0E142A]/96 p-1.5 shadow-[0_16px_30px_rgba(0,0,0,0.42)] backdrop-blur-xl"
           >
             <button type="button" onClick={onAttachFile} className="composer-menu-btn"><Paperclip className="h-4 w-4" /> Attach file</button>
             <button type="button" onClick={onAddImagePrompt} className="composer-menu-btn"><ImagePlus className="h-4 w-4" /> Insert image prompt</button>
@@ -82,7 +82,7 @@ export function ChatComposerPremium(props: ChatComposerPremiumProps) {
         ) : null}
       </AnimatePresence>
 
-      <div className="rounded-[26px] border border-[#DEE3F3] bg-white/92 p-1.5 shadow-[0_18px_40px_rgba(56,72,140,0.13)] backdrop-blur-xl">
+      <div className="rounded-[26px] border border-white/10 bg-[#0C1226]/90 p-1.5 shadow-[0_20px_38px_rgba(0,0,0,0.45)] backdrop-blur-xl">
         <div className="flex items-center gap-1.5">
           <input
             ref={fileInputRef}

@@ -55,8 +55,8 @@ class DashboardSectionBoundary extends React.Component<{ title: string; children
     if (this.state.hasError) {
       return (
         <PremiumCard className="p-4">
-          <h2 className="text-base font-semibold text-slate-900">{this.props.title}</h2>
-          <p className="mt-2 text-sm text-slate-500">This section is temporarily unavailable. Try refreshing the page.</p>
+          <h2 className="text-base font-semibold text-slate-100">{this.props.title}</h2>
+          <p className="mt-2 text-sm text-slate-400">This section is temporarily unavailable. Try refreshing the page.</p>
         </PremiumCard>
       );
     }
@@ -177,16 +177,16 @@ export default function HomePage() {
 
   return (
     <AppShell>
-      <header className="mb-4 rounded-2xl border border-[#E5E7EB] bg-white/90 p-4 shadow-[0_8px_24px_rgba(15,23,42,0.06)]">
+      <header className="mb-4 rounded-2xl border border-white/10 bg-white/[0.03] p-4 shadow-[0_16px_34px_rgba(0,0,0,0.35)] backdrop-blur-xl">
         <div className="flex items-start justify-between gap-3">
           <div>
-            <p className="text-xs text-slate-500">Good afternoon, {user?.name || 'there'}</p>
-            <h1 className="text-3xl font-semibold tracking-tight text-slate-900">Your operator is ready.</h1>
-            <button onClick={editName} type="button" className="mt-1 text-xs text-[#5B5CF0]">Edit name</button>
+            <p className="text-xs text-slate-400">Welcome back, {user?.name || 'there'}</p>
+            <h1 className="text-3xl font-semibold tracking-tight text-slate-100">Kivo command center</h1>
+            <button onClick={editName} type="button" className="mt-1 text-xs text-[#9BA2FF]">Edit profile name</button>
           </div>
           <div className="flex items-center gap-1">
-            <Link href="/alerts" className="rounded-full border border-[#E5E7EB] p-2 text-slate-500"><Bell className="h-4 w-4" /></Link>
-            <button type="button" onClick={logout} className="rounded-full border border-[#E5E7EB] p-2 text-slate-500"><LogOut className="h-4 w-4" /></button>
+            <Link href="/alerts" className="rounded-full border border-white/15 bg-white/[0.04] p-2 text-slate-300"><Bell className="h-4 w-4" /></Link>
+            <button type="button" onClick={logout} className="rounded-full border border-white/15 bg-white/[0.04] p-2 text-slate-300"><LogOut className="h-4 w-4" /></button>
           </div>
         </div>
         <div className="mt-3"><AIStatusPill status={loading ? 'Analyzing' : 'Ready'} /></div>
@@ -201,8 +201,8 @@ export default function HomePage() {
       ) : showLoadingState ? (
         <PremiumCard className="shimmer space-y-2 p-6 text-center">
           <AIOrb />
-          <h2 className="text-xl font-semibold text-slate-900">Loading mission control</h2>
-          <p className="text-sm text-slate-500">Pulling your savings, tasks, and alerts.</p>
+          <h2 className="text-xl font-semibold text-slate-100">Loading mission control</h2>
+          <p className="text-sm text-slate-400">Pulling your savings, tasks, and alerts.</p>
         </PremiumCard>
       ) : dashboardError ? (
         <EmptyState

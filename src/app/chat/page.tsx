@@ -34,7 +34,7 @@ const formatConversationTime = (iso: string) => {
 const formatUsageLine = (current: number, limit: number, unlimited: boolean) =>
   unlimited ? 'Unlimited (Dev Mode)' : `${Math.max(limit - current, 0)} / ${limit} uses left today`;
 
-const SUGGESTION_PROMPTS = ['Help me save money', 'Analyze something', 'Plan my next move', 'Check Gmail', 'Think deeper'];
+const SUGGESTION_PROMPTS = ['Find savings opportunities', 'Analyze this week', 'Plan priorities', 'Review Gmail risks', 'Think deeper'];
 
 export default function ChatPage() {
   const router = useRouter();
@@ -289,22 +289,22 @@ export default function ChatPage() {
 
   return (
     <AppShell className="pb-52">
-      <header className="sticky top-0 z-20 mb-4 border-b border-[#E7EAF5]/80 bg-[#F8FAFC]/88 pb-3 pt-1 backdrop-blur-xl">
+      <header className="sticky top-0 z-20 mb-4 border-b border-white/10 bg-[#060A19]/80 pb-3 pt-1 backdrop-blur-xl">
         <div className="flex items-center justify-between gap-3 px-1">
           <div>
             <div className="flex items-center gap-2">
-              <h1 className="text-[17px] font-semibold tracking-[-0.01em] text-[#0F172A]">Kivo</h1>
-              <span className="inline-flex items-center gap-1.5 rounded-full border border-[#D8DFFF] bg-white px-2.5 py-1 text-[10px] font-medium text-[#4549C4]">
-                <span className={`h-1.5 w-1.5 rounded-full ${isAgentResponding ? 'animate-pulse bg-[#5B5CF0]' : 'bg-emerald-500'}`} />
+              <h1 className="text-[17px] font-semibold tracking-[-0.01em] text-slate-100">Kivo</h1>
+              <span className="inline-flex items-center gap-1.5 rounded-full border border-white/10 bg-white/[0.06] px-2.5 py-1 text-[10px] font-medium text-slate-200">
+                <span className={`h-1.5 w-1.5 rounded-full ${isAgentResponding ? 'animate-pulse bg-[#7E88FF]' : 'bg-emerald-400'}`} />
                 {isAgentResponding ? 'Thinking' : 'Ready'}
               </span>
             </div>
-            <p className="text-[11px] text-[#64748B]">{formatUsageLine(usage.current, usage.limit, usage.unlimited)}</p>
+            <p className="text-[11px] text-slate-400">{formatUsageLine(usage.current, usage.limit, usage.unlimited)}</p>
           </div>
           <button
             type="button"
             onClick={() => setOpenPanel((prev) => (prev === 'conversations' ? null : 'conversations'))}
-            className="inline-flex h-9 w-9 items-center justify-center rounded-full border border-[#DEE5F4] bg-white text-[#64748B] shadow-[0_6px_14px_rgba(15,23,42,0.06)]"
+            className="inline-flex h-9 w-9 items-center justify-center rounded-full border border-white/15 bg-white/[0.05] text-slate-300 shadow-[0_8px_20px_rgba(0,0,0,0.3)]"
             aria-label="Open options"
           >
             <MoreHorizontal className="h-4 w-4" />
@@ -342,15 +342,15 @@ export default function ChatPage() {
                 className="flex min-h-[56vh] flex-col items-center justify-center px-5 text-center"
               >
                 <LivingAIPresence className="mb-7" />
-                <h2 className="text-[36px] font-semibold tracking-[-0.03em] text-[#0F172A]">Ask anything.</h2>
-                <p className="mt-2 max-w-sm text-sm leading-6 text-[#64748B]">Your operator turns questions into actions, insights, and next steps.</p>
+                <h2 className="text-[36px] font-semibold tracking-[-0.03em] text-slate-100">Ask Kivo anything.</h2>
+                <p className="mt-2 max-w-sm text-sm leading-6 text-slate-400">Kivo turns questions into actions, insights, and high-leverage next steps.</p>
                 <div className="mt-7 grid w-full max-w-[320px] grid-cols-2 gap-2.5">
                   {SUGGESTION_PROMPTS.map((prompt) => (
                     <button
                       key={prompt}
                       type="button"
                       onClick={() => applyTemplate(prompt, 'Prompt added.')}
-                      className="rounded-full border border-[#E2E7F5] bg-white/88 px-3 py-1.5 text-xs font-medium text-[#334155] shadow-[0_3px_10px_rgba(40,56,120,0.06)] transition hover:-translate-y-0.5 hover:bg-white"
+                      className="rounded-full border border-white/15 bg-white/[0.05] px-3 py-1.5 text-xs font-medium text-slate-200 shadow-[0_6px_16px_rgba(0,0,0,0.22)] transition hover:-translate-y-0.5 hover:bg-white/[0.08]"
                     >
                       {prompt}
                     </button>
@@ -371,7 +371,7 @@ export default function ChatPage() {
                 className={`max-w-[96%] ${message.role === 'user' ? 'ml-auto' : ''}`}
               >
                 {message.role === 'user' ? (
-                  <div className="ml-auto max-w-[88%] rounded-[20px] border border-[#DEE5F5] bg-white/90 px-4 py-2.5 text-[15px] leading-6 tracking-[-0.01em] text-[#1E293B] shadow-[0_10px_24px_rgba(42,58,120,0.08)] backdrop-blur">
+                  <div className="ml-auto max-w-[88%] rounded-[20px] border border-[#5A69FF]/35 bg-[#6170FF]/22 px-4 py-2.5 text-[15px] leading-6 tracking-[-0.01em] text-[#EEF1FF] shadow-[0_12px_30px_rgba(35,45,110,0.33)] backdrop-blur">
                     {message.content}
                   </div>
                 ) : (
@@ -401,7 +401,7 @@ export default function ChatPage() {
           </AnimatePresence>
 
           {streamError && !streamError.startsWith('LIMIT_REACHED:') && !streamError.startsWith('AUTH_REQUIRED:') && !streamError.startsWith('PREMIUM_REQUIRED:') ? (
-            <div className="rounded-xl border border-[#E5E7EB] bg-white px-3 py-2.5 text-sm text-[#334155]">
+            <div className="rounded-xl border border-white/10 bg-white/[0.04] px-3 py-2.5 text-sm text-slate-300">
               We hit a processing issue, but your conversation is still safe.
               <button type="button" onClick={() => void retryLastPrompt()} className="btn-secondary ml-2 inline-flex items-center gap-1 px-2 py-1 text-xs">
                 <RefreshCw className="h-3 w-3" /> Retry
@@ -449,9 +449,9 @@ export default function ChatPage() {
 
       {isLimitReached && !isUnlimited ? (
         <div className="fixed bottom-[calc(156px+env(safe-area-inset-bottom))] left-1/2 z-20 w-full max-w-md -translate-x-1/2 px-4">
-          <div className="rounded-2xl border border-[#E5E7EB] bg-white px-3 py-2.5 text-xs text-[#475569] shadow-[0_8px_18px_rgba(15,23,42,0.08)]">
+          <div className="rounded-2xl border border-white/10 bg-[#0D1327]/96 px-3 py-2.5 text-xs text-slate-300 shadow-[0_14px_28px_rgba(0,0,0,0.4)]">
             You&apos;ve reached your daily limit. Upgrade for higher limits and file tools.
-            <button type="button" onClick={openUpgrade} className="ml-2 inline-flex rounded-full border border-[#E5E7EB] px-2 py-0.5 text-[11px] font-medium">
+            <button type="button" onClick={openUpgrade} className="ml-2 inline-flex rounded-full border border-white/20 bg-white/[0.05] px-2 py-0.5 text-[11px] font-medium">
               Upgrade
             </button>
           </div>
@@ -460,9 +460,9 @@ export default function ChatPage() {
 
       {showAuthPrompt ? (
         <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/35 px-6">
-          <div className="w-full max-w-sm rounded-2xl border border-black/10 bg-[#f7f7f7] p-4 shadow-xl">
-            <h2 className="text-base font-semibold text-primary">Sign in required</h2>
-            <p className="mt-1 text-sm text-secondary">Please log in before sending messages or saving conversations.</p>
+          <div className="w-full max-w-sm rounded-2xl border border-white/10 bg-[#0E1429] p-4 shadow-xl">
+            <h2 className="text-base font-semibold text-slate-100">Sign in required</h2>
+            <p className="mt-1 text-sm text-slate-400">Please log in before sending messages or saving conversations.</p>
             <div className="mt-4 flex gap-2">
               <button type="button" className="btn-secondary w-full px-3 py-2 text-sm" onClick={() => setShowAuthPrompt(false)}>
                 Not now
@@ -477,15 +477,15 @@ export default function ChatPage() {
 
       {showPaywall && !isUnlimited ? (
         <div className="fixed inset-0 z-40 flex items-end justify-center bg-black/30 px-4 pb-20 pt-8">
-          <div className="w-full max-w-md rounded-[24px] border border-black/10 bg-[#f7f7f7] p-4 shadow-[0_12px_40px_rgba(0,0,0,0.2)]">
-            <div className="mb-3 flex items-center gap-2 text-[#2f2f2f]">
+          <div className="w-full max-w-md rounded-[24px] border border-white/10 bg-[#0E1429] p-4 shadow-[0_18px_44px_rgba(0,0,0,0.45)]">
+            <div className="mb-3 flex items-center gap-2 text-slate-100">
               <Crown className="h-5 w-5" />
               <h2 className="text-base font-semibold">Daily limit reached</h2>
             </div>
-            <p className="text-sm text-secondary">You&apos;ve used all free runs for today. Upgrade to unlock more daily runs and file attachments.</p>
-            <div className="mt-3 rounded-xl border border-black/10 bg-white p-3 text-sm">
-              <p className="font-medium text-primary">Free vs Premium</p>
-              <ul className="mt-1 space-y-1 text-secondary">
+            <p className="text-sm text-slate-400">You&apos;ve used all free runs for today. Upgrade to unlock more daily runs and file attachments.</p>
+            <div className="mt-3 rounded-xl border border-white/10 bg-white/[0.04] p-3 text-sm">
+              <p className="font-medium text-slate-100">Free vs Premium</p>
+              <ul className="mt-1 space-y-1 text-slate-400">
                 <li>• Free: {usage.limit} runs / day</li>
                 <li>• Premium: 1000 runs / day</li>
                 <li>• Premium: File uploads in chat</li>
