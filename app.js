@@ -21,16 +21,19 @@ function renderMessages() {
 }
 
 async function runRealChat(prompt) {
-  const response = await fetch('/api/chat', {
+  const response = await fetch('/api/agent', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ message: prompt, source: 'signal-operator-ui' })
+    body: JSON.stringify({
+      input: prompt,
+      history: messages.slice(-8).map(({ role, content }) => ({ role, content })),
+    })
   });
 
   if (!response.ok) throw new Error('Operator backend unavailable');
 
   const data = await response.json();
-  return data?.message || data?.reply || 'Operation completed.';
+  return data?.reply || data?.message || 'Operation completed.';
 }
 
 chatForm.addEventListener('submit', async (e) => {
