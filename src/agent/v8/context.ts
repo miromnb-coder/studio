@@ -41,6 +41,7 @@ function inferDecisionContext(params: {
   const knownConstraints = memoryTexts
     .filter((text) => /student|family|rent|income|fixed|tight|low budget|constraint|freelancer/i.test(text))
     .slice(0, 4);
+  if (params.route.goal.emotionalTone === 'overwhelmed') knownConstraints.unshift('User may be cognitively overloaded; keep plans simple.');
 
   const recentActions = params.conversation
     .filter((item) => item.role === 'assistant' || item.role === 'user')
@@ -70,6 +71,7 @@ function inferDecisionContext(params: {
   const pressureFromProfile = Number(params.financeProfile?.total_monthly_cost || 0) > Number(params.financeProfile?.monthly_income || 0)
     ? 'high'
     : 'unknown';
+  const repeatedIgnores = deprioritizedRecommendationIds.length >= 3;
 
   const currentFinancialPressure: DecisionContextV8['currentFinancialPressure'] =
     /urgent|behind|late fee|overdrawn|stress|can't pay|cannot pay/.test(corpus)
@@ -78,6 +80,8 @@ function inferDecisionContext(params: {
         ? 'medium'
         : pressureFromProfile === 'high'
           ? 'high'
+          : repeatedIgnores
+            ? 'medium'
           : /comfortable|stable/.test(corpus)
             ? 'low'
             : 'unknown';

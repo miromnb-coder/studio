@@ -20,60 +20,54 @@ export type SynthesisInputV8 = {
   critic: CriticResultV8;
 };
 
+function asRecord(value: unknown): Record<string, unknown> {
+  return value && typeof value === 'object' ? (value as Record<string, unknown>) : {};
+}
+
 function buildSuggestedActions(input: SynthesisInputV8): SuggestedActionV8[] {
   const { route, execution, context } = input;
+
   if (route.intent === 'finance') {
-    const recommendations = context.intelligence.recommendations.slice(0, 2);
+    const recommendations = context.intelligence.recommendations.slice(0, 3);
     if (recommendations.length > 0) {
-      return recommendations.map((rec) => ({
+      return recommendations.map((rec, idx) => ({
         id: `rec_${rec.id}`,
-        label: rec.title,
+        label: idx === 0 ? `Do now: ${rec.title}` : rec.title,
         kind: 'finance',
-        payload: { recommendationId: rec.id, priority: rec.priority, type: rec.type },
+        payload: {
+          recommendationId: rec.id,
+          priority: rec.priority,
+          type: rec.type,
+          confidence: rec.confidence,
+        },
       }));
     }
 
-    const financeRead = (execution.structuredData.finance_read || {}) as Record<string, unknown>;
-    const profile = (financeRead.profile || {}) as Record<string, unknown>;
-    const hasRecurringBaseline = Number(profile.active_subscriptions || 0) > 0 || Number(profile.total_monthly_cost || 0) > 0;
-    const gmailFetch = (execution.structuredData.gmail_fetch || {}) as Record<string, unknown>;
-    const hasGmailData = Number(gmailFetch.emailsAnalyzed || 0) > 0;
-    const noGmailFinanceSignals = hasGmailData
+    const gmailFetch = asRecord(execution.structuredData.gmail_fetch);
+    const hasNoSignals = Number(gmailFetch.emailsAnalyzed || 0) > 0
       && Number(gmailFetch.subscriptionsFound || 0) === 0
       && Number(gmailFetch.recurringPaymentsFound || 0) === 0;
 
-    if (noGmailFinanceSignals) {
+    if (hasNoSignals) {
       return [
-        { id: 'act_widen_email_window', label: 'Expand email scan (90d)', kind: 'finance' },
-        { id: 'act_scan_receipt_keywords', label: 'Include receipt keywords', kind: 'finance' },
-      ];
-    }
-    if (hasRecurringBaseline) {
-      return [
-        { id: 'act_rank_cancellations', label: 'Rank cancellation targets', kind: 'finance' },
-        { id: 'act_review_recurring', label: 'Review recurring charges', kind: 'finance' },
+        { id: 'act_expand_scan', label: 'Expand scan to 90 days', kind: 'finance' },
+        { id: 'act_add_keywords', label: 'Add receipt keywords', kind: 'finance' },
       ];
     }
 
     return [
-      { id: 'act_share_expense', label: 'Share one monthly expense', kind: 'finance' },
-      { id: 'act_start_savings_plan', label: 'Build quick savings plan', kind: 'finance' },
+      { id: 'act_pick_expense', label: 'Pick one expense to optimize', kind: 'finance' },
+      { id: 'act_build_7day', label: 'Build 7-day action plan', kind: 'finance' },
     ];
   }
 
-  if (route.intent === 'gmail') {
-    return [{ id: 'act_mail_triage', label: 'Triage inbox', kind: 'gmail' }];
-  }
+  if (route.intent === 'gmail') return [{ id: 'act_mail_triage', label: 'Triage inbox', kind: 'gmail' }];
+  if (route.intent === 'coding') return [{ id: 'act_share_error', label: 'Share failing trace', kind: 'general' }];
+  if (route.intent === 'productivity') return [{ id: 'act_define_deadline', label: 'Set one deadline', kind: 'productivity' }];
 
-  if (route.intent === 'coding') {
-    return [{ id: 'act_share_error', label: 'Share error trace', kind: 'general' }];
-  }
-
-  if (route.intent === 'productivity') {
-    return [{ id: 'act_define_deadline', label: 'Set deadline', kind: 'productivity' }];
-  }
-
-  return Object.keys(execution.structuredData).length ? [{ id: 'act_review_data', label: 'Review data', kind: 'general' }] : [];
+  return Object.keys(execution.structuredData).length > 0
+    ? [{ id: 'act_review_data', label: 'Review extracted data', kind: 'general' }]
+    : [];
 }
 
 function buildOperatorModules(input: SynthesisInputV8): OperatorModuleV8[] {
@@ -82,13 +76,11 @@ function buildOperatorModules(input: SynthesisInputV8): OperatorModuleV8[] {
   const alerts = input.context.intelligence.operatorAlerts;
   if (!recommendations.length && !alerts.length) return [];
 
-  const top = recommendations[0];
-  const fastestSaving = recommendations
-    .filter((item) => (item.estimated_impact.monthly_savings || 0) > 0)
-    .sort((a, b) => (b.estimated_impact.monthly_savings || 0) - (a.estimated_impact.monthly_savings || 0))[0];
-  const risk = recommendations.find((item) => item.type === 'anomaly_review') || recommendations.find((item) => item.priority === 'critical');
-
   const modules: OperatorModuleV8[] = [];
+  const top = recommendations[0];
+  const second = recommendations[1];
+  const risk = recommendations.find((item) => item.type === 'anomaly_review' || item.priority === 'critical');
+
   if (top) {
     modules.push({
       id: `module-next-${top.id}`,
@@ -99,16 +91,18 @@ function buildOperatorModules(input: SynthesisInputV8): OperatorModuleV8[] {
       priority: top.priority,
     });
   }
-  if (fastestSaving) {
+
+  if (second) {
     modules.push({
-      id: `module-saving-${fastestSaving.id}`,
-      title: 'Fastest Saving Opportunity',
-      summary: fastestSaving.summary,
-      impactLabel: `~$${(fastestSaving.estimated_impact.monthly_savings || 0).toFixed(0)}/mo`,
-      recommendationId: fastestSaving.id,
-      priority: fastestSaving.priority,
+      id: `module-week-${second.id}`,
+      title: 'Recommended This Week',
+      summary: second.title,
+      impactLabel: second.estimated_impact.monthly_savings ? `~$${second.estimated_impact.monthly_savings.toFixed(0)}/mo` : undefined,
+      recommendationId: second.id,
+      priority: second.priority,
     });
   }
+
   if (risk) {
     modules.push({
       id: `module-risk-${risk.id}`,
@@ -125,6 +119,7 @@ function buildOperatorModules(input: SynthesisInputV8): OperatorModuleV8[] {
       priority: alerts[0].severity === 'high' ? 'critical' : alerts[0].severity,
     });
   }
+
   if (top?.suggested_actions?.[0]) {
     modules.push({
       id: `module-input-${top.id}`,
@@ -134,19 +129,23 @@ function buildOperatorModules(input: SynthesisInputV8): OperatorModuleV8[] {
       priority: top.priority,
     });
   }
-  if (recommendations.length > 1) {
-    modules.push({
-      id: `module-week-${recommendations[1].id}`,
-      title: 'Recommended This Week',
-      summary: recommendations[1].title,
-      impactLabel: recommendations[1].estimated_impact.monthly_savings
-        ? `~$${recommendations[1].estimated_impact.monthly_savings.toFixed(0)}/mo`
-        : undefined,
-      recommendationId: recommendations[1].id,
-      priority: recommendations[1].priority,
-    });
-  }
+
   return modules.slice(0, 5);
+}
+
+function extractConfidence(reply: string): string {
+  const match = reply.match(/confidence:\s*([^\n.]+)/i);
+  return (match?.[1] || 'Medium').trim();
+}
+
+function extractAssumptions(reply: string): string {
+  const match = reply.match(/assumptions:\s*([^\n]+)/i);
+  return (match?.[1] || 'Some financial assumptions were required due to partial data.').trim();
+}
+
+function extractNextStep(reply: string): string {
+  const match = reply.match(/next step:\s*([^\n]+)/i);
+  return (match?.[1] || 'Confirm the top action to proceed.').trim();
 }
 
 export function synthesizeResponseV8(input: SynthesisInputV8): AgentResponseV8 {
@@ -166,6 +165,23 @@ export function synthesizeResponseV8(input: SynthesisInputV8): AgentResponseV8 {
       steps: input.execution.steps,
       structuredData: {
         ...input.execution.structuredData,
+        synthesized: {
+          answer: finalReply,
+          topActions: finalReply
+            .split('\n')
+            .filter((line) => /^-\s*\d+\./.test(line) || /^-\s/.test(line))
+            .slice(0, 3),
+          nextStep: extractNextStep(finalReply),
+          confidence: extractConfidence(finalReply),
+          assumptions: extractAssumptions(finalReply),
+          suggestedModules: buildOperatorModules(input).map((item) => item.title),
+          metadata: {
+            routeConfidence: input.route.confidence,
+            criticScore: input.critic.criticScore,
+            verificationPassed: input.verificationPassed,
+            memoryUsed: input.context.memory.relevantMemories.length > 0,
+          },
+        },
         ...(input.context.intelligence.recommendations.length
           ? { recommendations: input.context.intelligence.recommendations }
           : {}),

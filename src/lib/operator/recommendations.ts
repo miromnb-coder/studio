@@ -328,8 +328,14 @@ function sortRecommendations(recommendations: OperatorRecommendation[]): Operato
   };
 
   return [...recommendations].sort((a, b) => {
-    const aWeight = priorityWeight[a.priority] * 100 + a.confidence * 10;
-    const bWeight = priorityWeight[b.priority] * 100 + b.confidence * 10;
+    const aImpact = (a.estimated_impact.monthly_savings || 0) / 15;
+    const bImpact = (b.estimated_impact.monthly_savings || 0) / 15;
+    const aEase = /cancel|pause|downgrade|review/i.test(a.title) ? 8 : 5;
+    const bEase = /cancel|pause|downgrade|review/i.test(b.title) ? 8 : 5;
+    const aUrgency = a.type === 'priority_action' || a.priority === 'critical' ? 12 : 6;
+    const bUrgency = b.type === 'priority_action' || b.priority === 'critical' ? 12 : 6;
+    const aWeight = priorityWeight[a.priority] * 100 + a.confidence * 14 + aImpact + aEase + aUrgency;
+    const bWeight = priorityWeight[b.priority] * 100 + b.confidence * 14 + bImpact + bEase + bUrgency;
     return bWeight - aWeight;
   });
 }
