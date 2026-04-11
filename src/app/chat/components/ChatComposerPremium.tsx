@@ -82,7 +82,7 @@ export function ChatComposerPremium(props: ChatComposerPremiumProps) {
         ) : null}
       </AnimatePresence>
 
-      <div className="rounded-full border border-[#E5E7EB] bg-white/96 p-1.5 shadow-[0_16px_35px_rgba(15,23,42,0.1)] backdrop-blur-xl">
+      <div className="rounded-[26px] border border-[#DEE3F3] bg-white/92 p-1.5 shadow-[0_18px_40px_rgba(56,72,140,0.13)] backdrop-blur-xl">
         <div className="flex items-center gap-1.5">
           <input
             ref={fileInputRef}
@@ -109,8 +109,8 @@ export function ChatComposerPremium(props: ChatComposerPremiumProps) {
               }
             }}
             rows={1}
-            placeholder={userPresent ? 'Type a message...' : 'Sign in to start chatting'}
-            className="system-input max-h-[132px] min-h-[38px] flex-1 resize-none border-none bg-transparent px-2 py-2 text-[15px] leading-6"
+            placeholder={userPresent ? 'Message Kivo…' : 'Sign in to start chatting'}
+            className="system-input max-h-[132px] min-h-[40px] flex-1 resize-none border-none bg-transparent px-2 py-2 text-[15px] leading-6 tracking-[-0.01em]"
           />
 
           <button type="button" className={`composer-icon-btn ${!voiceSupported ? 'opacity-40' : ''}`} aria-label="Start speech to text" onClick={onSpeechToText} disabled={!voiceSupported}><Mic className="h-4 w-4" /></button>

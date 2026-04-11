@@ -2,8 +2,8 @@
 
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { Crown, History, RefreshCw, Settings2 } from 'lucide-react';
-import { AnimatePresence, motion } from 'framer-motion';
+import { Crown, MoreHorizontal, RefreshCw } from 'lucide-react';
+import { AnimatePresence, LayoutGroup, motion } from 'framer-motion';
 import { useAppStore } from '../store/app-store';
 import { useUserEntitlements } from '../hooks/use-user-entitlements';
 import type { FinanceActionType } from '@/lib/finance/types';
@@ -13,9 +13,10 @@ import { ChatComposerPremium } from './components/ChatComposerPremium';
 import { ConversationSwitcherSheet } from './components/ConversationSwitcherSheet';
 import type { ExecutionStep } from './components/AgentExecutionTimeline';
 import { AppShell } from '../components/premium-ui';
+import { LivingAIPresence } from './components/LivingAIPresence';
 
 const PREMIUM_UPLOAD_MESSAGE = 'File upload is a Premium feature. Upgrade to attach files.';
-const THINKING_STEPS = ['Understanding request', 'Analyzing options', 'Writing response'];
+const THINKING_STEPS = ['Understanding request', 'Gathering context', 'Thinking deeper', 'Writing response'];
 
 const formatConversationTime = (iso: string) => {
   const timestamp = new Date(iso);
@@ -32,6 +33,8 @@ const formatConversationTime = (iso: string) => {
 
 const formatUsageLine = (current: number, limit: number, unlimited: boolean) =>
   unlimited ? 'Unlimited (Dev Mode)' : `${Math.max(limit - current, 0)} / ${limit} uses left today`;
+
+const SUGGESTION_PROMPTS = ['Help me save money', 'Analyze something', 'Plan my next move', 'Check Gmail', 'Think deeper'];
 
 export default function ChatPage() {
   const router = useRouter();
@@ -165,7 +168,7 @@ export default function ChatPage() {
     setSimulatedStepIndex(0);
     const interval = window.setInterval(() => {
       setSimulatedStepIndex((current) => (current >= THINKING_STEPS.length - 1 ? current : current + 1));
-    }, 1200);
+    }, 1100);
 
     return () => window.clearInterval(interval);
   }, [isAgentResponding, activeConversationId]);
@@ -286,34 +289,26 @@ export default function ChatPage() {
 
   return (
     <AppShell className="pb-52">
-      <header className="sticky top-0 z-20 mb-4 border-b border-[#E5E7EB]/80 bg-[#F8FAFC]/95 pb-3 pt-1 backdrop-blur">
+      <header className="sticky top-0 z-20 mb-4 border-b border-[#E7EAF5]/80 bg-[#F8FAFC]/88 pb-3 pt-1 backdrop-blur-xl">
         <div className="flex items-center justify-between gap-3 px-1">
           <div>
             <div className="flex items-center gap-2">
-              <h1 className="text-lg font-semibold text-[#0F172A]">Kivo</h1>
-              <span className="inline-flex items-center gap-1 rounded-full border border-[#D5DBFF] bg-[#EEF0FF] px-2 py-0.5 text-[10px] font-medium text-[#4B4CE6]">
+              <h1 className="text-[17px] font-semibold tracking-[-0.01em] text-[#0F172A]">Kivo</h1>
+              <span className="inline-flex items-center gap-1.5 rounded-full border border-[#D8DFFF] bg-white px-2.5 py-1 text-[10px] font-medium text-[#4549C4]">
                 <span className={`h-1.5 w-1.5 rounded-full ${isAgentResponding ? 'animate-pulse bg-[#5B5CF0]' : 'bg-emerald-500'}`} />
-                {isAgentResponding ? 'Live' : 'Ready'}
+                {isAgentResponding ? 'Thinking' : 'Ready'}
               </span>
             </div>
-            <p className="text-xs text-[#64748B]">{formatUsageLine(usage.current, usage.limit, usage.unlimited)}</p>
+            <p className="text-[11px] text-[#64748B]">{formatUsageLine(usage.current, usage.limit, usage.unlimited)}</p>
           </div>
-          <div className="flex items-center gap-1.5">
-            <button
-              type="button"
-              onClick={() => setOpenPanel((prev) => (prev === 'conversations' ? null : 'conversations'))}
-              className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-[#E5E7EB] bg-white text-[#64748B]"
-              aria-label="Conversation history"
-            >
-              <History className="h-4 w-4" />
-            </button>
-            <button type="button" onClick={() => setComposerNotice(`Plan: ${plan}`)} className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-[#E5E7EB] bg-white text-[#64748B]" aria-label="Settings">
-              <Settings2 className="h-4 w-4" />
-            </button>
-            <button type="button" onClick={openUpgrade} className="inline-flex items-center gap-1 rounded-full border border-[#E5E7EB] bg-white px-2.5 py-1.5 text-xs font-medium text-[#0F172A]">
-              <Crown className="h-3.5 w-3.5 text-[#5B5CF0]" /> Upgrade
-            </button>
-          </div>
+          <button
+            type="button"
+            onClick={() => setOpenPanel((prev) => (prev === 'conversations' ? null : 'conversations'))}
+            className="inline-flex h-9 w-9 items-center justify-center rounded-full border border-[#DEE5F4] bg-white text-[#64748B] shadow-[0_6px_14px_rgba(15,23,42,0.06)]"
+            aria-label="Open options"
+          >
+            <MoreHorizontal className="h-4 w-4" />
+          </button>
         </div>
 
         <AnimatePresence>
@@ -335,76 +330,86 @@ export default function ChatPage() {
         </AnimatePresence>
       </header>
 
-      <section ref={listRef} className="relative z-10 max-h-[calc(100vh-276px)] space-y-5 overflow-y-auto pb-3">
-        {empty ? (
-          <div className="flex min-h-[58vh] flex-col items-center justify-center px-5 text-center">
-            <div className="mb-5 h-10 w-10 rounded-full border border-[#DDE3F7] bg-white shadow-[0_8px_25px_rgba(91,92,240,0.16)]" />
-            <h2 className="text-[34px] font-semibold tracking-tight text-[#0F172A]">Ask anything.</h2>
-            <p className="mt-2 max-w-xs text-sm leading-6 text-[#64748B]">Your operator turns questions into actions, insights, and next steps.</p>
-            <div className="mt-6 flex w-full flex-wrap items-center justify-center gap-2">
-              {['Help me save money', 'Analyze something', 'Plan my next move', 'Check Gmail', 'Think deeper'].map((prompt) => (
-                <button
-                  key={prompt}
-                  type="button"
-                  onClick={() => applyTemplate(prompt, 'Prompt added.')}
-                  className="rounded-full border border-[#E5E7EB] bg-white px-3 py-1.5 text-xs font-medium text-[#334155] shadow-[0_2px_10px_rgba(15,23,42,0.04)]"
-                >
-                  {prompt}
-                </button>
-              ))}
-            </div>
-          </div>
-        ) : null}
-
-        {messages
-          .filter((message) => !(message.role === 'assistant' && message.isStreaming && isAgentResponding))
-          .map((message) => (
-            <motion.div
-              key={message.id}
-              initial={{ opacity: 0, y: 8 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.2 }}
-              className={`max-w-[96%] ${message.role === 'user' ? 'ml-auto' : ''}`}
-            >
-              {message.role === 'user' ? (
-                <div className="ml-auto max-w-[88%] rounded-2xl border border-[#E2E8F0] bg-[#F1F5F9] px-4 py-2.5 text-[15px] leading-6 text-[#0F172A]">
-                  {message.content}
+      <LayoutGroup>
+        <section ref={listRef} className="relative z-10 max-h-[calc(100vh-272px)] space-y-5 overflow-y-auto pb-3">
+          <AnimatePresence mode="wait">
+            {empty ? (
+              <motion.div
+                key="chat-hero"
+                initial={{ opacity: 0, y: 14 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -20, transition: { duration: 0.28, ease: 'easeInOut' } }}
+                className="flex min-h-[56vh] flex-col items-center justify-center px-5 text-center"
+              >
+                <LivingAIPresence className="mb-7" />
+                <h2 className="text-[36px] font-semibold tracking-[-0.03em] text-[#0F172A]">Ask anything.</h2>
+                <p className="mt-2 max-w-sm text-sm leading-6 text-[#64748B]">Your operator turns questions into actions, insights, and next steps.</p>
+                <div className="mt-7 grid w-full max-w-[320px] grid-cols-2 gap-2.5">
+                  {SUGGESTION_PROMPTS.map((prompt) => (
+                    <button
+                      key={prompt}
+                      type="button"
+                      onClick={() => applyTemplate(prompt, 'Prompt added.')}
+                      className="rounded-full border border-[#E2E7F5] bg-white/88 px-3 py-1.5 text-xs font-medium text-[#334155] shadow-[0_3px_10px_rgba(40,56,120,0.06)] transition hover:-translate-y-0.5 hover:bg-white"
+                    >
+                      {prompt}
+                    </button>
+                  ))}
                 </div>
-              ) : (
-                <AssistantResponseSurface
-                  message={message}
-                  isPremium={isPremium}
-                  actionLoading={financeActionLoadingForMessage[message.id] || null}
-                  onAction={(actionType) => void handleFinanceAction(message.id, actionType)}
-                  onPremiumRequired={() => setShowPaywall(true)}
-                />
-              )}
-            </motion.div>
-          ))}
+              </motion.div>
+            ) : null}
+          </AnimatePresence>
 
-        <AnimatePresence mode="wait">
-          {showThinkingSurface ? (
-            <motion.div
-              key="thinking-surface"
-              initial={{ opacity: 0, y: 8 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -8 }}
-              transition={{ duration: 0.24 }}
-            >
-              <AgentThinkingSurface statusText={thinkingStatus} steps={derivedExecutionSteps} />
-            </motion.div>
+          {messages
+            .filter((message) => !(message.role === 'assistant' && message.isStreaming && isAgentResponding))
+            .map((message) => (
+              <motion.div
+                key={message.id}
+                initial={{ opacity: 0, y: 11 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.25, ease: 'easeOut' }}
+                className={`max-w-[96%] ${message.role === 'user' ? 'ml-auto' : ''}`}
+              >
+                {message.role === 'user' ? (
+                  <div className="ml-auto max-w-[88%] rounded-[20px] border border-[#DEE5F5] bg-white/90 px-4 py-2.5 text-[15px] leading-6 tracking-[-0.01em] text-[#1E293B] shadow-[0_10px_24px_rgba(42,58,120,0.08)] backdrop-blur">
+                    {message.content}
+                  </div>
+                ) : (
+                  <AssistantResponseSurface
+                    message={message}
+                    isPremium={isPremium}
+                    actionLoading={financeActionLoadingForMessage[message.id] || null}
+                    onAction={(actionType) => void handleFinanceAction(message.id, actionType)}
+                    onPremiumRequired={() => setShowPaywall(true)}
+                  />
+                )}
+              </motion.div>
+            ))}
+
+          <AnimatePresence mode="wait">
+            {showThinkingSurface ? (
+              <motion.div
+                key="thinking-surface"
+                initial={{ opacity: 0, y: 8 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -8 }}
+                transition={{ duration: 0.24 }}
+              >
+                <AgentThinkingSurface statusText={thinkingStatus} steps={derivedExecutionSteps} />
+              </motion.div>
+            ) : null}
+          </AnimatePresence>
+
+          {streamError && !streamError.startsWith('LIMIT_REACHED:') && !streamError.startsWith('AUTH_REQUIRED:') && !streamError.startsWith('PREMIUM_REQUIRED:') ? (
+            <div className="rounded-xl border border-[#E5E7EB] bg-white px-3 py-2.5 text-sm text-[#334155]">
+              We hit a processing issue, but your conversation is still safe.
+              <button type="button" onClick={() => void retryLastPrompt()} className="btn-secondary ml-2 inline-flex items-center gap-1 px-2 py-1 text-xs">
+                <RefreshCw className="h-3 w-3" /> Retry
+              </button>
+            </div>
           ) : null}
-        </AnimatePresence>
-
-        {streamError && !streamError.startsWith('LIMIT_REACHED:') && !streamError.startsWith('AUTH_REQUIRED:') && !streamError.startsWith('PREMIUM_REQUIRED:') ? (
-          <div className="rounded-xl border border-[#E5E7EB] bg-white px-3 py-2.5 text-sm text-[#334155]">
-            We hit a processing issue, but your conversation is still safe.
-            <button type="button" onClick={() => void retryLastPrompt()} className="btn-secondary ml-2 inline-flex items-center gap-1 px-2 py-1 text-xs">
-              <RefreshCw className="h-3 w-3" /> Retry
-            </button>
-          </div>
-        ) : null}
-      </section>
+        </section>
+      </LayoutGroup>
 
       <ChatComposerPremium
         composerRef={composerRef}
