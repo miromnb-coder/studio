@@ -25,8 +25,9 @@ function stripTemplateLanguage(text: string): string {
 function resolveResponseLanguage(context: AgentContextV8): string {
   const message = context.user.message;
   if (FINNISH_LANGUAGE_PATTERN.test(message)) return 'fi';
+  if (/\b(vastaa englanniksi|kirjoita englanniksi|englanniksi)\b/i.test(message)) return 'en';
 
-  const explicitLanguage = message.toLowerCase().match(/\b(reply|respond|answer|speak|write)\s+(in\s+)?([a-z\-]{2,20})\b/i)?.[3];
+  const explicitLanguage = message.toLowerCase().match(/\b(reply|respond|answer|speak|write|vastaa|kirjoita)\s+(in\s+)?([a-z\-]{2,20})\b/i)?.[3];
   if (explicitLanguage) return explicitLanguage.slice(0, 8);
 
   return context.intelligence.userProfile?.preferred_language || 'en';
@@ -53,7 +54,12 @@ export async function runResearchAgent(input: ResearchAgentInput): Promise<Resea
     role: item.role,
     content: item.content,
   }));
-  const toolResultKeys = Object.keys(input.execution.structuredData || {});
+  const toolData = input.execution.structuredData || {};
+  const toolResultKeys = Object.keys(toolData);
+  const gmailData =
+    toolData.gmail_fetch && typeof toolData.gmail_fetch === 'object'
+      ? (toolData.gmail_fetch as Record<string, unknown>)
+      : null;
   const environmentSummary = `gmailConnected=${input.context.environment.gmailConnected}, plan=${input.context.environment.productState.plan}`;
   const topRecommendation = input.context.intelligence.recommendations[0];
 
@@ -71,6 +77,24 @@ export async function runResearchAgent(input: ResearchAgentInput): Promise<Resea
   let answerDraft = responseLanguage === 'fi'
     ? 'Tarvitsen yhden täsmällisen lisätiedon, jotta voin vastata oikein.'
     : 'I need one specific detail to answer this correctly.';
+  const groundingEvidence = [
+    relevantMemories.length ? `memory(${relevantMemories.length})` : '',
+    toolResultKeys.length ? `tools(${toolResultKeys.join(',')})` : '',
+    topRecommendation ? 'recommendation(1)' : '',
+    `env(${environmentSummary})`,
+  ].filter(Boolean);
+  const gmailGroundingBlock = gmailData
+    ? JSON.stringify({
+        connected: Boolean(gmailData.connected),
+        query: gmailData.query || '',
+        emailsAnalyzed: Number(gmailData.emailsAnalyzed || 0),
+        subscriptionsFound: Number(gmailData.subscriptionsFound || 0),
+        recurringPaymentsFound: Number(gmailData.recurringPaymentsFound || 0),
+        summary: String(gmailData.summary || ''),
+        trialRisks: Array.isArray(gmailData.trialRisks) ? gmailData.trialRisks.slice(0, 3) : [],
+        savingsOpportunities: Array.isArray(gmailData.savingsOpportunities) ? gmailData.savingsOpportunities.slice(0, 3) : [],
+      })
+    : 'none';
 
   try {
     const completion = await groq.chat.completions.create({
@@ -87,6 +111,8 @@ Do not mention tools, plans, hidden steps, intent labels, or internal routing un
 For simple questions, give the answer immediately with no preamble.
 ${modeHint}
 ${verbosityInstruction(replyLength)}
+If gmail_fetch output exists, cite only those fields and never invent values.
+Hard rule: NO DATA = NO CLAIMS (no fabricated invoices, amounts, due dates, obligations, or merchants).
 Respond in ${responseLanguage}.`,
         },
         ...conversationTail,
@@ -96,8 +122,10 @@ Respond in ${responseLanguage}.`,
 Relevant memory: ${relevantMemories.length ? relevantMemories.join(' | ') : 'none'}
 Tool outputs present: ${input.execution.steps.length > 0 ? 'yes' : 'no'}
 Tool output keys: ${toolResultKeys.length ? toolResultKeys.join(', ') : 'none'}
+gmail_fetch structured output: ${gmailGroundingBlock}
 Top recommendation: ${topRecommendation ? `${topRecommendation.title} (${topRecommendation.priority})` : 'none'}
 Environment: ${environmentSummary}
+Grounding evidence available: ${groundingEvidence.join(', ')}
 You must ground your answer in at least one of: memory, tool outputs, recommendation, or environment.
 If the request is ambiguous, ask one short clarifying question. Otherwise give a direct final answer.`,
         },

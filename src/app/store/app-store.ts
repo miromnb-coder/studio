@@ -189,26 +189,7 @@ const initialState: AppState = {
   messages: [],
   draftPrompt: '',
   agents: defaultAgents(),
-  alerts: [
-    {
-      id: 'alert-renewal',
-      title: 'Subscription renewal due soon',
-      description: 'A high-cost annual subscription renews in 3 days.',
-      type: 'billing',
-      createdAt: new Date(Date.now() - 1000 * 60 * 70).toISOString(),
-      resolved: false,
-      snoozedUntil: null,
-    },
-    {
-      id: 'alert-duplicate',
-      title: 'Potential duplicate billing',
-      description: 'Two similar charges were detected in the last 48 hours.',
-      type: 'risk',
-      createdAt: new Date(Date.now() - 1000 * 60 * 35).toISOString(),
-      resolved: false,
-      snoozedUntil: null,
-    },
-  ],
+  alerts: [],
   history: [],
   activeAgent: null,
   isAgentResponding: false,
@@ -260,6 +241,31 @@ const DEFAULT_ACTIVE_AGENT: AgentName = 'Supervisor Agent';
 
 const getConversationWindow = (messages: Message[]) =>
   messages.slice(-10).map((message) => ({ role: message.role, content: message.content }));
+
+function mapOperatorAlertToUI(alert: Record<string, any>): Alert {
+  const status = String(alert.status || 'active');
+  const type = String(alert.type || '').includes('billing')
+    ? 'billing'
+    : String(alert.type || '').includes('risk')
+      ? 'risk'
+      : 'digest';
+  return {
+    id: String(alert.id || createId()),
+    title: String(alert.title || 'Operator alert'),
+    description: String(alert.summary || alert.suggested_action || 'Review this item.'),
+    type,
+    createdAt: String(alert.created_at || nowIso()),
+    resolved: status !== 'active',
+    snoozedUntil: null,
+  };
+}
+
+async function fetchServerAlerts() {
+  const response = await fetch('/api/operator/alerts?include=all');
+  if (!response.ok) return [];
+  const data = (await response.json().catch(() => ({}))) as { alerts?: Array<Record<string, any>> };
+  return Array.isArray(data.alerts) ? data.alerts.map(mapOperatorAlertToUI) : [];
+}
 
 function normalizeAgentResponse(result: Partial<AgentResponse>): AgentResponse {
   const metadata = result.metadata;
@@ -493,6 +499,14 @@ const actions: AppActions = {
 
     persist();
     emit();
+
+    if (state.user?.id) {
+      fetchServerAlerts()
+        .then((alerts) => {
+          setState((prev) => ({ ...prev, alerts }));
+        })
+        .catch(() => {});
+    }
   },
 
   setDraftPrompt: (prompt) => {
@@ -874,16 +888,22 @@ const actions: AppActions = {
       ...prev,
       alerts: [{ id: createId(), createdAt: nowIso(), resolved: false, snoozedUntil: null, ...alert }, ...prev.alerts],
     }));
-    addHistory({ title: 'Alert created', description: alert.title, type: 'alert' });
+    addHistory({ title: 'Local alert created', description: alert.title, type: 'alert' });
     persist();
     emit();
   },
 
   resolveAlert: (alertId) => {
-    setState((prev) => ({ ...prev, alerts: prev.alerts.map((item) => (item.id === alertId ? { ...item, resolved: true } : item)) }));
-    addHistory({ title: 'Alert resolved', description: alertId, type: 'alert' });
-    persist();
-    emit();
+    fetch(`/api/operator/alerts/${alertId}/complete`, { method: 'POST' })
+      .then(async () => {
+        const alerts = await fetchServerAlerts();
+        if (!alerts.length) return;
+        setState((prev) => ({ ...prev, alerts }));
+        addHistory({ title: 'Alert resolved', description: alertId, type: 'alert' });
+      })
+      .catch(() => {
+        setState((prev) => ({ ...prev, alerts: prev.alerts.map((item) => (item.id === alertId ? { ...item, resolved: true } : item)) }));
+      });
   },
 
   snoozeAlert: (alertId, minutes = 60) => {
@@ -895,13 +915,19 @@ const actions: AppActions = {
   },
 
   markAlertFalsePositive: (alertId) => {
-    setState((prev) => ({
-      ...prev,
-      alerts: prev.alerts.map((item) => item.id === alertId ? { ...item, resolved: true, description: `${item.description} (marked false positive)` } : item),
-    }));
-    addHistory({ title: 'Alert marked false positive', description: alertId, type: 'alert' });
-    persist();
-    emit();
+    fetch(`/api/operator/alerts/${alertId}/dismiss`, { method: 'POST' })
+      .then(async () => {
+        const alerts = await fetchServerAlerts();
+        if (!alerts.length) return;
+        setState((prev) => ({ ...prev, alerts }));
+        addHistory({ title: 'Alert marked false positive', description: alertId, type: 'alert' });
+      })
+      .catch(() => {
+        setState((prev) => ({
+          ...prev,
+          alerts: prev.alerts.map((item) => item.id === alertId ? { ...item, resolved: true, description: `${item.description} (marked false positive)` } : item),
+        }));
+      });
   },
 
   openAlertInChat: (alertId, mode = 'open') => {
@@ -916,6 +942,11 @@ const actions: AppActions = {
   setUser: (user) => {
     setState((prev) => ({ ...prev, user }));
     addHistory({ title: 'User signed in', description: user.email, type: 'account' });
+    fetchServerAlerts()
+      .then((alerts) => {
+        setState((prev) => ({ ...prev, alerts }));
+      })
+      .catch(() => {});
     persist();
     emit();
   },

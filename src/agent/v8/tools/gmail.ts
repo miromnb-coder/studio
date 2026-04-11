@@ -1,5 +1,4 @@
 import { AgentContextV8, ToolResultV8 } from '../types';
-import { createClient as createSupabaseClient } from '../../../lib/supabase/server';
 import {
   analyzeFinancialEmailsWithAI,
   fetchFinancialEmails,
@@ -28,8 +27,7 @@ export async function gmailFetchTool(
   const financeOnly = Boolean(input.financeOnly);
   const maxResults = financeOnly ? 60 : 40;
 
-  const supabase = await createSupabaseClient();
-  const { data: profile, error: profileError } = await supabase
+  const { data: profile, error: profileError } = await context.supabase
     .from('finance_profiles')
     .select('last_analysis')
     .eq('user_id', context.user.id)

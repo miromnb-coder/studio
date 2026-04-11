@@ -61,6 +61,8 @@ export async function runFinanceAgent(input: FinanceAgentInput): Promise<Finance
     ? gmailData.trialRisks.map((item) => String(item || '').trim()).filter(Boolean)
     : [];
   const emailSubscriptionsFound = Number(gmailData.subscriptionsFound || 0);
+  const gmailEmailsAnalyzed = Number(gmailData.emailsAnalyzed || 0);
+  const gmailRecurringPaymentsFound = Number(gmailData.recurringPaymentsFound || 0);
 
   const toolResultKeys = Object.keys(input.execution.structuredData || {});
   const toolsUsed = input.execution.steps.filter((s) => s.status === 'completed').map((s) => s.tool);
@@ -113,6 +115,7 @@ export async function runFinanceAgent(input: FinanceAgentInput): Promise<Finance
   ].filter(Boolean);
 
   const responseParts: string[] = [];
+  const evidenceParts: string[] = [];
 
   if (userFocusOnSavings) {
     responseParts.push('Since your memory profile indicates you prefer saving money, prioritize actions that reduce recurring costs first.');
@@ -122,36 +125,62 @@ export async function runFinanceAgent(input: FinanceAgentInput): Promise<Finance
 
   if (asksCount && activeSubscriptions > 0) {
     responseParts.push(`You currently have ${activeSubscriptions} active subscriptions.`);
+    evidenceParts.push('finance_profile.active_subscriptions');
   }
   if (asksTotal && totalMonthlyCost > 0) {
     responseParts.push(`Your recurring monthly spend is about ${formatMoney(totalMonthlyCost)}.`);
+    evidenceParts.push('finance_profile.total_monthly_cost');
   }
 
   if ((asksSavings || asksNextAction || responseParts.length === 0) && topRecTitle) {
     responseParts.push(
       `${topRecTitle}${topRecSummary ? ` — ${topRecSummary}` : ''}${topRecImpact > 0 ? ` Estimated impact: ${formatMoney(topRecImpact)}/month.` : '.'}`,
     );
+    evidenceParts.push('recommendations.top');
   }
 
   if (asksEmailCheck || asksSavings || asksNextAction) {
     if (gmailData.connected) {
-      const emailInsight = emailSubscriptionsFound > 0
-        ? `Gmail tool results found ${emailSubscriptionsFound} subscription-related email signals.`
-        : 'Gmail tool executed, but did not return a strong subscription count signal.';
+      const emailInsight = emailSubscriptionsFound > 0 || gmailRecurringPaymentsFound > 0
+        ? `Gmail tool found ${emailSubscriptionsFound} subscription and ${gmailRecurringPaymentsFound} recurring payment signals from ${gmailEmailsAnalyzed} analyzed emails.`
+        : `Gmail tool executed${gmailEmailsAnalyzed > 0 ? ` on ${gmailEmailsAnalyzed} emails` : ''}, but returned no strong finance signal.`;
       responseParts.push(emailInsight);
+      evidenceParts.push('gmail_fetch');
 
       if (gmailSummary) responseParts.push(`Email summary: ${gmailSummary}`);
       if (gmailSavingsOpportunities[0]) responseParts.push(`Top Gmail savings opportunity: ${gmailSavingsOpportunities[0]}.`);
       if (gmailTrialRisks[0]) responseParts.push(`Trial risk to review: ${gmailTrialRisks[0]}.`);
     } else if (gmailConnected) {
-      responseParts.push('Gmail is connected in your environment, but no fresh gmail_fetch result was returned on this turn.');
+      responseParts.push('Gmail is connected, but no gmail_fetch data was returned for this turn, so I cannot make email-grounded claims yet.');
     } else {
       responseParts.push('Gmail is not connected in your current environment, so recommendations are based on available finance memory and profile data.');
     }
   }
 
+  const hasGroundedFinanceData =
+    activeSubscriptions > 0 ||
+    totalMonthlyCost > 0 ||
+    estimatedSavings > 0 ||
+    gmailEmailsAnalyzed > 0 ||
+    gmailSummary.length > 0 ||
+    recommendations.length > 0;
+
+  if (!hasGroundedFinanceData) {
+    responseParts.length = 0;
+    responseParts.push(
+      'I do not currently have grounded finance evidence for invoices, amounts, due dates, or obligations.',
+      'If you want, I can re-run analysis after fresh Gmail import or updated finance profile data.',
+    );
+  }
+
   if (!responseParts.length) {
     responseParts.push('I do not have enough finance data yet to answer precisely. Ask me to analyze subscriptions or monthly recurring spend.');
+  }
+
+  if (evidenceParts.length) {
+    responseParts.push(`Confidence: medium, based on ${evidenceParts.join(', ')}.`);
+  } else {
+    responseParts.push('Confidence: low, because grounded data was limited this turn.');
   }
 
   const answerDraft = responseParts.join(' ').replace(/\s{2,}/g, ' ').trim();

@@ -54,6 +54,7 @@ export type UserMemoryItemV8 = {
 };
 
 export type AgentContextV8 = {
+  supabase: SupabaseClient;
   user: {
     id: string;
     message: string;

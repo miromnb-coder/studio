@@ -75,8 +75,14 @@ function shouldUseOperatorAlertsContext(input: string): boolean {
     'mika nayttaa riskilta',
     'mitä minun kannattaa peruuttaa',
     'mita minun kannattaa peruuttaa',
+    'mitä minun pitäisi priorisoida',
+    'mita minun pitaisi priorisoida',
+    'onko riskejä',
+    'onko riskeja',
+    'what should i prioritize',
+    'do i have any risks',
   ];
-  const semanticSignals = /\b(subscription|billing|spend|finance|save|cancel|risk|priority|attention|raha|sääst|saast|tilaus|lasku|kulu|talous)\b/i;
+  const semanticSignals = /\b(subscription|billing|spend|finance|save|cancel|risk|priority|attention|raha|sääst|saast|tilaus|lasku|kulu|talous|priorisoi|riski)\b/i;
   return explicitPhrases.some((phrase) => normalized.includes(phrase)) || semanticSignals.test(normalized);
 }
 
@@ -114,7 +120,7 @@ function asArrayOfObjects(value: unknown): Array<Record<string, unknown>> {
 }
 
 function inferMemorySummaryType(input: string): 'finance' | 'general' {
-  return /\b(save|saving|budget|subscription|bill|expense|debt|money|finance|monthly|cost|raha|sääst|saast|budjet|tilaus|lasku|kulu|talous|ahorro|dinero|gasto|suscrip|factura)\b/i.test(input)
+  return /\b(save|saving|budget|subscription|bill|expense|debt|money|finance|monthly|cost|raha|sääst|saast|budjet|tilaus|lasku|kulu|talous|ahorro|dinero|gasto|suscrip|factura|sijoit|krypt|osake)\b/i.test(input)
     ? 'finance'
     : 'general';
 }

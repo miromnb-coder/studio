@@ -66,6 +66,7 @@ export async function buildContextV8(params: {
     : [];
 
   return {
+    supabase: params.supabase,
     user: {
       id: params.userId,
       message: params.message,

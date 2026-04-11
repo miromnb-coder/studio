@@ -3,7 +3,7 @@ import { runAgent } from '@/agent/agent';
 
 /**
  * @fileOverview Legacy API Wrapper.
- * Redirects legacy /api/analyze calls to the unified Agent V6 Pipeline via src/agent/agent.ts.
+ * Redirects legacy /api/analyze calls to the unified Agent v8 pipeline via src/agent/agent.ts.
  */
 
 export const dynamic = 'force-dynamic';
@@ -13,7 +13,7 @@ export async function POST(req: Request) {
   try {
     const body = await req.json();
     
-    console.log("[LEGACY_API] Routing to Agent V6 Bridge...");
+    console.log("[LEGACY_API] Routing to Agent v8 compatibility bridge...");
     const result = await runAgent(
       body.documentText || "Analysis Request",
       body.history || [],

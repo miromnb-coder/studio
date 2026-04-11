@@ -25,7 +25,7 @@ function classifyMemory(content: string, intent: string): { type: UserMemoryType
     return { type: 'finance', importance: 0.88 };
   }
   if (
-    /\b(prefer|like|language|suomeksi|always|never|pidän|pidan|tykkään|tykkaan|haluan vastaukset|vastaa suomeksi|lyhy(?:t|istä)|prefiero|preferisco)\b/.test(
+    /\b(prefer|like|language|suomeksi|englanniksi|always|never|pidän|pidan|tykkään|tykkaan|haluan vastaukset|vastaa suomeksi|vastaa englanniksi|lyhy(?:t|istä)|prefiero|preferisco)\b/.test(
       lower,
     )
   ) {
