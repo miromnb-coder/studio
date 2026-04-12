@@ -40,6 +40,7 @@ export type ResponseModeV8 = 'analyst' | 'coach' | 'operator' | 'researcher';
 export type GoalUnderstandingV8 = {
   explicitRequest: string;
   inferredGoal: string;
+  realObjective?: string;
   urgency: 'low' | 'medium' | 'high';
   blockerLevel: 'none' | 'some' | 'high';
   riskLevel: 'low' | 'medium' | 'high';
@@ -48,6 +49,8 @@ export type GoalUnderstandingV8 = {
   preferredStyle: 'concise' | 'structured' | 'detailed' | 'supportive';
   category: 'cashflow' | 'savings' | 'debt' | 'subscriptions' | 'planning' | 'general';
   hiddenOpportunities: string[];
+  priorityLens?: Array<'impact' | 'urgency' | 'effort' | 'certainty' | 'risk_reduction' | 'speed'>;
+  missingCriticalData?: string[];
   emotionalTone: 'neutral' | 'stressed' | 'overwhelmed' | 'motivated';
 };
 

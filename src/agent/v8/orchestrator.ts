@@ -16,13 +16,14 @@ function buildSafeFallbackReply(input: {
 
   if (intent === 'finance') {
     return [
-      'Summary: I could not fully complete the financial analysis from the available evidence.',
-      'Biggest Opportunity: Start with one concrete monthly cost, bill, or subscription so I can make the next answer much more precise.',
-      'Top Actions:',
+      'What I understood: You want a concrete financial recommendation, not generic tips.',
+      'What matters most: The current evidence is partial, so precision is limited.',
+      'Best recommendation now: Share one concrete monthly cost, bill, or subscription so I can prioritize correctly.',
+      'Why this first: A single number lets me rank high-impact actions instead of guessing.',
+      'Next actions:',
       '- Share one recurring charge or monthly spending target.',
       '- Ask for a subscription audit or savings plan.',
       '- Add Gmail or finance evidence if you want deeper analysis.',
-      'Estimated Monthly Impact: Unknown until more grounded data is available.',
       'Confidence: Low (the system did not have enough validated evidence to produce a strong financial recommendation).',
       clarificationQuestion
         ? `Question: ${clarificationQuestion}`

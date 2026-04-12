@@ -120,7 +120,8 @@ function toMode(intent: AgentIntentV8): RouteResultV8['mode'] {
   return 'general';
 }
 
-function buildGoalUnderstanding(message: string, subtype: FinanceIntentSubtypeV8): GoalUnderstandingV8 {
+function buildGoalUnderstanding(message: string, subtype: FinanceIntentSubtypeV8, historyContext = ''): GoalUnderstandingV8 {
+  const corpus = `${historyContext} ${message}`.trim();
   const explicitRequest = message.trim();
   const urgency = /\b(urgent|asap|today|immediately|overdue|late fee)\b/i.test(message) ? 'high' : /\b(this week|soon|quick)\b/i.test(message) ? 'medium' : 'low';
   const emotionalTone = /\b(overwhelmed|too much|can't handle|lost)\b/i.test(message)
@@ -144,6 +145,17 @@ function buildGoalUnderstanding(message: string, subtype: FinanceIntentSubtypeV8
               ? 'Reduce near-term cash pressure and avoid late fees.'
               : explicitRequest || 'Clarify objective and deliver best next action.';
 
+  const realObjective =
+    /\b(stress|anxious|overwhelmed|can't handle|pressure)\b/i.test(corpus)
+      ? 'Lower financial stress quickly with one high-certainty action.'
+      : /\b(more money|money left|save money|monthly leftover|cash ?flow)\b/i.test(corpus)
+        ? 'Increase monthly free cashflow with the fastest reliable win.'
+        : /\b(compare|vs|versus|which is better|tradeoff)\b/i.test(corpus)
+          ? 'Make a high-confidence decision with clear tradeoffs and downside risk.'
+          : /\b(budget|plan|roadmap)\b/i.test(corpus)
+            ? 'Build a realistic plan the user can actually stick to.'
+            : inferredGoal;
+
   const blockerLevel = /\b(confused|not sure|don'?t know|overwhelmed)\b/i.test(message) ? 'high' : /\b(maybe|unclear|depends)\b/i.test(message) ? 'some' : 'none';
   const riskLevel = /\b(overdue|late fee|cannot pay|can't pay|debt spiral|overdrawn)\b/i.test(message) ? 'high' : /\b(tight|worried|price increase)\b/i.test(message) ? 'medium' : 'low';
   const effortTolerance = /\b(simple|quick|fast|easy|one step)\b/i.test(message) ? 'low' : /\b(deep|full audit|comprehensive)\b/i.test(message) ? 'high' : 'medium';
@@ -163,9 +175,20 @@ function buildGoalUnderstanding(message: string, subtype: FinanceIntentSubtypeV8
     /\b(save|savings|money left|budget)\b/i.test(message) ? 'Create automatic transfer immediately after income lands.' : '',
   ].filter(Boolean);
 
+  const missingCriticalData = [
+    !/\$?\d[\d,.]*/.test(corpus) ? 'No concrete numeric anchor provided yet.' : '',
+    subtype === 'compare_options' && !/\b(month|year|annual|monthly|price|cost)\b/i.test(corpus)
+      ? 'Comparison request is missing price or value constraints.'
+      : '',
+    (subtype === 'budgeting' || subtype === 'savings_audit') && !/\b(income|expenses?|spend|budget)\b/i.test(corpus)
+      ? 'Budget request is missing income/expense baseline.'
+      : '',
+  ].filter(Boolean);
+
   return {
     explicitRequest,
     inferredGoal,
+    realObjective,
     urgency,
     blockerLevel,
     riskLevel,
@@ -185,6 +208,8 @@ function buildGoalUnderstanding(message: string, subtype: FinanceIntentSubtypeV8
                 ? 'debt'
                 : 'general',
     hiddenOpportunities: hiddenOpportunities.slice(0, 3),
+    priorityLens: ['impact', 'urgency', 'effort', 'certainty', 'risk_reduction'],
+    missingCriticalData,
     emotionalTone,
   };
 }
@@ -255,7 +280,7 @@ export function routeIntentV8(message: string, history: AgentMessageV8[] = []): 
     userState: { stress, urgency, confusion },
     reason: top.score > 0 ? top.reason : 'No strong domain signal.',
     responseMode: detectResponseMode(normalized, normalizedIntent),
-    goal: buildGoalUnderstanding(normalized, subtype),
+    goal: buildGoalUnderstanding(normalized, subtype, historyText),
     needsGmail,
     needsFinanceData: normalizedIntent === 'finance',
     wantsRecommendations: normalizedIntent === 'finance' || /\b(best next|priorit|recommend|smartest next move)\b/i.test(normalized),

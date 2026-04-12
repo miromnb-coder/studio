@@ -183,7 +183,9 @@ export function createPlanV8(route: RouteResultV8, message: string): ExecutionPl
       ? 'Which two options should I compare, and what are their monthly or annual prices?'
       : route.ambiguity > 0.65
         ? 'Should I focus first on reducing recurring costs, improving cashflow safety, or comparing options?'
-        : 'What is one concrete number I should optimize around: monthly budget, target savings, or a recurring cost?'
+        : route.goal.missingCriticalData?.[0]
+          ? `I can improve precision quickly. ${route.goal.missingCriticalData[0]} Which one number should we optimize first?`
+          : 'What is one concrete number I should optimize around: monthly budget, target savings, or a recurring cost?'
     : undefined;
 
   let planModes = mapSubtypeToModes();
