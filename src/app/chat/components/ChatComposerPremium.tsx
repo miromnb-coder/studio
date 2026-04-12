@@ -119,7 +119,7 @@ export function ChatComposerPremium(props: ChatComposerPremiumProps) {
         ) : null}
       </AnimatePresence>
 
-      <div className="chat-composer-shell rounded-[34px] px-4 pb-3 pt-3">
+      <div className="rounded-[38px] border border-[#d8d9dd] bg-[#f3f3f4] px-4 pb-3 pt-3.5 shadow-[0_1px_2px_rgba(16,24,40,0.03)]">
         <input
           ref={fileInputRef}
           type="file"
@@ -144,18 +144,23 @@ export function ChatComposerPremium(props: ChatComposerPremiumProps) {
             }
           }}
           placeholder={userPresent ? 'Assign a task or ask anything' : 'Sign in to start chatting'}
-          className="chat-composer-input mb-4 max-h-[130px] min-h-[56px] w-full resize-none border-none bg-transparent text-[17px] leading-7 tracking-[-0.01em]"
+          className="mb-5 max-h-[130px] min-h-[56px] w-full resize-none border-none bg-transparent text-[17px] leading-7 tracking-[-0.01em] text-[#2f3238] placeholder:text-[#b2b4ba] focus:outline-none"
         />
 
         <div className="flex items-end justify-between">
           <div className="flex items-center gap-2">
-            <button type="button" onClick={() => onTogglePanel('add')} className="composer-icon-btn h-12 w-12" aria-label="Open add menu">
+            <button
+              type="button"
+              onClick={() => onTogglePanel('add')}
+              className="inline-flex h-12 w-12 items-center justify-center rounded-full border border-[#d6d7db] bg-[#efeff1] text-[#36383d] transition hover:bg-[#ebebee]"
+              aria-label="Open add menu"
+            >
               <Plus className="h-6 w-6" />
             </button>
             <button
               type="button"
               onClick={onToggleConnectors}
-              className="composer-icon-btn h-12 w-12"
+              className="inline-flex h-12 w-12 items-center justify-center rounded-full border border-[#d6d7db] bg-[#efeff1] text-[#36383d] transition hover:bg-[#ebebee]"
               aria-label="Open connectors"
             >
               <Link2 className="h-5 w-5" />
@@ -163,17 +168,33 @@ export function ChatComposerPremium(props: ChatComposerPremiumProps) {
           </div>
 
           <div className="flex items-center gap-2">
-            <button type="button" onClick={onSpeechToText} disabled={!voiceSupported} className="composer-icon-btn h-12 w-12" aria-label="Voice input">
+            <button
+              type="button"
+              onClick={onSpeechToText}
+              disabled={!voiceSupported}
+              className="inline-flex h-12 w-12 items-center justify-center rounded-full border border-[#d6d7db] bg-[#efeff1] text-[#36383d] transition hover:bg-[#ebebee] disabled:opacity-55"
+              aria-label="Voice input"
+            >
               <MessageCircle className="h-5 w-5" />
             </button>
-            <button type="button" onClick={onSpeechToText} disabled={!voiceSupported} className="composer-icon-btn h-12 w-12" aria-label="Start speech to text">
+            <button
+              type="button"
+              onClick={onSpeechToText}
+              disabled={!voiceSupported}
+              className="inline-flex h-12 w-12 items-center justify-center rounded-full border border-[#d6d7db] bg-[#efeff1] text-[#36383d] transition hover:bg-[#ebebee] disabled:opacity-55"
+              aria-label="Start speech to text"
+            >
               <Mic className="h-5 w-5" />
             </button>
             <button
               type="button"
               onClick={onSend}
               disabled={!draft.trim() || isAgentResponding || isLimitReached}
-              className="composer-send-btn h-12 w-12 shrink-0 disabled:opacity-60"
+              className={`inline-flex h-12 w-12 shrink-0 items-center justify-center rounded-full border transition ${
+                draft.trim() && !isAgentResponding && !isLimitReached
+                  ? 'border-[#cfd1d6] bg-[#d7d8dd] text-[#4f535a] hover:bg-[#cfd1d7]'
+                  : 'border-[#d6d7db] bg-[#e2e3e6] text-[#a5a7ad] disabled:opacity-60 disabled:hover:bg-[#e2e3e6]'
+              }`}
               aria-label="Send message"
             >
               {isSending ? <span className="h-4 w-4 animate-spin rounded-full border-2 border-slate-400 border-t-slate-700" /> : <ArrowUp className="h-5 w-5" />}
