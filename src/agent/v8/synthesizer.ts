@@ -158,7 +158,7 @@ function extractSectionValue(reply: string, labels: string[]): string | null {
 function extractConfidence(reply: string, language: string): string {
   const labels =
     language === 'fi'
-      ? ['confidence', 'varmuus']
+      ? ['confidence', 'varmuus', 'varmuustaso']
       : language === 'sv'
         ? ['confidence', 'säkerhet']
         : ['confidence'];
@@ -184,9 +184,9 @@ function extractAssumptions(reply: string, language: string, fallback: string): 
 function extractNextStep(reply: string, language: string, fallback: string): string {
   const labels =
     language === 'fi'
-      ? ['next step:', 'seuraava askel:']
+      ? ['next step:', 'seuraava askel:', 'selkeä seuraava siirto:']
       : language === 'sv'
-        ? ['next step:', 'nästa steg:']
+        ? ['next step:', 'nästa steg:', 'tydligt nästa steg:']
         : ['next step:'];
 
   return extractSectionValue(reply, labels) || fallback;
