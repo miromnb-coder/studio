@@ -2,7 +2,23 @@
 
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { Bot, Crown, MoreHorizontal, RefreshCw, Sparkles, Wand2 } from 'lucide-react';
+import {
+  Bot,
+  Calendar,
+  CalendarDays,
+  Crown,
+  FileText,
+  FolderKanban,
+  Github,
+  Globe,
+  Inbox,
+  Mail,
+  MessageSquare,
+  MoreHorizontal,
+  RefreshCw,
+  Sparkles,
+  Wand2,
+} from 'lucide-react';
 import { AnimatePresence, LayoutGroup, motion } from 'framer-motion';
 import { useAppStore } from '../store/app-store';
 import { useUserEntitlements } from '../hooks/use-user-entitlements';
@@ -12,6 +28,7 @@ import { AssistantResponseSurface } from './components/AssistantResponseSurface'
 import { ChatComposerPremium } from './components/ChatComposerPremium';
 import { ConversationSwitcherSheet } from './components/ConversationSwitcherSheet';
 import type { ExecutionStep } from './components/AgentExecutionTimeline';
+import type { ConnectorItem } from './components/ConnectorRow';
 import { AppShell } from '../components/premium-ui';
 import { trackEvent } from '@/app/lib/analytics-client';
 
@@ -37,6 +54,19 @@ const INTRO_LINES = [
   'Understood. I’m reviewing this now and narrowing the best path.',
   'I’m on it. I’ll check the most important signals first.',
 ] as const;
+
+const INITIAL_CONNECTORS: ConnectorItem[] = [
+  { id: 'github', name: 'GitHub', icon: Github, status: 'connected' },
+  { id: 'browser', name: 'Browser', icon: Globe, status: 'not_connected' },
+  { id: 'gmail', name: 'Gmail', icon: Mail, status: 'not_connected' },
+  { id: 'google-calendar', name: 'Google Calendar', icon: CalendarDays, status: 'not_connected' },
+  { id: 'google-drive', name: 'Google Drive', icon: FolderKanban, status: 'not_connected' },
+  { id: 'outlook-mail', name: 'Outlook Mail', icon: Inbox, status: 'error' },
+  { id: 'outlook-calendar', name: 'Outlook Calendar', icon: Calendar, status: 'loading' },
+  { id: 'notion', name: 'Notion', icon: FileText, status: 'not_connected' },
+  { id: 'slack', name: 'Slack', icon: MessageSquare, status: 'not_connected' },
+  { id: 'dropbox', name: 'Dropbox', icon: Bot, status: 'not_connected' },
+];
 
 function formatConversationTime(iso: string) {
   const timestamp = new Date(iso);
@@ -108,6 +138,8 @@ export default function ChatPage() {
 
   const [draft, setDraft] = useState('');
   const [openPanel, setOpenPanel] = useState<'add' | 'conversations' | null>(null);
+  const [connectorsOpen, setConnectorsOpen] = useState(false);
+  const [connectors, setConnectors] = useState<ConnectorItem[]>(INITIAL_CONNECTORS);
   const [composerNotice, setComposerNotice] = useState<string | null>(null);
   const [showPaywall, setShowPaywall] = useState(false);
   const [showAuthPrompt, setShowAuthPrompt] = useState(false);
@@ -454,6 +486,22 @@ export default function ChatPage() {
     listRef.current.scrollTo({ top: listRef.current.scrollHeight, behavior: 'smooth' });
   };
 
+  const setConnectorStatus = (id: string, status: ConnectorItem['status']) => {
+    setConnectors((current) =>
+      current.map((connector) => (connector.id === id ? { ...connector, status } : connector)),
+    );
+  };
+
+  const connectConnector = (id: string) => {
+    setConnectorStatus(id, 'loading');
+
+    window.setTimeout(() => {
+      const shouldError = id === 'outlook-mail';
+      setConnectorStatus(id, shouldError ? 'error' : 'connected');
+      setComposerNotice(shouldError ? 'Connection failed. Please retry.' : 'Connector linked successfully.');
+    }, 820);
+  };
+
   return (
     <AppShell className="relative isolate overflow-hidden pb-64 sm:pb-60">
       <div className="pointer-events-none absolute inset-x-0 top-[-180px] z-0 h-[420px] bg-[radial-gradient(circle_at_top,rgba(125,211,252,0.14),transparent_58%),radial-gradient(circle_at_72%_18%,rgba(167,139,250,0.14),transparent_48%)]" />
@@ -662,6 +710,8 @@ export default function ChatPage() {
         draft={draft}
         notice={composerNotice}
         openPanel={openPanel === 'conversations' ? null : openPanel}
+        connectorsOpen={connectorsOpen}
+        connectors={connectors}
         voiceSupported={voiceSupported}
         isAgentResponding={isAgentResponding}
         isSending={isSending}
@@ -678,6 +728,11 @@ export default function ChatPage() {
           if (requireAuth()) router.push('/login?next=/chat');
         }}
         onTogglePanel={(panel) => setOpenPanel((prev) => (prev === panel ? null : panel))}
+        onToggleConnectors={() => {
+          setConnectorsOpen((prev) => !prev);
+          setOpenPanel(null);
+        }}
+        onCloseConnectors={() => setConnectorsOpen(false)}
         onSpeechToText={startSpeechToText}
         onAttachFile={() => {
           if (!isPremium) {
@@ -693,6 +748,13 @@ export default function ChatPage() {
         onAddImagePrompt={() => applyTemplate('Please use this image as context:', 'Image template added.')}
         onStartTaskTemplate={() => applyTemplate('Start a structured task template for: ', 'Task template added.')}
         onAddNoteTemplate={() => applyTemplate('Quick note: ', 'Note template added.')}
+        onOpenAddConnector={() => setComposerNotice('Connector discovery will be wired to provider OAuth flows.')}
+        onOpenManageConnector={() => setComposerNotice('Connector settings will include scopes and account switching.')}
+        onToggleConnector={(id, enabled) => {
+          setConnectorStatus(id, enabled ? 'connected' : 'not_connected');
+        }}
+        onConnectConnector={connectConnector}
+        onRetryConnector={connectConnector}
       />
 
       {isLimitReached && !isUnlimited ? (
