@@ -18,35 +18,24 @@ export function AppMenuSheet() {
   const groups = useMemo(
     () => [
       {
-        title: 'Navigation',
+        title: 'Primary',
         items: [
-          { label: 'Home', href: '/' },
+          { label: 'New Chat', href: '/chat?new=1' },
+          { label: 'Conversations', href: '/chat?panel=conversations' },
           { label: 'Tasks', href: '/tasks' },
           { label: 'Alerts', href: '/alerts' },
-          { label: 'History', href: '/history' },
+        ] as MenuItem[],
+      },
+      {
+        title: 'Secondary',
+        items: [
           { label: 'Profile', href: '/profile' },
-        ] as MenuItem[],
-      },
-      {
-        title: 'Chat Tools',
-        items: [
-          { label: 'New Chat', href: '/chat' },
-          { label: 'Conversations', href: '/chat' },
-          { label: 'Connected Apps', href: '/chat' },
-          { label: 'Search', href: '/history' },
-        ] as MenuItem[],
-      },
-      {
-        title: 'Account',
-        items: [
-          { label: 'Upgrade', href: '/upgrade' },
-          { label: 'Usage', href: '/settings' },
           { label: 'Settings', href: '/settings' },
-          { label: 'Sign Out', action: () => router.push('/login') },
+          { label: 'Upgrade', href: '/upgrade' },
         ] as MenuItem[],
       },
     ],
-    [router],
+    [],
   );
 
   useEffect(() => {
