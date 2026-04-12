@@ -5,12 +5,12 @@ import {
   ClipboardPaste,
   ImagePlus,
   Link2,
+  MessageCircle,
   Mic,
   NotebookPen,
   Paperclip,
   Plus,
   Sparkles,
-  Wand2,
 } from 'lucide-react';
 import { AnimatePresence, motion } from 'framer-motion';
 import type { RefObject } from 'react';
@@ -87,7 +87,7 @@ export function ChatComposerPremium(props: ChatComposerPremiumProps) {
   return (
     <div
       ref={composerRef}
-      className="fixed bottom-[calc(74px+env(safe-area-inset-bottom))] left-1/2 z-30 w-full max-w-md -translate-x-1/2 px-3.5 pb-2.5"
+      className="fixed bottom-[calc(12px+env(safe-area-inset-bottom))] left-1/2 z-30 w-full max-w-md -translate-x-1/2 px-3.5"
     >
       <AnimatePresence>
         {notice ? (
@@ -95,7 +95,7 @@ export function ChatComposerPremium(props: ChatComposerPremiumProps) {
             initial={{ opacity: 0, y: 4 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: 4 }}
-            className="mb-2 inline-flex items-center gap-1.5 rounded-full border border-white/[0.06] bg-black/35 px-3 py-1.5 text-[11px] tracking-wide text-zinc-300 backdrop-blur"
+            className="mb-2 inline-flex items-center gap-1.5 rounded-full border border-[#d9dee6] bg-[#f8f9fb] px-3 py-1.5 text-[11px] tracking-wide text-[#5f6875]"
           >
             <Sparkles className="h-3 w-3" />
             {notice}
@@ -109,138 +109,74 @@ export function ChatComposerPremium(props: ChatComposerPremiumProps) {
             initial={{ opacity: 0, y: 10 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: 6 }}
-            className="mb-2 rounded-[18px] border border-white/[0.06] bg-[#0f1014]/90 p-1.5 shadow-[0_22px_42px_rgba(0,0,0,0.5)] backdrop-blur-2xl"
+            className="mb-2 rounded-[18px] border border-[#dce1e8] bg-white p-1.5 shadow-sm"
           >
-            <button
-              type="button"
-              onClick={onAttachFile}
-              className="composer-menu-btn"
-            >
-              <Paperclip className="h-4 w-4" />
-              <span>Attach file</span>
-            </button>
-
-            <button
-              type="button"
-              onClick={onAddImagePrompt}
-              className="composer-menu-btn"
-            >
-              <ImagePlus className="h-4 w-4" />
-              <span>Use image context</span>
-            </button>
-
-            <button
-              type="button"
-              onClick={onStartTaskTemplate}
-              className="composer-menu-btn"
-            >
-              <NotebookPen className="h-4 w-4" />
-              <span>Start structured task</span>
-            </button>
-
-            <button
-              type="button"
-              onClick={onAddNoteTemplate}
-              className="composer-menu-btn"
-            >
-              <ClipboardPaste className="h-4 w-4" />
-              <span>Add quick note</span>
-            </button>
+            <button type="button" onClick={onAttachFile} className="composer-menu-btn"><Paperclip className="h-4 w-4" /><span>Attach file</span></button>
+            <button type="button" onClick={onAddImagePrompt} className="composer-menu-btn"><ImagePlus className="h-4 w-4" /><span>Use image context</span></button>
+            <button type="button" onClick={onStartTaskTemplate} className="composer-menu-btn"><NotebookPen className="h-4 w-4" /><span>Start structured task</span></button>
+            <button type="button" onClick={onAddNoteTemplate} className="composer-menu-btn"><ClipboardPaste className="h-4 w-4" /><span>Add quick note</span></button>
           </motion.div>
         ) : null}
       </AnimatePresence>
 
-      <div className="chat-composer-shell rounded-[28px] px-3 py-2.5 shadow-[0_18px_40px_rgba(0,0,0,0.5)]">
+      <div className="chat-composer-shell rounded-[34px] px-4 pb-3 pt-3">
         <input
           ref={fileInputRef}
           type="file"
           className="hidden"
           onChange={(event) => {
             const fileName = event.target.files?.[0]?.name;
-
             if (!fileName) return;
-
-            onDraftChange(
-              draft
-                ? `${draft}\nAttached file context: ${fileName}`
-                : `Attached file context: ${fileName}`
-            );
+            onDraftChange(draft ? `${draft}\nAttached file context: ${fileName}` : `Attached file context: ${fileName}`);
           }}
         />
 
-        <div className="mb-1.5 flex items-center justify-between px-1">
-          <p className="inline-flex items-center gap-1 text-[10px] uppercase tracking-[0.14em] text-zinc-500">
-            <Wand2 className="h-3 w-3" />
-            Premium composer
-          </p>
-          <p className="text-[10px] text-zinc-500">{isAgentResponding ? 'Agent is responding…' : 'Ready for your next instruction'}</p>
-        </div>
+        <textarea
+          ref={textareaRef}
+          value={draft}
+          rows={1}
+          onFocus={onTextareaFocus}
+          onChange={(event) => onDraftChange(event.target.value)}
+          onKeyDown={(event) => {
+            if (event.key === 'Enter' && !event.shiftKey) {
+              event.preventDefault();
+              onSend();
+            }
+          }}
+          placeholder={userPresent ? 'Assign a task or ask anything' : 'Sign in to start chatting'}
+          className="chat-composer-input mb-4 max-h-[130px] min-h-[56px] w-full resize-none border-none bg-transparent text-[17px] leading-7 tracking-[-0.01em]"
+        />
 
-        <div className="flex items-end gap-2 px-1">
-          <div className="mb-1 flex items-center gap-1">
+        <div className="flex items-end justify-between">
+          <div className="flex items-center gap-2">
+            <button type="button" onClick={() => onTogglePanel('add')} className="composer-icon-btn h-12 w-12" aria-label="Open add menu">
+              <Plus className="h-6 w-6" />
+            </button>
             <button
               type="button"
-              onClick={() => onTogglePanel('add')}
-              className="composer-icon-btn"
-              aria-label="Open add menu"
-            >
-              <Plus className="h-4 w-4" />
-            </button>
-
-            <motion.button
-              type="button"
-              whileTap={{ scale: 0.95 }}
               onClick={onToggleConnectors}
-              className="composer-icon-btn border border-sky-300/20 bg-[linear-gradient(155deg,rgba(125,211,252,0.16),rgba(125,211,252,0.04))] text-sky-100 shadow-[0_10px_24px_rgba(56,189,248,0.22)]"
+              className="composer-icon-btn h-12 w-12"
               aria-label="Open connectors"
             >
-              <Link2 className="h-4 w-4" />
-            </motion.button>
+              <Link2 className="h-5 w-5" />
+            </button>
           </div>
 
-          <textarea
-            ref={textareaRef}
-            value={draft}
-            rows={1}
-            onFocus={onTextareaFocus}
-            onChange={(event) => onDraftChange(event.target.value)}
-            onKeyDown={(event) => {
-              if (event.key === 'Enter' && !event.shiftKey) {
-                event.preventDefault();
-                onSend();
-              }
-            }}
-            placeholder={
-              userPresent
-                ? 'Ask anything, assign a task, or draft an action…'
-                : 'Sign in to start chatting'
-            }
-            className="chat-composer-input max-h-[140px] min-h-[46px] w-full resize-none border-none bg-transparent py-1 text-[15px] leading-6 tracking-[-0.01em]"
-          />
-
-          <div className="mb-1 flex items-center gap-1">
-            <button
-              type="button"
-              onClick={onSpeechToText}
-              disabled={!voiceSupported}
-              className={`composer-icon-btn ${!voiceSupported ? 'opacity-35' : ''}`}
-              aria-label="Start speech to text"
-            >
-              <Mic className="h-4 w-4" />
+          <div className="flex items-center gap-2">
+            <button type="button" onClick={onSpeechToText} disabled={!voiceSupported} className="composer-icon-btn h-12 w-12" aria-label="Voice input">
+              <MessageCircle className="h-5 w-5" />
             </button>
-
+            <button type="button" onClick={onSpeechToText} disabled={!voiceSupported} className="composer-icon-btn h-12 w-12" aria-label="Start speech to text">
+              <Mic className="h-5 w-5" />
+            </button>
             <button
               type="button"
               onClick={onSend}
               disabled={!draft.trim() || isAgentResponding || isLimitReached}
-              className="composer-send-btn h-10 w-10 shrink-0 disabled:opacity-45"
+              className="composer-send-btn h-12 w-12 shrink-0 disabled:opacity-60"
               aria-label="Send message"
             >
-              {isSending ? (
-                <span className="h-4 w-4 animate-spin rounded-full border-2 border-zinc-700/50 border-t-zinc-900" />
-              ) : (
-                <ArrowUp className="h-4 w-4" />
-              )}
+              {isSending ? <span className="h-4 w-4 animate-spin rounded-full border-2 border-slate-400 border-t-slate-700" /> : <ArrowUp className="h-5 w-5" />}
             </button>
           </div>
         </div>

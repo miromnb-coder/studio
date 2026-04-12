@@ -34,7 +34,7 @@ export function ConversationSwitcherSheet({
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
         exit={{ opacity: 0 }}
-        className="fixed inset-0 z-40 bg-black/25"
+        className="fixed inset-0 z-40 bg-black/16"
       />
 
       <motion.aside
@@ -42,11 +42,11 @@ export function ConversationSwitcherSheet({
         animate={{ y: 0, opacity: 1 }}
         exit={{ y: '-104%', opacity: 0.7 }}
         transition={{ type: 'spring', damping: 32, stiffness: 300 }}
-        className="fixed inset-x-0 top-0 z-50 mx-auto flex max-h-[82vh] w-full max-w-xl flex-col rounded-b-[26px] border-b border-white/10 bg-[#0f1014]/96 px-3 pb-3 pt-2.5 shadow-[0_22px_40px_rgba(0,0,0,0.42)] backdrop-blur-xl"
+        className="fixed inset-x-0 top-0 z-50 mx-auto flex max-h-[82vh] w-full max-w-xl flex-col rounded-b-[26px] border-b border-[#dde1e8] bg-[#f8f9fb]/96 px-3 pb-3 pt-2.5 shadow-sm backdrop-blur-xl"
       >
-        <div className="mx-auto mb-2 h-1 w-10 rounded-full bg-white/20" />
+        <div className="mx-auto mb-2 h-1 w-10 rounded-full bg-[#ccd3dd]" />
         <div className="mb-3 flex items-center justify-between">
-          <div className="inline-flex items-center gap-2 text-sm font-medium text-zinc-100">
+          <div className="inline-flex items-center gap-2 text-sm font-medium text-[#242a31]">
             <MessageSquare className="h-4 w-4" /> Conversations
           </div>
           <button type="button" onClick={onClose} className="composer-icon-btn" aria-label="Close panel">
@@ -57,7 +57,7 @@ export function ConversationSwitcherSheet({
         <button
           type="button"
           onClick={onNewChat}
-          className="mb-3 inline-flex items-center justify-center gap-2 rounded-xl border border-white/15 bg-white/[0.08] px-3 py-2 text-sm font-medium text-zinc-100 shadow-[0_6px_14px_rgba(0,0,0,0.16)]"
+          className="mb-3 inline-flex items-center justify-center gap-2 rounded-xl border border-[#dce1e8] bg-white px-3 py-2 text-sm font-medium text-[#242a31] shadow-sm"
         >
           <Plus className="h-4 w-4" /> New chat
         </button>
@@ -66,13 +66,13 @@ export function ConversationSwitcherSheet({
           {conversations.map((conversation) => {
             const isActive = conversation.id === activeConversationId;
             return (
-              <div key={conversation.id} className={`rounded-xl border px-2.5 py-2 transition-colors ${isActive ? 'border-white/20 bg-white/[0.1]' : 'border-white/10 bg-white/[0.04]'}`}>
+              <div key={conversation.id} className={`rounded-xl border px-2.5 py-2 transition-colors ${isActive ? 'border-[#ced6e2] bg-[#eef2f7]' : 'border-[#dde1e8] bg-white'}`}>
                 <button type="button" onClick={() => onOpenConversation(conversation.id)} className="w-full text-left">
                   <div className="flex items-start justify-between gap-2">
-                    <p className={`line-clamp-1 text-sm font-medium ${isActive ? 'text-zinc-100' : 'text-zinc-200'}`}>{conversation.title}</p>
-                    <span className="text-[11px] text-zinc-500">{formatConversationTime(conversation.updatedAt)}</span>
+                    <p className={`line-clamp-1 text-sm font-medium ${isActive ? 'text-[#242a31]' : 'text-[#313741]'}`}>{conversation.title}</p>
+                    <span className="text-[11px] text-[#8a93a1]">{formatConversationTime(conversation.updatedAt)}</span>
                   </div>
-                  <p className="line-clamp-1 text-xs text-zinc-500">{conversation.lastMessagePreview || 'No messages yet'}</p>
+                  <p className="line-clamp-1 text-xs text-[#8a93a1]">{conversation.lastMessagePreview || 'No messages yet'}</p>
                 </button>
                 <div className="mt-2 flex items-center justify-end gap-1">
                   <button type="button" onClick={() => onRenameConversation(conversation.id, conversation.title)} className="composer-icon-btn" aria-label="Rename conversation">
@@ -87,7 +87,7 @@ export function ConversationSwitcherSheet({
           })}
 
           {conversations.length === 0 ? (
-            <div className="rounded-xl border border-white/10 bg-white/[0.03] px-3 py-4 text-sm text-zinc-400">No conversations yet. Start your first chat.</div>
+            <div className="rounded-xl border border-[#dde1e8] bg-white px-3 py-4 text-sm text-[#8a93a1]">No conversations yet. Start your first chat.</div>
           ) : null}
         </div>
       </motion.aside>

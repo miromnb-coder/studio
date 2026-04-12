@@ -3,9 +3,11 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import {
+  ArrowLeft,
   Bot,
   Calendar,
   CalendarDays,
+  ChevronRight,
   Crown,
   FileText,
   FolderKanban,
@@ -14,10 +16,10 @@ import {
   Inbox,
   Mail,
   MessageSquare,
-  MoreHorizontal,
   RefreshCw,
   Sparkles,
   Wand2,
+  X,
 } from 'lucide-react';
 import { AnimatePresence, LayoutGroup, motion } from 'framer-motion';
 import { useAppStore } from '../store/app-store';
@@ -148,6 +150,7 @@ export default function ChatPage() {
   const [simulatedStepIndex, setSimulatedStepIndex] = useState(0);
   const [isSending, setIsSending] = useState(false);
   const [isNearBottom, setIsNearBottom] = useState(true);
+  const [chatMenuOpen, setChatMenuOpen] = useState(false);
 
   const listRef = useRef<HTMLDivElement>(null);
   const composerRef = useRef<HTMLDivElement>(null);
@@ -503,52 +506,43 @@ export default function ChatPage() {
   };
 
   return (
-    <AppShell className="relative isolate overflow-hidden pb-64 sm:pb-60">
-      <div className="pointer-events-none absolute inset-x-0 top-[-180px] z-0 h-[420px] bg-[radial-gradient(circle_at_top,rgba(125,211,252,0.14),transparent_58%),radial-gradient(circle_at_72%_18%,rgba(167,139,250,0.14),transparent_48%)]" />
-
-      <header className="sticky top-0 z-30 mb-4 rounded-[24px] border border-white/[0.06] bg-[linear-gradient(160deg,rgba(17,20,30,0.92),rgba(10,11,16,0.84))] px-4 py-3.5 shadow-[0_16px_40px_rgba(0,0,0,0.36)] backdrop-blur-2xl">
+    <AppShell className="relative isolate overflow-hidden pb-44 sm:pb-42">
+      <header className="sticky top-0 z-30 mb-4 rounded-[24px] border border-[#dce1e8] bg-[#f8f9fb]/95 px-4 py-3 shadow-sm backdrop-blur">
         <div className="flex items-center justify-between gap-3">
-          <div className="min-w-0">
-            <div className="flex items-center gap-2">
-              <span className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-white/[0.08] bg-white/[0.03]">
-                <Bot className="h-4 w-4 text-zinc-200" />
-              </span>
-              <div>
-                <h1 className="text-[18px] font-semibold tracking-[-0.024em] text-zinc-100">Kivo Operator</h1>
-                <p className="text-[10px] uppercase tracking-[0.16em] text-zinc-500">Premium AI Workspace</p>
-              </div>
-            </div>
-            <p className="mt-2 truncate text-[11px] tracking-[0.01em] text-zinc-500">
-              {formatUsageLine(usage.current, usage.limit, usage.unlimited)}
-            </p>
-          </div>
-
-          <div className="flex items-center gap-1.5">
-            <span className="inline-flex items-center gap-1.5 rounded-full border border-white/[0.08] bg-white/[0.03] px-2.5 py-1 text-[10px] font-medium text-zinc-300">
-              <span
-                className={`h-1.5 w-1.5 rounded-full ${
-                  isAgentResponding ? 'animate-pulse bg-sky-300' : 'bg-emerald-300'
-                }`}
-              />
-              {isAgentResponding ? 'Agent running' : 'Agent ready'}
-            </span>
-
+          <div className="inline-flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => router.back()}
+              className="inline-flex h-9 w-9 items-center justify-center rounded-full border border-[#d6dce6] bg-white text-[#2a313a]"
+              aria-label="Back"
+            >
+              <ArrowLeft className="h-4 w-4" />
+            </button>
             <button
               type="button"
               onClick={() => setOpenPanel((prev) => (prev === 'conversations' ? null : 'conversations'))}
-              className="inline-flex min-w-0 max-w-[56vw] items-center gap-2 rounded-full border border-white/[0.07] bg-white/[0.03] px-3 py-1.5 text-zinc-300 transition-all duration-200 hover:border-white/[0.14] hover:bg-white/[0.05]"
-              aria-label="Open conversations"
+              className="inline-flex h-9 items-center gap-1.5 rounded-full border border-[#d6dce6] bg-white px-3 text-xs text-[#4f5661]"
             >
-              <span className="truncate text-xs font-medium text-zinc-100">
-                {activeConversation?.title || 'Conversations'}
-              </span>
-              <span className="rounded-full border border-white/[0.08] bg-black/20 px-1.5 py-0.5 text-[10px] text-zinc-500">
-                {conversationList.length}
-              </span>
-              <MoreHorizontal className="h-4 w-4 shrink-0" />
+              Workspace
+              <ChevronRight className="h-3.5 w-3.5" />
+            </button>
+          </div>
+          <h1 className="text-[19px] font-semibold tracking-[-0.02em] text-[#242a31]">Kivo</h1>
+
+          <div className="flex items-center gap-1.5">
+            <button
+              type="button"
+              onClick={() => setChatMenuOpen(true)}
+              className="inline-flex h-9 w-9 items-center justify-center rounded-full border border-[#d6dce6] bg-white text-[#2a313a]"
+              aria-label="Open menu"
+            >
+              <Menu className="h-4 w-4" />
             </button>
           </div>
         </div>
+        <p className="mt-2 truncate text-[11px] tracking-[0.01em] text-[#8b95a3]">
+          {formatUsageLine(usage.current, usage.limit, usage.unlimited)}
+        </p>
 
         <AnimatePresence>
           {openPanel === 'conversations' ? (
@@ -569,6 +563,35 @@ export default function ChatPage() {
         </AnimatePresence>
       </header>
 
+      <AnimatePresence>
+        {chatMenuOpen ? (
+          <>
+            <motion.button initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={() => setChatMenuOpen(false)} className="fixed inset-0 z-40 bg-black/20" />
+            <motion.aside initial={{ y: '100%' }} animate={{ y: 0 }} exit={{ y: '100%' }} transition={{ type: 'spring', stiffness: 320, damping: 30 }} className="fixed inset-x-0 bottom-0 z-50 mx-auto w-full max-w-md rounded-t-[30px] border border-[#dde1e8] bg-[#f6f7f9] px-4 pb-[calc(20px+env(safe-area-inset-bottom))] pt-3 shadow-[0_-12px_30px_rgba(17,24,39,0.12)]">
+              <div className="mx-auto mb-3 h-1.5 w-10 rounded-full bg-[#c8ced8]" />
+              <div className="mb-3 flex items-center justify-between">
+                <h2 className="text-lg font-semibold text-[#22262c]">Menu</h2>
+                <button type="button" onClick={() => setChatMenuOpen(false)} className="composer-icon-btn"><X className="h-4 w-4" /></button>
+              </div>
+              {[
+                ['Navigation', [['Home', '/'], ['Tasks', '/tasks'], ['Alerts', '/alerts'], ['History', '/history'], ['Profile', '/profile']]],
+                ['Chat Tools', [['New Chat', '/chat'], ['Conversations', '/chat'], ['Connected Apps', '/chat'], ['Search', '/history']]],
+                ['Account', [['Upgrade', '/upgrade'], ['Usage', '/settings'], ['Settings', '/settings'], ['Sign Out', '/login']]],
+              ].map(([title, items]) => (
+                <div key={title as string} className="mb-2.5 rounded-2xl border border-[#dde1e8] bg-white p-2.5">
+                  <p className="px-2 pb-1 text-xs uppercase tracking-[0.16em] text-[#7a838f]">{title as string}</p>
+                  {(items as string[][]).map(([label, href]) => (
+                    <button key={label} type="button" onClick={() => { router.push(href); setChatMenuOpen(false); }} className="flex w-full items-center justify-between rounded-xl px-2 py-2.5 text-left text-sm text-[#2b3037] hover:bg-[#f3f5f8]">
+                      <span>{label}</span><ChevronRight className="h-4 w-4 text-[#8b95a3]" />
+                    </button>
+                  ))}
+                </div>
+              ))}
+            </motion.aside>
+          </>
+        ) : null}
+      </AnimatePresence>
+
       <LayoutGroup>
         <section
           ref={listRef}
@@ -583,12 +606,12 @@ export default function ChatPage() {
                 exit={{ opacity: 0, y: -10 }}
                 className="flex min-h-[66vh] flex-col items-center justify-center px-5 text-center"
               >
-                <div className="rounded-3xl border border-white/[0.07] bg-[linear-gradient(160deg,rgba(255,255,255,0.045),rgba(255,255,255,0.016))] px-5 py-4 shadow-[0_16px_42px_rgba(0,0,0,0.26)] backdrop-blur-xl">
-                  <p className="inline-flex items-center gap-1.5 rounded-full border border-white/[0.08] bg-white/[0.03] px-2.5 py-1 text-[10px] uppercase tracking-[0.12em] text-zinc-400">
+                <div className="rounded-3xl border border-[#dce1e8] bg-white px-5 py-4 shadow-sm backdrop-blur-xl">
+                  <p className="inline-flex items-center gap-1.5 rounded-full border border-[#dce1e8] bg-[#f8f9fb] px-2.5 py-1 text-[10px] uppercase tracking-[0.12em] text-[#8791a0]">
                     <Sparkles className="h-3 w-3" />
                     Kivo Agent Mode
                   </p>
-                  <h2 className="mt-3 text-[34px] font-semibold leading-[1.06] tracking-[-0.04em] text-zinc-100">
+                  <h2 className="mt-3 text-[34px] font-semibold leading-[1.06] tracking-[-0.04em] text-[#22262c]">
                     Ask once. Get a real plan.
                   </h2>
                   <p className="mt-3 max-w-[30ch] text-sm leading-6 text-zinc-500">
@@ -602,7 +625,7 @@ export default function ChatPage() {
                       key={prompt}
                       type="button"
                       onClick={() => applyTemplate(prompt, 'Prompt added. You can edit before sending.')}
-                      className="rounded-2xl border border-white/[0.08] bg-[linear-gradient(155deg,rgba(255,255,255,0.04),rgba(255,255,255,0.014))] px-4 py-3 text-left text-xs leading-5 text-zinc-300 transition hover:border-white/[0.14] hover:bg-white/[0.05]"
+                      className="rounded-2xl border border-[#dce1e8] bg-[linear-gradient(155deg,rgba(255,255,255,0.04),rgba(255,255,255,0.014))] px-4 py-3 text-left text-xs leading-5 text-[#4b5360] transition hover:border-[#cfd6e0] hover:bg-[#f3f5f8]"
                     >
                       {prompt}
                     </button>
@@ -624,9 +647,9 @@ export default function ChatPage() {
                   className={`max-w-[99%] ${message.role === 'user' ? 'ml-auto' : ''}`}
                 >
                   {message.role === 'user' ? (
-                    <div className="ml-auto w-full max-w-[88%] rounded-[24px] border border-sky-200/18 bg-[linear-gradient(152deg,rgba(90,175,255,0.25),rgba(255,255,255,0.1)_52%,rgba(255,255,255,0.04))] px-4 py-3.5 text-[15px] leading-7 tracking-[-0.01em] text-zinc-100 shadow-[0_18px_36px_rgba(8,16,32,0.38)]">
+                    <div className="ml-auto w-full max-w-[88%] rounded-[24px] border border-[#d2d9e6] bg-[#eaf0f8] px-4 py-3.5 text-[15px] leading-7 tracking-[-0.01em] text-[#22262c] shadow-sm">
                       <p>{message.content}</p>
-                      <p className="mt-2 text-right text-[10px] uppercase tracking-[0.16em] text-sky-100/55">You · #{index + 1}</p>
+                      <p className="mt-2 text-right text-[10px] uppercase tracking-[0.16em] text-[#7a838f]">You · #{index + 1}</p>
                     </div>
                   ) : (
                     <AssistantResponseSurface
@@ -657,13 +680,13 @@ export default function ChatPage() {
                     animate={{ opacity: 1, y: 0 }}
                     exit={{ opacity: 0, y: -6 }}
                     transition={{ duration: 0.22 }}
-                    className="rounded-[24px] border border-white/[0.06] bg-[linear-gradient(155deg,rgba(255,255,255,0.08),rgba(255,255,255,0.02))] px-4 py-3.5 shadow-[0_14px_32px_rgba(0,0,0,0.24)] backdrop-blur-xl"
+                    className="rounded-[24px] border border-[#dce1e8] bg-white px-4 py-3.5 shadow-sm backdrop-blur-xl"
                   >
-                    <p className="inline-flex items-center gap-1.5 rounded-full border border-white/[0.08] bg-white/[0.03] px-2 py-0.5 text-[10px] uppercase tracking-[0.14em] text-zinc-400">
+                    <p className="inline-flex items-center gap-1.5 rounded-full border border-[#dce1e8] bg-[#f8f9fb] px-2 py-0.5 text-[10px] uppercase tracking-[0.14em] text-[#8791a0]">
                       <Wand2 className="h-3 w-3" />
                       Live reasoning
                     </p>
-                    <p className="mt-2 text-[15px] leading-7 tracking-[-0.012em] text-zinc-100/95">
+                    <p className="mt-2 text-[15px] leading-7 tracking-[-0.012em] text-[#22262c]/95">
                       {liveIntro}
                     </p>
                   </motion.div>
@@ -678,7 +701,7 @@ export default function ChatPage() {
           !streamError.startsWith('LIMIT_REACHED:') &&
           !streamError.startsWith('AUTH_REQUIRED:') &&
           !streamError.startsWith('PREMIUM_REQUIRED:') ? (
-            <div className="mx-1 mt-4 rounded-[20px] border border-rose-300/18 bg-rose-300/10 px-3.5 py-2.5 text-sm text-rose-100/90 shadow-[0_12px_28px_rgba(0,0,0,0.2)] backdrop-blur-xl">
+            <div className="mx-1 mt-4 rounded-[20px] border border-rose-300/18 bg-rose-300/10 px-3.5 py-2.5 text-sm text-rose-700 shadow-sm backdrop-blur-xl">
               We hit a processing issue, but your conversation is still safe.
               <button
                 type="button"
@@ -695,7 +718,7 @@ export default function ChatPage() {
             <button
               type="button"
               onClick={jumpToBottom}
-              className="sticky bottom-3 left-1/2 z-20 ml-auto mr-2 block rounded-full border border-white/[0.1] bg-black/58 px-3 py-1.5 text-xs text-zinc-100 backdrop-blur-xl transition hover:border-white/[0.16] hover:bg-black/66"
+              className="sticky bottom-3 left-1/2 z-20 ml-auto mr-2 block rounded-full border border-[#cfd6e0] bg-white/95 px-3 py-1.5 text-xs text-[#22262c] backdrop-blur-xl transition hover:border-[#c0c9d6] hover:bg-white"
             >
               Jump to latest
             </button>
@@ -759,12 +782,12 @@ export default function ChatPage() {
 
       {isLimitReached && !isUnlimited ? (
         <div className="fixed bottom-[calc(176px+env(safe-area-inset-bottom))] left-1/2 z-20 w-full max-w-md -translate-x-1/2 px-4">
-          <div className="rounded-2xl border border-white/[0.08] bg-black/68 px-3 py-2.5 text-xs text-zinc-300 shadow-[0_14px_28px_rgba(0,0,0,0.38)] backdrop-blur-xl">
+          <div className="rounded-2xl border border-[#dce1e8] bg-[#f8f9fb] px-3 py-2.5 text-xs text-[#4b5360] shadow-sm backdrop-blur-xl">
             You&apos;ve reached your daily limit. Upgrade for higher limits and file tools.
             <button
               type="button"
               onClick={openUpgrade}
-              className="ml-2 inline-flex rounded-full border border-white/[0.14] bg-white/[0.04] px-2 py-0.5 text-[11px] font-medium"
+              className="ml-2 inline-flex rounded-full border border-[#d2d8e2] bg-[#f5f7fa] px-2 py-0.5 text-[11px] font-medium"
             >
               Upgrade
             </button>
@@ -773,10 +796,10 @@ export default function ChatPage() {
       ) : null}
 
       {showAuthPrompt ? (
-        <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/35 px-6">
-          <div className="w-full max-w-sm rounded-2xl border border-white/[0.08] bg-[#111111] p-4 shadow-xl">
-            <h2 className="text-base font-semibold text-zinc-100">Sign in required</h2>
-            <p className="mt-1 text-sm text-zinc-400">
+        <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/20 px-6">
+          <div className="w-full max-w-sm rounded-2xl border border-[#dce1e8] bg-white p-4 shadow-xl">
+            <h2 className="text-base font-semibold text-[#22262c]">Sign in required</h2>
+            <p className="mt-1 text-sm text-[#8791a0]">
               Please log in before sending messages or saving conversations.
             </p>
             <div className="mt-4 flex gap-2">
@@ -800,19 +823,19 @@ export default function ChatPage() {
       ) : null}
 
       {showPaywall && !isUnlimited ? (
-        <div className="fixed inset-0 z-40 flex items-end justify-center bg-black/45 px-4 pb-20 pt-8">
-          <div className="w-full max-w-md rounded-[24px] border border-white/[0.08] bg-[#111111] p-4 shadow-[0_18px_44px_rgba(0,0,0,0.45)]">
-            <div className="mb-3 flex items-center gap-2 text-zinc-100">
+        <div className="fixed inset-0 z-40 flex items-end justify-center bg-black/20 px-4 pb-20 pt-8">
+          <div className="w-full max-w-md rounded-[24px] border border-[#dce1e8] bg-white p-4 shadow-lg">
+            <div className="mb-3 flex items-center gap-2 text-[#22262c]">
               <Crown className="h-5 w-5" />
               <h2 className="text-base font-semibold">Daily limit reached</h2>
             </div>
-            <p className="text-sm text-zinc-400">
+            <p className="text-sm text-[#8791a0]">
               You&apos;ve used all free runs for today. Upgrade to unlock more daily runs and file attachments.
             </p>
 
-            <div className="mt-3 rounded-xl border border-white/[0.08] bg-white/[0.03] p-3 text-sm">
-              <p className="font-medium text-zinc-100">Free vs Premium</p>
-              <ul className="mt-1 space-y-1 text-zinc-400">
+            <div className="mt-3 rounded-xl border border-[#dce1e8] bg-[#f8f9fb] p-3 text-sm">
+              <p className="font-medium text-[#22262c]">Free vs Premium</p>
+              <ul className="mt-1 space-y-1 text-[#8791a0]">
                 <li>• Free: {usage.limit} runs / day</li>
                 <li>• Premium: 1000 runs / day</li>
                 <li>• Premium: File uploads in chat</li>
