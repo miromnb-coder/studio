@@ -1,5 +1,6 @@
 import crypto from 'node:crypto';
 import { groq } from '@/ai/groq';
+import { resolveAIModel } from '@/lib/ai/config';
 
 export const GMAIL_FINANCE_QUERY =
   '("receipt" OR "invoice" OR "subscription" OR "payment" OR "trial" OR "renewal" OR "billed" OR "charge" OR "statement") newer_than:365d -category:social -category:promotions';
@@ -386,7 +387,7 @@ export async function analyzeFinancialEmailsWithAI(emails: ParsedFinancialEmail[
 
   try {
     const response = await groq.chat.completions.create({
-      model: 'llama-3.3-70b-versatile',
+      model: resolveAIModel(),
       temperature: 0,
       response_format: { type: 'json_object' },
       messages: [

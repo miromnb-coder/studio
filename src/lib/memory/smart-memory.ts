@@ -1,4 +1,5 @@
 import { groq } from '@/ai/groq';
+import { resolveAIModel } from '@/lib/ai/config';
 import type { FinanceActionType, FinanceAnalysis } from '@/lib/finance/types';
 import type { SupabaseClient } from '@supabase/supabase-js';
 
@@ -218,7 +219,7 @@ export async function detectMemoryIntent(input: string): Promise<MemoryIntent> {
 
   try {
     const response = await groq.chat.completions.create({
-      model: 'llama-3.3-70b-versatile',
+      model: resolveAIModel(),
       temperature: 0,
       response_format: { type: 'json_object' },
       messages: [
@@ -307,7 +308,7 @@ interface MemoryExtraction {
 async function extractGeneralFacts(userInput: string, assistantReply: string) {
   try {
     const response = await groq.chat.completions.create({
-      model: 'llama-3.3-70b-versatile',
+      model: resolveAIModel(),
       temperature: 0,
       response_format: { type: 'json_object' },
       messages: [
