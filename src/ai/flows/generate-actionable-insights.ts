@@ -4,6 +4,7 @@
  */
 
 import { ai } from '@/ai/genkit';
+import { resolveGenkitModel } from '@/lib/ai/config';
 
 export interface GenerateActionableInsightsInput {
   detectedItems: any[];
@@ -33,7 +34,7 @@ export async function generateActionableInsights(input: GenerateActionableInsigh
 
   try {
     const response = await ai.generate({
-      model: 'groq/llama-3.3-70b-versatile',
+      model: resolveGenkitModel(),
       system: 'Olet AI Life Operator. Luo priorisoitu lista toimenpiteistä havaittujen taloudellisten löydösten perusteella suomeksi. Palauta vastaus tiukasti JSON-muodossa.',
       prompt: JSON.stringify(input),
       config: {

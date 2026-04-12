@@ -1,4 +1,5 @@
 import type { AIProviderClient, ChatGenerationRequest, ChatStreamEvent } from './types';
+import { resolveAIModel } from './config';
 
 const GROQ_URL = 'https://api.groq.com/openai/v1/chat/completions';
 
@@ -65,7 +66,7 @@ export const groqProvider: AIProviderClient = {
       throw new Error('Missing GROQ_API_KEY environment variable.');
     }
 
-    const model = request.model ?? process.env.GROQ_MODEL ?? 'llama-3.3-70b-versatile';
+    const model = resolveAIModel(request.model);
 
     const response = await fetch(GROQ_URL, {
       method: 'POST',

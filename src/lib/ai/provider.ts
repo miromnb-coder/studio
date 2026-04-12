@@ -1,6 +1,7 @@
 import { groqProvider } from './groq';
 import { openAIProvider } from './openai';
 import type { AIProviderClient } from './types';
+import { AI_CONFIG } from './config';
 
 const providers = {
   openai: openAIProvider,
@@ -10,7 +11,7 @@ const providers = {
 type ProviderName = keyof typeof providers;
 
 export function getAIProvider(): AIProviderClient {
-  const selected = (process.env.AI_PROVIDER ?? 'groq').toLowerCase();
+  const selected = AI_CONFIG.provider;
 
   if (selected in providers) {
     return providers[selected as ProviderName];

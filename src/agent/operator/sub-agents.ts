@@ -100,6 +100,7 @@ export async function runResponseAgent(
       'Use this internal structure: core answer, key insight, optional actions, deeper analysis (only if requested).',
       'Use memory only when it improves relevance, and reference it naturally.',
       'If uncertain, state uncertainty briefly and continue with best guidance.',
+      'Language lock: answer fully in the user message language; never mix Finnish/English/Swedish in one reply.',
       'Do not expose chain-of-thought.',
     ].join(' '),
     [

@@ -659,7 +659,7 @@ const actions: AppActions = {
         } catch (error) {
           attempts += 1;
           const errorMessage = error instanceof Error ? error.message : 'Unknown streaming error.';
-          const isConfigError = /GROQ_API_KEY|OPENAI_API_KEY|Unsupported AI_PROVIDER/i.test(errorMessage);
+          const isConfigError = /GROQ_API_KEY|OPENAI_API_KEY|AI_MODEL|GROQ_MODEL|OPENAI_MODEL|Unsupported AI_PROVIDER/i.test(errorMessage);
           if (isConfigError || attempts >= 2) throw error;
         }
       }

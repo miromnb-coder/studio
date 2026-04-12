@@ -1,4 +1,5 @@
 import type { AIProviderClient, ChatGenerationRequest, ChatStreamEvent } from './types';
+import { resolveAIModel } from './config';
 
 const OPENAI_URL = 'https://api.openai.com/v1/responses';
 
@@ -103,7 +104,7 @@ export const openAIProvider: AIProviderClient = {
       throw new Error('Missing OPENAI_API_KEY environment variable.');
     }
 
-    const model = request.model ?? process.env.OPENAI_MODEL ?? 'gpt-4.1-mini';
+    const model = resolveAIModel(request.model);
 
     const response = await fetch(OPENAI_URL, {
       method: 'POST',

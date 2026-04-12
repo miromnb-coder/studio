@@ -1,5 +1,6 @@
 import { AgentContextV8, ExecutionResultV8, RouteResultV8 } from '../types';
 import { groq } from '@/ai/groq';
+import { resolveAIModel } from '@/lib/ai/config';
 
 export type ResearchAgentInput = {
   route: RouteResultV8;
@@ -100,7 +101,7 @@ export async function runResearchAgent(input: ResearchAgentInput): Promise<Resea
 
   try {
     const completion = await groq.chat.completions.create({
-      model: 'llama-3.3-70b-versatile',
+      model: resolveAIModel(),
       temperature: 0.2,
       messages: [
         {
@@ -121,7 +122,8 @@ ${goalStructureInstruction(input.route.intent)}
 ${verbosityInstruction(replyLength)}
 If gmail_fetch output exists, cite only those fields and never invent values.
 Hard rule: NO DATA = NO CLAIMS (no fabricated invoices, amounts, due dates, obligations, or merchants).
-Respond in ${responseLanguage}.`,
+Respond in ${responseLanguage}.
+Never mix languages in the same answer. If input is Finnish, output only Finnish. If input is English, output only English. If input is Swedish, output only Swedish.`,
         },
         ...conversationTail,
         {

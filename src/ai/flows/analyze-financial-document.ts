@@ -5,6 +5,7 @@
  */
 
 import { ai } from '@/ai/genkit';
+import { resolveGenkitModel } from '@/lib/ai/config';
 
 export interface AnalyzeFinancialDocumentInput {
   imageDataUri?: string;
@@ -47,8 +48,7 @@ function extractJSON(text: string): any {
 
 export async function analyzeFinancialDocument(input: AnalyzeFinancialDocumentInput): Promise<AnalyzeFinancialDocumentOutput> {
   const hasImage = !!input.imageDataUri;
-  // Exclusively Groq Models
-  const modelId = hasImage ? 'groq/llama-3.2-11b-vision-preview' : 'groq/llama-3.3-70b-versatile';
+  const modelId = resolveGenkitModel();
   
   if (!process.env.GROQ_API_KEY) {
     throw new Error("GROQ_API_KEY is missing from environment.");
@@ -61,6 +61,7 @@ export async function analyzeFinancialDocument(input: AnalyzeFinancialDocumentIn
 PRIMARY OBJECTIVE:
 - Solve the user's current request using high-performance Groq reasoning.
 - Detect the user's language automatically and reply in that language.
+- Never mix languages in one response (FI->FI only, EN->EN only, SV->SV only).
 
 OUTPUT FORMAT:
 Return ONLY a valid JSON object.
@@ -76,7 +77,7 @@ Return ONLY a valid JSON object.
 
   const userContent: any[] = [];
   if (hasImage) {
-    userContent.push({ text: 'Analyze this visual source using Groq protocols.' });
+    userContent.push({ text: 'Analyze this visual source using Groq protocols and return output strictly in one language.' });
     userContent.push({ media: { url: input.imageDataUri } });
   } else {
     userContent.push({ 
