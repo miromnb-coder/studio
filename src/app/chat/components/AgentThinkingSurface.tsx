@@ -10,45 +10,53 @@ type AgentThinkingSurfaceProps = {
 };
 
 export function AgentThinkingSurface({ statusText, steps }: AgentThinkingSurfaceProps) {
-  const [showDetails, setShowDetails] = useState(false);
+  const [showDetails, setShowDetails] = useState(true);
 
   const running = steps.find((step) => step.status === 'running');
   const failed = steps.find((step) => step.status === 'failed');
   const completedCount = steps.filter((step) => step.status === 'completed').length;
 
   const phase = failed?.label || running?.label || statusText;
-
-  const detail = failed?.summary || running?.summary || 'Reviewing subscriptions and recurring costs';
+  const detail = failed?.summary || running?.summary || 'Reviewing context and preparing the best next action';
 
   const progressLabel = useMemo(() => {
-    if (!steps.length) return null;
-    if (failed) return 'Execution hit an issue';
-    if (running) return `Working through ${Math.max(completedCount + 1, 1)} of ${steps.length} steps`;
-    return `${steps.length} steps prepared`;
+    if (!steps.length) return 'Preparing workflow';
+    if (failed) return 'Needs attention';
+    if (running) return `Step ${Math.max(completedCount + 1, 1)} of ${steps.length}`;
+    return `${steps.length} steps complete`;
   }, [completedCount, failed, running, steps]);
 
+  const progress = useMemo(() => {
+    if (!steps.length) return 12;
+    return Math.min(100, Math.round((completedCount / steps.length) * 100));
+  }, [completedCount, steps]);
+
   return (
-    <div className="max-w-[94%] space-y-1.5">
+    <div className="max-w-[94%] space-y-2.5 rounded-[20px] border border-white/[0.06] bg-[linear-gradient(170deg,rgba(255,255,255,0.03),rgba(255,255,255,0.012))] p-3.5 shadow-[0_14px_30px_rgba(0,0,0,0.24)]">
       <ThinkingIndicator phase={phase} detail={detail} />
 
+      <div className="rounded-xl border border-white/[0.05] bg-white/[0.015] px-2.5 py-2">
+        <div className="mb-1.5 flex items-center justify-between text-[10.5px] text-zinc-400">
+          <span>{progressLabel}</span>
+          <span>{progress}%</span>
+        </div>
+        <div className="h-1.5 rounded-full bg-white/[0.06]">
+          <div
+            className="h-1.5 rounded-full bg-gradient-to-r from-sky-300/85 to-indigo-300/90 transition-all duration-300"
+            style={{ width: `${progress}%` }}
+          />
+        </div>
+      </div>
+
       {steps.length > 0 ? (
-        <div className="pl-1.5 pt-0.5">
+        <div className="pl-0.5 pt-0.5">
           <button
             type="button"
             onClick={() => setShowDetails((current) => !current)}
-            className="inline-flex items-center gap-1.5 rounded-full border border-white/[0.04] bg-white/[0.012] px-2.5 py-1 text-[10.5px] font-medium tracking-[0.005em] text-zinc-500 transition-all duration-200 hover:border-white/[0.065] hover:bg-white/[0.024] hover:text-zinc-400"
+            className="inline-flex items-center gap-1.5 rounded-full border border-white/[0.05] bg-white/[0.02] px-2.5 py-1 text-[10.5px] font-medium tracking-[0.005em] text-zinc-400 transition-all duration-200 hover:border-white/[0.09] hover:text-zinc-200"
           >
-            <span
-              className={`h-1.5 w-1.5 rounded-full ${
-                failed
-                  ? 'bg-rose-300/90'
-                  : running
-                    ? 'bg-sky-300/90'
-                    : 'bg-zinc-500/90'
-              }`}
-            />
-            <span>{progressLabel || 'Working through steps'}</span>
-            <span className="text-zinc-600">{showDetails ? 'Hide' : 'Details'}</span>
+            <span className={`h-1.5 w-1.5 rounded-full ${failed ? 'bg-rose-300/90' : running ? 'bg-sky-300/90' : 'bg-emerald-300/90'}`} />
+            <span>{showDetails ? 'Hide run details' : 'Show run details'}</span>
           </button>
         </div>
       ) : null}

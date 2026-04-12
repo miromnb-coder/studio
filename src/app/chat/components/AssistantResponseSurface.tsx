@@ -1,7 +1,7 @@
 'use client';
 
 import { AnimatePresence, motion } from 'framer-motion';
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import FinanceResultCard from '@/components/chat/FinanceResultCard';
 import FinanceActionResultCard from '@/components/chat/FinanceActionResultCard';
 import type { Message } from '@/app/store/app-store';
@@ -58,15 +58,9 @@ export function AssistantResponseSurface({
     setSavingOutcomeFor(null);
   };
 
-  const surfaceBlocks = [
-    metadata?.structuredData?.finance ? 'finance' : null,
-    metadata?.structuredData?.actionResult ? 'actionResult' : null,
-    operatorModules.length ? 'modules' : null,
-    hasToolDetails ? 'details' : null,
-  ].filter(Boolean);
-
   const stagedPrefixes = ['Observation:', 'Interpretation:', 'Next focus:', 'Recommendation:'];
   const contentLines = (message.content || '').split('\n').filter((line) => line.trim().length > 0);
+  const readingMinutes = useMemo(() => Math.max(1, Math.round((message.content || '').split(/\s+/).filter(Boolean).length / 180)), [message.content]);
 
   return (
     <motion.section
@@ -75,24 +69,30 @@ export function AssistantResponseSurface({
       transition={{ duration: 0.24, ease: 'easeOut' }}
       className="max-w-[96%] space-y-3"
     >
-      <div className="px-0.5">
+      <div className="rounded-[22px] border border-white/[0.07] bg-[linear-gradient(170deg,rgba(255,255,255,0.04),rgba(255,255,255,0.015))] px-4 py-3.5 shadow-[0_16px_34px_rgba(0,0,0,0.22)] backdrop-blur-xl">
+        <div className="mb-3 flex items-center justify-between border-b border-white/[0.05] pb-2">
+          <p className="text-[11px] font-medium uppercase tracking-[0.16em] text-zinc-500">Kivo assistant</p>
+          <p className="text-[10px] text-zinc-500">~{readingMinutes} min read</p>
+        </div>
+
         {contentLines.length > 0 ? (
-          <div className="space-y-1.5 text-[15px] leading-8 tracking-[-0.01em] text-zinc-100/94">
+          <div className="space-y-2 text-[15px] leading-7 tracking-[-0.008em] text-zinc-100/95">
             {contentLines.map((line, idx) => {
               const isStageLine = stagedPrefixes.some((prefix) => line.startsWith(prefix));
               return (
                 <p
                   key={`${message.id}-line-${idx}`}
-                  className={isStageLine ? 'rounded-xl border border-white/[0.04] bg-white/[0.015] px-2.5 py-1' : 'whitespace-pre-wrap'}
+                  className={isStageLine ? 'rounded-xl border border-white/[0.05] bg-white/[0.02] px-3 py-1.5' : 'whitespace-pre-wrap'}
                 >
                   {line}
                 </p>
               );
             })}
+            {message.isStreaming ? <span className="inline-block h-5 w-1.5 animate-pulse rounded bg-zinc-400/65" /> : null}
           </div>
         ) : (
-          <div className="space-y-2 text-[15px] leading-8 tracking-[-0.01em] text-zinc-100/94">
-            {message.isStreaming ? ' ' : ''}
+          <div className="space-y-2 text-[15px] leading-7 tracking-[-0.01em] text-zinc-100/94">
+            {message.isStreaming ? <span className="inline-block h-5 w-1.5 animate-pulse rounded bg-zinc-400/65" /> : ''}
           </div>
         )}
       </div>
@@ -118,7 +118,7 @@ export function AssistantResponseSurface({
                       key={item.id}
                       type="button"
                       onClick={() => onAction(actionType)}
-                      className="rounded-full border border-white/[0.06] bg-white/[0.02] px-2.5 py-1.5 text-[10.5px] font-medium tracking-[0.008em] text-zinc-300 transition-all duration-200 hover:border-white/[0.09] hover:bg-white/[0.036]"
+                      className="rounded-full border border-white/[0.08] bg-white/[0.03] px-3 py-1.5 text-[11px] font-medium text-zinc-200 transition-all duration-200 hover:border-white/[0.14] hover:bg-white/[0.05]"
                     >
                       {item.label}
                     </button>
@@ -128,14 +128,14 @@ export function AssistantResponseSurface({
             ) : null}
 
             {operatorModules.length ? (
-              <div className="space-y-1.5">
+              <div className="space-y-2">
                 {operatorModules.slice(0, 4).map((module, index) => (
                   <motion.div
                     key={module.id}
                     initial={{ opacity: 0, y: 6 }}
                     animate={{ opacity: 1, y: 0 }}
                     transition={{ duration: 0.22, delay: index * 0.03 }}
-                    className="rounded-[18px] border border-white/[0.04] bg-[linear-gradient(180deg,rgba(255,255,255,0.03),rgba(255,255,255,0.012))] px-3.5 py-3 shadow-[0_8px_22px_rgba(0,0,0,0.14)] backdrop-blur-[14px]"
+                    className="rounded-[18px] border border-white/[0.05] bg-[linear-gradient(180deg,rgba(255,255,255,0.03),rgba(255,255,255,0.012))] px-3.5 py-3 shadow-[0_8px_22px_rgba(0,0,0,0.14)] backdrop-blur-[14px]"
                   >
                     <div className="flex items-start justify-between gap-3">
                       <div className="min-w-0">
@@ -187,73 +187,67 @@ export function AssistantResponseSurface({
               </div>
             ) : null}
 
-            {surfaceBlocks.length > 0 ? (
-              <div className="space-y-1.5">
-                {metadata.structuredData?.finance ? (
-                  <details className="group rounded-[16px] border border-white/[0.035] bg-white/[0.012] px-3.5 py-2 shadow-[0_7px_20px_rgba(0,0,0,0.12)] backdrop-blur-[12px]">
-                    <summary className="flex cursor-pointer list-none items-center justify-between gap-3 text-[10.5px] font-medium tracking-[0.01em] text-zinc-500 transition-colors marker:content-none hover:text-zinc-300">
-                      <span>Data analysis</span>
-                      <span className="text-[10px] text-zinc-600 transition group-open:text-zinc-400">
-                        Expand
-                      </span>
-                    </summary>
-                    <div className="mt-2.5 border-t border-white/[0.03] pt-2.5">
-                      <FinanceResultCard
-                        data={metadata.structuredData.finance}
-                        onAction={onAction}
-                        actionLoading={actionLoading}
-                        isPremium={isPremium}
-                        onPremiumRequired={onPremiumRequired}
-                      />
-                    </div>
-                  </details>
-                ) : null}
+            <div className="space-y-1.5">
+              {metadata.structuredData?.finance ? (
+                <details className="group rounded-[16px] border border-white/[0.045] bg-white/[0.016] px-3.5 py-2 shadow-[0_7px_20px_rgba(0,0,0,0.12)] backdrop-blur-[12px]">
+                  <summary className="flex cursor-pointer list-none items-center justify-between gap-3 text-[10.5px] font-medium tracking-[0.01em] text-zinc-400 transition-colors marker:content-none hover:text-zinc-200">
+                    <span>Data analysis</span>
+                    <span className="text-[10px] text-zinc-600 transition group-open:text-zinc-400">
+                      Expand
+                    </span>
+                  </summary>
+                  <div className="mt-2.5 border-t border-white/[0.03] pt-2.5">
+                    <FinanceResultCard
+                      data={metadata.structuredData.finance}
+                      onAction={onAction}
+                      actionLoading={actionLoading}
+                      isPremium={isPremium}
+                      onPremiumRequired={onPremiumRequired}
+                    />
+                  </div>
+                </details>
+              ) : null}
 
-                {metadata.structuredData?.actionResult ? (
-                  <details className="group rounded-[16px] border border-white/[0.035] bg-white/[0.012] px-3.5 py-2 shadow-[0_7px_20px_rgba(0,0,0,0.12)] backdrop-blur-[12px]">
-                    <summary className="flex cursor-pointer list-none items-center justify-between gap-3 text-[10.5px] font-medium tracking-[0.01em] text-zinc-500 transition-colors marker:content-none hover:text-zinc-300">
-                      <span>Detailed result</span>
-                      <span className="text-[10px] text-zinc-600 transition group-open:text-zinc-400">
-                        Expand
-                      </span>
-                    </summary>
-                    <div className="mt-2.5 border-t border-white/[0.03] pt-2.5">
-                      <FinanceActionResultCard result={metadata.structuredData.actionResult} />
-                    </div>
-                  </details>
-                ) : null}
+              {metadata.structuredData?.actionResult ? (
+                <details className="group rounded-[16px] border border-white/[0.045] bg-white/[0.016] px-3.5 py-2 shadow-[0_7px_20px_rgba(0,0,0,0.12)] backdrop-blur-[12px]">
+                  <summary className="flex cursor-pointer list-none items-center justify-between gap-3 text-[10.5px] font-medium tracking-[0.01em] text-zinc-400 transition-colors marker:content-none hover:text-zinc-200">
+                    <span>Detailed result</span>
+                    <span className="text-[10px] text-zinc-600 transition group-open:text-zinc-400">
+                      Expand
+                    </span>
+                  </summary>
+                  <div className="mt-2.5 border-t border-white/[0.03] pt-2.5">
+                    <FinanceActionResultCard result={metadata.structuredData.actionResult} />
+                  </div>
+                </details>
+              ) : null}
 
-                {hasToolDetails ? (
-                  <details className="group rounded-[16px] border border-white/[0.035] bg-white/[0.012] px-3.5 py-2 shadow-[0_7px_20px_rgba(0,0,0,0.12)] backdrop-blur-[12px]">
-                    <summary className="flex cursor-pointer list-none items-center justify-between gap-3 text-[10.5px] font-medium tracking-[0.01em] text-zinc-500 transition-colors marker:content-none hover:text-zinc-300">
-                      <span>Actions taken</span>
-                      <span className="text-[10px] text-zinc-600 transition group-open:text-zinc-400">
-                        Expand
-                      </span>
-                    </summary>
+              {hasToolDetails ? (
+                <details className="group rounded-[16px] border border-white/[0.045] bg-white/[0.016] px-3.5 py-2 shadow-[0_7px_20px_rgba(0,0,0,0.12)] backdrop-blur-[12px]">
+                  <summary className="flex cursor-pointer list-none items-center justify-between gap-3 text-[10.5px] font-medium tracking-[0.01em] text-zinc-400 transition-colors marker:content-none hover:text-zinc-200">
+                    <span>Actions taken</span>
+                    <span className="text-[10px] text-zinc-600 transition group-open:text-zinc-400">
+                      Expand
+                    </span>
+                  </summary>
 
-                    <div className="mt-2.5 border-t border-white/[0.03] pt-2.5 text-xs text-zinc-300">
-                      {metadata.plan ? (
-                        <p className="mb-2 leading-6 text-zinc-400">
-                          {metadata.plan}
-                        </p>
-                      ) : null}
+                  <div className="mt-2.5 border-t border-white/[0.03] pt-2.5 text-xs text-zinc-300">
+                    {metadata.plan ? <p className="mb-2 leading-6 text-zinc-400">{metadata.plan}</p> : null}
 
-                      {metadata.steps?.length ? (
-                        <ul className="space-y-1.5">
-                          {metadata.steps.map((step, index) => (
-                            <li key={`${step.action}-${index}`} className="leading-5 text-zinc-400">
-                              <span className="text-zinc-300">• {step.action}</span>
-                              {step.summary || step.status ? ` — ${step.summary || step.status}` : ''}
-                            </li>
-                          ))}
-                        </ul>
-                      ) : null}
-                    </div>
-                  </details>
-                ) : null}
-              </div>
-            ) : null}
+                    {metadata.steps?.length ? (
+                      <ul className="space-y-1.5">
+                        {metadata.steps.map((step, index) => (
+                          <li key={`${step.action}-${index}`} className="leading-5 text-zinc-400">
+                            <span className="text-zinc-200">• {step.action}</span>
+                            {step.summary || step.status ? ` — ${step.summary || step.status}` : ''}
+                          </li>
+                        ))}
+                      </ul>
+                    ) : null}
+                  </div>
+                </details>
+              ) : null}
+            </div>
           </motion.div>
         ) : null}
       </AnimatePresence>

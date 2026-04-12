@@ -9,7 +9,10 @@
   --border-subtle: rgba(255, 255, 255, 0.04);
   --text-primary: #f4f4f5;
   --text-secondary: #9ca3af;
-  --surface-radius: 18px;
+  --surface-radius: 20px;
+  --radius-xl: 24px;
+  --radius-lg: 20px;
+  --radius-md: 14px;
   --surface-shadow: 0 14px 34px rgba(0, 0, 0, 0.42);
   --surface-elevated-shadow: 0 24px 56px rgba(0, 0, 0, 0.56);
   --screen-x: 1rem;
@@ -499,5 +502,28 @@ body {
   }
   50% {
     opacity: 1;
+  }
+}
+
+
+.chat-scroll-anchor {
+  scroll-margin-bottom: 180px;
+}
+
+@media (max-width: 640px) {
+  .screen {
+    padding-left: 0.85rem;
+    padding-right: 0.85rem;
+    padding-bottom: calc(96px + env(safe-area-inset-bottom));
+  }
+
+  .chat-composer-shell {
+    border-radius: 24px;
+  }
+
+  .composer-icon-btn,
+  .composer-send-btn {
+    min-height: 38px;
+    min-width: 38px;
   }
 }
