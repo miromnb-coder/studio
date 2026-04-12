@@ -134,10 +134,10 @@ export default function AlertsPage() {
       <PremiumCard className="space-y-4 p-5">
         <div className="flex items-center justify-between gap-3">
           <div className="flex items-center gap-3">
-            <div className="rounded-2xl bg-white/[0.08] p-2.5 text-zinc-200"><Bell className="h-5 w-5" /></div>
+            <div className="rounded-2xl bg-[#eef2f7] p-2.5 text-zinc-200"><Bell className="h-5 w-5" /></div>
             <div>
-              <h1 className="text-3xl font-semibold tracking-tight text-zinc-100">Operator Alerts</h1>
-              <p className="text-sm text-zinc-400">High-signal risks and opportunities across your account.</p>
+              <h1 className="text-3xl font-semibold tracking-tight text-[#22262c]">Operator Alerts</h1>
+              <p className="text-sm text-[#8791a0]">High-signal risks and opportunities across your account.</p>
             </div>
           </div>
           <SmartButton variant="secondary" onClick={() => void evaluateAlerts()} disabled={refreshing} className="px-3 py-2 text-xs">
@@ -147,15 +147,15 @@ export default function AlertsPage() {
 
         <PremiumCard className="bg-white/[0.02] p-4">
           <SectionHeader title="Alert summary" subtitle="Mission-critical status" />
-          <div className="grid gap-2 text-sm text-zinc-300">
-            <p><span className="font-semibold text-zinc-100">Top risk:</span> {summary.top?.title || 'None detected'}</p>
-            <p><span className="font-semibold text-zinc-100">Potential monthly savings:</span> {currency(summary.potentialSavings)}</p>
-            <p><span className="font-semibold text-zinc-100">Recommended next action:</span> {summary.recommendedNextAction}</p>
+          <div className="grid gap-2 text-sm text-[#4e5662]">
+            <p><span className="font-semibold text-[#22262c]">Top risk:</span> {summary.top?.title || 'None detected'}</p>
+            <p><span className="font-semibold text-[#22262c]">Potential monthly savings:</span> {currency(summary.potentialSavings)}</p>
+            <p><span className="font-semibold text-[#22262c]">Recommended next action:</span> {summary.recommendedNextAction}</p>
           </div>
         </PremiumCard>
 
         {loading ? (
-          <PremiumCard className="shimmer px-4 py-4 text-sm text-zinc-400">Loading operator alerts…</PremiumCard>
+          <PremiumCard className="shimmer px-4 py-4 text-sm text-[#8791a0]">Loading operator alerts…</PremiumCard>
         ) : activeAlerts.length === 0 ? (
           <EmptyState title="No urgent issues detected" message="Your system is stable. We’ll notify you when an important action appears." />
         ) : (
@@ -166,11 +166,11 @@ export default function AlertsPage() {
                   <ActionRow title={alert.title} description={alert.summary} icon={<TriangleAlert className="h-4 w-4" />} />
                   <span className={`rounded-full border px-2 py-1 text-[11px] font-semibold uppercase ${severityStyle[alert.severity]}`}>{alert.severity}</span>
                 </div>
-                <div className="grid gap-1.5 text-xs text-zinc-300">
-                  <p><span className="font-semibold text-zinc-100">Why it matters:</span> {metadataText(alert, 'why_it_matters', alert.summary)}</p>
-                  <p><span className="font-semibold text-zinc-100">Estimated impact:</span> {metadataText(alert, 'estimated_impact', 'Impact estimate unavailable')}</p>
-                  <p><span className="font-semibold text-zinc-100">Suggested action:</span> {alert.suggested_action}</p>
-                  <p><span className="font-semibold text-zinc-100">Confidence:</span> {metadataText(alert, 'confidence', '0.65')}</p>
+                <div className="grid gap-1.5 text-xs text-[#4e5662]">
+                  <p><span className="font-semibold text-[#22262c]">Why it matters:</span> {metadataText(alert, 'why_it_matters', alert.summary)}</p>
+                  <p><span className="font-semibold text-[#22262c]">Estimated impact:</span> {metadataText(alert, 'estimated_impact', 'Impact estimate unavailable')}</p>
+                  <p><span className="font-semibold text-[#22262c]">Suggested action:</span> {alert.suggested_action}</p>
+                  <p><span className="font-semibold text-[#22262c]">Confidence:</span> {metadataText(alert, 'confidence', '0.65')}</p>
                 </div>
                 <div className="grid grid-cols-2 gap-2 text-xs font-semibold">
                   <SmartButton variant="secondary" onClick={() => void handleStatus(alert.id, 'dismiss')} disabled={busyAlertId === alert.id} className="w-full">
@@ -180,7 +180,7 @@ export default function AlertsPage() {
                     <CheckCircle2 className="mr-1.5 h-3.5 w-3.5" /> Mark completed
                   </SmartButton>
                 </div>
-                <p className="inline-flex items-center gap-1 text-[11px] text-zinc-400">
+                <p className="inline-flex items-center gap-1 text-[11px] text-[#8791a0]">
                   <CircleDashed className="h-3.5 w-3.5" /> Updated {new Date(alert.updated_at).toLocaleString()}
                 </p>
               </PremiumCard>

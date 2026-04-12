@@ -55,8 +55,8 @@ class DashboardSectionBoundary extends React.Component<{ title: string; children
     if (this.state.hasError) {
       return (
         <PremiumCard className="p-4">
-          <h2 className="text-base font-semibold text-zinc-100">{this.props.title}</h2>
-          <p className="mt-2 text-sm text-zinc-400">This section is temporarily unavailable. Try refreshing the page.</p>
+          <h2 className="text-base font-semibold text-[#22262c]">{this.props.title}</h2>
+          <p className="mt-2 text-sm text-[#8791a0]">This section is temporarily unavailable. Try refreshing the page.</p>
         </PremiumCard>
       );
     }
@@ -180,16 +180,16 @@ export default function HomePage() {
 
   return (
     <AppShell>
-      <header className="mb-4 rounded-[26px] border border-white/12 bg-white/[0.04] p-4 shadow-[0_20px_40px_rgba(0,0,0,0.4)] backdrop-blur-xl">
+      <header className="mb-4 rounded-[26px] border border-[#dde1e8] bg-white p-4 shadow-sm backdrop-blur-xl">
         <div className="flex items-start justify-between gap-3">
           <div>
-            <p className="text-xs text-zinc-400">Welcome back, {user?.name || 'there'}</p>
-            <h1 className="text-3xl font-semibold tracking-[-0.03em] text-zinc-100">Kivo command center</h1>
-            <button onClick={editName} type="button" className="mt-1 text-xs text-zinc-400">Edit profile name</button>
+            <p className="text-xs text-[#8791a0]">Welcome back, {user?.name || 'there'}</p>
+            <h1 className="text-3xl font-semibold tracking-[-0.03em] text-[#22262c]">Kivo command center</h1>
+            <button onClick={editName} type="button" className="mt-1 text-xs text-[#8791a0]">Edit profile name</button>
           </div>
           <div className="flex items-center gap-1">
-            <Link href="/alerts" className="rounded-full border border-white/15 bg-white/[0.04] p-2 text-zinc-300"><Bell className="h-4 w-4" /></Link>
-            <button type="button" onClick={logout} className="rounded-full border border-white/15 bg-white/[0.04] p-2 text-zinc-300"><LogOut className="h-4 w-4" /></button>
+            <Link href="/alerts" className="rounded-full border border-[#d6dce6] bg-white p-2 text-[#4e5662]"><Bell className="h-4 w-4" /></Link>
+            <button type="button" onClick={logout} className="rounded-full border border-[#d6dce6] bg-white p-2 text-[#4e5662]"><LogOut className="h-4 w-4" /></button>
           </div>
         </div>
         <div className="mt-3"><AIStatusPill status={loading ? 'Analyzing' : 'Ready'} /></div>
@@ -204,8 +204,8 @@ export default function HomePage() {
       ) : showLoadingState ? (
         <PremiumCard className="shimmer space-y-2 p-6 text-center">
           <AIOrb />
-          <h2 className="text-xl font-semibold text-zinc-100">Loading mission control</h2>
-          <p className="text-sm text-zinc-400">Pulling your savings, tasks, and alerts.</p>
+          <h2 className="text-xl font-semibold text-[#22262c]">Loading mission control</h2>
+          <p className="text-sm text-[#8791a0]">Pulling your savings, tasks, and alerts.</p>
         </PremiumCard>
       ) : dashboardError ? (
         <EmptyState
@@ -224,20 +224,20 @@ export default function HomePage() {
           <PremiumCard className="space-y-4 p-4">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-xs uppercase tracking-wide text-zinc-400">Start here</p>
-                <p className="mt-1 text-sm text-zinc-300">One tap to get your next best financial move.</p>
+                <p className="text-xs uppercase tracking-wide text-[#8791a0]">Start here</p>
+                <p className="mt-1 text-sm text-[#4e5662]">One tap to get your next best financial move.</p>
                 <p className="mt-3 text-xs uppercase tracking-wide text-zinc-500">Potential monthly savings</p>
                 <AnimatedNumber value={data.stats.estimatedSavings} />
               </div>
               <AIOrb className="h-16 w-16" />
             </div>
-            <p className="text-sm text-zinc-400">Top recommendation: Review your highest monthly subscription stack and remove duplicates.</p>
+            <p className="text-sm text-[#8791a0]">Top recommendation: Review your highest monthly subscription stack and remove duplicates.</p>
             <SmartButton onClick={() => openInChat(primaryPrompt)}>Open next recommendation</SmartButton>
           </PremiumCard>
 
           <div className="grid grid-cols-2 gap-3">
             <StatCard title="Total monthly spend" value={<AnimatedNumber value={data.stats.monthlyTotal} />} />
-            <StatCard title="Active subscriptions" value={<span className="text-3xl font-semibold text-zinc-100">{data.stats.activeSubscriptions}</span>} />
+            <StatCard title="Active subscriptions" value={<span className="text-3xl font-semibold text-[#22262c]">{data.stats.activeSubscriptions}</span>} />
           </div>
 
           <PremiumCard className="p-4">
