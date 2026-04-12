@@ -4,6 +4,7 @@ import {
   ArrowUp,
   ClipboardPaste,
   ImagePlus,
+  Link2,
   Mic,
   NotebookPen,
   Paperclip,
@@ -13,6 +14,8 @@ import {
 } from 'lucide-react';
 import { AnimatePresence, motion } from 'framer-motion';
 import type { RefObject } from 'react';
+import { ConnectorsSheet } from './ConnectorsSheet';
+import type { ConnectorItem } from './ConnectorRow';
 
 export type ComposerPanel = 'add' | null;
 
@@ -28,15 +31,24 @@ type ChatComposerPremiumProps = {
   isSending: boolean;
   isLimitReached: boolean;
   userPresent: boolean;
+  connectorsOpen: boolean;
+  connectors: ConnectorItem[];
   onDraftChange: (value: string) => void;
   onSend: () => void;
   onTextareaFocus: () => void;
   onTogglePanel: (panel: Exclude<ComposerPanel, null>) => void;
+  onToggleConnectors: () => void;
+  onCloseConnectors: () => void;
   onSpeechToText: () => void;
   onAttachFile: () => void;
   onAddImagePrompt: () => void;
   onStartTaskTemplate: () => void;
   onAddNoteTemplate: () => void;
+  onOpenAddConnector: () => void;
+  onOpenManageConnector: () => void;
+  onToggleConnector: (id: string, enabled: boolean) => void;
+  onConnectConnector: (id: string) => void;
+  onRetryConnector: (id: string) => void;
 };
 
 export function ChatComposerPremium(props: ChatComposerPremiumProps) {
@@ -52,15 +64,24 @@ export function ChatComposerPremium(props: ChatComposerPremiumProps) {
     isSending,
     isLimitReached,
     userPresent,
+    connectorsOpen,
+    connectors,
     onDraftChange,
     onSend,
     onTextareaFocus,
     onTogglePanel,
+    onToggleConnectors,
+    onCloseConnectors,
     onSpeechToText,
     onAttachFile,
     onAddImagePrompt,
     onStartTaskTemplate,
     onAddNoteTemplate,
+    onOpenAddConnector,
+    onOpenManageConnector,
+    onToggleConnector,
+    onConnectConnector,
+    onRetryConnector,
   } = props;
 
   return (
@@ -156,6 +177,27 @@ export function ChatComposerPremium(props: ChatComposerPremiumProps) {
         </div>
 
         <div className="flex items-end gap-2 px-1">
+          <div className="mb-1 flex items-center gap-1">
+            <button
+              type="button"
+              onClick={() => onTogglePanel('add')}
+              className="composer-icon-btn"
+              aria-label="Open add menu"
+            >
+              <Plus className="h-4 w-4" />
+            </button>
+
+            <motion.button
+              type="button"
+              whileTap={{ scale: 0.95 }}
+              onClick={onToggleConnectors}
+              className="composer-icon-btn border border-sky-300/20 bg-[linear-gradient(155deg,rgba(125,211,252,0.16),rgba(125,211,252,0.04))] text-sky-100 shadow-[0_10px_24px_rgba(56,189,248,0.22)]"
+              aria-label="Open connectors"
+            >
+              <Link2 className="h-4 w-4" />
+            </motion.button>
+          </div>
+
           <textarea
             ref={textareaRef}
             value={draft}
@@ -176,32 +218,7 @@ export function ChatComposerPremium(props: ChatComposerPremiumProps) {
             className="chat-composer-input max-h-[140px] min-h-[46px] w-full resize-none border-none bg-transparent py-1 text-[15px] leading-6 tracking-[-0.01em]"
           />
 
-          <button
-            type="button"
-            onClick={onSend}
-            disabled={!draft.trim() || isAgentResponding || isLimitReached}
-            className="composer-send-btn h-10 w-10 shrink-0 disabled:opacity-45"
-            aria-label="Send message"
-          >
-            {isSending ? (
-              <span className="h-4 w-4 animate-spin rounded-full border-2 border-zinc-700/50 border-t-zinc-900" />
-            ) : (
-              <ArrowUp className="h-4 w-4" />
-            )}
-          </button>
-        </div>
-
-        <div className="mt-1.5 flex items-center justify-between">
-          <div className="flex items-center gap-1">
-            <button
-              type="button"
-              onClick={() => onTogglePanel('add')}
-              className="composer-icon-btn"
-              aria-label="Open add menu"
-            >
-              <Plus className="h-4 w-4" />
-            </button>
-
+          <div className="mb-1 flex items-center gap-1">
             <button
               type="button"
               onClick={onSpeechToText}
@@ -211,10 +228,34 @@ export function ChatComposerPremium(props: ChatComposerPremiumProps) {
             >
               <Mic className="h-4 w-4" />
             </button>
+
+            <button
+              type="button"
+              onClick={onSend}
+              disabled={!draft.trim() || isAgentResponding || isLimitReached}
+              className="composer-send-btn h-10 w-10 shrink-0 disabled:opacity-45"
+              aria-label="Send message"
+            >
+              {isSending ? (
+                <span className="h-4 w-4 animate-spin rounded-full border-2 border-zinc-700/50 border-t-zinc-900" />
+              ) : (
+                <ArrowUp className="h-4 w-4" />
+              )}
+            </button>
           </div>
-          <p className="pr-1 text-[10px] text-zinc-500">↵ send · shift+↵ new line</p>
         </div>
       </div>
+
+      <ConnectorsSheet
+        open={connectorsOpen}
+        connectors={connectors}
+        onClose={onCloseConnectors}
+        onOpenAddConnector={onOpenAddConnector}
+        onOpenManageConnector={onOpenManageConnector}
+        onToggleConnected={onToggleConnector}
+        onConnect={onConnectConnector}
+        onRetry={onRetryConnector}
+      />
     </div>
   );
 }
