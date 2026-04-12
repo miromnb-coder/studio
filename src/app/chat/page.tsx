@@ -5,7 +5,6 @@ import type { ComponentType, ReactNode } from 'react';
 import { useRouter } from 'next/navigation';
 import {
   ArrowLeft,
-  Bell,
   ChevronRight,
   CircleUserRound,
   Crown,
@@ -23,6 +22,7 @@ import {
   Link2,
   ClipboardPlus,
   FilePlus2,
+  Bell,
 } from 'lucide-react';
 import { AnimatePresence, motion } from 'framer-motion';
 import { useAppStore } from '../store/app-store';
@@ -186,7 +186,7 @@ export default function ChatPage() {
     const conversationId = createConversation();
     openConversation(conversationId);
     setDraftPrompt('');
-    setMenuOpen(false);
+    closeAllSheets();
     requestAnimationFrame(() => inputRef.current?.focus());
   };
 
@@ -207,19 +207,19 @@ export default function ChatPage() {
   };
 
   return (
-    <main className="min-h-screen bg-[#eeedf2] px-4 py-4 text-[#3e4450] sm:px-6">
-      <section className="mx-auto flex min-h-[calc(100vh-2rem)] w-full max-w-[430px] flex-col overflow-hidden rounded-[32px] border border-[#dde0e6] bg-[#e8e9ee] shadow-[0_16px_32px_rgba(54,61,78,0.14)]">
-        <header className="flex h-16 items-center justify-between border-b border-[#d8dce2] px-4">
+    <main className="min-h-screen bg-[#efeff2] px-3 py-3 text-[#4a5160] sm:px-6">
+      <section className="mx-auto flex min-h-[calc(100vh-24px)] w-full max-w-[430px] flex-col overflow-hidden rounded-[34px] border border-[#dfe2e8] bg-[#ececf1] shadow-[0_20px_40px_rgba(82,88,104,0.12)]">
+        <header className="flex h-[72px] items-center justify-between border-b border-[#d9dde4] px-5">
           <button
             type="button"
             onClick={onBack}
             aria-label="Go back"
-            className="inline-flex h-10 w-10 items-center justify-center rounded-full text-[#4f5662] transition hover:bg-[#e1e5ea]"
+            className="inline-flex h-10 w-10 items-center justify-center rounded-full text-[#616978] transition hover:bg-[#e7e9ee]"
           >
-            <ArrowLeft className="h-5 w-5" strokeWidth={1.9} />
+            <ArrowLeft className="h-[22px] w-[22px]" strokeWidth={1.9} />
           </button>
 
-          <h1 className="text-[39px] font-medium leading-none tracking-[-0.02em] text-[#454c58]">Kivo</h1>
+          <h1 className="text-[24px] font-medium tracking-[-0.03em] text-[#4b5261]">Kivo</h1>
 
           <button
             type="button"
@@ -229,16 +229,16 @@ export default function ChatPage() {
               setConnectorsOpen(false);
             }}
             aria-label="Open menu"
-            className="inline-flex h-10 w-10 items-center justify-center rounded-full border border-[#cbd0d9] bg-[#e6e8ed] text-[#6d7481]"
+            className="inline-flex h-[42px] w-[42px] items-center justify-center rounded-full border border-[#cfd4dc] bg-[#ebecef] text-[#737b88] shadow-[0_2px_6px_rgba(67,74,88,0.03)]"
           >
-            <Menu className="h-5 w-5" strokeWidth={1.8} />
+            <Menu className="h-[20px] w-[20px]" strokeWidth={1.8} />
           </button>
         </header>
 
         <div className="relative flex flex-1 flex-col">
-          <div className="flex flex-1 items-center justify-center px-10 pb-28">
+          <div className="flex flex-1 items-center justify-center px-8 pb-[164px] pt-6">
             <p
-              className="text-center text-[18px] font-normal leading-[1.35] tracking-[-0.01em] text-[#3f4652]"
+              className="max-w-[300px] text-center text-[19px] font-normal leading-[1.15] tracking-[-0.02em] text-[#474d5b]"
               style={{ fontFamily: 'ui-serif, Georgia, Times, serif' }}
             >
               What can I do for you?
@@ -251,7 +251,7 @@ export default function ChatPage() {
                 <motion.button
                   type="button"
                   aria-label="Close menu"
-                  className="absolute inset-0 z-20 bg-[#949baa26]"
+                  className="absolute inset-0 z-20 bg-[#8f97a614]"
                   initial={{ opacity: 0 }}
                   animate={{ opacity: 1 }}
                   exit={{ opacity: 0 }}
@@ -259,14 +259,14 @@ export default function ChatPage() {
                 />
 
                 <motion.aside
-                  initial={{ y: 22, opacity: 0.55 }}
+                  initial={{ y: 24, opacity: 0.7 }}
                   animate={{ y: 0, opacity: 1 }}
                   exit={{ y: 28, opacity: 0 }}
-                  transition={{ type: 'spring', bounce: 0.15, duration: 0.35 }}
-                  className="absolute inset-x-0 bottom-0 z-30 rounded-t-[30px] border-t border-[#d8dce3] bg-[#e9ebf0] px-4 pb-[calc(14px+env(safe-area-inset-bottom))] pt-3 shadow-[0_-8px_24px_rgba(34,41,56,0.12)]"
+                  transition={{ type: 'spring', stiffness: 280, damping: 28 }}
+                  className="absolute inset-x-0 bottom-0 z-30 rounded-t-[30px] border-t border-[#d9dde4] bg-[#ececf1] px-4 pb-[calc(16px+env(safe-area-inset-bottom))] pt-3 shadow-[0_-12px_28px_rgba(66,72,88,0.09)]"
                 >
-                  <div className="mx-auto mb-4 h-1.5 w-14 rounded-full bg-[#cfd3db]" />
-                  <h2 className="mb-3 px-2 text-[18px] font-medium text-[#505764]">Menu</h2>
+                  <div className="mx-auto mb-4 h-[5px] w-14 rounded-full bg-[#d2d5dc]" />
+                  <h2 className="mb-3 px-2 text-[18px] font-medium tracking-[-0.02em] text-[#5b6270]">Menu</h2>
 
                   <MenuGroup
                     rows={primaryMenu}
@@ -277,18 +277,18 @@ export default function ChatPage() {
                     }}
                   />
 
-                  <p className="mb-2 mt-4 px-2 text-[14px] text-[#787f8c]">Secondary</p>
+                  <p className="mb-2 mt-5 px-2 text-[13px] font-normal text-[#8b919f]">Secondary</p>
                   <MenuGroup rows={secondaryMenu} onClick={(row) => row.href && onMenuRoute(row.href)} />
 
-                  <div className="mt-4 overflow-hidden rounded-[18px] border border-[#d4d8df] bg-[#f1f2f6] shadow-[0_8px_18px_rgba(52,60,74,0.08)]">
+                  <div className="mt-5 overflow-hidden rounded-[18px] border border-[#d7dbe2] bg-[#f4f5f8] shadow-[0_6px_14px_rgba(66,72,88,0.05)]">
                     <button
                       type="button"
                       onClick={onSignOut}
                       className="flex h-[56px] w-full items-center gap-3 px-4 text-left"
                     >
-                      <LogOut className="h-5 w-5 text-[#757d8a]" strokeWidth={1.8} />
-                      <span className="flex-1 text-base text-[#545b67]">Sign Out</span>
-                      <ChevronRight className="h-5 w-5 text-[#9da4b1]" strokeWidth={1.8} />
+                      <LogOut className="h-5 w-5 text-[#7d8492]" strokeWidth={1.8} />
+                      <span className="flex-1 text-[16px] font-normal text-[#59606d]">Sign Out</span>
+                      <ChevronRight className="h-5 w-5 text-[#a3a9b5]" strokeWidth={1.8} />
                     </button>
                   </div>
                 </motion.aside>
@@ -296,8 +296,8 @@ export default function ChatPage() {
             ) : null}
           </AnimatePresence>
 
-          <div className="pointer-events-none absolute inset-x-3 bottom-[calc(12px+env(safe-area-inset-bottom))] z-10">
-            <div className="pointer-events-auto rounded-[24px] border border-[#d5d9e1] bg-[#eff1f5] px-3.5 pb-2.5 pt-2.5 shadow-[0_8px_20px_rgba(55,63,79,0.13)]">
+          <div className="pointer-events-none absolute inset-x-5 bottom-[calc(20px+env(safe-area-inset-bottom))] z-10">
+            <div className="pointer-events-auto rounded-[28px] border border-[#d9dde4] bg-[#f3f4f7] px-4 pb-4 pt-4 shadow-[0_16px_24px_rgba(70,76,90,0.08)]">
               <label htmlFor="chat-composer" className="sr-only">
                 Assign a task or ask anything
               </label>
@@ -314,11 +314,11 @@ export default function ChatPage() {
                   }
                 }}
                 placeholder="Assign a task or ask anything"
-                className="mb-2.5 w-full bg-transparent px-1 text-[15px] text-[#6f7785] placeholder:text-[#8e95a2] outline-none"
+                className="mb-4 w-full bg-transparent px-1 text-[16px] font-normal text-[#7b8290] placeholder:text-[#9ea4b0] outline-none"
               />
 
               <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-3">
                   <SmallIconButton
                     label="Add actions"
                     onClick={() => {
@@ -327,8 +327,9 @@ export default function ChatPage() {
                       setMenuOpen(false);
                     }}
                   >
-                    <Plus className="h-[18px] w-[18px]" strokeWidth={1.9} />
+                    <Plus className="h-[22px] w-[22px]" strokeWidth={1.8} />
                   </SmallIconButton>
+
                   <SmallIconButton
                     label="Open connectors"
                     onClick={() => {
@@ -337,21 +338,25 @@ export default function ChatPage() {
                       setMenuOpen(false);
                     }}
                   >
-                    <Wrench className="h-[18px] w-[18px]" strokeWidth={1.9} />
+                    <Wrench className="h-[20px] w-[20px]" strokeWidth={1.8} />
                   </SmallIconButton>
                 </div>
 
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-3">
                   <SmallIconButton label="Voice utility" onClick={handleVoiceUtility}>
-                    <Speech className="h-[18px] w-[18px]" strokeWidth={1.9} />
+                    <Speech className="h-[20px] w-[20px]" strokeWidth={1.8} />
                   </SmallIconButton>
 
                   <SmallIconButton label="Microphone" onClick={toggleMic} active={listening}>
-                    <Mic className="h-[18px] w-[18px]" strokeWidth={1.9} />
+                    <Mic className="h-[20px] w-[20px]" strokeWidth={1.8} />
                   </SmallIconButton>
 
-                  <SmallIconButton label="Send" onClick={() => void handleSend()} disabled={!hasText || isSending}>
-                    <Send className="h-[18px] w-[18px]" strokeWidth={1.9} />
+                  <SmallIconButton
+                    label="Send"
+                    onClick={() => void handleSend()}
+                    disabled={!hasText || isSending}
+                  >
+                    <Send className="h-[20px] w-[20px]" strokeWidth={1.8} />
                   </SmallIconButton>
                 </div>
               </div>
@@ -381,7 +386,7 @@ export default function ChatPage() {
           />
         </div>
 
-        <div className="mx-auto mb-2 mt-auto h-1.5 w-24 rounded-full bg-[#0f1217]/40" />
+        <div className="mx-auto mb-3 mt-auto h-1.5 w-[110px] rounded-full bg-[#14181f]/42" />
       </section>
 
       <AnimatePresence>
@@ -390,10 +395,10 @@ export default function ChatPage() {
             initial={{ opacity: 0, y: -8 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: -6 }}
-            className="pointer-events-none fixed left-1/2 top-5 z-50 w-[min(92vw,340px)] -translate-x-1/2 rounded-2xl border border-[#d7dce4] bg-[#f4f6f9] px-4 py-2 text-center shadow-md"
+            className="pointer-events-none fixed left-1/2 top-5 z-50 w-[min(92vw,340px)] -translate-x-1/2 rounded-2xl border border-[#d8dde5] bg-[#f6f7fa] px-4 py-2 text-center shadow-[0_6px_16px_rgba(70,76,90,0.07)]"
           >
-            <p className="text-sm font-medium text-[#4e5662]">{notice.title}</p>
-            <p className="text-xs text-[#757d8b]">{notice.detail}</p>
+            <p className="text-sm font-medium text-[#505865]">{notice.title}</p>
+            <p className="text-xs text-[#7d8593]">{notice.detail}</p>
           </motion.div>
         ) : null}
       </AnimatePresence>
@@ -405,11 +410,16 @@ function MenuGroup({
   rows,
   onClick,
 }: {
-  rows: Array<{ label: string; icon: ComponentType<{ className?: string; strokeWidth?: number }>; href?: string; action?: string }>;
+  rows: Array<{
+    label: string;
+    icon: ComponentType<{ className?: string; strokeWidth?: number }>;
+    href?: string;
+    action?: string;
+  }>;
   onClick: (row: { label: string; href?: string; action?: string }) => void;
 }) {
   return (
-    <div className="overflow-hidden rounded-[18px] border border-[#d4d8df] bg-[#f1f2f6] shadow-[0_8px_18px_rgba(52,60,74,0.08)]">
+    <div className="overflow-hidden rounded-[18px] border border-[#d7dbe2] bg-[#f4f5f8] shadow-[0_6px_14px_rgba(66,72,88,0.05)]">
       {rows.map((row) => {
         const Icon = row.icon;
         return (
@@ -417,14 +427,16 @@ function MenuGroup({
             key={row.label}
             type="button"
             onClick={() => onClick(row)}
-            className="flex h-[56px] w-full items-center gap-3 border-b border-[#e2e5ea] px-4 text-left last:border-b-0"
+            className="flex h-[56px] w-full items-center gap-3 border-b border-[#e2e5eb] px-4 text-left last:border-b-0"
           >
-            <Icon className="h-5 w-5 text-[#757d8a]" strokeWidth={1.8} />
-            <span className="flex-1 text-base text-[#545b67]">{row.label}</span>
+            <Icon className="h-5 w-5 text-[#7d8492]" strokeWidth={1.8} />
+            <span className="flex-1 text-[16px] font-normal text-[#59606d]">{row.label}</span>
             {row.label === 'Settings' ? (
-              <span className="rounded-full bg-[#e4e7ee] px-2 py-0.5 text-[11px] font-medium text-[#8a91a0]">New</span>
+              <span className="rounded-full bg-[#e7e9ee] px-2 py-0.5 text-[11px] font-medium text-[#9097a4]">
+                New
+              </span>
             ) : null}
-            <ChevronRight className="h-5 w-5 text-[#9da4b1]" strokeWidth={1.8} />
+            <ChevronRight className="h-5 w-5 text-[#a3a9b5]" strokeWidth={1.8} />
           </button>
         );
       })}
@@ -451,8 +463,8 @@ function SmallIconButton({
       onClick={onClick}
       aria-label={label}
       disabled={disabled}
-      className={`inline-flex h-9 w-9 items-center justify-center rounded-full border border-[#ccd1da] text-[#7a818f] transition ${
-        active ? 'bg-[#dfe4ec]' : 'bg-[#e8ebf0]'
+      className={`inline-flex h-[54px] w-[54px] items-center justify-center rounded-full border border-[#d2d6de] text-[#808896] transition ${
+        active ? 'bg-[#e4e7ed]' : 'bg-[#eef0f4]'
       } disabled:opacity-50`}
     >
       {children}
@@ -479,7 +491,7 @@ function BottomMiniSheet({
         <>
           <motion.button
             type="button"
-            className="absolute inset-0 z-20 bg-[#9198a722]"
+            className="absolute inset-0 z-20 bg-[#8f97a614]"
             aria-label={`Close ${title}`}
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
@@ -488,13 +500,13 @@ function BottomMiniSheet({
           />
 
           <motion.aside
-            initial={{ y: 30, opacity: 0.55 }}
+            initial={{ y: 26, opacity: 0.72 }}
             animate={{ y: 0, opacity: 1 }}
-            exit={{ y: 38, opacity: 0 }}
-            transition={{ type: 'spring', bounce: 0.15, duration: 0.3 }}
-            className="absolute inset-x-3 bottom-[calc(98px+env(safe-area-inset-bottom))] z-30 rounded-[24px] border border-[#d4d8df] bg-[#f1f2f6] p-3 shadow-[0_10px_24px_rgba(40,46,59,0.14)]"
+            exit={{ y: 30, opacity: 0 }}
+            transition={{ type: 'spring', stiffness: 280, damping: 28 }}
+            className="absolute inset-x-4 bottom-[calc(116px+env(safe-area-inset-bottom))] z-30 rounded-[24px] border border-[#d7dbe2] bg-[#f4f5f8] p-3 shadow-[0_12px_24px_rgba(66,72,88,0.08)]"
           >
-            <p className="mb-2 px-1 text-sm font-medium text-[#616875]">{title}</p>
+            <p className="mb-2 px-1 text-[14px] font-medium text-[#636a77]">{title}</p>
             {items.map((item) => {
               const Icon = item.icon;
               return (
@@ -502,10 +514,10 @@ function BottomMiniSheet({
                   key={item.label}
                   type="button"
                   onClick={() => onSelect(item.label)}
-                  className="flex h-11 w-full items-center gap-3 rounded-xl px-2 text-left hover:bg-[#e7eaf0]"
+                  className="flex h-11 w-full items-center gap-3 rounded-xl px-2 text-left hover:bg-[#eaedf2]"
                 >
-                  <Icon className="h-[18px] w-[18px] text-[#757d8a]" strokeWidth={1.9} />
-                  <span className="text-sm text-[#525966]">{item.label}</span>
+                  <Icon className="h-[18px] w-[18px] text-[#7d8492]" strokeWidth={1.9} />
+                  <span className="text-sm text-[#575e6b]">{item.label}</span>
                 </button>
               );
             })}
