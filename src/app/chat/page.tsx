@@ -16,29 +16,35 @@ import { AppShell } from '../components/premium-ui';
 
 const PREMIUM_UPLOAD_MESSAGE = 'File upload is a Premium feature. Upgrade to attach files.';
 const THINKING_STEPS = [
-  'Understanding your request',
-  'Checking your context',
+  'Understanding your goal',
+  'Checking context',
   'Reviewing subscriptions',
-  'Finding highest-impact savings',
-  'Ranking best next actions',
+  'Ranking best actions',
   'Preparing recommendation',
-];
+] as const;
+
 const QUICK_START_PROMPTS = [
   'Review my monthly subscriptions and tell me what to cancel first.',
   'Create a 30-day savings plan based on my current spending.',
   'Check my recent billing risks and suggest next actions.',
-];
+] as const;
+
+const DRAFT_STORAGE_KEY = 'nova-operator-chat-draft';
 
 const formatConversationTime = (iso: string) => {
   const timestamp = new Date(iso);
   const diffMs = Date.now() - timestamp.getTime();
   const minutes = Math.floor(diffMs / (1000 * 60));
+
   if (minutes < 1) return 'Just now';
   if (minutes < 60) return `${minutes}m`;
+
   const hours = Math.floor(minutes / 60);
   if (hours < 24) return `${hours}h`;
+
   const days = Math.floor(hours / 24);
   if (days < 7) return `${days}d`;
+
   return timestamp.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
 };
 
@@ -66,6 +72,7 @@ export default function ChatPage() {
   const renameConversation = useAppStore((s) => s.renameConversation);
   const runFinanceAction = useAppStore((s) => s.runFinanceAction);
   const activeSteps = useAppStore((s) => s.activeSteps);
+
   const { usage, isPremium, isLimitReached, isUnlimited, refresh } = useUserEntitlements();
 
   const [draft, setDraft] = useState('');
@@ -84,9 +91,11 @@ export default function ChatPage() {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
-  const activeAssistantMessage = [...messages].reverse().find((m) => m.role === 'assistant');
+  const activeAssistantMessage = [...messages].reverse().find((message) => message.role === 'assistant');
+
+  const empty = messages.length === 0;
   const showThinkingSurface = isAgentResponding;
-  const empty = useMemo(() => messages.length === 0, [messages]);
+
   const activeConversation = useMemo(
     () => conversationList.find((conversation) => conversation.id === activeConversationId) ?? null,
     [conversationList, activeConversationId],
@@ -105,7 +114,13 @@ export default function ChatPage() {
     return THINKING_STEPS.map((label, idx) => ({
       id: `sim-${idx}`,
       label,
-      status: !isAgentResponding ? 'completed' : idx < simulatedStepIndex ? 'completed' : idx === simulatedStepIndex ? 'running' : 'pending',
+      status: !isAgentResponding
+        ? 'completed'
+        : idx < simulatedStepIndex
+          ? 'completed'
+          : idx === simulatedStepIndex
+            ? 'running'
+            : 'pending',
     }));
   }, [activeAssistantMessage, isAgentResponding, simulatedStepIndex]);
 
@@ -113,6 +128,16 @@ export default function ChatPage() {
     if (user) return false;
     setShowAuthPrompt(true);
     return true;
+  };
+
+  const persistDraft = (value: string) => {
+    if (typeof window === 'undefined') return;
+    window.sessionStorage.setItem(DRAFT_STORAGE_KEY, value);
+  };
+
+  const clearPersistedDraft = () => {
+    if (typeof window === 'undefined') return;
+    window.sessionStorage.removeItem(DRAFT_STORAGE_KEY);
   };
 
   const openUpgrade = () => {
@@ -136,7 +161,8 @@ export default function ChatPage() {
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
-    const persisted = window.sessionStorage.getItem('nova-operator-chat-draft');
+    const persisted = window.sessionStorage.getItem(DRAFT_STORAGE_KEY);
+
     if (persisted && !draftPrompt) {
       setDraft(persisted);
       setDraftPrompt(persisted);
@@ -151,17 +177,21 @@ export default function ChatPage() {
   useEffect(() => {
     const listEl = listRef.current;
     if (!listEl) return;
+
     const onScroll = () => {
       const distance = listEl.scrollHeight - listEl.scrollTop - listEl.clientHeight;
       setIsNearBottom(distance < 90);
     };
+
     onScroll();
     listEl.addEventListener('scroll', onScroll, { passive: true });
+
     return () => listEl.removeEventListener('scroll', onScroll);
   }, []);
 
   useEffect(() => {
     if (!textareaRef.current) return;
+
     textareaRef.current.style.height = 'auto';
     textareaRef.current.style.height = `${Math.min(textareaRef.current.scrollHeight, 128)}px`;
     textareaRef.current.style.overflowY = textareaRef.current.scrollHeight > 128 ? 'auto' : 'hidden';
@@ -170,13 +200,16 @@ export default function ChatPage() {
   useEffect(() => {
     const handler = (event: MouseEvent | TouchEvent) => {
       if (!composerRef.current) return;
+
       const target = event.target as Node;
       if (!composerRef.current.contains(target)) {
         setOpenPanel((prev) => (prev === 'conversations' ? prev : null));
       }
     };
+
     document.addEventListener('mousedown', handler);
     document.addEventListener('touchstart', handler);
+
     return () => {
       document.removeEventListener('mousedown', handler);
       document.removeEventListener('touchstart', handler);
@@ -202,39 +235,48 @@ export default function ChatPage() {
     }
 
     setSimulatedStepIndex(0);
+
     const interval = window.setInterval(() => {
-      setSimulatedStepIndex((current) => (current >= THINKING_STEPS.length - 1 ? current : current + 1));
-    }, 850);
+      setSimulatedStepIndex((current) =>
+        current >= THINKING_STEPS.length - 1 ? current : current + 1,
+      );
+    }, 980);
 
     return () => window.clearInterval(interval);
   }, [isAgentResponding, activeConversationId]);
 
   const applyTemplate = (template: string, notice: string) => {
     if (requireAuth()) return;
+
     const nextValue = draft ? `${draft}\n${template}` : template;
     setDraft(nextValue);
     setDraftPrompt(nextValue);
-    if (typeof window !== 'undefined') window.sessionStorage.setItem('nova-operator-chat-draft', nextValue);
+    persistDraft(nextValue);
     setComposerNotice(notice);
     setOpenPanel(null);
   };
 
   const handleSend = async () => {
     if (requireAuth()) return;
+
     if (isLimitReached) {
       setShowPaywall(true);
       return;
     }
+
     if (!draft.trim() || isAgentResponding) return;
+
     setIsSending(true);
+
     try {
       await sendMessage(draft);
     } finally {
       setIsSending(false);
     }
+
     setDraftPrompt('');
     setDraft('');
-    if (typeof window !== 'undefined') window.sessionStorage.removeItem('nova-operator-chat-draft');
+    clearPersistedDraft();
     await refresh();
   };
 
@@ -275,13 +317,16 @@ export default function ChatPage() {
     recognition.onstart = () => setComposerNotice('Listening…');
     recognition.onresult = (event) => {
       const transcript = event.results?.[0]?.[0]?.transcript?.trim();
+
       if (!transcript) {
         setComposerNotice('No speech detected. Please try again.');
         return;
       }
+
       const nextValue = draft ? `${draft} ${transcript}` : transcript;
       setDraft(nextValue);
       setDraftPrompt(nextValue);
+      persistDraft(nextValue);
       setComposerNotice('Speech added to your message.');
     };
     recognition.onerror = () => setComposerNotice('Microphone permission is required to transcribe speech.');
@@ -298,7 +343,9 @@ export default function ChatPage() {
   const handleDeleteConversation = (conversationId: string) => {
     const conversation = conversationList.find((item) => item.id === conversationId);
     if (!conversation) return;
+
     if (!window.confirm(`Delete "${conversation.title}"? This cannot be undone.`)) return;
+
     deleteConversation(conversationId);
     setComposerNotice('Conversation deleted.');
   };
@@ -306,6 +353,7 @@ export default function ChatPage() {
   const handleRenameConversation = (conversationId: string, currentTitle: string) => {
     const nextTitle = window.prompt('Rename conversation', currentTitle);
     if (!nextTitle) return;
+
     renameConversation(conversationId, nextTitle);
     setComposerNotice('Conversation renamed.');
   };
@@ -315,19 +363,24 @@ export default function ChatPage() {
       setShowPaywall(true);
       return;
     }
+
     setFinanceActionLoadingForMessage((prev) => ({ ...prev, [messageId]: actionType }));
+
     const result = await runFinanceAction(messageId, actionType);
+
     setFinanceActionLoadingForMessage((prev) => ({ ...prev, [messageId]: null }));
+
     if (!result.ok && result.errorCode === 'PREMIUM_REQUIRED') {
       setShowPaywall(true);
       return;
     }
+
     if (!result.ok) setComposerNotice('Action completed with partial result.');
   };
 
   const thinkingStatus = activeSteps.length
-    ? activeSteps.find((step) => step.status === 'running')?.label || 'Processing execution steps'
-    : derivedExecutionSteps.find((step) => step.status === 'running')?.label || 'Preparing response';
+    ? activeSteps.find((step) => step.status === 'running')?.label || 'Preparing recommendation'
+    : derivedExecutionSteps.find((step) => step.status === 'running')?.label || 'Preparing recommendation';
 
   const jumpToBottom = () => {
     if (!listRef.current) return;
@@ -336,27 +389,37 @@ export default function ChatPage() {
 
   return (
     <AppShell className="pb-60">
-      <header className="sticky top-0 z-20 mb-5 rounded-[22px] border border-white/8 bg-[#0b0c0f]/68 px-4 py-3.5 shadow-[0_14px_34px_rgba(0,0,0,0.35)] backdrop-blur-2xl">
+      <header className="sticky top-0 z-20 mb-5 rounded-[22px] border border-white/[0.06] bg-[#0b0c0f]/62 px-4 py-3.5 shadow-[0_14px_34px_rgba(0,0,0,0.34)] backdrop-blur-2xl">
         <div className="flex items-center justify-between gap-3">
           <div className="min-w-0">
             <div className="flex items-center gap-2">
               <h1 className="text-[18px] font-semibold tracking-[-0.024em] text-zinc-100">Kivo</h1>
-              <span className="inline-flex items-center gap-1.5 rounded-full border border-white/10 bg-white/[0.04] px-2 py-0.5 text-[10px] font-medium text-zinc-300">
-                <span className={`h-1.5 w-1.5 rounded-full ${isAgentResponding ? 'animate-pulse bg-zinc-200' : 'bg-zinc-500'}`} />
+              <span className="inline-flex items-center gap-1.5 rounded-full border border-white/[0.08] bg-white/[0.035] px-2 py-0.5 text-[10px] font-medium text-zinc-300">
+                <span
+                  className={`h-1.5 w-1.5 rounded-full ${
+                    isAgentResponding ? 'animate-pulse bg-sky-300' : 'bg-zinc-500'
+                  }`}
+                />
                 {isAgentResponding ? 'Working' : 'Ready'}
               </span>
             </div>
-            <p className="mt-1 truncate text-[11px] tracking-[0.01em] text-zinc-500">{formatUsageLine(usage.current, usage.limit, usage.unlimited)}</p>
+            <p className="mt-1 truncate text-[11px] tracking-[0.01em] text-zinc-500">
+              {formatUsageLine(usage.current, usage.limit, usage.unlimited)}
+            </p>
           </div>
 
           <button
             type="button"
             onClick={() => setOpenPanel((prev) => (prev === 'conversations' ? null : 'conversations'))}
-            className="inline-flex min-w-0 max-w-[56vw] items-center gap-2 rounded-full border border-white/10 bg-white/[0.04] px-3 py-1.5 text-zinc-300 transition-all duration-200 hover:-translate-y-[1px] hover:bg-white/[0.08]"
+            className="inline-flex min-w-0 max-w-[56vw] items-center gap-2 rounded-full border border-white/[0.08] bg-white/[0.035] px-3 py-1.5 text-zinc-300 transition-all duration-200 hover:-translate-y-[1px] hover:border-white/[0.12] hover:bg-white/[0.055]"
             aria-label="Open conversations"
           >
-            <span className="truncate text-xs font-medium text-zinc-200">{activeConversation?.title || 'Conversations'}</span>
-            <span className="rounded-full border border-white/10 bg-white/[0.04] px-1.5 py-0.5 text-[10px] text-zinc-400">{conversationList.length}</span>
+            <span className="truncate text-xs font-medium text-zinc-200">
+              {activeConversation?.title || 'Conversations'}
+            </span>
+            <span className="rounded-full border border-white/[0.08] bg-white/[0.03] px-1.5 py-0.5 text-[10px] text-zinc-400">
+              {conversationList.length}
+            </span>
             <MoreHorizontal className="h-4 w-4 shrink-0" />
           </button>
         </div>
@@ -381,7 +444,10 @@ export default function ChatPage() {
       </header>
 
       <LayoutGroup>
-        <section ref={listRef} className="relative z-10 max-h-[calc(100vh-260px)] overflow-y-auto pb-4">
+        <section
+          ref={listRef}
+          className="relative z-10 max-h-[calc(100vh-260px)] overflow-y-auto pb-4"
+        >
           <AnimatePresence mode="wait">
             {empty ? (
               <motion.div
@@ -391,15 +457,20 @@ export default function ChatPage() {
                 exit={{ opacity: 0, y: -10 }}
                 className="flex min-h-[62vh] flex-col items-center justify-center px-8 text-center"
               >
-                <h2 className="text-[34px] font-semibold leading-[1.08] tracking-[-0.036em] text-zinc-100">How can Kivo help today?</h2>
-                <p className="mt-3 max-w-[26ch] text-sm leading-6 text-zinc-500">Start with a question or a task. Kivo will handle the next steps.</p>
+                <h2 className="text-[34px] font-semibold leading-[1.08] tracking-[-0.036em] text-zinc-100">
+                  How can Kivo help today?
+                </h2>
+                <p className="mt-3 max-w-[26ch] text-sm leading-6 text-zinc-500">
+                  Start with a question or a task. Kivo will handle the next steps.
+                </p>
+
                 <div className="mt-6 flex w-full max-w-sm flex-col gap-2">
                   {QUICK_START_PROMPTS.map((prompt) => (
                     <button
                       key={prompt}
                       type="button"
                       onClick={() => applyTemplate(prompt, 'Prompt added. You can edit before sending.')}
-                      className="rounded-2xl border border-white/10 bg-white/[0.03] px-3.5 py-3 text-left text-xs leading-5 text-zinc-300 transition hover:border-white/20 hover:bg-white/[0.06]"
+                      className="rounded-2xl border border-white/[0.08] bg-white/[0.03] px-3.5 py-3 text-left text-xs leading-5 text-zinc-300 transition hover:border-white/[0.14] hover:bg-white/[0.05]"
                     >
                       {prompt}
                     </button>
@@ -421,7 +492,7 @@ export default function ChatPage() {
                   className={`max-w-[98%] ${message.role === 'user' ? 'ml-auto' : ''}`}
                 >
                   {message.role === 'user' ? (
-                    <div className="ml-auto max-w-[86%] rounded-[21px] border border-white/10 bg-[linear-gradient(150deg,rgba(255,255,255,0.14),rgba(255,255,255,0.08))] px-4 py-3 text-[15px] leading-7 tracking-[-0.01em] text-zinc-100 shadow-[0_14px_28px_rgba(0,0,0,0.3)]">
+                    <div className="ml-auto max-w-[86%] rounded-[21px] border border-white/[0.08] bg-[linear-gradient(150deg,rgba(255,255,255,0.12),rgba(255,255,255,0.06))] px-4 py-3 text-[15px] leading-7 tracking-[-0.01em] text-zinc-100 shadow-[0_14px_28px_rgba(0,0,0,0.28)]">
                       {message.content}
                     </div>
                   ) : (
@@ -444,19 +515,27 @@ export default function ChatPage() {
                 initial={{ opacity: 0, y: 8 }}
                 animate={{ opacity: 1, y: 0 }}
                 exit={{ opacity: 0, y: -8 }}
-                transition={{ duration: 0.24 }}
-                className="px-1"
+                transition={{ duration: 0.26, ease: [0.22, 1, 0.36, 1] }}
+                className="px-1 pt-1"
               >
                 <AgentThinkingSurface statusText={thinkingStatus} steps={derivedExecutionSteps} />
               </motion.div>
             ) : null}
           </AnimatePresence>
 
-          {streamError && !streamError.startsWith('LIMIT_REACHED:') && !streamError.startsWith('AUTH_REQUIRED:') && !streamError.startsWith('PREMIUM_REQUIRED:') ? (
-            <div className="mx-1 mt-4 rounded-xl border border-white/10 bg-white/[0.04] px-3 py-2.5 text-sm text-zinc-300">
+          {streamError &&
+          !streamError.startsWith('LIMIT_REACHED:') &&
+          !streamError.startsWith('AUTH_REQUIRED:') &&
+          !streamError.startsWith('PREMIUM_REQUIRED:') ? (
+            <div className="mx-1 mt-4 rounded-[18px] border border-white/[0.08] bg-white/[0.03] px-3 py-2.5 text-sm text-zinc-300 shadow-[0_10px_24px_rgba(0,0,0,0.2)] backdrop-blur-xl">
               We hit a processing issue, but your conversation is still safe.
-              <button type="button" onClick={() => void retryLastPrompt()} className="btn-secondary ml-2 inline-flex items-center gap-1 px-2 py-1 text-xs">
-                <RefreshCw className="h-3 w-3" /> Retry
+              <button
+                type="button"
+                onClick={() => void retryLastPrompt()}
+                className="btn-secondary ml-2 inline-flex items-center gap-1 px-2 py-1 text-xs"
+              >
+                <RefreshCw className="h-3 w-3" />
+                Retry
               </button>
             </div>
           ) : null}
@@ -465,7 +544,7 @@ export default function ChatPage() {
             <button
               type="button"
               onClick={jumpToBottom}
-              className="sticky bottom-3 left-1/2 z-20 ml-auto mr-2 block rounded-full border border-white/12 bg-black/55 px-3 py-1.5 text-xs text-zinc-200 backdrop-blur"
+              className="sticky bottom-3 left-1/2 z-20 ml-auto mr-2 block rounded-full border border-white/[0.08] bg-black/50 px-3 py-1.5 text-xs text-zinc-200 backdrop-blur-xl transition hover:border-white/[0.14] hover:bg-black/58"
             >
               Jump to latest
             </button>
@@ -489,7 +568,7 @@ export default function ChatPage() {
           if (requireAuth()) return;
           setDraft(value);
           setDraftPrompt(value);
-          if (typeof window !== 'undefined') window.sessionStorage.setItem('nova-operator-chat-draft', value);
+          persistDraft(value);
         }}
         onSend={() => void handleSend()}
         onTextareaFocus={() => {
@@ -503,6 +582,7 @@ export default function ChatPage() {
             setShowPaywall(true);
             return;
           }
+
           fileInputRef.current?.click();
           setOpenPanel(null);
         }}
@@ -513,9 +593,13 @@ export default function ChatPage() {
 
       {isLimitReached && !isUnlimited ? (
         <div className="fixed bottom-[calc(165px+env(safe-area-inset-bottom))] left-1/2 z-20 w-full max-w-md -translate-x-1/2 px-4">
-          <div className="rounded-2xl border border-white/10 bg-black/70 px-3 py-2.5 text-xs text-zinc-300 shadow-[0_14px_28px_rgba(0,0,0,0.4)]">
+          <div className="rounded-2xl border border-white/[0.08] bg-black/68 px-3 py-2.5 text-xs text-zinc-300 shadow-[0_14px_28px_rgba(0,0,0,0.38)] backdrop-blur-xl">
             You&apos;ve reached your daily limit. Upgrade for higher limits and file tools.
-            <button type="button" onClick={openUpgrade} className="ml-2 inline-flex rounded-full border border-white/20 bg-white/[0.05] px-2 py-0.5 text-[11px] font-medium">
+            <button
+              type="button"
+              onClick={openUpgrade}
+              className="ml-2 inline-flex rounded-full border border-white/[0.14] bg-white/[0.04] px-2 py-0.5 text-[11px] font-medium"
+            >
               Upgrade
             </button>
           </div>
@@ -524,14 +608,24 @@ export default function ChatPage() {
 
       {showAuthPrompt ? (
         <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/35 px-6">
-          <div className="w-full max-w-sm rounded-2xl border border-white/10 bg-[#111111] p-4 shadow-xl">
+          <div className="w-full max-w-sm rounded-2xl border border-white/[0.08] bg-[#111111] p-4 shadow-xl">
             <h2 className="text-base font-semibold text-zinc-100">Sign in required</h2>
-            <p className="mt-1 text-sm text-zinc-400">Please log in before sending messages or saving conversations.</p>
+            <p className="mt-1 text-sm text-zinc-400">
+              Please log in before sending messages or saving conversations.
+            </p>
             <div className="mt-4 flex gap-2">
-              <button type="button" className="btn-secondary w-full px-3 py-2 text-sm" onClick={() => setShowAuthPrompt(false)}>
+              <button
+                type="button"
+                className="btn-secondary w-full px-3 py-2 text-sm"
+                onClick={() => setShowAuthPrompt(false)}
+              >
                 Not now
               </button>
-              <button type="button" className="btn-primary w-full px-3 py-2 text-sm" onClick={() => router.push('/login?next=/chat')}>
+              <button
+                type="button"
+                className="btn-primary w-full px-3 py-2 text-sm"
+                onClick={() => router.push('/login?next=/chat')}
+              >
                 Continue to login
               </button>
             </div>
@@ -541,13 +635,16 @@ export default function ChatPage() {
 
       {showPaywall && !isUnlimited ? (
         <div className="fixed inset-0 z-40 flex items-end justify-center bg-black/45 px-4 pb-20 pt-8">
-          <div className="w-full max-w-md rounded-[24px] border border-white/10 bg-[#111111] p-4 shadow-[0_18px_44px_rgba(0,0,0,0.45)]">
+          <div className="w-full max-w-md rounded-[24px] border border-white/[0.08] bg-[#111111] p-4 shadow-[0_18px_44px_rgba(0,0,0,0.45)]">
             <div className="mb-3 flex items-center gap-2 text-zinc-100">
               <Crown className="h-5 w-5" />
               <h2 className="text-base font-semibold">Daily limit reached</h2>
             </div>
-            <p className="text-sm text-zinc-400">You&apos;ve used all free runs for today. Upgrade to unlock more daily runs and file attachments.</p>
-            <div className="mt-3 rounded-xl border border-white/10 bg-white/[0.04] p-3 text-sm">
+            <p className="text-sm text-zinc-400">
+              You&apos;ve used all free runs for today. Upgrade to unlock more daily runs and file attachments.
+            </p>
+
+            <div className="mt-3 rounded-xl border border-white/[0.08] bg-white/[0.03] p-3 text-sm">
               <p className="font-medium text-zinc-100">Free vs Premium</p>
               <ul className="mt-1 space-y-1 text-zinc-400">
                 <li>• Free: {usage.limit} runs / day</li>
@@ -555,11 +652,20 @@ export default function ChatPage() {
                 <li>• Premium: File uploads in chat</li>
               </ul>
             </div>
+
             <div className="mt-4 flex gap-2">
-              <button type="button" className="btn-secondary w-full px-3 py-2 text-sm" onClick={() => setShowPaywall(false)}>
+              <button
+                type="button"
+                className="btn-secondary w-full px-3 py-2 text-sm"
+                onClick={() => setShowPaywall(false)}
+              >
                 Close
               </button>
-              <button type="button" className="btn-primary w-full px-3 py-2 text-sm" onClick={openUpgrade}>
+              <button
+                type="button"
+                className="btn-primary w-full px-3 py-2 text-sm"
+                onClick={openUpgrade}
+              >
                 Upgrade
               </button>
             </div>
