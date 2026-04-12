@@ -1,9 +1,8 @@
 'use client';
 
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import {
-  ArrowLeft,
   Bot,
   Calendar,
   CalendarDays,
@@ -110,6 +109,7 @@ function normalizeStepLabel(label?: string) {
 
 export default function ChatPage() {
   const router = useRouter();
+  const searchParams = useSearchParams();
 
   const hydrated = useAppStore((s) => s.hydrated);
   const hydrate = useAppStore((s) => s.hydrate);
@@ -232,6 +232,30 @@ export default function ChatPage() {
   useEffect(() => {
     if (!hydrated) hydrate();
   }, [hydrate, hydrated]);
+
+  useEffect(() => {
+    const panel = searchParams.get('panel');
+    const shouldStartNew = searchParams.get('new') === '1';
+
+    if (!panel && !shouldStartNew) return;
+
+    if (panel === 'conversations') {
+      setOpenPanel('conversations');
+      setConnectorsOpen(false);
+    }
+
+    if (shouldStartNew) {
+      if (!user) {
+        setShowAuthPrompt(true);
+      } else {
+        createConversation();
+        setOpenPanel(null);
+        setComposerNotice('Started a new chat.');
+      }
+    }
+
+    router.replace('/chat');
+  }, [createConversation, router, searchParams, user]);
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
@@ -503,33 +527,32 @@ export default function ChatPage() {
     <AppShell className="relative isolate overflow-hidden bg-[#ededee] pb-44 sm:pb-42">
       <header className="sticky top-0 z-30 mb-3 px-4 pb-2 pt-4 backdrop-blur">
         <div className="flex items-center justify-between gap-3">
-          <div className="inline-flex items-center">
+          <div className="inline-flex items-center gap-1.5">
             <button
               type="button"
-              onClick={() => router.back()}
-              className="inline-flex h-9 w-9 items-center justify-center rounded-full border border-[#d3d4d8] bg-[#f1f1f2] text-[#2d2f34]"
-              aria-label="Back"
+              onClick={() => setOpenPanel((prev) => (prev === 'conversations' ? null : 'conversations'))}
+              className="inline-flex min-h-9 items-center justify-center rounded-full border border-[#d3d4d8] bg-[#f1f1f2] px-3 text-xs font-medium text-[#2d2f34]"
+              aria-label="Open conversations"
             >
-              <ArrowLeft className="h-4 w-4" />
+              Conversations
+            </button>
+            <button
+              type="button"
+              onClick={() => router.push('/activity')}
+              className="inline-flex min-h-9 items-center justify-center rounded-full border border-[#d3d4d8] bg-[#f1f1f2] px-3 text-xs font-medium text-[#2d2f34]"
+            >
+              Workspace
             </button>
           </div>
-          <button
-            type="button"
-            onClick={() => setOpenPanel((prev) => (prev === 'conversations' ? null : 'conversations'))}
-            className="text-[22px] font-medium tracking-[-0.02em] text-[#2b2d31]"
-          >
-            Kivo
-          </button>
+          <p className="text-[22px] font-medium tracking-[-0.02em] text-[#2b2d31]">Kivo</p>
 
           <div className="flex items-center gap-2">
-            <span className="inline-flex items-center rounded-full border border-[#d1d3d8] bg-[#f3f3f4] px-2.5 py-1 text-[11px] text-[#666b74]">
-              {formatCompactUsage(usage.current, usage.limit, usage.unlimited)}
-            </span>
             <button type="button" onClick={() => setChatMenuOpen(true)} className="inline-flex h-9 w-9 items-center justify-center rounded-full border border-[#d3d4d8] bg-[#f1f1f2] text-[#3a3d43]" aria-label="Open menu">
               <Menu className="h-4 w-4" />
             </button>
           </div>
         </div>
+        <p className="mt-2 text-center text-[11px] text-[#666b74]">{formatCompactUsage(usage.current, usage.limit, usage.unlimited)}</p>
 
         <AnimatePresence>
           {openPanel === 'conversations' ? (
@@ -561,9 +584,8 @@ export default function ChatPage() {
                 <button type="button" onClick={() => setChatMenuOpen(false)} className="composer-icon-btn"><X className="h-4 w-4" /></button>
               </div>
               {[
-                ['Navigation', [['Home', '/'], ['Tasks', '/tasks'], ['Alerts', '/alerts'], ['History', '/history'], ['Profile', '/profile']]],
-                ['Chat Tools', [['New Chat', '/chat'], ['Conversations', '/chat'], ['Connected Apps', '/chat'], ['Search', '/history']]],
-                ['Account', [['Upgrade', '/upgrade'], ['Usage', '/settings'], ['Settings', '/settings'], ['Sign Out', '/login']]],
+                ['Primary', [['New Chat', '/chat?new=1'], ['Conversations', '/chat?panel=conversations'], ['Tasks', '/tasks'], ['Alerts', '/alerts']]],
+                ['Secondary', [['Profile', '/profile'], ['Settings', '/settings'], ['Upgrade', '/upgrade']]],
               ].map(([title, items]) => (
                 <div key={title as string} className="mb-2.5 rounded-2xl border border-[#dde1e8] bg-white p-2.5">
                   <p className="px-2 pb-1 text-xs uppercase tracking-[0.16em] text-[#7a838f]">{title as string}</p>
