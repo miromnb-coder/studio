@@ -28,33 +28,33 @@ export function AgentThinkingSurface({ statusText, steps }: AgentThinkingSurface
   }, [completedCount, failed, running, steps]);
 
   return (
-    <div className="max-w-[94%] space-y-2">
+    <div className="max-w-[94%] space-y-1.5">
       <ThinkingIndicator phase={phase} detail={detail} />
 
       {steps.length > 0 ? (
-        <div className="pl-1">
+        <div className="pl-1.5 pt-0.5">
           <button
             type="button"
             onClick={() => setShowDetails((current) => !current)}
-            className="inline-flex items-center gap-2 rounded-full border border-white/[0.06] bg-white/[0.02] px-3 py-1.5 text-[11px] font-medium tracking-[0.01em] text-zinc-400 transition-all duration-200 hover:border-white/[0.1] hover:bg-white/[0.04] hover:text-zinc-300"
+            className="inline-flex items-center gap-1.5 rounded-full border border-white/[0.04] bg-white/[0.012] px-2.5 py-1 text-[10.5px] font-medium tracking-[0.005em] text-zinc-500 transition-all duration-200 hover:border-white/[0.065] hover:bg-white/[0.024] hover:text-zinc-400"
           >
             <span
               className={`h-1.5 w-1.5 rounded-full ${
                 failed
-                  ? 'bg-rose-300'
+                  ? 'bg-rose-300/90'
                   : running
-                    ? 'bg-sky-300'
-                    : 'bg-zinc-500'
+                    ? 'bg-sky-300/90'
+                    : 'bg-zinc-500/90'
               }`}
             />
             <span>{progressLabel || 'Working through steps'}</span>
-            <span className="text-zinc-500">{showDetails ? 'Hide details' : 'Show details'}</span>
+            <span className="text-zinc-600">{showDetails ? 'Hide' : 'Details'}</span>
           </button>
         </div>
       ) : null}
 
       {showDetails ? (
-        <div className="pt-0.5">
+        <div className="pt-0.5 pl-0.5">
           <AgentExecutionTimeline steps={steps} />
         </div>
       ) : null}

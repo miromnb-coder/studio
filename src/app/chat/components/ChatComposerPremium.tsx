@@ -64,7 +64,7 @@ export function ChatComposerPremium(props: ChatComposerPremiumProps) {
   return (
     <div
       ref={composerRef}
-      className="fixed bottom-[calc(76px+env(safe-area-inset-bottom))] left-1/2 z-30 w-full max-w-md -translate-x-1/2 px-4 pb-3"
+      className="fixed bottom-[calc(76px+env(safe-area-inset-bottom))] left-1/2 z-30 w-full max-w-md -translate-x-1/2 px-4 pb-2.5"
     >
       <AnimatePresence>
         {notice ? (
@@ -85,7 +85,7 @@ export function ChatComposerPremium(props: ChatComposerPremiumProps) {
             initial={{ opacity: 0, y: 10 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: 6 }}
-            className="mb-2 rounded-[18px] border border-white/6 bg-[#0f1014]/90 p-1.5 shadow-[0_24px_52px_rgba(0,0,0,0.58)] backdrop-blur-3xl"
+            className="mb-2 rounded-[17px] border border-white/[0.05] bg-[#0f1014]/86 p-1.5 shadow-[0_18px_42px_rgba(0,0,0,0.48)] backdrop-blur-2xl"
           >
             <button
               type="button"
@@ -126,7 +126,7 @@ export function ChatComposerPremium(props: ChatComposerPremiumProps) {
         ) : null}
       </AnimatePresence>
 
-      <div className="chat-composer-shell rounded-[28px] px-3 py-2.5">
+      <div className="chat-composer-shell rounded-[26px] px-3 py-2">
         <input
           ref={fileInputRef}
           type="file"
@@ -144,7 +144,7 @@ export function ChatComposerPremium(props: ChatComposerPremiumProps) {
           }}
         />
 
-        <div className="flex items-end gap-2.5 px-1">
+        <div className="flex items-end gap-2 px-1">
           <textarea
             ref={textareaRef}
             value={draft}
@@ -162,14 +162,14 @@ export function ChatComposerPremium(props: ChatComposerPremiumProps) {
                 ? 'Ask anything, assign a task, or draft an action…'
                 : 'Sign in to start chatting'
             }
-            className="chat-composer-input max-h-[128px] min-h-[44px] w-full resize-none border-none bg-transparent py-1.5 text-[15px] leading-6 tracking-[-0.01em]"
+            className="chat-composer-input max-h-[128px] min-h-[44px] w-full resize-none border-none bg-transparent py-1 text-[15px] leading-6 tracking-[-0.01em]"
           />
 
           <button
             type="button"
             onClick={onSend}
             disabled={!draft.trim() || isAgentResponding || isLimitReached}
-            className="composer-send-btn h-10 w-10 shrink-0 disabled:opacity-45"
+            className="composer-send-btn h-9.5 w-9.5 shrink-0 disabled:opacity-45"
             aria-label="Send message"
           >
             {isSending ? (
@@ -180,7 +180,7 @@ export function ChatComposerPremium(props: ChatComposerPremiumProps) {
           </button>
         </div>
 
-        <div className="mt-2 flex items-center justify-between">
+        <div className="mt-1.5 flex items-center justify-between">
           <div className="flex items-center gap-1">
             <button
               type="button"

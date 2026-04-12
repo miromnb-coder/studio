@@ -389,12 +389,12 @@ export default function ChatPage() {
 
   return (
     <AppShell className="pb-60">
-      <header className="sticky top-0 z-20 mb-5 rounded-[22px] border border-white/[0.06] bg-[#0b0c0f]/62 px-4 py-3.5 shadow-[0_14px_34px_rgba(0,0,0,0.34)] backdrop-blur-2xl">
+      <header className="sticky top-0 z-20 mb-4 rounded-[20px] border border-white/[0.045] bg-[#0b0c0f]/56 px-4 py-3 shadow-[0_10px_28px_rgba(0,0,0,0.28)] backdrop-blur-xl">
         <div className="flex items-center justify-between gap-3">
           <div className="min-w-0">
             <div className="flex items-center gap-2">
               <h1 className="text-[18px] font-semibold tracking-[-0.024em] text-zinc-100">Kivo</h1>
-              <span className="inline-flex items-center gap-1.5 rounded-full border border-white/[0.08] bg-white/[0.035] px-2 py-0.5 text-[10px] font-medium text-zinc-300">
+              <span className="inline-flex items-center gap-1.5 rounded-full border border-white/[0.06] bg-white/[0.025] px-2 py-0.5 text-[10px] font-medium text-zinc-300">
                 <span
                   className={`h-1.5 w-1.5 rounded-full ${
                     isAgentResponding ? 'animate-pulse bg-sky-300' : 'bg-zinc-500'
@@ -403,7 +403,7 @@ export default function ChatPage() {
                 {isAgentResponding ? 'Working' : 'Ready'}
               </span>
             </div>
-            <p className="mt-1 truncate text-[11px] tracking-[0.01em] text-zinc-500">
+            <p className="mt-1 truncate text-[11px] tracking-[0.01em] text-zinc-600">
               {formatUsageLine(usage.current, usage.limit, usage.unlimited)}
             </p>
           </div>
@@ -411,13 +411,13 @@ export default function ChatPage() {
           <button
             type="button"
             onClick={() => setOpenPanel((prev) => (prev === 'conversations' ? null : 'conversations'))}
-            className="inline-flex min-w-0 max-w-[56vw] items-center gap-2 rounded-full border border-white/[0.08] bg-white/[0.035] px-3 py-1.5 text-zinc-300 transition-all duration-200 hover:-translate-y-[1px] hover:border-white/[0.12] hover:bg-white/[0.055]"
+            className="inline-flex min-w-0 max-w-[56vw] items-center gap-2 rounded-full border border-white/[0.06] bg-white/[0.025] px-3 py-1.5 text-zinc-300 transition-all duration-200 hover:border-white/[0.1] hover:bg-white/[0.04]"
             aria-label="Open conversations"
           >
             <span className="truncate text-xs font-medium text-zinc-200">
               {activeConversation?.title || 'Conversations'}
             </span>
-            <span className="rounded-full border border-white/[0.08] bg-white/[0.03] px-1.5 py-0.5 text-[10px] text-zinc-400">
+            <span className="rounded-full border border-white/[0.06] bg-white/[0.02] px-1.5 py-0.5 text-[10px] text-zinc-500">
               {conversationList.length}
             </span>
             <MoreHorizontal className="h-4 w-4 shrink-0" />
@@ -480,7 +480,7 @@ export default function ChatPage() {
             ) : null}
           </AnimatePresence>
 
-          <div className="space-y-8 px-1 pb-2">
+          <div className="space-y-7 px-1 pb-2">
             {messages
               .filter((message) => !(message.role === 'assistant' && message.isStreaming && isAgentResponding))
               .map((message) => (
@@ -492,7 +492,7 @@ export default function ChatPage() {
                   className={`max-w-[98%] ${message.role === 'user' ? 'ml-auto' : ''}`}
                 >
                   {message.role === 'user' ? (
-                    <div className="ml-auto max-w-[86%] rounded-[21px] border border-white/[0.08] bg-[linear-gradient(150deg,rgba(255,255,255,0.12),rgba(255,255,255,0.06))] px-4 py-3 text-[15px] leading-7 tracking-[-0.01em] text-zinc-100 shadow-[0_14px_28px_rgba(0,0,0,0.28)]">
+                    <div className="ml-auto max-w-[86%] rounded-[20px] border border-white/[0.06] bg-[linear-gradient(150deg,rgba(255,255,255,0.1),rgba(255,255,255,0.045))] px-4 py-3 text-[15px] leading-7 tracking-[-0.01em] text-zinc-100 shadow-[0_11px_24px_rgba(0,0,0,0.22)]">
                       {message.content}
                     </div>
                   ) : (
@@ -516,7 +516,7 @@ export default function ChatPage() {
                 animate={{ opacity: 1, y: 0 }}
                 exit={{ opacity: 0, y: -8 }}
                 transition={{ duration: 0.26, ease: [0.22, 1, 0.36, 1] }}
-                className="px-1 pt-1"
+                className="px-1 pt-0.5"
               >
                 <AgentThinkingSurface statusText={thinkingStatus} steps={derivedExecutionSteps} />
               </motion.div>

@@ -70,10 +70,10 @@ export function AssistantResponseSurface({
       initial={{ opacity: 0, y: 8 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.24, ease: 'easeOut' }}
-      className="max-w-[96%] space-y-3.5"
+      className="max-w-[96%] space-y-3"
     >
       <div className="px-0.5">
-        <div className="space-y-2 text-[15px] leading-8 tracking-[-0.01em] text-zinc-100/95">
+        <div className="space-y-2 text-[15px] leading-8 tracking-[-0.01em] text-zinc-100/94">
           {message.content || (message.isStreaming ? ' ' : '')}
         </div>
       </div>
@@ -86,10 +86,10 @@ export function AssistantResponseSurface({
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: 8 }}
             transition={{ duration: 0.22, ease: [0.22, 1, 0.36, 1] }}
-            className="space-y-2.5"
+            className="space-y-2"
           >
             {metadata.suggestedActions?.length ? (
-              <div className="flex flex-wrap gap-2 pt-0.5">
+              <div className="flex flex-wrap gap-1.5 pt-0.5">
                 {metadata.suggestedActions.slice(0, 3).map((item) => {
                   const actionType = item.payload?.actionType;
                   if (!isFinanceAction(actionType)) return null;
@@ -99,7 +99,7 @@ export function AssistantResponseSurface({
                       key={item.id}
                       type="button"
                       onClick={() => onAction(actionType)}
-                      className="rounded-full border border-white/[0.08] bg-white/[0.03] px-3 py-1.5 text-[11px] font-medium tracking-[0.01em] text-zinc-200 transition-all duration-200 hover:-translate-y-[1px] hover:border-white/[0.12] hover:bg-white/[0.055]"
+                      className="rounded-full border border-white/[0.06] bg-white/[0.02] px-2.5 py-1.5 text-[10.5px] font-medium tracking-[0.008em] text-zinc-300 transition-all duration-200 hover:border-white/[0.09] hover:bg-white/[0.036]"
                     >
                       {item.label}
                     </button>
@@ -109,39 +109,39 @@ export function AssistantResponseSurface({
             ) : null}
 
             {operatorModules.length ? (
-              <div className="space-y-2">
+              <div className="space-y-1.5">
                 {operatorModules.slice(0, 4).map((module, index) => (
                   <motion.div
                     key={module.id}
                     initial={{ opacity: 0, y: 6 }}
                     animate={{ opacity: 1, y: 0 }}
                     transition={{ duration: 0.22, delay: index * 0.03 }}
-                    className="rounded-[20px] border border-white/[0.06] bg-[linear-gradient(180deg,rgba(255,255,255,0.045),rgba(255,255,255,0.018))] px-4 py-3.5 shadow-[0_10px_28px_rgba(0,0,0,0.2)] backdrop-blur-[18px]"
+                    className="rounded-[18px] border border-white/[0.04] bg-[linear-gradient(180deg,rgba(255,255,255,0.03),rgba(255,255,255,0.012))] px-3.5 py-3 shadow-[0_8px_22px_rgba(0,0,0,0.14)] backdrop-blur-[14px]"
                   >
                     <div className="flex items-start justify-between gap-3">
                       <div className="min-w-0">
-                        <p className="text-[11px] font-medium uppercase tracking-[0.12em] text-zinc-500">
+                        <p className="text-[10.5px] font-medium tracking-[0.02em] text-zinc-500">
                           {module.title}
                         </p>
-                        <p className="mt-1.5 text-[14px] leading-6 text-zinc-100/92">
+                        <p className="mt-1 text-[13.5px] leading-6 text-zinc-100/90">
                           {module.summary}
                         </p>
                       </div>
 
                       {module.impactLabel ? (
-                        <span className="shrink-0 rounded-full border border-emerald-300/10 bg-emerald-300/10 px-2 py-1 text-[10px] font-medium text-emerald-300">
+                        <span className="shrink-0 rounded-full border border-emerald-300/8 bg-emerald-300/8 px-2 py-1 text-[10px] font-medium text-emerald-300/90">
                           {module.impactLabel}
                         </span>
                       ) : null}
                     </div>
 
                     {module.recommendationId ? (
-                      <div className="mt-3 flex flex-wrap gap-1.5">
+                      <div className="mt-2.5 flex flex-wrap gap-1.5">
                         <button
                           type="button"
                           disabled={savingOutcomeFor === module.id}
                           onClick={() => void saveOutcome(module, 'completed')}
-                          className="rounded-full border border-white/[0.1] bg-white/[0.03] px-2.5 py-1 text-[10px] font-medium text-zinc-300 transition hover:border-white/[0.14] hover:bg-white/[0.05]"
+                          className="rounded-full border border-white/[0.07] bg-white/[0.02] px-2.5 py-1 text-[10px] font-medium text-zinc-300 transition hover:border-white/[0.1] hover:bg-white/[0.036]"
                         >
                           Done
                         </button>
@@ -149,7 +149,7 @@ export function AssistantResponseSurface({
                           type="button"
                           disabled={savingOutcomeFor === module.id}
                           onClick={() => void saveOutcome(module, 'postponed')}
-                          className="rounded-full border border-white/[0.1] bg-white/[0.02] px-2.5 py-1 text-[10px] font-medium text-zinc-300 transition hover:border-white/[0.14] hover:bg-white/[0.045]"
+                          className="rounded-full border border-white/[0.07] bg-white/[0.015] px-2.5 py-1 text-[10px] font-medium text-zinc-300 transition hover:border-white/[0.1] hover:bg-white/[0.03]"
                         >
                           Later
                         </button>
@@ -157,7 +157,7 @@ export function AssistantResponseSurface({
                           type="button"
                           disabled={savingOutcomeFor === module.id}
                           onClick={() => void saveOutcome(module, 'ignored')}
-                          className="rounded-full border border-white/[0.08] bg-transparent px-2.5 py-1 text-[10px] font-medium text-zinc-500 transition hover:border-white/[0.12] hover:text-zinc-400"
+                          className="rounded-full border border-white/[0.06] bg-transparent px-2.5 py-1 text-[10px] font-medium text-zinc-500 transition hover:border-white/[0.09] hover:text-zinc-400"
                         >
                           Ignore
                         </button>
@@ -169,16 +169,16 @@ export function AssistantResponseSurface({
             ) : null}
 
             {surfaceBlocks.length > 0 ? (
-              <div className="space-y-2">
+              <div className="space-y-1.5">
                 {metadata.structuredData?.finance ? (
-                  <details className="group rounded-[18px] border border-white/[0.05] bg-white/[0.018] px-3.5 py-2.5 shadow-[0_8px_22px_rgba(0,0,0,0.16)] backdrop-blur-[16px]">
-                    <summary className="flex cursor-pointer list-none items-center justify-between gap-3 text-[11px] font-medium tracking-[0.11em] text-zinc-500 transition-colors marker:content-none hover:text-zinc-300">
-                      <span>DATA / ANALYSIS</span>
+                  <details className="group rounded-[16px] border border-white/[0.035] bg-white/[0.012] px-3.5 py-2 shadow-[0_7px_20px_rgba(0,0,0,0.12)] backdrop-blur-[12px]">
+                    <summary className="flex cursor-pointer list-none items-center justify-between gap-3 text-[10.5px] font-medium tracking-[0.01em] text-zinc-500 transition-colors marker:content-none hover:text-zinc-300">
+                      <span>Data analysis</span>
                       <span className="text-[10px] text-zinc-600 transition group-open:text-zinc-400">
                         Expand
                       </span>
                     </summary>
-                    <div className="mt-3 border-t border-white/[0.05] pt-3">
+                    <div className="mt-2.5 border-t border-white/[0.03] pt-2.5">
                       <FinanceResultCard
                         data={metadata.structuredData.finance}
                         onAction={onAction}
@@ -191,29 +191,29 @@ export function AssistantResponseSurface({
                 ) : null}
 
                 {metadata.structuredData?.actionResult ? (
-                  <details className="group rounded-[18px] border border-white/[0.05] bg-white/[0.018] px-3.5 py-2.5 shadow-[0_8px_22px_rgba(0,0,0,0.16)] backdrop-blur-[16px]">
-                    <summary className="flex cursor-pointer list-none items-center justify-between gap-3 text-[11px] font-medium tracking-[0.11em] text-zinc-500 transition-colors marker:content-none hover:text-zinc-300">
-                      <span>DETAILED RESULT</span>
+                  <details className="group rounded-[16px] border border-white/[0.035] bg-white/[0.012] px-3.5 py-2 shadow-[0_7px_20px_rgba(0,0,0,0.12)] backdrop-blur-[12px]">
+                    <summary className="flex cursor-pointer list-none items-center justify-between gap-3 text-[10.5px] font-medium tracking-[0.01em] text-zinc-500 transition-colors marker:content-none hover:text-zinc-300">
+                      <span>Detailed result</span>
                       <span className="text-[10px] text-zinc-600 transition group-open:text-zinc-400">
                         Expand
                       </span>
                     </summary>
-                    <div className="mt-3 border-t border-white/[0.05] pt-3">
+                    <div className="mt-2.5 border-t border-white/[0.03] pt-2.5">
                       <FinanceActionResultCard result={metadata.structuredData.actionResult} />
                     </div>
                   </details>
                 ) : null}
 
                 {hasToolDetails ? (
-                  <details className="group rounded-[18px] border border-white/[0.05] bg-white/[0.018] px-3.5 py-2.5 shadow-[0_8px_22px_rgba(0,0,0,0.16)] backdrop-blur-[16px]">
-                    <summary className="flex cursor-pointer list-none items-center justify-between gap-3 text-[11px] font-medium tracking-[0.11em] text-zinc-500 transition-colors marker:content-none hover:text-zinc-300">
-                      <span>ACTIONS TAKEN</span>
+                  <details className="group rounded-[16px] border border-white/[0.035] bg-white/[0.012] px-3.5 py-2 shadow-[0_7px_20px_rgba(0,0,0,0.12)] backdrop-blur-[12px]">
+                    <summary className="flex cursor-pointer list-none items-center justify-between gap-3 text-[10.5px] font-medium tracking-[0.01em] text-zinc-500 transition-colors marker:content-none hover:text-zinc-300">
+                      <span>Actions taken</span>
                       <span className="text-[10px] text-zinc-600 transition group-open:text-zinc-400">
                         Expand
                       </span>
                     </summary>
 
-                    <div className="mt-3 border-t border-white/[0.05] pt-3 text-xs text-zinc-300">
+                    <div className="mt-2.5 border-t border-white/[0.03] pt-2.5 text-xs text-zinc-300">
                       {metadata.plan ? (
                         <p className="mb-2 leading-6 text-zinc-400">
                           {metadata.plan}
