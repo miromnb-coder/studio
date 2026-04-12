@@ -11,30 +11,52 @@ function buildSafeFallbackReply(input: {
   userMessage: string;
   intent: string;
   clarificationQuestion?: string;
+  language?: string;
 }): string {
-  const { intent, clarificationQuestion } = input;
+  const { intent, clarificationQuestion, language = 'en' } = input;
+  const isFi = language.startsWith('fi');
+  const isSv = language.startsWith('sv');
 
   if (intent === 'finance') {
+    if (isFi) {
+      return [
+        'Mikä on tärkeintä nyt: Haluat konkreettisen taloustoimen, mutta todennettu data on vielä osittainen.',
+        'Paras suositus: Aloita suurimmasta toistuvasta kulusta ennen laajempia muutoksia.',
+        'Miksi tämä toimii: Yksi priorisoitu toimi tuottaa nopeimman vaikutuksen ja vähentää epävarmuutta.',
+        `Selkeä seuraava siirto: ${clarificationQuestion || 'Lähetä yksi kuukausikulu, niin teen tarkan priorisoinnin.'}`,
+      ].join('\n');
+    }
+    if (isSv) {
+      return [
+        'Vad som betyder mest nu: Du vill ha en konkret ekonomisk åtgärd men verifierad data är fortfarande delvis ofullständig.',
+        'Bästa rekommendationen: Börja med den största återkommande kostnaden före bredare ändringar.',
+        'Varför detta fungerar: En prioriterad åtgärd ger snabbast effekt och minskar osäkerhet.',
+        `Tydligt nästa steg: ${clarificationQuestion || 'Skicka en månadskostnad så rangordnar jag nästa steg exakt.'}`,
+      ].join('\n');
+    }
+
     return [
-      'Observation: You want a concrete financial move, but current evidence is still partial.',
-      'Interpretation: The main blocker is not options—it is missing numeric grounding for prioritization.',
-      'Next focus: Add one monthly cost, bill, or subscription so I can rank actions accurately.',
-      'Recommendation: Start with the highest recurring pressure item before broader budget changes.',
-      'Action steps:',
-      '- Share one recurring charge or monthly spending target.',
-      '- Ask for a subscription audit or savings plan.',
-      '- Add Gmail or finance evidence if you want deeper analysis.',
-      'Confidence: Low (the system did not have enough validated evidence to produce a strong financial recommendation).',
-      clarificationQuestion
-        ? `Question: ${clarificationQuestion}`
-        : 'Question: What is one concrete number I should optimize around?',
-      'Next Step: Send one bill, subscription, or monthly target and I will turn it into a more precise action plan.',
+      'What matters most now: You want a concrete financial move, but current evidence is still partial.',
+      'Best recommendation: Start with the highest recurring pressure item before broader budget changes.',
+      'Why this matters: The biggest blocker is missing numeric grounding for prioritization.',
+      `Clear next move: ${clarificationQuestion || 'Share one bill, subscription, or monthly target and I will rank actions precisely.'}`,
     ].join('\n');
   }
 
+  if (isFi) {
+    return clarificationQuestion
+      ? `Mikä on tärkeintä nyt: Tarvitsen yhden täsmennyksen.\nSelkeä seuraava siirto: ${clarificationQuestion}`
+      : 'Mikä on tärkeintä nyt: Tarvitsen yhden täsmennyksen, jotta voin vastata tarkasti.';
+  }
+  if (isSv) {
+    return clarificationQuestion
+      ? `Vad som betyder mest nu: Jag behöver ett förtydligande.\nTydligt nästa steg: ${clarificationQuestion}`
+      : 'Vad som betyder mest nu: Jag behöver ett förtydligande för att svara exakt.';
+  }
+
   return clarificationQuestion
-    ? `Observation: I need one concrete detail to give a precise answer.\nNext focus: ${clarificationQuestion}`
-    : 'Observation: I need one concrete detail to give a precise answer.';
+    ? `What matters most now: I need one concrete detail to answer precisely.\nClear next move: ${clarificationQuestion}`
+    : 'What matters most now: I need one concrete detail to answer precisely.';
 }
 
 export async function runAgentV8(input: AgentRunInputV8): Promise<AgentResponseV8> {
@@ -90,6 +112,7 @@ export async function runAgentV8(input: AgentRunInputV8): Promise<AgentResponseV
       userMessage: input.input,
       intent: route.intent,
       clarificationQuestion: plan.clarificationQuestion,
+      language: route.responseLanguage,
     });
   }
 
@@ -112,6 +135,7 @@ export async function runAgentV8(input: AgentRunInputV8): Promise<AgentResponseV
           userMessage: input.input,
           intent: route.intent,
           clarificationQuestion: plan.clarificationQuestion,
+          language: route.responseLanguage,
         });
 
   const safeReply =
@@ -120,6 +144,7 @@ export async function runAgentV8(input: AgentRunInputV8): Promise<AgentResponseV
           userMessage: input.input,
           intent: route.intent,
           clarificationQuestion: plan.clarificationQuestion,
+          language: route.responseLanguage,
         })
       : finalReply;
 
