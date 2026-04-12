@@ -15,6 +15,7 @@ import {
   Globe,
   Inbox,
   Mail,
+  Menu,
   MessageSquare,
   RefreshCw,
   Sparkles,
