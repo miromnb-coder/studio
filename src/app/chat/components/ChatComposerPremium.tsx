@@ -64,7 +64,7 @@ export function ChatComposerPremium(props: ChatComposerPremiumProps) {
   return (
     <div
       ref={composerRef}
-      className="fixed bottom-[calc(76px+env(safe-area-inset-bottom))] left-1/2 z-30 w-full max-w-md -translate-x-1/2 px-4 pb-2.5"
+      className="fixed bottom-[calc(74px+env(safe-area-inset-bottom))] left-1/2 z-30 w-full max-w-md -translate-x-1/2 px-3.5 pb-2.5"
     >
       <AnimatePresence>
         {notice ? (
@@ -72,7 +72,7 @@ export function ChatComposerPremium(props: ChatComposerPremiumProps) {
             initial={{ opacity: 0, y: 4 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: 4 }}
-            className="mb-2 px-2 text-[11px] tracking-wide text-zinc-500"
+            className="mb-2 rounded-full border border-white/[0.06] bg-black/30 px-3 py-1.5 text-[11px] tracking-wide text-zinc-400 backdrop-blur"
           >
             {notice}
           </motion.p>
@@ -85,7 +85,7 @@ export function ChatComposerPremium(props: ChatComposerPremiumProps) {
             initial={{ opacity: 0, y: 10 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: 6 }}
-            className="mb-2 rounded-[17px] border border-white/[0.05] bg-[#0f1014]/86 p-1.5 shadow-[0_18px_42px_rgba(0,0,0,0.48)] backdrop-blur-2xl"
+            className="mb-2 rounded-[18px] border border-white/[0.06] bg-[#0f1014]/90 p-1.5 shadow-[0_22px_42px_rgba(0,0,0,0.5)] backdrop-blur-2xl"
           >
             <button
               type="button"
@@ -126,7 +126,7 @@ export function ChatComposerPremium(props: ChatComposerPremiumProps) {
         ) : null}
       </AnimatePresence>
 
-      <div className="chat-composer-shell rounded-[26px] px-3 py-2">
+      <div className="chat-composer-shell rounded-[28px] px-3 py-2.5 shadow-[0_18px_40px_rgba(0,0,0,0.5)]">
         <input
           ref={fileInputRef}
           type="file"
@@ -162,14 +162,14 @@ export function ChatComposerPremium(props: ChatComposerPremiumProps) {
                 ? 'Ask anything, assign a task, or draft an action…'
                 : 'Sign in to start chatting'
             }
-            className="chat-composer-input max-h-[128px] min-h-[44px] w-full resize-none border-none bg-transparent py-1 text-[15px] leading-6 tracking-[-0.01em]"
+            className="chat-composer-input max-h-[140px] min-h-[46px] w-full resize-none border-none bg-transparent py-1 text-[15px] leading-6 tracking-[-0.01em]"
           />
 
           <button
             type="button"
             onClick={onSend}
             disabled={!draft.trim() || isAgentResponding || isLimitReached}
-            className="composer-send-btn h-9.5 w-9.5 shrink-0 disabled:opacity-45"
+            className="composer-send-btn h-10 w-10 shrink-0 disabled:opacity-45"
             aria-label="Send message"
           >
             {isSending ? (
@@ -201,6 +201,7 @@ export function ChatComposerPremium(props: ChatComposerPremiumProps) {
               <Mic className="h-4 w-4" />
             </button>
           </div>
+          <p className="pr-1 text-[10px] text-zinc-500">↵ send · shift+↵ new line</p>
         </div>
       </div>
     </div>

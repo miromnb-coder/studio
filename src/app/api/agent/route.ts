@@ -127,10 +127,13 @@ function inferMemorySummaryType(input: string): 'finance' | 'general' {
 }
 
 export async function POST(req: Request) {
+  const requestId = req.headers.get('x-kivo-request-id') || crypto.randomUUID();
+  const startedAt = Date.now();
+
   try {
-    console.info('AGENT_ROUTE_PARSE_START');
+    console.info('AGENT_ROUTE_PARSE_START', { requestId });
     const body = await req.json().catch(() => ({}));
-    console.info('AGENT_ROUTE_PARSE_DONE');
+    console.info('AGENT_ROUTE_PARSE_DONE', { requestId });
 
     const { input, history, imageUri, userId: requestedUserId } = body ?? {};
     const actionType = parseActionType(body?.actionType);
@@ -159,7 +162,7 @@ export async function POST(req: Request) {
     });
 
     if (!supabase) {
-      console.error('SUPABASE_UNAVAILABLE');
+      console.error('SUPABASE_UNAVAILABLE', { requestId });
       return safeJsonResponse(SAFE_AGENT_FALLBACK);
     }
 
@@ -169,7 +172,7 @@ export async function POST(req: Request) {
     } = await supabase.auth.getUser();
 
     if (authError) {
-      console.error('AGENT_ROUTE_AUTH_ERROR', authError);
+      console.error('AGENT_ROUTE_AUTH_ERROR', { requestId, error: authError });
       return safeJsonResponse({ error: 'AUTH_REQUIRED', message: 'Please sign in to use chat.' }, 401);
     }
 
@@ -202,6 +205,7 @@ export async function POST(req: Request) {
 
     if (requestedUserId && requestedUserId !== userId) {
       console.warn('AGENT_ROUTE_USER_ID_MISMATCH', {
+        requestId,
         requestedUserId,
         sessionUserId: userId,
       });
@@ -307,6 +311,7 @@ export async function POST(req: Request) {
     };
 
     console.info('AGENT_ROUTE_ORCHESTRATOR_START', {
+      requestId,
       userId,
       hasImage: Boolean(imageUri),
       historyCount: safeHistory.length,
@@ -338,6 +343,7 @@ export async function POST(req: Request) {
     });
 
     console.info('AGENT_ROUTE_ORCHESTRATOR_DONE', {
+      requestId,
       ok: Boolean(agentResult),
       intent: agentResult?.metadata?.intent || 'unknown',
       stepCount: agentResult?.metadata?.steps?.length || 0,
@@ -423,9 +429,10 @@ export async function POST(req: Request) {
       });
     }
 
-    console.info('AGENT_ROUTE_RESPONSE_SYNTHESIS_START');
+    console.info('AGENT_ROUTE_RESPONSE_SYNTHESIS_START', { requestId });
     const reply = agentResult.reply || '';
     console.info('AGENT_ROUTE_RESPONSE_SYNTHESIS_DONE', {
+      requestId,
       hasReply: reply.trim().length > 0,
     });
 
@@ -488,9 +495,11 @@ export async function POST(req: Request) {
       plan,
     };
 
+    console.info('AGENT_ROUTE_SUCCESS', { requestId, durationMs: Date.now() - startedAt, intent: payload.metadata.intent });
+
     return safeJsonResponse(payload);
   } catch (error) {
-    console.error('AGENT_ROUTE_ERROR:', error);
+    console.error('AGENT_ROUTE_ERROR', { requestId, durationMs: Date.now() - startedAt, error });
     return safeJsonResponse(SAFE_AGENT_FALLBACK);
   }
 }

@@ -13,6 +13,7 @@ import { ChatComposerPremium } from './components/ChatComposerPremium';
 import { ConversationSwitcherSheet } from './components/ConversationSwitcherSheet';
 import type { ExecutionStep } from './components/AgentExecutionTimeline';
 import { AppShell } from '../components/premium-ui';
+import { trackEvent } from '@/app/lib/analytics-client';
 
 const PREMIUM_UPLOAD_MESSAGE = 'File upload is a Premium feature. Upgrade to attach files.';
 const THINKING_STEPS = [
@@ -246,6 +247,7 @@ export default function ChatPage() {
   }, [isAgentResponding, activeConversationId]);
 
   const applyTemplate = (template: string, notice: string) => {
+    trackEvent('chat_prompt_template_used', { conversationId: activeConversationId, properties: { template } });
     if (requireAuth()) return;
 
     const nextValue = draft ? `${draft}\n${template}` : template;
@@ -257,19 +259,21 @@ export default function ChatPage() {
   };
 
   const handleSend = async () => {
+    const trimmedDraft = draft.trim();
     if (requireAuth()) return;
 
     if (isLimitReached) {
+      trackEvent('chat_paywall_hit', { conversationId: activeConversationId, properties: { source: 'composer_send' } });
       setShowPaywall(true);
       return;
     }
 
-    if (!draft.trim() || isAgentResponding) return;
+    if (!trimmedDraft || isAgentResponding) return;
 
     setIsSending(true);
 
     try {
-      await sendMessage(draft);
+      await sendMessage(trimmedDraft);
     } finally {
       setIsSending(false);
     }
@@ -382,6 +386,22 @@ export default function ChatPage() {
     ? activeSteps.find((step) => step.status === 'running')?.label || 'Preparing recommendation'
     : derivedExecutionSteps.find((step) => step.status === 'running')?.label || 'Preparing recommendation';
 
+
+  useEffect(() => {
+    if (!draft.trim()) return;
+
+    const handler = () => {
+      if (!draft.trim() || isAgentResponding) return;
+      trackEvent('chat_abandoned_send', {
+        conversationId: activeConversationId,
+        properties: { draftLength: draft.trim().length },
+      });
+    };
+
+    window.addEventListener('beforeunload', handler);
+    return () => window.removeEventListener('beforeunload', handler);
+  }, [draft, isAgentResponding, activeConversationId]);
+
   const jumpToBottom = () => {
     if (!listRef.current) return;
     listRef.current.scrollTo({ top: listRef.current.scrollHeight, behavior: 'smooth' });
@@ -446,7 +466,7 @@ export default function ChatPage() {
       <LayoutGroup>
         <section
           ref={listRef}
-          className="relative z-10 max-h-[calc(100vh-260px)] overflow-y-auto pb-4"
+          className="relative z-10 max-h-[calc(100vh-252px)] overflow-y-auto pb-8 scroll-pb-44"
         >
           <AnimatePresence mode="wait">
             {empty ? (
@@ -480,7 +500,7 @@ export default function ChatPage() {
             ) : null}
           </AnimatePresence>
 
-          <div className="space-y-7 px-1 pb-2">
+          <div className="space-y-8 px-1 pb-4">
             {messages
               .filter((message) => !(message.role === 'assistant' && message.isStreaming && isAgentResponding))
               .map((message) => (
@@ -489,10 +509,10 @@ export default function ChatPage() {
                   initial={{ opacity: 0, y: 10 }}
                   animate={{ opacity: 1, y: 0 }}
                   transition={{ duration: 0.22, ease: 'easeOut' }}
-                  className={`max-w-[98%] ${message.role === 'user' ? 'ml-auto' : ''}`}
+                  className={`max-w-[99%] ${message.role === 'user' ? 'ml-auto' : ''}`}
                 >
                   {message.role === 'user' ? (
-                    <div className="ml-auto max-w-[86%] rounded-[20px] border border-white/[0.06] bg-[linear-gradient(150deg,rgba(255,255,255,0.1),rgba(255,255,255,0.045))] px-4 py-3 text-[15px] leading-7 tracking-[-0.01em] text-zinc-100 shadow-[0_11px_24px_rgba(0,0,0,0.22)]">
+                    <div className="ml-auto max-w-[87%] rounded-[22px] border border-sky-200/15 bg-[linear-gradient(155deg,rgba(87,170,255,0.24),rgba(255,255,255,0.08)_55%,rgba(255,255,255,0.04))] px-4 py-3.5 text-[15px] leading-7 tracking-[-0.01em] text-zinc-100 shadow-[0_16px_32px_rgba(8,16,32,0.36)]">
                       {message.content}
                     </div>
                   ) : (
@@ -578,6 +598,7 @@ export default function ChatPage() {
         onSpeechToText={startSpeechToText}
         onAttachFile={() => {
           if (!isPremium) {
+            trackEvent('chat_paywall_hit', { conversationId: activeConversationId, properties: { source: 'file_upload' } });
             setComposerNotice(PREMIUM_UPLOAD_MESSAGE);
             setShowPaywall(true);
             return;

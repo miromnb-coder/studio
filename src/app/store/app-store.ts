@@ -1,6 +1,7 @@
 'use client';
 
 import { useSyncExternalStore } from 'react';
+import { trackEvent } from '@/app/lib/analytics-client';
 import type { AgentResponse, AgentResponseMetadata } from '@/types/agent-response';
 import type { FinanceActionType } from '@/lib/finance/types';
 
@@ -306,15 +307,23 @@ function emitUsageUpdate(payload: { usage?: { current: number; limit: number; re
   );
 }
 
+type StreamPhase = 'planning' | 'tool_running' | 'synthesizing' | 'retrying' | 'completed';
+
+type ChatStreamEvent =
+  | { type: 'typing'; requestId?: string }
+  | { type: 'status'; phase?: StreamPhase; label?: string; detail?: string; requestId?: string }
+  | { type: 'text-delta'; delta?: string; emittedChars?: number; requestId?: string }
+  | { type: 'final'; content?: string; metadata?: AgentResponseMetadata; metrics?: { ttfbMs?: number; completionMs?: number; charCount?: number }; requestId?: string }
+  | { type: 'done'; requestId?: string };
+
 async function streamAssistantResponse(requestId: string, assistantMessageId: string, conversationId: string) {
   const conversationMessages = state.messageState[conversationId] ?? [];
   const payload = {
-    input: [...conversationMessages].reverse().find((message) => message.role === 'user')?.content || '',
-    history: getConversationWindow(conversationMessages).filter((message) => message.content.trim()),
+    messages: getConversationWindow(conversationMessages).filter((message) => message.content.trim()),
     userId: state.user?.id || 'system_anonymous',
   };
 
-  const response = await fetch('/api/agent', {
+  const response = await fetch('/api/chat', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(payload),
@@ -347,54 +356,177 @@ async function streamAssistantResponse(requestId: string, assistantMessageId: st
     throw new Error(providerSafeErrorMessage(reason?.message || `Request failed (${response.status})`));
   }
 
-  const raw = (await response.json()) as Partial<AgentResponse>;
-  const rawWithUsage = raw as Partial<AgentResponse> & {
-    usage?: { current?: number; limit?: number; remaining?: number; unlimited?: boolean; unlimitedReason?: 'dev' | 'admin' | null };
-    plan?: string;
-  };
-  if (
-    typeof rawWithUsage.usage?.current === 'number' &&
-    typeof rawWithUsage.usage?.limit === 'number' &&
-    typeof rawWithUsage.usage?.remaining === 'number'
-  ) {
-    emitUsageUpdate({
-      usage: {
-        current: rawWithUsage.usage.current,
-        limit: rawWithUsage.usage.limit,
-        remaining: rawWithUsage.usage.remaining,
-        unlimited: Boolean(rawWithUsage.usage.unlimited),
-        unlimitedReason:
-          rawWithUsage.usage.unlimitedReason === 'dev' || rawWithUsage.usage.unlimitedReason === 'admin'
-            ? rawWithUsage.usage.unlimitedReason
-            : null,
-      },
-      plan: rawWithUsage.plan,
-    });
-  }
-  const result = normalizeAgentResponse(raw);
+  const reader = response.body?.getReader();
+  if (!reader) throw new Error('Missing streaming body.');
 
-  if (state.activeRequestId !== requestId) return;
+  const decoder = new TextDecoder();
+  let buffer = '';
+  let streamedText = '';
+  let firstTokenMarked = false;
+  let streamComplete = false;
+  let rafPending = false;
+  let bufferedDelta = '';
+  const streamStartedAt = Date.now();
+
+  const flushDelta = () => {
+    if (!bufferedDelta) return;
+    const delta = bufferedDelta;
+    bufferedDelta = '';
+
+    setState((prev) => {
+      const messages = prev.messageState[conversationId] ?? [];
+      return {
+        ...prev,
+        messageState: {
+          ...prev.messageState,
+          [conversationId]: messages.map((message) =>
+            message.id === assistantMessageId
+              ? {
+                  ...message,
+                  content: (message.content || '') + delta,
+                }
+              : message,
+          ),
+        },
+      };
+    });
+  };
+
+  const queueDeltaFlush = () => {
+    if (rafPending) return;
+    rafPending = true;
+    requestAnimationFrame(() => {
+      flushDelta();
+      rafPending = false;
+    });
+  };
+
+  const handleStreamEvent = (event: ChatStreamEvent) => {
+    if (event.type === 'status') {
+      const label = event.label || 'Processing';
+      trackEvent('chat_phase_transition', {
+        conversationId,
+        messageId: assistantMessageId,
+        requestId,
+        properties: {
+          phase: event.phase || 'tool_running',
+          label,
+        },
+      });
+
+      setState((prev) => ({
+        ...prev,
+        activeSteps: [
+          ...prev.activeSteps,
+          {
+            id: createId(),
+            label,
+            status: event.phase === 'retrying' ? 'failed' : 'running',
+          },
+        ].slice(-8),
+      }));
+      return;
+    }
+
+    if (event.type === 'text-delta' && event.delta) {
+      streamedText += event.delta;
+      bufferedDelta += event.delta;
+      queueDeltaFlush();
+
+      if (!firstTokenMarked) {
+        firstTokenMarked = true;
+        trackEvent('chat_stream_first_token', {
+          conversationId,
+          messageId: assistantMessageId,
+          requestId,
+          properties: { ttfbMs: Date.now() - streamStartedAt },
+        });
+      }
+      return;
+    }
+
+    if (event.type === 'final') {
+      flushDelta();
+      streamComplete = true;
+
+      setState((prev) => {
+        const messages = prev.messageState[conversationId] ?? [];
+        const content = event.content || streamedText || 'I could not generate a response.';
+
+        return {
+          ...prev,
+          activeAgent: DEFAULT_ACTIVE_AGENT,
+          activeSteps: (event.metadata?.steps || prev.activeSteps).map((step) => ({
+            id: createId(),
+            label: 'action' in step ? step.action : step.label,
+            status:
+              ('status' in step ? step.status : 'completed') === 'failed'
+                ? 'failed'
+                : ('status' in step ? step.status : 'completed') === 'running'
+                  ? 'running'
+                  : 'completed',
+          })),
+          messageState: {
+            ...prev.messageState,
+            [conversationId]: messages.map((message) =>
+              message.id === assistantMessageId
+                ? {
+                    ...message,
+                    content,
+                    agentMetadata: event.metadata,
+                  }
+                : message,
+            ),
+          },
+        };
+      });
+
+      trackEvent('chat_stream_completed', {
+        conversationId,
+        messageId: assistantMessageId,
+        requestId,
+        properties: {
+          completionMs: event.metrics?.completionMs ?? Date.now() - streamStartedAt,
+          chars: event.metrics?.charCount ?? streamedText.length,
+        },
+      });
+    }
+  };
+
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+
+    buffer += decoder.decode(value, { stream: true });
+    const lines = buffer.split('\n');
+    buffer = lines.pop() || '';
+
+    for (const line of lines) {
+      if (!line.trim()) continue;
+      const parsed = JSON.parse(line) as ChatStreamEvent;
+      handleStreamEvent(parsed);
+    }
+  }
+
+  if (!streamComplete) {
+    trackEvent('chat_stream_interrupted', {
+      conversationId,
+      messageId: assistantMessageId,
+      requestId,
+      properties: {
+        chars: streamedText.length,
+      },
+    });
+
+    throw new Error('Streaming interrupted before completion.');
+  }
 
   setState((prev) => {
     const messages = prev.messageState[conversationId] ?? [];
-    const nextConversationMessages = messages.map((message) =>
-      message.id === assistantMessageId
-        ? {
-            ...message,
-            content: result.reply || message.content,
-            agentMetadata: result.metadata,
-          }
-        : message,
-    );
+    const nextConversationMessages = messages;
 
     return {
       ...prev,
-      activeAgent: DEFAULT_ACTIVE_AGENT,
-      activeSteps: (result.metadata?.steps || []).map((step) => ({
-        id: createId(),
-        label: step.action,
-        status: step.status === 'failed' ? 'failed' : step.status === 'running' ? 'running' : 'completed',
-      })),
       messageState: {
         ...prev.messageState,
         [conversationId]: nextConversationMessages,
@@ -600,6 +732,16 @@ const actions: AppActions = {
       isStreaming: true,
     };
 
+    trackEvent('chat_message_send', {
+      conversationId,
+      messageId: userMessage.id,
+      requestId,
+      properties: {
+        promptLength: cleanPrompt.length,
+        messageCountBefore: (state.messageState[conversationId] ?? []).length,
+      },
+    });
+
     setState((prev) => {
       const currentMessages = prev.messageState[conversationId] ?? [];
       const nextConversationMessages = [...currentMessages, userMessage, assistantMessage];
@@ -701,6 +843,7 @@ const actions: AppActions = {
       });
 
       addHistory({ title: `${agent} task completed`, description: cleanPrompt, type: 'agent', prompt: cleanPrompt });
+      trackEvent('chat_message_success', { conversationId, messageId: assistantMessage.id, requestId, properties: { attempts } });
       addHistory({
         title: 'Final answer delivered',
         description: `Completed with ${agent}.`,
@@ -711,6 +854,7 @@ const actions: AppActions = {
       emit();
     } catch (error) {
       const rawMessage = error instanceof Error ? error.message : 'Unknown streaming error.';
+      trackEvent('chat_message_failure', { conversationId, messageId: assistantMessage.id, requestId, properties: { error: rawMessage } });
       const message = providerSafeErrorMessage(rawMessage);
 
       setState((prev) => {
@@ -768,6 +912,7 @@ const actions: AppActions = {
 
   retryLastPrompt: async () => {
     const lastPrompt = [...state.messages].reverse().find((msg) => msg.role === 'user')?.content;
+    trackEvent('chat_retry', { conversationId: state.activeConversationId, properties: { hasPrompt: Boolean(lastPrompt) } });
     if (!lastPrompt) return;
     await actions.sendMessage(lastPrompt);
   },
@@ -1047,6 +1192,14 @@ const actions: AppActions = {
   },
 
   openConversation: (conversationId) => {
+    const isReopen = state.activeConversationId !== conversationId;
+    if (!state.messageState[conversationId]) return;
+
+    trackEvent(isReopen ? 'chat_conversation_reopened' : 'chat_conversation_opened', {
+      conversationId,
+      properties: { messageCount: (state.messageState[conversationId] || []).length },
+    });
+
     setState((prev) => {
       if (!prev.conversationList.some((conversation) => conversation.id === conversationId)) {
         return prev;
