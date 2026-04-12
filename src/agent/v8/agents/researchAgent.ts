@@ -46,6 +46,13 @@ function verbosityInstruction(level: 'short' | 'medium' | 'detailed'): string {
   return 'Keep the answer concise but complete.';
 }
 
+function goalStructureInstruction(intent: RouteResultV8['intent']): string {
+  if (intent === 'research' || intent === 'coding') {
+    return 'Use this structure when relevant: what you understood -> key tradeoff(s) -> recommendation -> 1-3 next actions -> clear next step.';
+  }
+  return 'Use this structure when relevant: what you understood -> what matters most -> best recommendation now -> why first -> 1-3 next actions -> clear next step.';
+}
+
 export async function runResearchAgent(input: ResearchAgentInput): Promise<ResearchAgentOutput> {
   const responseLanguage = resolveResponseLanguage(input.context);
   const message = input.context.user.message;
@@ -114,6 +121,10 @@ Avoid generic filler, fake process summaries, and operator-style language.
 Do not mention tools, plans, hidden steps, intent labels, or internal routing unless the user asks.
 For simple questions, give the answer immediately with no preamble.
 ${modeHint}
+Prioritize decisive recommendations over brainstorming.
+Choose one best path first unless the user explicitly requests many options.
+If there are options, compare briefly using impact, effort, risk, and certainty.
+${goalStructureInstruction(input.route.intent)}
 ${verbosityInstruction(replyLength)}
 If gmail_fetch output exists, cite only those fields and never invent values.
 Hard rule: NO DATA = NO CLAIMS (no fabricated invoices, amounts, due dates, obligations, or merchants).
@@ -146,10 +157,6 @@ If the request is ambiguous, ask one short clarifying question. Otherwise give a
   const memoryUsed = relevantMemories.length > 0;
   const toolResultUsed = toolResultKeys.length > 0;
   const intelligenceUsed = Boolean(topRecommendation);
-
-  console.info('CONTEXT_MEMORY_USED', { memoryUsed, memoryCount: relevantMemories.length });
-  console.info('TOOL_RESULT_USED', { toolResultUsed, toolResultKeys });
-  console.info('INTELLIGENCE_USED', { intelligenceUsed, recommendationCount: input.context.intelligence.recommendations.length });
 
   const keyPoints = [
     `Intent: ${input.route.intent}`,

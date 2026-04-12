@@ -109,7 +109,6 @@ export async function runFinanceAgent(input: FinanceAgentInput): Promise<Finance
 
   const userProfile = input.context.intelligence.userProfile;
   const decision = input.context.decisionContext;
-  const relevantMemories = input.context.memory.relevantMemories.map((item) => item.content).filter(Boolean);
   const acceptedIds = new Set(decision.successfulRecommendationIds);
   const ignoredIds = new Set(decision.deprioritizedRecommendationIds);
   const repeatedFailureMode = decision.deprioritizedRecommendationIds.length >= 3;
@@ -213,11 +212,16 @@ export async function runFinanceAgent(input: FinanceAgentInput): Promise<Finance
   const stressedPenalty = input.route.goal.emotionalTone === 'overwhelmed' ? -0.08 : 0;
 
   const rankedActions = actionCandidates
-    .map((candidate) => ({
-      ...candidate,
-      ease: Math.max(0.2, Math.min(1, candidate.ease + personalizedEaseShift + stressedPenalty)),
-      rankScore: scoreAction(candidate),
-    }))
+    .map((candidate) => {
+      const adjusted = {
+        ...candidate,
+        ease: Math.max(0.2, Math.min(1, candidate.ease + personalizedEaseShift + stressedPenalty)),
+      };
+      return {
+        ...adjusted,
+        rankScore: scoreAction(adjusted),
+      };
+    })
     .sort((a, b) => b.rankScore - a.rankScore)
     .slice(0, 3);
 
@@ -258,46 +262,34 @@ export async function runFinanceAgent(input: FinanceAgentInput): Promise<Finance
     assumptions: assumptions.length,
   });
 
-  const moduleHints = [
-    highestImpact?.category === 'decision' ? 'comparison' : '',
-    highestImpact?.category === 'risk' ? 'alerts' : '',
-    totalMonthly > 0 || activeSubscriptions > 0 ? 'subscription_audit' : '',
-    toNum(savingsPlan.recommendedMonthlySavings, 0) > 0 ? 'savings_plan' : '',
-  ].filter(Boolean);
-
-  const calmLead = input.route.goal.emotionalTone === 'overwhelmed'
-    ? 'You are not failing; we will reduce load and move one step at a time.'
-    : input.route.goal.emotionalTone === 'stressed'
-      ? 'Let’s remove pressure first, then optimize.'
-      : '';
-
   const summary = [
     totalMonthly > 0 ? `Recurring baseline is ${formatMoney(totalMonthly)}/month.` : 'Recurring baseline is not fully available yet.',
     activeSubscriptions > 0 ? `${activeSubscriptions} active subscriptions detected.` : 'Subscription count is not fully verified.',
     monthlyNet !== 0 ? `Estimated monthly net: ${formatMoney(monthlyNet)}.` : '',
   ].filter(Boolean).join(' ');
 
+  const understandingLine = `What I understood: ${input.route.goal.realObjective || input.route.goal.inferredGoal}`;
+  const whyFirst = highestImpact
+    ? `Why this first: It scores highest on impact × urgency × ease for your current situation.`
+    : 'Why this first: It is the best high-certainty move with current data.';
+
   const nextStep = mode === 'operator'
-    ? `Reply "execute: ${highestImpact.title}" and I will generate a checklist or ready-to-send message.`
-    : `Reply "do action 1" and I will turn the top move into a concrete 7-day plan.`;
+    ? `Reply "execute action 1" and I will generate the exact checklist/message to complete it.`
+    : `Reply "build plan" and I will turn action 1 into a concrete 7-day execution plan.`;
 
   const answerDraft = [
-    calmLead,
-    `Summary: ${summary}`,
-    `Operator Read: Goal = ${input.route.goal.inferredGoal}`,
-    `Top Priority: ${highestImpact.title} — ${highestImpact.rationale}`,
-    `Fastest Win: ${fastestWin.title}.`,
+    understandingLine,
+    `What matters most now: ${summary}`,
+    `Best recommendation now: ${highestImpact.title} — ${highestImpact.rationale}`,
+    whyFirst,
+    `Fastest win: ${fastestWin.title}.`,
     biggestRisk ? `Biggest Risk: ${biggestRisk.title}.` : '',
-    'Ranked Actions:',
+    'Next actions:',
     ...rankedActions.map((item, index) => `- ${index + 1}. ${item.title} (${item.rationale})`),
-    noResultsRecovery.length ? `Recovery Plan: ${noResultsRecovery.join(' ')}` : '',
-    cancelDraft.draft ? `Execution Asset: Cancellation draft is ready for ${String(cancelDraft.service || 'the selected service')}.` : '',
+    noResultsRecovery.length ? `If signals are sparse: ${noResultsRecovery.join(' ')}` : '',
+    cancelDraft.draft ? `Ready asset: A cancellation draft is available for ${String(cancelDraft.service || 'the selected service')}.` : '',
     `Confidence: ${confidence}.`,
-    `Data Quality: ${groundedSignals >= 4 ? 'Strong' : groundedSignals >= 2 ? 'Moderate' : 'Limited'}.`,
     assumptions.length ? `Assumptions: ${assumptions.join(' ')}` : 'Assumptions: Minimal assumptions; most guidance is grounded in available signals.',
-    `Suggested Modules: ${moduleHints.join(', ') || 'subscription_audit, savings_plan'}.`,
-    relevantMemories[0] ? `Personalization Signal: ${relevantMemories[0]}` : '',
-    decision.activeGoal ? `Active Goal in Memory: ${decision.activeGoal}` : '',
     `Next Step: ${nextStep}`,
   ].filter(Boolean).join('\n');
 
