@@ -1,7 +1,7 @@
 'use client';
 
 import type { RefObject } from 'react';
-import { Mic, Plus, Send, Speech, Wrench } from 'lucide-react';
+import { ArrowUp, Mic, Plus, Sparkles } from 'lucide-react';
 import { ComposerButton } from './ComposerButton';
 
 type ComposerProps = {
@@ -11,8 +11,7 @@ type ComposerProps = {
   onChange: (value: string) => void;
   onSend: () => void;
   onOpenCreate: () => void;
-  onOpenConnectors: () => void;
-  onVoiceUtility: () => void;
+  onOpenTools: () => void;
   onToggleMic: () => void;
   inputRef: RefObject<HTMLInputElement | null>;
 };
@@ -24,8 +23,7 @@ export function Composer({
   onChange,
   onSend,
   onOpenCreate,
-  onOpenConnectors,
-  onVoiceUtility,
+  onOpenTools,
   onToggleMic,
   inputRef,
 }: ComposerProps) {
@@ -33,7 +31,7 @@ export function Composer({
 
   return (
     <div className="pointer-events-none absolute inset-x-4 bottom-[calc(14px+env(safe-area-inset-bottom))] z-10 sm:inset-x-6">
-      <div className="pointer-events-auto rounded-[26px] border border-[#d9dde4] bg-[#f4f5f8] px-4 pb-3.5 pt-3.5 shadow-[0_10px_22px_rgba(70,76,90,0.06)]">
+      <div className="pointer-events-auto rounded-[26px] border border-[#d9dde4] bg-[#f4f5f8] px-4 pb-3 pt-3 shadow-[0_10px_22px_rgba(70,76,90,0.06)]">
         <label htmlFor="chat-composer" className="sr-only">
           Assign a task or ask anything
         </label>
@@ -49,32 +47,28 @@ export function Composer({
               onSend();
             }
           }}
-          placeholder="Assign a task or ask anything"
-          className="mb-3.5 w-full bg-transparent px-1 text-[16px] font-normal text-[#717988] placeholder:text-[#a1a7b4] outline-none"
+          placeholder="Message Kivo..."
+          className="mb-3 w-full bg-transparent px-1 text-[16px] font-normal text-[#717988] placeholder:text-[#a1a7b4] outline-none"
         />
 
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2">
+        <div className="flex items-center justify-between gap-3">
+          <div className="flex items-center gap-2.5">
             <ComposerButton label="Add actions" onClick={onOpenCreate}>
-              <Plus className="h-[17px] w-[17px]" strokeWidth={1.9} />
+              <Plus className="h-[18px] w-[18px]" strokeWidth={1.75} />
             </ComposerButton>
 
-            <ComposerButton label="Open connectors" onClick={onOpenConnectors}>
-              <Wrench className="h-[17px] w-[17px]" strokeWidth={1.9} />
+            <ComposerButton label="Open tools" onClick={onOpenTools}>
+              <Sparkles className="h-[18px] w-[18px]" strokeWidth={1.75} />
             </ComposerButton>
           </div>
 
-          <div className="flex items-center gap-2">
-            <ComposerButton label="Voice utility" onClick={onVoiceUtility}>
-              <Speech className="h-[17px] w-[17px]" strokeWidth={1.9} />
-            </ComposerButton>
-
+          <div className="flex items-center gap-2.5">
             <ComposerButton label="Microphone" onClick={onToggleMic} active={listening}>
-              <Mic className="h-[17px] w-[17px]" strokeWidth={1.9} />
+              <Mic className="h-[18px] w-[18px]" strokeWidth={1.75} />
             </ComposerButton>
 
             <ComposerButton label="Send" onClick={onSend} disabled={!hasText || isSending}>
-              <Send className="h-[17px] w-[17px]" strokeWidth={1.9} />
+              <ArrowUp className="h-[18px] w-[18px]" strokeWidth={1.75} />
             </ComposerButton>
           </div>
         </div>
