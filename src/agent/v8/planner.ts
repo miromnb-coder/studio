@@ -124,13 +124,16 @@ function uniquePlanModes(modes: PlanModeV8[]): PlanModeV8[] {
 
 function localizedClarificationQuestion(route: RouteResultV8): string {
   if (route.inputLanguage === 'fi') {
+    if (route.goal.emotionalTone === 'overwhelmed') return 'Otetaan yksi askel kerrallaan: haluatko ensin vähentää yhtä kulua vai tehdä nopean säästötoimen?';
     if (route.subtype === 'compare_options') return 'Mitä kahta vaihtoehtoa vertaillaan, ja mitkä ovat niiden kuukausi- tai vuosihinnat?';
     return 'Mikä yksi numero optimoidaan ensin: kuukausibudjetti, säästötavoite vai toistuva kulu?';
   }
   if (route.inputLanguage === 'sv') {
+    if (route.goal.emotionalTone === 'overwhelmed') return 'Vi tar ett steg i taget: vill du först minska en kostnad eller göra en snabb sparåtgärd?';
     if (route.subtype === 'compare_options') return 'Vilka två alternativ ska jag jämföra, och vad kostar de per månad eller år?';
     return 'Vilket tal ska vi optimera först: månadsbudget, sparmål eller återkommande kostnad?';
   }
+  if (route.goal.emotionalTone === 'overwhelmed') return 'One step at a time: should we cut one expense first or set one quick savings move?';
   if (route.subtype === 'compare_options') return 'Which two options should I compare, and what are their monthly or annual prices?';
   return 'What is one concrete number I should optimize around: monthly budget, target savings, or a recurring cost?';
 }
@@ -176,13 +179,16 @@ export function createPlanV8(route: RouteResultV8, message: string): ExecutionPl
     route.responseMode === 'operator',
     route.responseMode === 'coach',
     route.ambiguity > 0.55,
+    route.goal.complexityLevel === 'high',
+    route.goal.requestKind === 'decision',
+    route.goal.requestKind === 'action',
   ].filter(Boolean).length;
 
   const depth: ExecutionPlanV8['depth'] = route.goal.speedVsDepth === 'speed'
     ? 'light'
-    : route.goal.speedVsDepth === 'depth' || complexitySignals >= 3
+    : route.goal.speedVsDepth === 'depth' || complexitySignals >= 4
       ? 'deep'
-      : complexitySignals >= 1
+      : complexitySignals >= 2
         ? 'standard'
         : 'light';
 
@@ -195,7 +201,9 @@ export function createPlanV8(route: RouteResultV8, message: string): ExecutionPl
     && !savingsInputs.monthlyExpenses
     && !savingsInputs.desiredMonthlySavings;
 
-  const needsClarification = route.shouldClarify || (route.intent === 'finance' && (compareNeedsClarification || savingsNeedsClarification));
+  const needsClarification = route.shouldClarify
+    || route.goal.clarificationNeeded
+    || (route.intent === 'finance' && (compareNeedsClarification || savingsNeedsClarification));
 
   const clarificationQuestion = needsClarification
     ? localizedClarificationQuestion(route)

@@ -73,6 +73,90 @@ function applyLanguageGuard(reply: string, lang: string): string {
   return reply;
 }
 
+function buildSectionLabels(lang: string) {
+  if (lang === 'fi') {
+    return {
+      now: 'Mikä on tärkeintä nyt',
+      recommendation: 'Paras suositus',
+      why: 'Miksi tämä toimii',
+      nextMove: 'Selkeä seuraava siirto',
+      deeper: 'Lisätieto (valinnainen)',
+      confidence: 'Varmuustaso',
+      assumptions: 'Oletukset',
+    };
+  }
+  if (lang === 'sv') {
+    return {
+      now: 'Vad som betyder mest nu',
+      recommendation: 'Bästa rekommendationen',
+      why: 'Varför detta fungerar',
+      nextMove: 'Tydligt nästa steg',
+      deeper: 'Fördjupning (valfritt)',
+      confidence: 'Säkerhet',
+      assumptions: 'Antaganden',
+    };
+  }
+  return {
+    now: 'What matters most now',
+    recommendation: 'Best recommendation',
+    why: 'Why this matters',
+    nextMove: 'Clear next move',
+    deeper: 'Optional deeper detail',
+    confidence: 'Confidence',
+    assumptions: 'Assumptions',
+  };
+}
+
+function firstSentence(text: string, fallback: string): string {
+  const part = text.split(/(?<=[.!?])\s+/).map((item) => item.trim()).find(Boolean);
+  return part || fallback;
+}
+
+function buildPremiumRewrite(args: { reply: string; lang: string; question?: string; concise?: boolean }): string {
+  const labels = buildSectionLabels(args.lang);
+  const cleaned = args.reply.replace(/\n{3,}/g, '\n\n').trim();
+  const lines = cleaned.split('\n').map((line) => line.trim()).filter(Boolean);
+  const bulletCandidates = lines.filter((line) => /^-\s*/.test(line)).slice(0, 2);
+  const bestAction = bulletCandidates[0]?.replace(/^-+\s*/, '') || firstSentence(cleaned, args.question || 'Start with one concrete action.');
+  const why = firstSentence(
+    lines.find((line) => /because|since|risk|impact|help|koska|vaikut|risk|eftersom/i.test(line)) || '',
+    args.lang === 'fi'
+      ? 'Tämä vähentää epävarmuutta ja nostaa onnistumisen todennäköisyyttä heti.'
+      : args.lang === 'sv'
+        ? 'Detta minskar osäkerhet och höjer sannolikheten för snabb effekt.'
+        : 'This reduces uncertainty and increases the chance of immediate progress.',
+  );
+
+  const nextMoveText = args.question
+    ? args.lang === 'fi'
+      ? `Vastaa tähän: ${args.question}`
+      : args.lang === 'sv'
+        ? `Svara på detta: ${args.question}`
+        : `Reply with this: ${args.question}`
+    : args.lang === 'fi'
+      ? 'Lähetä yksi numero tai kulu, niin priorisoin toimet tarkasti.'
+      : args.lang === 'sv'
+        ? 'Skicka en siffra eller kostnad så prioriterar jag nästa steg exakt.'
+        : 'Send one concrete number/cost and I will prioritize the exact next actions.';
+
+  const confidence = args.lang === 'fi' ? 'Keskitaso' : args.lang === 'sv' ? 'Medel' : 'Medium';
+  const assumptions = args.lang === 'fi'
+    ? 'Osa tiedoista on vielä epätäydellinen, joten suositus painottaa nopeaa vaikutusta.'
+    : args.lang === 'sv'
+      ? 'Viss data saknas fortfarande, så rekommendationen prioriterar snabb effekt.'
+      : 'Some data is still partial, so this recommendation prioritizes immediate impact.';
+
+  return [
+    `${labels.now}: ${firstSentence(cleaned, bestAction)}`,
+    `${labels.recommendation}: ${bestAction}`,
+    `${labels.why}: ${why}`,
+    `${labels.nextMove}: ${nextMoveText}`,
+    args.concise ? '' : `${labels.deeper}: ${bulletCandidates[1]?.replace(/^-+\s*/, '') || ''}`,
+    `${labels.confidence}: ${confidence}.`,
+    `${labels.assumptions}: ${assumptions}`,
+  ].filter(Boolean).join('\n');
+}
+
 function composeFallback(question: string | undefined, lang: string): string {
   if (lang === 'fi') {
     return [
@@ -120,6 +204,10 @@ function composeFallback(question: string | undefined, lang: string): string {
 export function verifyExecutionV8(input: AgentCriticInputV8): CriticResultV8 {
   const notes: string[] = [];
   const language = input.responseLanguage || 'en';
+  const goal = input.goal || {
+    emotionalTone: 'neutral',
+    speedVsDepth: 'balanced',
+  };
   let refinedReply = String(input.reply || '').trim();
 
   for (const pattern of GENERIC_PATTERNS) {
@@ -141,6 +229,8 @@ export function verifyExecutionV8(input: AgentCriticInputV8): CriticResultV8 {
   const conciseEnough = refinedReply.split(/\s+/).length <= 360;
   const noFiller = !/here are some ideas|it depends|you could consider/i.test(refinedReply);
   const languageConsistent = !hasEnglishLeakForNonEnglish(refinedReply, language);
+  const hasPriorityFirst = /what matters most now|best recommendation|clear next move|mikä on tärkeintä nyt|paras suositus|selkeä seuraava siirto|vad som betyder mest nu|bästa rekommendationen|tydligt nästa steg/i.test(refinedReply);
+  const lowLoadWhenStressed = goal.emotionalTone !== 'overwhelmed' || refinedReply.split(/\n/).length <= 10;
 
   const score = clamp(
     scoreDimension(hasActionability, 20)
@@ -149,6 +239,8 @@ export function verifyExecutionV8(input: AgentCriticInputV8): CriticResultV8 {
     + scoreDimension(hasClarity, 12)
     + scoreDimension(hasConcreteNext, 14)
     + scoreDimension(languageConsistent, 16)
+    + scoreDimension(hasPriorityFirst, 6)
+    + scoreDimension(lowLoadWhenStressed, 4)
     + scoreDimension(hasToolGrounding || input.intent !== 'finance', 6)
     + scoreDimension(conciseEnough, 4)
     + scoreDimension(noFiller, 2),
@@ -158,7 +250,22 @@ export function verifyExecutionV8(input: AgentCriticInputV8): CriticResultV8 {
 
   if (needsRewrite || !refinedReply.trim()) {
     notes.push(`Quality threshold miss (${score}/100). Applied localized fallback rewrite.`);
-    refinedReply = composeFallback(input.plan.clarificationQuestion, language);
+    refinedReply = buildPremiumRewrite({
+      reply: refinedReply || composeFallback(input.plan.clarificationQuestion, language),
+      lang: language,
+      question: input.plan.clarificationQuestion,
+      concise: goal.emotionalTone === 'overwhelmed' || goal.speedVsDepth === 'speed',
+    });
+  }
+
+  if (!hasPriorityFirst) {
+    refinedReply = buildPremiumRewrite({
+      reply: refinedReply,
+      lang: language,
+      question: input.plan.clarificationQuestion,
+      concise: goal.emotionalTone === 'overwhelmed',
+    });
+    notes.push('Upgraded answer to priority-first premium structure.');
   }
 
   return {

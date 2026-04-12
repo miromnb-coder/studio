@@ -42,12 +42,15 @@ export type GoalUnderstandingV8 = {
   hiddenRequest: string;
   inferredGoal: string;
   realObjective?: string;
+  interpretationConfidence: 'low' | 'medium' | 'high';
   urgency: 'low' | 'medium' | 'high';
+  complexityLevel: 'low' | 'medium' | 'high';
   blockerLevel: 'none' | 'some' | 'high';
   riskLevel: 'low' | 'medium' | 'high';
   effortTolerance: 'low' | 'medium' | 'high';
   speedVsDepth: 'speed' | 'balanced' | 'depth';
   decisionType: 'informational' | 'choice' | 'execution' | 'emotional';
+  requestKind: 'advice' | 'action' | 'explanation' | 'decision' | 'clarification';
   userConfidenceLevel: 'low' | 'medium' | 'high';
   horizon: 'immediate' | 'short_term' | 'long_term';
   preferredStyle: 'concise' | 'structured' | 'detailed' | 'supportive';
@@ -55,6 +58,9 @@ export type GoalUnderstandingV8 = {
   hiddenOpportunities: string[];
   priorityLens?: Array<'impact' | 'urgency' | 'effort' | 'certainty' | 'risk_reduction' | 'speed'>;
   missingCriticalData?: string[];
+  clarificationNeeded: boolean;
+  clarificationReason?: string;
+  wantsImmediateNextStep: boolean;
   emotionalTone: 'neutral' | 'stressed' | 'overwhelmed' | 'motivated';
   inputLanguage: string;
   responseLanguage: string;

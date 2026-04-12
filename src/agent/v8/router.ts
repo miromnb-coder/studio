@@ -13,6 +13,8 @@ type IntentSignal = {
   reason: string;
 };
 
+type LanguageCode = 'en' | 'fi' | 'sv' | 'other';
+
 const DOMAIN_PATTERNS: Array<{ intent: AgentIntentV8; weight: number; reason: string; patterns: RegExp[] }> = [
   {
     intent: 'finance',
@@ -87,24 +89,35 @@ const DOMAIN_PATTERNS: Array<{ intent: AgentIntentV8; weight: number; reason: st
   },
 ];
 
-function detectLanguage(text: string): string {
+const LANGUAGE_KEYWORDS: Record<LanguageCode, string[]> = {
+  en: ['how', 'what', 'help', 'need', 'plan', 'money', 'costs', 'monthly', 'reduce'],
+  fi: ['voinko', 'säästää', 'kuussa', 'mitä', 'auta', 'tarvitsen', 'talous', 'kulu', 'lasku'],
+  sv: ['hur', 'sparar', 'månad', 'hjälp', 'behöver', 'kostnad', 'räkning', 'budget'],
+  other: [],
+};
+
+function scoreLanguage(text: string, lang: LanguageCode): number {
   const lower = text.toLowerCase();
-  const swedishSignals = [/(\bhur\b|\bjag\b|\bkan\b|\bspara\b|\bvarje\b|\bmånad\b|\binte\b|\bvad\b|\bdet\b|\boch\b|\bför\b)/, /[åäö]/];
-  const finnishSignals = [/(\bvoinko\b|\bsäästää\b|\bkuussa\b|\bhelposti\b|\ben\b|\bmitä\b|\btehdä\b|\bkuukausi\b|\braha\b|\btalous\b)/, /[äö]/];
-  const englishSignals = [/(\bhow\b|\bwhat\b|\bi\b|\bmonthly\b|\bexpenses\b|\bhelp\b|\bstart\b|\bneed\b)/];
+  if (lang === 'fi' && /[äö]/.test(lower)) return 2 + LANGUAGE_KEYWORDS.fi.reduce((a, k) => a + Number(lower.includes(k)), 0);
+  if (lang === 'sv' && /[åäö]/.test(lower)) return 2 + LANGUAGE_KEYWORDS.sv.reduce((a, k) => a + Number(lower.includes(k)), 0);
+  return LANGUAGE_KEYWORDS[lang].reduce((a, k) => a + Number(lower.includes(k)), 0);
+}
 
-  const fiScore = finnishSignals.reduce((acc, rx) => acc + (rx.test(lower) ? 1 : 0), 0);
-  const svScore = swedishSignals.reduce((acc, rx) => acc + (rx.test(lower) ? 1 : 0), 0);
-  const enScore = englishSignals.reduce((acc, rx) => acc + (rx.test(lower) ? 1 : 0), 0);
-
-  if (fiScore >= svScore && fiScore >= enScore && fiScore > 0) return 'fi';
-  if (svScore > fiScore && svScore >= enScore && svScore > 0) return 'sv';
-  return 'en';
+function detectLanguage(text: string): LanguageCode {
+  const fi = scoreLanguage(text, 'fi');
+  const sv = scoreLanguage(text, 'sv');
+  const en = scoreLanguage(text, 'en');
+  const top = Math.max(fi, sv, en);
+  if (top <= 0) return 'en';
+  if (fi === top && fi >= sv + 1) return 'fi';
+  if (sv === top && sv >= fi + 1) return 'sv';
+  if (en === top) return 'en';
+  return fi >= sv ? 'fi' : 'sv';
 }
 
 function detectFinanceSubtype(message: string, historyContext: string): FinanceIntentSubtypeV8 {
   const corpus = `${historyContext} ${message}`;
-  if (/\b(compare|vs\.?|versus|which is better|annual vs monthly|monthly vs yearly)\b/i.test(corpus)) return 'compare_options';
+  if (/\b(compare|vs\.?|versus|which is better|annual vs monthly|monthly vs yearly|kumpi|vilken)\b/i.test(corpus)) return 'compare_options';
   if (/\b(subscription|trial|recurring|cancel|membership|tilaus|peruuta|abonnemang)\b/i.test(corpus)) return 'subscriptions';
   if (/\b(bill|invoice|due date|late fee|utility|lasku|räkning)\b/i.test(corpus)) return 'bills';
   if (/\b(cash ?flow|runway|paycheck to paycheck|monthly leftover)\b/i.test(corpus)) return 'cashflow';
@@ -139,9 +152,17 @@ function toMode(intent: AgentIntentV8): RouteResultV8['mode'] {
   return 'general';
 }
 
+function inferRequestKind(message: string): GoalUnderstandingV8['requestKind'] {
+  if (/\b(what is|why|explain|understand|selitä|förklara)\b/i.test(message)) return 'explanation';
+  if (/\b(compare|which|kumpi|vilken|decide|valitse)\b/i.test(message)) return 'decision';
+  if (/\b(do this|execute|draft|build|create|toteuta|gör)\b/i.test(message)) return 'action';
+  if (/\b(help|advice|recommend|should i|mitä kannattaisi|råd)\b/i.test(message)) return 'advice';
+  return 'clarification';
+}
+
 function detectResponseMode(message: string, intent: AgentIntentV8): ResponseModeV8 {
-  if (/\b(overwhelmed|stressed|panic|anxious|lost|don't know what to do)\b/i.test(message)) return 'coach';
-  if (/\b(execute|do it|draft|checklist|exact steps)\b/i.test(message)) return 'operator';
+  if (/\b(overwhelmed|stressed|panic|anxious|lost|don't know what to do|en tiedä|överväldigad)\b/i.test(message)) return 'coach';
+  if (/\b(execute|do it|draft|checklist|exact steps|toteuta|toimi nyt)\b/i.test(message)) return 'operator';
   if (intent === 'coding' || /\b(research|investigate|tradeoff)\b/i.test(message)) return 'researcher';
   return intent === 'finance' ? 'analyst' : 'researcher';
 }
@@ -149,42 +170,71 @@ function detectResponseMode(message: string, intent: AgentIntentV8): ResponseMod
 function buildGoalUnderstanding(message: string, subtype: FinanceIntentSubtypeV8, historyContext = '', inputLanguage = 'en'): GoalUnderstandingV8 {
   const corpus = `${historyContext} ${message}`.trim();
   const explicitRequest = message.trim();
-  const emotionalTone = /\b(overwhelmed|too much|can't handle|lost|don't know what to do|en tiedä mitä tehdä)\b/i.test(message)
+
+  const emotionalTone = /\b(overwhelmed|too much|can't handle|lost|don't know what to do|en tiedä mitä tehdä|överväldigad)\b/i.test(corpus)
     ? 'overwhelmed'
-    : /\b(stressed|anxious|worried|behind|stressad|ahdist)\b/i.test(message)
+    : /\b(stressed|anxious|worried|behind|stressad|ahdist)\b/i.test(corpus)
       ? 'stressed'
-      : /\b(let's do this|ready|motivated)\b/i.test(message)
+      : /\b(ready|motivated|let's do this|mennään|kör)\b/i.test(corpus)
         ? 'motivated'
         : 'neutral';
 
-  const urgency = /\b(urgent|asap|today|immediately|overdue|late fee|nyt heti)\b/i.test(message) ? 'high' : /\b(this week|soon|quick|snabbt)\b/i.test(message) ? 'medium' : 'low';
-  const effortTolerance = /\b(simple|quick|fast|easy|one step|helposti|enkelt|snabbt)\b/i.test(message) ? 'low' : /\b(deep|full audit|comprehensive|thorough)\b/i.test(message) ? 'high' : 'medium';
-  const speedVsDepth: GoalUnderstandingV8['speedVsDepth'] = effortTolerance === 'low' || urgency === 'high' ? 'speed' : effortTolerance === 'high' ? 'depth' : 'balanced';
+  const urgency = /\b(urgent|asap|today|immediately|overdue|late fee|nyt heti|idag)\b/i.test(corpus)
+    ? 'high'
+    : /\b(this week|soon|quick|snabbt)\b/i.test(corpus)
+      ? 'medium'
+      : 'low';
+
+  const effortTolerance = /\b(simple|quick|fast|easy|one step|helposti|enkelt|snabbt)\b/i.test(corpus)
+    ? 'low'
+    : /\b(deep|full audit|comprehensive|thorough|detaljerat|perusteellinen)\b/i.test(corpus)
+      ? 'high'
+      : 'medium';
+
+  const speedVsDepth: GoalUnderstandingV8['speedVsDepth'] =
+    effortTolerance === 'low' || urgency === 'high'
+      ? 'speed'
+      : effortTolerance === 'high'
+        ? 'depth'
+        : 'balanced';
+
+  const complexitySignals = [
+    message.split(/\s+/).length > 25,
+    /\b(compare|tradeoff|strategy|roadmap|constraints?|pros and cons)\b/i.test(corpus),
+    subtype === 'compare_options',
+    subtype === 'cashflow',
+    /\b(multiple|several|many|many options)\b/i.test(corpus),
+  ].filter(Boolean).length;
+
+  const complexityLevel: GoalUnderstandingV8['complexityLevel'] =
+    complexitySignals >= 3 ? 'high' : complexitySignals >= 1 ? 'medium' : 'low';
 
   const inferredGoal =
     subtype === 'subscriptions'
-      ? 'Reduce recurring spend without damaging essentials.'
+      ? 'Reduce recurring spend without harming essentials.'
       : subtype === 'compare_options'
-        ? 'Choose the strongest option with transparent tradeoffs.'
+        ? 'Select the strongest option with transparent tradeoffs.'
         : subtype === 'savings_audit'
           ? 'Increase monthly free cash quickly and sustainably.'
           : subtype === 'budgeting'
-            ? 'Build a realistic plan that the user can maintain.'
+            ? 'Build a realistic budget the user can maintain.'
             : subtype === 'cashflow'
-              ? 'Reduce near-term cash pressure and avoid late fees.'
-              : explicitRequest || 'Clarify objective and deliver best next action.';
+              ? 'Reduce short-term cash pressure and avoid penalties.'
+              : explicitRequest || 'Clarify objective and deliver the best next move.';
 
   const hiddenRequest = emotionalTone === 'overwhelmed'
-    ? 'Reduce cognitive load and provide one clear first step.'
+    ? 'Reduce cognitive load and give one safe first step.'
     : speedVsDepth === 'speed'
-      ? 'Get a high-impact answer fast with minimal effort.'
-      : 'Improve decision quality with practical ranking.';
+      ? 'Give the highest-probability action now.'
+      : 'Improve decision quality with clear prioritization.';
+
+  const requestKind = inferRequestKind(corpus);
 
   const decisionType: GoalUnderstandingV8['decisionType'] = emotionalTone === 'overwhelmed'
     ? 'emotional'
-    : /\b(compare|which|choose|vs|versus|kumpi|vilken)\b/i.test(corpus)
+    : requestKind === 'decision'
       ? 'choice'
-      : /\b(cancel|reduce|save|optimize|start|do next|mitä teen)\b/i.test(corpus)
+      : requestKind === 'action'
         ? 'execution'
         : 'informational';
 
@@ -194,30 +244,52 @@ function buildGoalUnderstanding(message: string, subtype: FinanceIntentSubtypeV8
       ? 'medium'
       : 'high';
 
+  const wantsImmediateNextStep = urgency === 'high' || speedVsDepth === 'speed' || emotionalTone === 'overwhelmed';
+
   const missingCriticalData = [
-    !/\$?\d[\d,.]*/.test(corpus) ? 'No concrete numeric anchor provided yet.' : '',
-    subtype === 'compare_options' && !/\b(month|year|annual|monthly|price|cost)\b/i.test(corpus)
-      ? 'Comparison request is missing price or value constraints.'
+    !/[$€£]?\d[\d,.]*/.test(corpus) ? 'No concrete numeric anchor provided yet.' : '',
+    subtype === 'compare_options' && !/\b(month|year|annual|monthly|price|cost|hinta|pris)\b/i.test(corpus)
+      ? 'Comparison request is missing price/value constraints.'
       : '',
     (subtype === 'budgeting' || subtype === 'savings_audit') && !/\b(income|expenses?|spend|budget|tulo|kulu|utgift|inkomst)\b/i.test(corpus)
       ? 'Budget request is missing income/expense baseline.'
       : '',
   ].filter(Boolean);
 
+  const clarificationNeeded =
+    explicitRequest.length < 8
+    || /^(help|i need help|apua|hjälp)$/i.test(explicitRequest)
+    || (requestKind === 'decision' && missingCriticalData.length > 0)
+    || (complexityLevel === 'high' && userConfidenceLevel === 'low');
+
+  const interpretationConfidence: GoalUnderstandingV8['interpretationConfidence'] =
+    clarificationNeeded || missingCriticalData.length >= 2
+      ? 'low'
+      : missingCriticalData.length === 1 || complexityLevel === 'high'
+        ? 'medium'
+        : 'high';
+
+  const clarificationReason = clarificationNeeded
+    ? missingCriticalData[0] || 'Intent is broad; a single target constraint is needed.'
+    : undefined;
+
   return {
     explicitRequest,
     hiddenRequest,
     inferredGoal,
     realObjective: hiddenRequest,
+    interpretationConfidence,
     urgency,
+    complexityLevel,
     blockerLevel: userConfidenceLevel === 'low' ? 'high' : 'some',
-    riskLevel: /\b(overdue|late fee|cannot pay|can't pay|debt spiral|overdrawn)\b/i.test(message) ? 'high' : urgency === 'high' ? 'medium' : 'low',
+    riskLevel: /\b(overdue|late fee|cannot pay|can't pay|debt spiral|overdrawn)\b/i.test(corpus) ? 'high' : urgency === 'high' ? 'medium' : 'low',
     effortTolerance,
     speedVsDepth,
     decisionType,
+    requestKind,
     userConfidenceLevel,
-    horizon: /\b(30-day|month|quarter|long term|kuukausi|månad)\b/i.test(message) ? 'long_term' : /\b(week|7-day|this week)\b/i.test(message) ? 'short_term' : 'immediate',
-    preferredStyle: emotionalTone === 'overwhelmed' ? 'supportive' : speedVsDepth === 'speed' ? 'concise' : 'structured',
+    horizon: /\b(30-day|month|quarter|long term|kuukausi|månad)\b/i.test(corpus) ? 'long_term' : /\b(week|7-day|this week)\b/i.test(corpus) ? 'short_term' : 'immediate',
+    preferredStyle: emotionalTone === 'overwhelmed' ? 'supportive' : speedVsDepth === 'speed' ? 'concise' : complexityLevel === 'high' ? 'detailed' : 'structured',
     category:
       subtype === 'subscriptions'
         ? 'subscriptions'
@@ -227,20 +299,38 @@ function buildGoalUnderstanding(message: string, subtype: FinanceIntentSubtypeV8
             ? 'savings'
             : subtype === 'budgeting'
               ? 'planning'
-              : /\b(debt|loan|credit card)\b/i.test(message)
+              : /\b(debt|loan|credit card)\b/i.test(corpus)
                 ? 'debt'
                 : 'general',
     hiddenOpportunities: [
-      /\b(subscription|recurring|trial|tilaus|abonnemang)\b/i.test(message) ? 'Audit top 3 recurring charges by cost and value.' : '',
-      /\b(compare|vs|versus|kumpi|vilken)\b/i.test(message) ? 'Compare total annual cost, switching cost, and failure risk.' : '',
-      /\b(save|savings|money left|budget|sääst|spara)\b/i.test(message) ? 'Create automatic transfer immediately after income lands.' : '',
+      /\b(subscription|recurring|trial|tilaus|abonnemang)\b/i.test(corpus) ? 'Audit top 3 recurring charges by cost and value.' : '',
+      /\b(compare|vs|versus|kumpi|vilken)\b/i.test(corpus) ? 'Compare annual cost, switching friction, and failure risk.' : '',
+      /\b(save|savings|money left|budget|sääst|spara)\b/i.test(corpus) ? 'Automate transfer immediately after income lands.' : '',
     ].filter(Boolean).slice(0, 3),
-    priorityLens: ['impact', 'speed', 'effort', 'certainty', 'risk_reduction'],
+    priorityLens: emotionalTone === 'overwhelmed'
+      ? ['speed', 'certainty', 'risk_reduction']
+      : ['impact', 'speed', 'effort', 'certainty', 'risk_reduction'],
     missingCriticalData,
+    clarificationNeeded,
+    clarificationReason,
+    wantsImmediateNextStep,
     emotionalTone,
     inputLanguage,
     responseLanguage: inputLanguage,
   };
+}
+
+function localizedClarificationPrompt(language: LanguageCode, subtype: FinanceIntentSubtypeV8): string {
+  if (language === 'fi') {
+    if (subtype === 'compare_options') return 'Tarkenna kaksi vaihtoehtoa ja niiden hinta per kk/vuosi.';
+    return 'Tarkenna yksi asia: haluatko säästää, pienentää kuluja vai lisätä tuloja ensin?';
+  }
+  if (language === 'sv') {
+    if (subtype === 'compare_options') return 'Förtydliga två alternativ och deras månads-/årspris.';
+    return 'Förtydliga en sak: vill du spara mer, minska kostnader eller öka inkomsten först?';
+  }
+  if (subtype === 'compare_options') return 'Clarify the two options and their monthly/annual price.';
+  return 'Clarify one thing first: save more, cut costs, or increase income?';
 }
 
 export function routeIntentV8(message: string, history: AgentMessageV8[] = []): RouteResultV8 {
@@ -248,6 +338,7 @@ export function routeIntentV8(message: string, history: AgentMessageV8[] = []): 
   const inputLanguage = detectLanguage(normalized || history.at(-1)?.content || '');
 
   if (!normalized) {
+    const goal = buildGoalUnderstanding('', 'none', '', inputLanguage);
     return {
       intent: 'unknown',
       subtype: 'none',
@@ -258,7 +349,7 @@ export function routeIntentV8(message: string, history: AgentMessageV8[] = []): 
       userState: { stress: 0, urgency: 0, confusion: 0 },
       reason: 'Empty input',
       responseMode: 'researcher',
-      goal: buildGoalUnderstanding('', 'none', '', inputLanguage),
+      goal,
       needsGmail: false,
       needsFinanceData: false,
       wantsRecommendations: false,
@@ -268,7 +359,7 @@ export function routeIntentV8(message: string, history: AgentMessageV8[] = []): 
   }
 
   const shortFollowUp = normalized.split(/\s+/).length <= 5 || /\b(this|that|same|what about it|entä tämä|kumpi|det här)\b/i.test(normalized);
-  const historyText = history.slice(-5).map((item) => item.content).join(' ');
+  const historyText = history.slice(-6).map((item) => item.content).join(' ');
   const inheritedIntent = shortFollowUp ? inferFromHistory(history) : 'general';
 
   const signals: IntentSignal[] = DOMAIN_PATTERNS.map((domain) => {
@@ -285,16 +376,28 @@ export function routeIntentV8(message: string, history: AgentMessageV8[] = []): 
   const subtype = normalizedIntent === 'finance' ? detectFinanceSubtype(normalized.toLowerCase(), historyText.toLowerCase()) : 'none';
 
   const ambiguityRaw = top.score <= 0 ? 1 : Math.max(0, 1 - (top.score - second.score) / Math.max(top.score, 1));
-  const stress = /\b(overwhelmed|stressed|anxious|panic|can't handle|en tiedä mitä tehdä|överväldigad)\b/i.test(normalized) ? 0.9 : 0.2;
+  const stress = /\b(overwhelmed|stressed|anxious|panic|can't handle|en tiedä mitä tehdä|överväldigad)\b/i.test(normalized) ? 0.92 : 0.25;
   const urgency = /\b(urgent|asap|today|immediately|overdue|nyt|snabbt)\b/i.test(normalized) ? 0.9 : /\b(soon|this week|kohta)\b/i.test(normalized) ? 0.6 : 0.2;
-  const confusion = /\b(not sure|don't know|confused|what should i do|help me prioritize|en tiedä|jag vet inte)\b/i.test(normalized) ? 0.85 : 0.25;
+  const confusion = /\b(not sure|don't know|confused|what should i do|help me prioritize|i need help|en tiedä|jag vet inte)\b/i.test(normalized) ? 0.88 : 0.22;
 
-  const confidence = Math.max(0.35, Math.min(0.98, 0.58 + top.score * 0.07 - ambiguityRaw * 0.2 - (shortFollowUp ? 0.04 : 0)));
-  const shouldClarify = ambiguityRaw > 0.68 || (normalizedIntent === 'finance' && subtype === 'compare_options' && !/\d/.test(normalized));
+  const confidence = Math.max(0.33, Math.min(0.98, 0.56 + top.score * 0.07 - ambiguityRaw * 0.22 - (shortFollowUp ? 0.03 : 0)));
+  const goal = buildGoalUnderstanding(normalized, subtype, historyText, inputLanguage);
+
+  const shouldClarify =
+    ambiguityRaw > 0.68
+    || goal.clarificationNeeded
+    || /^(help|i need help|apua|hjälp)$/i.test(normalized)
+    || (normalizedIntent === 'finance' && subtype === 'compare_options' && !/\d/.test(normalized));
 
   const needsGmail =
-    /\b(gmail|email|inbox|receipt|invoice)\b/i.test(normalized) ||
-    (normalizedIntent === 'finance' && ['bills', 'subscriptions', 'alerts_review'].includes(subtype));
+    /\b(gmail|email|inbox|receipt|invoice)\b/i.test(normalized)
+    || (normalizedIntent === 'finance' && ['bills', 'subscriptions', 'alerts_review'].includes(subtype));
+
+  const reason = top.score > 0
+    ? shouldClarify
+      ? `${top.reason} Clarification needed: ${goal.clarificationReason || localizedClarificationPrompt(inputLanguage, subtype)}.`
+      : top.reason
+    : 'No strong domain signal.';
 
   return {
     intent: normalizedIntent,
@@ -304,12 +407,15 @@ export function routeIntentV8(message: string, history: AgentMessageV8[] = []): 
     ambiguity: Number(ambiguityRaw.toFixed(2)),
     shouldClarify,
     userState: { stress, urgency, confusion },
-    reason: top.score > 0 ? top.reason : 'No strong domain signal.',
+    reason,
     responseMode: detectResponseMode(normalized, normalizedIntent),
-    goal: buildGoalUnderstanding(normalized, subtype, historyText, inputLanguage),
+    goal,
     needsGmail,
     needsFinanceData: normalizedIntent === 'finance',
-    wantsRecommendations: normalizedIntent === 'finance' || /\b(best next|priorit|recommend|smartest next move|suositus)\b/i.test(normalized),
+    wantsRecommendations:
+      normalizedIntent === 'finance'
+      || goal.requestKind === 'advice'
+      || /\b(best next|priorit|recommend|smartest next move|suositus|rekommendation)\b/i.test(normalized),
     inputLanguage,
     responseLanguage: inputLanguage,
   };
