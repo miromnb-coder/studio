@@ -20,11 +20,17 @@ export type KivoThinkingIndicatorProps = {
   compact?: boolean;
 };
 
-const MIN_SIZE = 26;
-const MAX_SIZE = 40;
-const PHASE_ROTATION_MS = 2800;
+const MIN_SIZE = 24;
+const MAX_SIZE = 38;
+const PHASE_ROTATION_MS = 2600;
 
-export function KivoThinkingIndicator({ phase, detail, size = 30, showLabel = true, compact = false }: KivoThinkingIndicatorProps) {
+export function KivoThinkingIndicator({
+  phase,
+  detail,
+  size = 28,
+  showLabel = true,
+  compact = false,
+}: KivoThinkingIndicatorProps) {
   const prefersReducedMotion = useReducedMotion();
   const normalizedSize = Math.min(MAX_SIZE, Math.max(MIN_SIZE, size));
   const hasPhase = Boolean(phase?.trim());
@@ -43,72 +49,159 @@ export function KivoThinkingIndicator({ phase, detail, size = 30, showLabel = tr
   const activePhase = hasPhase ? phase!.trim() : KIVO_THINKING_PHASES[phaseIndex];
 
   const activePhaseIndex = useMemo(() => {
-    const fallbackIndex = phaseIndex;
-    if (!hasPhase) return fallbackIndex;
+    if (!hasPhase) return phaseIndex;
 
     const normalizedPhase = activePhase.toLowerCase();
-    const matchedIndex = KIVO_THINKING_PHASES.findIndex((candidate) => normalizedPhase.includes(candidate.toLowerCase()));
-    return matchedIndex >= 0 ? matchedIndex : fallbackIndex;
+    const matchedIndex = KIVO_THINKING_PHASES.findIndex((candidate) =>
+      normalizedPhase.includes(candidate.toLowerCase()),
+    );
+
+    return matchedIndex >= 0 ? matchedIndex : phaseIndex;
   }, [activePhase, hasPhase, phaseIndex]);
 
-  const intensity = 0.94 + (activePhaseIndex / (KIVO_THINKING_PHASES.length - 1)) * 0.18;
+  const phaseProgress =
+    KIVO_THINKING_PHASES.length > 1
+      ? activePhaseIndex / (KIVO_THINKING_PHASES.length - 1)
+      : 0;
+
+  const auraOpacity = 0.5 + phaseProgress * 0.16;
+  const coreOpacity = 0.86 + phaseProgress * 0.1;
 
   return (
     <motion.div
-      initial={{ opacity: 0, y: 10, filter: 'blur(6px)' }}
-      animate={{ opacity: 1, y: 0, filter: 'blur(0px)' }}
-      exit={{ opacity: 0, y: -8, filter: 'blur(4px)' }}
-      transition={{ duration: 0.5, ease: [0.19, 1, 0.22, 1] }}
-      className={`relative overflow-hidden rounded-[24px] border border-white/[0.08] bg-[linear-gradient(145deg,rgba(255,255,255,0.08),rgba(255,255,255,0.02))] ${compact ? 'px-4 py-3.5' : 'px-5 py-4'} shadow-[0_18px_45px_rgba(0,0,0,0.38)] backdrop-blur-2xl`}
+      initial={{ opacity: 0, y: 12, scale: 0.985, filter: 'blur(8px)' }}
+      animate={{ opacity: 1, y: 0, scale: 1, filter: 'blur(0px)' }}
+      exit={{ opacity: 0, y: -8, scale: 0.99, filter: 'blur(4px)' }}
+      transition={{ duration: 0.52, ease: [0.22, 1, 0.36, 1] }}
+      className={[
+        'relative overflow-hidden',
+        compact ? 'rounded-[22px] px-4 py-3.5' : 'rounded-[26px] px-5 py-4.5',
+        'border border-white/[0.045]',
+        'bg-[linear-gradient(180deg,rgba(255,255,255,0.045),rgba(255,255,255,0.018))]',
+        'shadow-[0_16px_42px_rgba(0,0,0,0.34)]',
+        'backdrop-blur-[22px]',
+      ].join(' ')}
     >
-      <span className="pointer-events-none absolute inset-[1px] rounded-[23px] border border-white/[0.06]" aria-hidden="true" />
+      <span
+        aria-hidden="true"
+        className="pointer-events-none absolute inset-px rounded-[inherit] border border-white/[0.028]"
+      />
+
+      <span
+        aria-hidden="true"
+        className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_top_left,rgba(255,255,255,0.055),transparent_42%)]"
+      />
+
       <div className={`relative flex items-center ${compact ? 'gap-3.5' : 'gap-4'}`}>
         <motion.div
           aria-hidden="true"
           className="relative shrink-0 transform-gpu"
           style={{ width: normalizedSize, height: normalizedSize }}
-          animate={prefersReducedMotion ? undefined : { rotate: [0, 5, 0, -5, 0] }}
-          transition={{ duration: 18, ease: 'linear', repeat: Infinity }}
+          animate={
+            prefersReducedMotion
+              ? undefined
+              : {
+                  rotate: [0, 7, 0, -7, 0],
+                }
+          }
+          transition={{
+            duration: 16,
+            ease: 'linear',
+            repeat: Infinity,
+          }}
         >
           <motion.div
-            className="absolute inset-[-36%] transform-gpu rounded-[46%] bg-[radial-gradient(circle_at_38%_34%,rgba(132,222,255,0.5)_0%,rgba(52,139,255,0.27)_44%,rgba(12,25,60,0)_80%)] blur-[11px]"
+            className="absolute inset-[-42%] transform-gpu blur-[14px]"
+            style={{
+              background:
+                'radial-gradient(circle at 40% 38%, rgba(138,221,255,0.48) 0%, rgba(71,154,255,0.24) 42%, rgba(15,25,52,0) 82%)',
+            }}
             animate={
               prefersReducedMotion
-                ? { opacity: 0.58 * intensity }
+                ? { opacity: auraOpacity }
                 : {
-                    opacity: [0.44 * intensity, 0.72 * intensity, 0.48 * intensity],
-                    scale: [0.94, 1.1, 0.98],
-                    borderRadius: ['44% 56% 52% 48% / 52% 46% 54% 48%', '58% 42% 45% 55% / 46% 57% 43% 54%', '44% 56% 52% 48% / 52% 46% 54% 48%'],
+                    opacity: [0.38 * auraOpacity, 0.72 * auraOpacity, 0.44 * auraOpacity],
+                    scale: [0.94, 1.12, 0.98],
+                    borderRadius: [
+                      '42% 58% 52% 48% / 50% 44% 56% 50%',
+                      '56% 44% 46% 54% / 42% 58% 44% 56%',
+                      '48% 52% 58% 42% / 52% 48% 52% 48%',
+                      '42% 58% 52% 48% / 50% 44% 56% 50%',
+                    ],
                   }
             }
-            transition={{ duration: 6.6, ease: 'easeInOut', repeat: Infinity }}
+            transition={{
+              duration: 7.2,
+              ease: 'easeInOut',
+              repeat: Infinity,
+            }}
           />
 
           <motion.div
-            className="absolute inset-[17%] transform-gpu rounded-[40%] bg-[radial-gradient(circle_at_33%_28%,rgba(234,251,255,0.98)_0%,rgba(126,220,255,0.94)_32%,rgba(58,145,255,0.9)_68%,rgba(16,45,118,0.82)_100%)] shadow-[0_0_22px_rgba(70,162,255,0.6),inset_0_0_22px_rgba(210,244,255,0.32)]"
+            className="absolute inset-[10%] transform-gpu"
+            style={{
+              background:
+                'radial-gradient(circle at 34% 28%, rgba(244,252,255,0.98) 0%, rgba(162,231,255,0.92) 30%, rgba(89,163,255,0.88) 62%, rgba(20,49,118,0.74) 100%)',
+              boxShadow:
+                '0 0 22px rgba(76,168,255,0.38), inset 0 0 18px rgba(221,246,255,0.2)',
+            }}
             animate={
               prefersReducedMotion
-                ? { opacity: 0.96 }
+                ? {
+                    opacity: coreOpacity,
+                    borderRadius: '48% 52% 54% 46% / 46% 52% 48% 54%',
+                  }
                 : {
-                    scale: [0.98, 1.06, 0.99, 0.98],
+                    scale: [0.98, 1.05, 0.99, 0.98],
+                    opacity: [0.82 * coreOpacity, 1 * coreOpacity, 0.88 * coreOpacity, 0.82 * coreOpacity],
+                    borderRadius: [
+                      '40% 60% 55% 45% / 42% 48% 52% 58%',
+                      '54% 46% 44% 56% / 58% 42% 56% 44%',
+                      '46% 54% 60% 40% / 50% 46% 54% 50%',
+                      '40% 60% 55% 45% / 42% 48% 52% 58%',
+                    ],
+                  }
+            }
+            transition={{
+              duration: 4.8,
+              ease: 'easeInOut',
+              repeat: Infinity,
+            }}
+          />
+
+          <motion.div
+            className="absolute inset-[24%] rounded-full bg-[radial-gradient(circle,rgba(255,255,255,0.92)_0%,rgba(210,243,255,0.74)_34%,rgba(145,214,255,0.16)_62%,rgba(145,214,255,0)_76%)] blur-[1.6px]"
+            animate={
+              prefersReducedMotion
+                ? { opacity: 0.72 }
+                : {
+                    scale: [0.78, 1.18, 0.88, 0.78],
+                    opacity: [0.3, 0.86, 0.42, 0.3],
+                  }
+            }
+            transition={{
+              duration: 2.9,
+              ease: 'easeInOut',
+              repeat: Infinity,
+              repeatDelay: 0.25,
+            }}
+          />
+
+          <motion.div
+            className="absolute inset-[33%] rounded-full bg-[radial-gradient(circle,rgba(255,255,255,0.98)_0%,rgba(220,247,255,0.95)_42%,rgba(220,247,255,0)_74%)] blur-[0.6px]"
+            animate={
+              prefersReducedMotion
+                ? { opacity: 0.92 }
+                : {
+                    scale: [0.94, 1.04, 0.97, 0.94],
                     opacity: [0.86, 1, 0.9, 0.86],
-                    borderRadius: ['36% 64% 56% 44% / 42% 48% 52% 58%', '54% 46% 43% 57% / 58% 42% 58% 42%', '36% 64% 56% 44% / 42% 48% 52% 58%'],
                   }
             }
-            transition={{ duration: 4.2, ease: 'easeInOut', repeat: Infinity }}
-          />
-
-          <motion.div
-            className="absolute inset-[36%] transform-gpu rounded-full bg-[radial-gradient(circle,rgba(255,255,255,0.95)_0%,rgba(196,239,255,0.88)_36%,rgba(130,204,255,0)_78%)] blur-[1.4px]"
-            animate={
-              prefersReducedMotion
-                ? { opacity: 0.66 }
-                : {
-                    scale: [0.86, 1.22, 0.9, 0.86],
-                    opacity: [0.38, 0.92, 0.5, 0.38],
-                  }
-            }
-            transition={{ duration: 2.8, ease: 'easeInOut', repeat: Infinity, repeatDelay: 0.4 }}
+            transition={{
+              duration: 2.2,
+              ease: 'easeInOut',
+              repeat: Infinity,
+            }}
           />
         </motion.div>
 
@@ -117,23 +210,31 @@ export function KivoThinkingIndicator({ phase, detail, size = 30, showLabel = tr
             <AnimatePresence mode="wait" initial={false}>
               <motion.p
                 key={activePhase}
-                initial={{ opacity: 0, y: 8 }}
+                initial={{ opacity: 0, y: 6 }}
                 animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, y: -6 }}
-                transition={{ duration: 0.35, ease: [0.22, 1, 0.36, 1] }}
-                className={`${compact ? 'text-[15px]' : 'text-base'} truncate font-semibold leading-tight tracking-[-0.015em] text-zinc-100`}
+                exit={{ opacity: 0, y: -5 }}
+                transition={{ duration: 0.34, ease: [0.22, 1, 0.36, 1] }}
+                className={[
+                  compact ? 'text-[15px]' : 'text-[16px]',
+                  'truncate font-semibold leading-tight tracking-[-0.018em] text-zinc-100',
+                ].join(' ')}
               >
                 {activePhase}
               </motion.p>
             </AnimatePresence>
+
             <AnimatePresence mode="wait" initial={false}>
               <motion.p
                 key={detail || 'default-detail'}
-                initial={{ opacity: 0, y: 5 }}
+                initial={{ opacity: 0, y: 4 }}
                 animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, y: -4 }}
-                transition={{ duration: 0.32, ease: [0.22, 1, 0.36, 1], delay: 0.04 }}
-                className="mt-1 truncate text-xs leading-5 text-zinc-400"
+                exit={{ opacity: 0, y: -3 }}
+                transition={{
+                  duration: 0.3,
+                  ease: [0.22, 1, 0.36, 1],
+                  delay: 0.03,
+                }}
+                className="mt-1 truncate text-[12px] leading-5 text-zinc-400"
               >
                 {detail || 'Reviewing subscriptions and recurring costs'}
               </motion.p>
