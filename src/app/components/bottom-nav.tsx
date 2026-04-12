@@ -2,14 +2,14 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { Bell, CircleUserRound, ClipboardCheck, MessageSquare, MessagesSquare } from 'lucide-react';
+import { CircleUserRound, Crosshair, MessageSquare, MessagesSquare, Sparkles } from 'lucide-react';
 import { motion } from 'framer-motion';
 
 const tabs = [
   { label: 'Chat', href: '/chat', icon: MessageSquare },
   { label: 'Chats', href: '/chat?panel=conversations', icon: MessagesSquare },
-  { label: 'Tasks', href: '/tasks', icon: ClipboardCheck },
-  { label: 'Alerts', href: '/alerts', icon: Bell },
+  { label: 'Focus', href: '/focus', icon: Crosshair },
+  { label: 'Actions', href: '/actions', icon: Sparkles },
   { label: 'Profile', href: '/profile', icon: CircleUserRound },
 ];
 

@@ -1,10 +1,11 @@
 import {
-  Bell,
+  Aperture,
   CircleUserRound,
+  Crosshair,
   Crown,
   MessageSquare,
-  Settings,
-  SquareCheckBig,
+  SlidersHorizontal,
+  Sparkles,
   type LucideIcon,
 } from 'lucide-react';
 
@@ -19,12 +20,13 @@ export type SharedMenuRow = {
 export const sharedPrimaryMenu: SharedMenuRow[] = [
   { label: 'New Chat', icon: MessageSquare, action: 'new-chat' },
   { label: 'Conversations', icon: MessageSquare, action: 'conversations' },
-  { label: 'Tasks', icon: SquareCheckBig, href: '/tasks' },
-  { label: 'Alerts', icon: Bell, href: '/alerts' },
+  { label: 'Focus', icon: Crosshair, href: '/focus' },
+  { label: 'Actions', icon: Sparkles, href: '/actions' },
+  { label: 'Memory', icon: Aperture, href: '/memory' },
 ];
 
 export const sharedSecondaryMenu: SharedMenuRow[] = [
   { label: 'Profile', icon: CircleUserRound, href: '/profile' },
-  { label: 'Settings', icon: Settings, href: '/settings', badge: 'New' },
+  { label: 'Control', icon: SlidersHorizontal, href: '/control', badge: 'New' },
   { label: 'Upgrade', icon: Crown, href: '/upgrade' },
 ];
