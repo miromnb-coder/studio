@@ -178,6 +178,8 @@ export function synthesizeResponseV8(input: SynthesisInputV8): AgentResponseV8 {
           metadata: {
             routeConfidence: input.route.confidence,
             routeAmbiguity: input.route.ambiguity,
+            responseLanguage: input.route.responseLanguage,
+            inputLanguage: input.route.inputLanguage,
             criticScore: input.critic.criticScore,
             verificationPassed: input.verificationPassed,
             memoryUsed: input.context.memory.relevantMemories.length > 0,

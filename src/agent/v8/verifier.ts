@@ -38,52 +38,80 @@ function removeRepeatedSentences(text: string): string {
   return unique.join(' ').trim();
 }
 
-function enforceStructure(reply: string): string {
-  let refined = reply;
-  if (!/observation:/i.test(refined)) {
-    refined = `Observation: ${refined}`;
-  }
-  if (!/interpretation:/i.test(refined)) {
-    refined = `${refined}\nInterpretation: The main issue is decision quality and prioritization, not a lack of options.`;
-  }
-  if (!/next focus:/i.test(refined)) {
-    refined = `${refined}\nNext focus: Validate one high-impact path and avoid splitting attention too early.`;
-  }
-  if (!/recommendation:|best next step:/i.test(refined)) {
-    refined = `${refined}\nRecommendation: Prioritize the highest-leverage move first, then sequence follow-up actions.`;
-  }
-  if (!/action steps:|next actions:|ranked actions:/i.test(refined)) {
-    refined = `${refined}\n\nAction steps:\n- 1. Execute the top move now.\n- 2. Complete one additional quick win.`;
-  }
-  if (!/next step:/i.test(refined)) {
-    refined = `${refined}\nNext Step: Confirm action 1 and I will convert it into a checklist.`;
-  }
-  if (!/confidence:/i.test(refined)) {
-    refined = `${refined}\nConfidence: Medium (grounded in available data, but precision improves with one concrete number).`;
-  }
-  if (!/assumptions:/i.test(refined)) {
-    refined = `${refined}\nAssumptions: Baseline amounts and billing windows may be incomplete.`;
-  }
-  return refined;
+function hasEnglishLeakForNonEnglish(text: string, lang: string): boolean {
+  if (lang === 'en') return false;
+  const commonEnglish = /\b(observation|interpretation|recommendation|next step|confidence|assumptions|action steps|i recommend|you should|the|and|your|this means|fastest|risk to watch)\b/i;
+  const tokens = text.toLowerCase().split(/[^a-zåäö]+/).filter((t) => t.length > 2);
+  const englishStop = new Set(['the', 'and', 'your', 'with', 'from', 'this', 'that', 'next', 'step', 'confidence', 'assumptions', 'recommendation']);
+  const stopCount = tokens.filter((t) => englishStop.has(t)).length;
+  return commonEnglish.test(text) || stopCount >= 6;
 }
 
-function softenOverconfidence(reply: string, notes: string[]): string {
-  if (!/guaranteed|definitely|certainly|100%|always/gi.test(reply)) return reply;
-  notes.push('Softened unsupported certainty claims.');
-  return reply.replace(/guaranteed|definitely|certainly|100%|always/gi, 'likely');
+function applyLanguageGuard(reply: string, lang: string): string {
+  if (lang === 'en') return reply;
+  if (!hasEnglishLeakForNonEnglish(reply, lang)) return reply;
+  if (lang === 'fi') {
+    return reply
+      .replace(/Observation:/gi, 'Ymmärrys:')
+      .replace(/Interpretation:/gi, 'Tulkinta:')
+      .replace(/Recommendation:/gi, 'Suositus:')
+      .replace(/Action steps:/gi, 'Seuraavat askeleet:')
+      .replace(/Next Step:/gi, 'Seuraava askel:')
+      .replace(/Confidence:/gi, 'Varmuustaso:')
+      .replace(/Assumptions:/gi, 'Oletukset:');
+  }
+  if (lang === 'sv') {
+    return reply
+      .replace(/Observation:/gi, 'Förståelse:')
+      .replace(/Interpretation:/gi, 'Tolkning:')
+      .replace(/Recommendation:/gi, 'Rekommendation:')
+      .replace(/Action steps:/gi, 'Nästa steg:')
+      .replace(/Next Step:/gi, 'Nästa steg:')
+      .replace(/Confidence:/gi, 'Säkerhet:')
+      .replace(/Assumptions:/gi, 'Antaganden:');
+  }
+  return reply;
 }
 
-function composeFallback(question?: string): string {
+function composeFallback(question: string | undefined, lang: string): string {
+  if (lang === 'fi') {
+    return [
+      'Ymmärrys: Pyyntösi on selkeä, mutta yksi avainnumero puuttuu priorisoinnista.',
+      'Tulkinta: Ilman yhtä konkreettista lukua suositus jää liian yleiseksi.',
+      'Suositus: Aloita suurimmasta toistuvasta kuukausikulusta ja optimoi se ensin.',
+      'Seuraavat askeleet:',
+      '- 1. Lähetä yksi kuukausikulu, lasku tai säästötavoite.',
+      '- 2. Jos Gmail on käytössä, tarkista 90 päivän lasku-/maksu-/uusinta-viestit.',
+      `Kysymys: ${question || 'Mikä yksittäinen meno optimoidaan ensin?'}`,
+      'Varmuustaso: Matala.',
+      'Oletukset: Nykyinen data on osittainen.',
+      'Seuraava askel: Lähetä yksi numero, niin teen tarkan prioriteettilistan.',
+    ].join('\n');
+  }
+  if (lang === 'sv') {
+    return [
+      'Förståelse: Din fråga är tydlig men saknar en nyckelsiffra för prioritering.',
+      'Tolkning: Utan en konkret siffra blir rekommendationen för generell.',
+      'Rekommendation: Börja med den största återkommande månadskostnaden först.',
+      'Nästa steg:',
+      '- 1. Skicka en månadskostnad, faktura eller ett sparmål.',
+      '- 2. Om Gmail är kopplat, skanna 90 dagar av kvitto-/betalningsmail.',
+      `Fråga: ${question || 'Vilken enskild kostnad ska optimeras först?'}`,
+      'Säkerhet: Låg.',
+      'Antaganden: Tillgänglig data är delvis ofullständig.',
+      'Nästa steg: Skicka en siffra så bygger jag en exakt prioritering.',
+    ].join('\n');
+  }
+
   return [
     'Observation: I reviewed your request and the key gap is missing numeric grounding.',
     'Interpretation: Without one concrete number, any ranking will be broad and lower-confidence.',
-    'Next focus: Add one recurring cost or savings target so I can prioritize accurately.',
     'Recommendation: Start with the single highest monthly pressure item before optimizing anything else.',
     'Action steps:',
     '- 1. Share one monthly bill, recurring charge, or savings target.',
     '- 2. If Gmail is connected, run a 90-day receipt scan with invoice/payment/renewal keywords.',
     `Question: ${question || 'Which single expense should we optimize first?'}.`,
-    'Confidence: Low (missing numeric anchor).',
+    'Confidence: Low.',
     'Assumptions: Current data is partial and may miss key transactions.',
     'Next Step: Send one concrete number and I will build a prioritized plan.',
   ].join('\n');
@@ -91,6 +119,7 @@ function composeFallback(question?: string): string {
 
 export function verifyExecutionV8(input: AgentCriticInputV8): CriticResultV8 {
   const notes: string[] = [];
+  const language = input.responseLanguage || 'en';
   let refinedReply = String(input.reply || '').trim();
 
   for (const pattern of GENERIC_PATTERNS) {
@@ -101,53 +130,35 @@ export function verifyExecutionV8(input: AgentCriticInputV8): CriticResultV8 {
   }
 
   refinedReply = removeRepeatedSentences(refinedReply);
-  refinedReply = softenOverconfidence(refinedReply, notes);
-  refinedReply = enforceStructure(refinedReply);
+  refinedReply = applyLanguageGuard(refinedReply, language);
 
-  const hasNumbers = /\$?\d+[\d,.]*/.test(refinedReply);
-  const hasPersonalization = /goal|you|your|memory|profile|pressure|preference|situation/i.test(refinedReply);
-  const hasPrioritization = /recommendation:|best next step:|ranked actions:|top priority:|fastest win:|risk to watch:/i.test(refinedReply);
-  const hasActionability = /-\s*1\.|checklist|reply\s+"|execute|cancel|switch|downgrade/i.test(refinedReply);
-  const hasHonesty = /confidence:|assumptions:|missing|unknown|estimate/i.test(refinedReply);
-  const hasClarity = /observation:|interpretation:|next focus:|recommendation:|next step:/i.test(refinedReply);
+  const hasPersonalization = /goal|you|your|memory|profile|pressure|preference|situation|sinun|din/i.test(refinedReply);
+  const hasActionability = /-\s*1\.|checklist|execute|cancel|switch|downgrade|seuraava|nästa/i.test(refinedReply);
+  const hasHonesty = /confidence|assumptions|missing|unknown|estimate|varmuustaso|oletus|säkerhet|antag/i.test(refinedReply);
+  const hasClarity = refinedReply.split(/\n+/).length >= 3;
   const hasToolGrounding = input.usedTools.length > 0 || Object.keys(input.structuredData || {}).length > 0;
-  const hasReasoningFlow = /observation:|interpretation:|next focus:/i.test(refinedReply);
-  const hasRiskAndPriority = /top priority:|risk to watch:|fastest win:/i.test(refinedReply);
-  const hasConcreteNext = /next step:\s*(reply|share|send|confirm|run|execute)/i.test(refinedReply);
-  const conciseEnough = refinedReply.split(/\s+/).length <= 320;
+  const hasConcreteNext = /next step|seuraava askel|nästa steg/i.test(refinedReply);
+  const conciseEnough = refinedReply.split(/\s+/).length <= 360;
   const noFiller = !/here are some ideas|it depends|you could consider/i.test(refinedReply);
-  const relevant = input.intent === 'finance'
-    ? /savings|spend|bill|subscription|cash|risk|monthly/i.test(refinedReply)
-    : true;
+  const languageConsistent = !hasEnglishLeakForNonEnglish(refinedReply, language);
 
   const score = clamp(
-    scoreDimension(relevant, 16)
-    + scoreDimension(hasActionability, 14)
-    + scoreDimension(hasPrioritization, 14)
-    + scoreDimension(hasPersonalization, 10)
-    + scoreDimension(hasHonesty, 10)
-    + scoreDimension(hasClarity, 10)
-    + scoreDimension(hasReasoningFlow, 10)
-    + scoreDimension(hasNumbers || !hasToolGrounding, 6)
-    + scoreDimension(hasRiskAndPriority, 4)
-    + scoreDimension(hasConcreteNext, 10)
+    scoreDimension(hasActionability, 20)
+    + scoreDimension(hasPersonalization, 14)
+    + scoreDimension(hasHonesty, 12)
+    + scoreDimension(hasClarity, 12)
+    + scoreDimension(hasConcreteNext, 14)
+    + scoreDimension(languageConsistent, 16)
+    + scoreDimension(hasToolGrounding || input.intent !== 'finance', 6)
     + scoreDimension(conciseEnough, 4)
-    + scoreDimension(noFiller, 6),
+    + scoreDimension(noFiller, 2),
   );
 
-  const needsRewrite = score < 85;
+  const needsRewrite = score < 82;
 
-  if (needsRewrite) {
-    notes.push(`Quality threshold miss (${score}/100). Applied strict rewrite fallback.`);
-    refinedReply = composeFallback(input.plan.clarificationQuestion);
-  } else if (input.plan.clarificationQuestion && !/question:/i.test(refinedReply)) {
-    refinedReply = `${refinedReply}\nQuestion: ${input.plan.clarificationQuestion}`;
-    notes.push('Added high-value clarification question.');
-  }
-
-  if (!refinedReply.trim()) {
-    refinedReply = composeFallback(input.plan.clarificationQuestion);
-    notes.push('Inserted empty-reply fallback.');
+  if (needsRewrite || !refinedReply.trim()) {
+    notes.push(`Quality threshold miss (${score}/100). Applied localized fallback rewrite.`);
+    refinedReply = composeFallback(input.plan.clarificationQuestion, language);
   }
 
   return {

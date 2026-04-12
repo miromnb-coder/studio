@@ -12,8 +12,6 @@ export type ResearchAgentOutput = {
   answerDraft: string;
 };
 
-const FINNISH_LANGUAGE_PATTERN = /\b(voitko vastata suomeksi|vastaa suomeksi|suomeksi|kirjoita suomeksi)\b/i;
-
 function stripTemplateLanguage(text: string): string {
   return text
     .replace(/\b(here('| i)s|this is)\s+(a\s+)?(direct|grounded)\s+answer[^.]*\.?/gi, '')
@@ -22,15 +20,8 @@ function stripTemplateLanguage(text: string): string {
     .trim();
 }
 
-function resolveResponseLanguage(context: AgentContextV8): string {
-  const message = context.user.message;
-  if (FINNISH_LANGUAGE_PATTERN.test(message)) return 'fi';
-  if (/\b(vastaa englanniksi|kirjoita englanniksi|englanniksi)\b/i.test(message)) return 'en';
-
-  const explicitLanguage = message.toLowerCase().match(/\b(reply|respond|answer|speak|write|vastaa|kirjoita)\s+(in\s+)?([a-z\-]{2,20})\b/i)?.[3];
-  if (explicitLanguage) return explicitLanguage.slice(0, 8);
-
-  return context.intelligence.userProfile?.preferred_language || 'en';
+function resolveResponseLanguage(input: ResearchAgentInput): string {
+  return input.route.responseLanguage || input.context.intelligence.userProfile?.preferred_language || 'en';
 }
 
 function resolveVerbosity(context: AgentContextV8): 'short' | 'medium' | 'detailed' {
@@ -54,7 +45,7 @@ function goalStructureInstruction(intent: RouteResultV8['intent']): string {
 }
 
 export async function runResearchAgent(input: ResearchAgentInput): Promise<ResearchAgentOutput> {
-  const responseLanguage = resolveResponseLanguage(input.context);
+  const responseLanguage = resolveResponseLanguage(input);
   const message = input.context.user.message;
   const relevantMemories = input.context.memory.relevantMemories.slice(0, 2).map((item) => item.content);
   const conversationTail = input.context.conversation.slice(-4).map((item) => ({

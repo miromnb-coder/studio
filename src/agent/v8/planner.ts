@@ -120,6 +120,20 @@ function uniquePlanModes(modes: PlanModeV8[]): PlanModeV8[] {
   return Array.from(new Set(modes));
 }
 
+
+
+function localizedClarificationQuestion(route: RouteResultV8): string {
+  if (route.inputLanguage === 'fi') {
+    if (route.subtype === 'compare_options') return 'Mitä kahta vaihtoehtoa vertaillaan, ja mitkä ovat niiden kuukausi- tai vuosihinnat?';
+    return 'Mikä yksi numero optimoidaan ensin: kuukausibudjetti, säästötavoite vai toistuva kulu?';
+  }
+  if (route.inputLanguage === 'sv') {
+    if (route.subtype === 'compare_options') return 'Vilka två alternativ ska jag jämföra, och vad kostar de per månad eller år?';
+    return 'Vilket tal ska vi optimera först: månadsbudget, sparmål eller återkommande kostnad?';
+  }
+  if (route.subtype === 'compare_options') return 'Which two options should I compare, and what are their monthly or annual prices?';
+  return 'What is one concrete number I should optimize around: monthly budget, target savings, or a recurring cost?';
+}
 export function createPlanV8(route: RouteResultV8, message: string): ExecutionPlanV8 {
   const mapSubtypeToModes = (): PlanModeV8[] => {
     switch (route.subtype) {
@@ -164,8 +178,13 @@ export function createPlanV8(route: RouteResultV8, message: string): ExecutionPl
     route.ambiguity > 0.55,
   ].filter(Boolean).length;
 
-  const depth: ExecutionPlanV8['depth'] =
-    complexitySignals >= 3 ? 'deep' : complexitySignals >= 1 ? 'standard' : 'light';
+  const depth: ExecutionPlanV8['depth'] = route.goal.speedVsDepth === 'speed'
+    ? 'light'
+    : route.goal.speedVsDepth === 'depth' || complexitySignals >= 3
+      ? 'deep'
+      : complexitySignals >= 1
+        ? 'standard'
+        : 'light';
 
   const compareNeedsClarification = route.subtype === 'compare_options' && compareOptions.length < 2;
   const savingsNeedsClarification =
@@ -179,13 +198,7 @@ export function createPlanV8(route: RouteResultV8, message: string): ExecutionPl
   const needsClarification = route.shouldClarify || (route.intent === 'finance' && (compareNeedsClarification || savingsNeedsClarification));
 
   const clarificationQuestion = needsClarification
-      ? compareNeedsClarification
-      ? 'Which two options should I compare, and what are their monthly or annual prices?'
-      : route.ambiguity > 0.65
-        ? 'Should I focus first on reducing recurring costs, improving cashflow safety, or comparing options?'
-        : route.goal.missingCriticalData?.[0]
-          ? `I can improve precision quickly. ${route.goal.missingCriticalData[0]} Which one number should we optimize first?`
-          : 'What is one concrete number I should optimize around: monthly budget, target savings, or a recurring cost?'
+    ? localizedClarificationQuestion(route)
     : undefined;
 
   let planModes = mapSubtypeToModes();
@@ -229,7 +242,7 @@ export function createPlanV8(route: RouteResultV8, message: string): ExecutionPl
       && !/\b(email|gmail|inbox|mail|receipt|invoice)\b/i.test(message)
       && (route.subtype === 'compare_options' || route.subtype === 'budgeting' || route.subtype === 'cashflow');
 
-    if (route.needsGmail && !financeOnlyButNoNeedForEmail) {
+    if (route.needsGmail && !financeOnlyButNoNeedForEmail && route.goal.speedVsDepth !== 'speed') {
       steps.push(
         buildStep(
           nextStep(),
