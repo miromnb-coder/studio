@@ -281,6 +281,23 @@ select {
   transform: scale(0.95);
 }
 
+.composer-action-btn-plus {
+  border-color: #cfd5de;
+  background: linear-gradient(180deg, #f8f9fb 0%, #eef1f5 100%);
+  color: #606878;
+  box-shadow: 0 8px 18px rgba(68, 75, 90, 0.1);
+}
+
+.composer-action-btn-plus:hover:not(:disabled) {
+  border-color: #c7ced9;
+  background: linear-gradient(180deg, #f6f8fb 0%, #e9edf2 100%);
+  color: #555e6e;
+}
+
+.composer-action-btn-plus:active:not(:disabled) {
+  transform: scale(0.94);
+}
+
 .composer-action-btn:disabled {
   opacity: 0.42;
   box-shadow: none;
