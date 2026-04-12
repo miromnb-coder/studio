@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { Crown, MoreHorizontal, RefreshCw } from 'lucide-react';
+import { Bot, Crown, MoreHorizontal, RefreshCw, Sparkles, Wand2 } from 'lucide-react';
 import { AnimatePresence, LayoutGroup, motion } from 'framer-motion';
 import { useAppStore } from '../store/app-store';
 import { useUserEntitlements } from '../hooks/use-user-entitlements';
@@ -20,10 +20,10 @@ const DRAFT_STORAGE_KEY = 'nova-operator-chat-draft';
 
 const THINKING_STEPS = [
   'Understanding your request',
-  'Reviewing context',
-  'Checking useful signals',
-  'Ranking best options',
-  'Building recommendation',
+  'Reviewing memory',
+  'Running tools',
+  'Comparing options',
+  'Finalizing answer',
 ] as const;
 
 const QUICK_START_PROMPTS = [
@@ -78,7 +78,7 @@ function pickIntroLine(input: string) {
 }
 
 function normalizeStepLabel(label?: string) {
-  if (!label) return 'Building recommendation';
+  if (!label) return 'Finalizing answer';
   return label;
 }
 
@@ -248,8 +248,8 @@ export default function ChatPage() {
     if (!textareaRef.current) return;
 
     textareaRef.current.style.height = 'auto';
-    textareaRef.current.style.height = `${Math.min(textareaRef.current.scrollHeight, 128)}px`;
-    textareaRef.current.style.overflowY = textareaRef.current.scrollHeight > 128 ? 'auto' : 'hidden';
+    textareaRef.current.style.height = `${Math.min(textareaRef.current.scrollHeight, 140)}px`;
+    textareaRef.current.style.overflowY = textareaRef.current.scrollHeight > 140 ? 'auto' : 'hidden';
   }, [draft]);
 
   useEffect(() => {
@@ -273,7 +273,7 @@ export default function ChatPage() {
 
   useEffect(() => {
     if (!composerNotice) return;
-    const timeout = window.setTimeout(() => setComposerNotice(null), 2400);
+    const timeout = window.setTimeout(() => setComposerNotice(null), 2600);
     return () => window.clearTimeout(timeout);
   }, [composerNotice]);
 
@@ -455,40 +455,51 @@ export default function ChatPage() {
   };
 
   return (
-    <AppShell className="pb-60">
-      <header className="sticky top-0 z-20 mb-4 rounded-[20px] border border-white/[0.045] bg-[#0b0c0f]/56 px-4 py-3 shadow-[0_10px_28px_rgba(0,0,0,0.28)] backdrop-blur-xl">
+    <AppShell className="relative isolate overflow-hidden pb-64 sm:pb-60">
+      <div className="pointer-events-none absolute inset-x-0 top-[-180px] z-0 h-[420px] bg-[radial-gradient(circle_at_top,rgba(125,211,252,0.14),transparent_58%),radial-gradient(circle_at_72%_18%,rgba(167,139,250,0.14),transparent_48%)]" />
+
+      <header className="sticky top-0 z-30 mb-4 rounded-[24px] border border-white/[0.06] bg-[linear-gradient(160deg,rgba(17,20,30,0.92),rgba(10,11,16,0.84))] px-4 py-3.5 shadow-[0_16px_40px_rgba(0,0,0,0.36)] backdrop-blur-2xl">
         <div className="flex items-center justify-between gap-3">
           <div className="min-w-0">
             <div className="flex items-center gap-2">
-              <h1 className="text-[18px] font-semibold tracking-[-0.024em] text-zinc-100">Kivo</h1>
-              <span className="inline-flex items-center gap-1.5 rounded-full border border-white/[0.06] bg-white/[0.025] px-2 py-0.5 text-[10px] font-medium text-zinc-300">
-                <span
-                  className={`h-1.5 w-1.5 rounded-full ${
-                    isAgentResponding ? 'animate-pulse bg-sky-300' : 'bg-zinc-500'
-                  }`}
-                />
-                {isAgentResponding ? 'Working' : 'Ready'}
+              <span className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-white/[0.08] bg-white/[0.03]">
+                <Bot className="h-4 w-4 text-zinc-200" />
               </span>
+              <div>
+                <h1 className="text-[18px] font-semibold tracking-[-0.024em] text-zinc-100">Kivo Operator</h1>
+                <p className="text-[10px] uppercase tracking-[0.16em] text-zinc-500">Premium AI Workspace</p>
+              </div>
             </div>
-            <p className="mt-1 truncate text-[11px] tracking-[0.01em] text-zinc-600">
+            <p className="mt-2 truncate text-[11px] tracking-[0.01em] text-zinc-500">
               {formatUsageLine(usage.current, usage.limit, usage.unlimited)}
             </p>
           </div>
 
-          <button
-            type="button"
-            onClick={() => setOpenPanel((prev) => (prev === 'conversations' ? null : 'conversations'))}
-            className="inline-flex min-w-0 max-w-[56vw] items-center gap-2 rounded-full border border-white/[0.06] bg-white/[0.025] px-3 py-1.5 text-zinc-300 transition-all duration-200 hover:border-white/[0.1] hover:bg-white/[0.04]"
-            aria-label="Open conversations"
-          >
-            <span className="truncate text-xs font-medium text-zinc-200">
-              {activeConversation?.title || 'Conversations'}
+          <div className="flex items-center gap-1.5">
+            <span className="inline-flex items-center gap-1.5 rounded-full border border-white/[0.08] bg-white/[0.03] px-2.5 py-1 text-[10px] font-medium text-zinc-300">
+              <span
+                className={`h-1.5 w-1.5 rounded-full ${
+                  isAgentResponding ? 'animate-pulse bg-sky-300' : 'bg-emerald-300'
+                }`}
+              />
+              {isAgentResponding ? 'Agent running' : 'Agent ready'}
             </span>
-            <span className="rounded-full border border-white/[0.06] bg-white/[0.02] px-1.5 py-0.5 text-[10px] text-zinc-500">
-              {conversationList.length}
-            </span>
-            <MoreHorizontal className="h-4 w-4 shrink-0" />
-          </button>
+
+            <button
+              type="button"
+              onClick={() => setOpenPanel((prev) => (prev === 'conversations' ? null : 'conversations'))}
+              className="inline-flex min-w-0 max-w-[56vw] items-center gap-2 rounded-full border border-white/[0.07] bg-white/[0.03] px-3 py-1.5 text-zinc-300 transition-all duration-200 hover:border-white/[0.14] hover:bg-white/[0.05]"
+              aria-label="Open conversations"
+            >
+              <span className="truncate text-xs font-medium text-zinc-100">
+                {activeConversation?.title || 'Conversations'}
+              </span>
+              <span className="rounded-full border border-white/[0.08] bg-black/20 px-1.5 py-0.5 text-[10px] text-zinc-500">
+                {conversationList.length}
+              </span>
+              <MoreHorizontal className="h-4 w-4 shrink-0" />
+            </button>
+          </div>
         </div>
 
         <AnimatePresence>
@@ -513,7 +524,7 @@ export default function ChatPage() {
       <LayoutGroup>
         <section
           ref={listRef}
-          className="relative z-10 max-h-[calc(100vh-252px)] overflow-y-auto pb-8 scroll-pb-44"
+          className="relative z-10 max-h-[calc(100vh-258px)] overflow-y-auto pb-10 scroll-pb-52"
         >
           <AnimatePresence mode="wait">
             {empty ? (
@@ -522,22 +533,28 @@ export default function ChatPage() {
                 initial={{ opacity: 0, y: 10 }}
                 animate={{ opacity: 1, y: 0 }}
                 exit={{ opacity: 0, y: -10 }}
-                className="flex min-h-[62vh] flex-col items-center justify-center px-8 text-center"
+                className="flex min-h-[66vh] flex-col items-center justify-center px-5 text-center"
               >
-                <h2 className="text-[34px] font-semibold leading-[1.08] tracking-[-0.036em] text-zinc-100">
-                  How can Kivo help today?
-                </h2>
-                <p className="mt-3 max-w-[28ch] text-sm leading-6 text-zinc-500">
-                  Ask a question or hand over a task. Kivo will work through it step by step.
-                </p>
+                <div className="rounded-3xl border border-white/[0.07] bg-[linear-gradient(160deg,rgba(255,255,255,0.045),rgba(255,255,255,0.016))] px-5 py-4 shadow-[0_16px_42px_rgba(0,0,0,0.26)] backdrop-blur-xl">
+                  <p className="inline-flex items-center gap-1.5 rounded-full border border-white/[0.08] bg-white/[0.03] px-2.5 py-1 text-[10px] uppercase tracking-[0.12em] text-zinc-400">
+                    <Sparkles className="h-3 w-3" />
+                    Kivo Agent Mode
+                  </p>
+                  <h2 className="mt-3 text-[34px] font-semibold leading-[1.06] tracking-[-0.04em] text-zinc-100">
+                    Ask once. Get a real plan.
+                  </h2>
+                  <p className="mt-3 max-w-[30ch] text-sm leading-6 text-zinc-500">
+                    Kivo thinks in visible steps, compares options, and returns structured recommendations you can act on immediately.
+                  </p>
+                </div>
 
-                <div className="mt-6 flex w-full max-w-sm flex-col gap-2">
+                <div className="mt-6 flex w-full max-w-sm flex-col gap-2.5">
                   {QUICK_START_PROMPTS.map((prompt) => (
                     <button
                       key={prompt}
                       type="button"
                       onClick={() => applyTemplate(prompt, 'Prompt added. You can edit before sending.')}
-                      className="rounded-2xl border border-white/[0.08] bg-white/[0.03] px-3.5 py-3 text-left text-xs leading-5 text-zinc-300 transition hover:border-white/[0.14] hover:bg-white/[0.05]"
+                      className="rounded-2xl border border-white/[0.08] bg-[linear-gradient(155deg,rgba(255,255,255,0.04),rgba(255,255,255,0.014))] px-4 py-3 text-left text-xs leading-5 text-zinc-300 transition hover:border-white/[0.14] hover:bg-white/[0.05]"
                     >
                       {prompt}
                     </button>
@@ -547,10 +564,10 @@ export default function ChatPage() {
             ) : null}
           </AnimatePresence>
 
-          <div className="space-y-8 px-1 pb-4">
+          <div className="space-y-7 px-1 pb-4">
             {messages
               .filter((message) => !(message.role === 'assistant' && message.isStreaming && isAgentResponding))
-              .map((message) => (
+              .map((message, index) => (
                 <motion.div
                   key={message.id}
                   initial={{ opacity: 0, y: 10 }}
@@ -559,8 +576,9 @@ export default function ChatPage() {
                   className={`max-w-[99%] ${message.role === 'user' ? 'ml-auto' : ''}`}
                 >
                   {message.role === 'user' ? (
-                    <div className="ml-auto max-w-[87%] rounded-[22px] border border-sky-200/15 bg-[linear-gradient(155deg,rgba(87,170,255,0.24),rgba(255,255,255,0.08)_55%,rgba(255,255,255,0.04))] px-4 py-3.5 text-[15px] leading-7 tracking-[-0.01em] text-zinc-100 shadow-[0_16px_32px_rgba(8,16,32,0.36)]">
-                      {message.content}
+                    <div className="ml-auto w-full max-w-[88%] rounded-[24px] border border-sky-200/18 bg-[linear-gradient(152deg,rgba(90,175,255,0.25),rgba(255,255,255,0.1)_52%,rgba(255,255,255,0.04))] px-4 py-3.5 text-[15px] leading-7 tracking-[-0.01em] text-zinc-100 shadow-[0_18px_36px_rgba(8,16,32,0.38)]">
+                      <p>{message.content}</p>
+                      <p className="mt-2 text-right text-[10px] uppercase tracking-[0.16em] text-sky-100/55">You · #{index + 1}</p>
                     </div>
                   ) : (
                     <AssistantResponseSurface
@@ -585,15 +603,19 @@ export default function ChatPage() {
                 transition={{ duration: 0.26, ease: [0.22, 1, 0.36, 1] }}
                 className="px-1 pt-0.5"
               >
-                <div className="max-w-[96%] space-y-3">
+                <div className="max-w-[97%] space-y-3">
                   <motion.div
                     initial={{ opacity: 0, y: 6 }}
                     animate={{ opacity: 1, y: 0 }}
                     exit={{ opacity: 0, y: -6 }}
                     transition={{ duration: 0.22 }}
-                    className="rounded-[22px] border border-white/[0.06] bg-[linear-gradient(155deg,rgba(255,255,255,0.07),rgba(255,255,255,0.025))] px-4 py-3.5 shadow-[0_12px_28px_rgba(0,0,0,0.22)] backdrop-blur-xl"
+                    className="rounded-[24px] border border-white/[0.06] bg-[linear-gradient(155deg,rgba(255,255,255,0.08),rgba(255,255,255,0.02))] px-4 py-3.5 shadow-[0_14px_32px_rgba(0,0,0,0.24)] backdrop-blur-xl"
                   >
-                    <p className="text-[15px] leading-7 tracking-[-0.012em] text-zinc-100/95">
+                    <p className="inline-flex items-center gap-1.5 rounded-full border border-white/[0.08] bg-white/[0.03] px-2 py-0.5 text-[10px] uppercase tracking-[0.14em] text-zinc-400">
+                      <Wand2 className="h-3 w-3" />
+                      Live reasoning
+                    </p>
+                    <p className="mt-2 text-[15px] leading-7 tracking-[-0.012em] text-zinc-100/95">
                       {liveIntro}
                     </p>
                   </motion.div>
@@ -608,7 +630,7 @@ export default function ChatPage() {
           !streamError.startsWith('LIMIT_REACHED:') &&
           !streamError.startsWith('AUTH_REQUIRED:') &&
           !streamError.startsWith('PREMIUM_REQUIRED:') ? (
-            <div className="mx-1 mt-4 rounded-[18px] border border-white/[0.08] bg-white/[0.03] px-3 py-2.5 text-sm text-zinc-300 shadow-[0_10px_24px_rgba(0,0,0,0.2)] backdrop-blur-xl">
+            <div className="mx-1 mt-4 rounded-[20px] border border-rose-300/18 bg-rose-300/10 px-3.5 py-2.5 text-sm text-rose-100/90 shadow-[0_12px_28px_rgba(0,0,0,0.2)] backdrop-blur-xl">
               We hit a processing issue, but your conversation is still safe.
               <button
                 type="button"
@@ -625,7 +647,7 @@ export default function ChatPage() {
             <button
               type="button"
               onClick={jumpToBottom}
-              className="sticky bottom-3 left-1/2 z-20 ml-auto mr-2 block rounded-full border border-white/[0.08] bg-black/50 px-3 py-1.5 text-xs text-zinc-200 backdrop-blur-xl transition hover:border-white/[0.14] hover:bg-black/58"
+              className="sticky bottom-3 left-1/2 z-20 ml-auto mr-2 block rounded-full border border-white/[0.1] bg-black/58 px-3 py-1.5 text-xs text-zinc-100 backdrop-blur-xl transition hover:border-white/[0.16] hover:bg-black/66"
             >
               Jump to latest
             </button>
@@ -674,7 +696,7 @@ export default function ChatPage() {
       />
 
       {isLimitReached && !isUnlimited ? (
-        <div className="fixed bottom-[calc(165px+env(safe-area-inset-bottom))] left-1/2 z-20 w-full max-w-md -translate-x-1/2 px-4">
+        <div className="fixed bottom-[calc(176px+env(safe-area-inset-bottom))] left-1/2 z-20 w-full max-w-md -translate-x-1/2 px-4">
           <div className="rounded-2xl border border-white/[0.08] bg-black/68 px-3 py-2.5 text-xs text-zinc-300 shadow-[0_14px_28px_rgba(0,0,0,0.38)] backdrop-blur-xl">
             You&apos;ve reached your daily limit. Upgrade for higher limits and file tools.
             <button
