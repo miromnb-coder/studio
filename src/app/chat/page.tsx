@@ -2,15 +2,15 @@
 
 import { useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { ClipboardPlus, FilePlus2, MessageSquarePlus } from 'lucide-react';
+import { AlarmClockPlus, ClipboardImage, ClipboardPlus, FilePlus2, MessageSquarePlus, Upload } from 'lucide-react';
 import { AnimatePresence, motion } from 'framer-motion';
 import { useAppStore } from '../store/app-store';
 import { AppShell } from '@/components/chat/AppShell';
-import { BottomActionSheet } from '@/components/chat/BottomActionSheet';
 import { ChatHeader } from '@/components/chat/ChatHeader';
 import { Composer } from '@/components/chat/Composer';
 import { MessageThread } from '@/components/chat/MessageThread';
 import { MenuSheet } from '@/components/chat/MenuSheet';
+import { QuickCreateMenu } from '@/components/chat/QuickCreateMenu';
 import { WorkspaceSheet } from '@/components/chat/WorkspaceSheet';
 import { sharedPrimaryMenu, sharedSecondaryMenu } from '@/components/chat/menu-config';
 
@@ -42,6 +42,9 @@ const createActions = [
   { id: 'new-chat', label: 'New Chat', icon: MessageSquarePlus },
   { id: 'new-task', label: 'New Task', icon: ClipboardPlus },
   { id: 'new-note', label: 'New Note', icon: FilePlus2 },
+  { id: 'upload-file', label: 'Upload File', icon: Upload },
+  { id: 'paste-screenshot', label: 'Paste Screenshot', icon: ClipboardImage },
+  { id: 'reminder', label: 'Reminder', icon: AlarmClockPlus },
 ];
 
 export default function ChatPage() {
@@ -69,6 +72,7 @@ export default function ChatPage() {
   const [listening, setListening] = useState(false);
 
   const recognitionRef = useRef<SpeechRecognitionLike | null>(null);
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
   const inputRef = useRef<HTMLInputElement | null>(null);
 
   const hasText = draftPrompt.trim().length > 0;
@@ -194,6 +198,36 @@ export default function ChatPage() {
     router.push(href);
   };
 
+  const openFilePicker = () => {
+    fileInputRef.current?.click();
+  };
+
+  const tryPasteScreenshot = async () => {
+    const hasClipboardRead = typeof navigator !== 'undefined' && 'clipboard' in navigator && 'read' in navigator.clipboard;
+
+    if (!hasClipboardRead) {
+      openFilePicker();
+      showNotice('Paste not supported', 'Clipboard image access is unavailable in this browser. Opened file picker instead.');
+      return;
+    }
+
+    try {
+      const clipboardItems = await navigator.clipboard.read();
+      const imageItem = clipboardItems.find((item) => item.types.some((type) => type.startsWith('image/')));
+
+      if (!imageItem) {
+        openFilePicker();
+        showNotice('No screenshot found', 'Clipboard did not include an image. Opened file picker instead.');
+        return;
+      }
+
+      showNotice('Screenshot ready', 'Clipboard image captured. Attachment flow can be connected next.');
+    } catch {
+      openFilePicker();
+      showNotice('Clipboard blocked', 'Could not read clipboard image. Opened file picker instead.');
+    }
+  };
+
   return (
     <AppShell>
       <div className="relative flex min-h-screen flex-col overflow-hidden">
@@ -227,10 +261,11 @@ export default function ChatPage() {
             value={draftPrompt}
             isSending={isSending}
             listening={listening}
+            createOpen={createOpen}
             onChange={setDraftPrompt}
             onSend={() => void handleSend()}
             onOpenCreate={() => {
-              setCreateOpen(true);
+              setCreateOpen((prev) => !prev);
               setConnectorsOpen(false);
               setMenuOpen(false);
             }}
@@ -243,24 +278,46 @@ export default function ChatPage() {
             inputRef={inputRef}
           />
 
-          <BottomActionSheet
+          <QuickCreateMenu
             open={createOpen}
-            title="Create"
             items={createActions}
             onClose={() => setCreateOpen(false)}
-            onSelect={(id) => {
+            onSelect={(id) => void (async () => {
               setCreateOpen(false);
               if (id === 'new-chat') {
                 createNewChat();
                 return;
               }
               if (id === 'new-task') {
-                router.push('/actions');
+                router.push('/tasks');
                 return;
               }
               if (id === 'new-note') {
                 router.push('/notes');
+                return;
               }
+              if (id === 'upload-file') {
+                openFilePicker();
+                return;
+              }
+              if (id === 'paste-screenshot') {
+                await tryPasteScreenshot();
+                return;
+              }
+              if (id === 'reminder') {
+                router.push('/alerts');
+              }
+            })()}
+          />
+
+          <input
+            ref={fileInputRef}
+            type="file"
+            className="sr-only"
+            onChange={(event) => {
+              const hasFile = Boolean(event.target.files?.length);
+              if (hasFile) showNotice('File selected', 'Attachment upload can be connected to message send next.');
+              event.target.value = '';
             }}
           />
 

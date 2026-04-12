@@ -8,6 +8,7 @@ type ComposerProps = {
   value: string;
   isSending: boolean;
   listening: boolean;
+  createOpen: boolean;
   onChange: (value: string) => void;
   onSend: () => void;
   onOpenCreate: () => void;
@@ -20,6 +21,7 @@ export function Composer({
   value,
   isSending,
   listening,
+  createOpen,
   onChange,
   onSend,
   onOpenCreate,
@@ -53,7 +55,7 @@ export function Composer({
 
         <div className="flex items-center justify-between gap-3">
           <div className="flex items-center gap-2.5">
-            <ComposerButton label="Add actions" onClick={onOpenCreate}>
+            <ComposerButton label="Quick create" onClick={onOpenCreate} active={createOpen} variant="quick-create">
               <Plus className="h-[18px] w-[18px]" strokeWidth={1.75} />
             </ComposerButton>
 
