@@ -268,29 +268,38 @@ export async function runFinanceAgent(input: FinanceAgentInput): Promise<Finance
     monthlyNet !== 0 ? `Estimated monthly net: ${formatMoney(monthlyNet)}.` : '',
   ].filter(Boolean).join(' ');
 
-  const understandingLine = `What I understood: ${input.route.goal.realObjective || input.route.goal.inferredGoal}`;
-  const whyFirst = highestImpact
-    ? `Why this first: It scores highest on impact × urgency × ease for your current situation.`
-    : 'Why this first: It is the best high-certainty move with current data.';
+  const focusObjective = input.route.goal.realObjective || input.route.goal.inferredGoal;
+  const observation = totalMonthly > 0
+    ? `I reviewed your current finance signals for "${focusObjective}". The main pressure point is recurring spend around ${formatMoney(totalMonthly)}/month.`
+    : `I reviewed your current finance signals for "${focusObjective}". The biggest gap is that the recurring spend baseline is still incomplete.`;
 
-  const nextStep = mode === 'operator'
-    ? `Reply "execute action 1" and I will generate the exact checklist/message to complete it.`
-    : `Reply "build plan" and I will turn action 1 into a concrete 7-day execution plan.`;
+  const interpretation = highestImpact
+    ? `This means the highest-leverage move is "${highestImpact.title}" because it balances impact, urgency, and execution ease better than the alternatives.`
+    : 'This means we should prioritize the fastest high-certainty action first, then expand once more data is available.';
+
+  const nextFocus = rankedActions[1]
+    ? `Next I would focus on validating "${rankedActions[1].title}" as the second move, so we keep momentum after action 1.`
+    : 'Next I would focus on collecting one additional numeric anchor so the second move can be ranked with higher confidence.';
+
+  const conclusion = mode === 'operator'
+    ? `The strongest next step is to execute "${highestImpact.title}" now. Reply "execute action 1" and I will generate the exact checklist/message.`
+    : `The strongest next step is to start with "${highestImpact.title}". Reply "build plan" and I will convert it into a practical 7-day plan.`;
 
   const answerDraft = [
-    understandingLine,
-    `What matters most now: ${summary}`,
-    `Best recommendation now: ${highestImpact.title} — ${highestImpact.rationale}`,
-    whyFirst,
+    `Observation: ${observation}`,
+    `Interpretation: ${interpretation}`,
+    `Next focus: ${nextFocus}`,
+    `Recommendation: ${conclusion}`,
+    `Current assessment: ${summary}`,
     `Fastest win: ${fastestWin.title}.`,
-    biggestRisk ? `Biggest Risk: ${biggestRisk.title}.` : '',
-    'Next actions:',
+    biggestRisk ? `Risk to watch: ${biggestRisk.title}.` : '',
+    'Action steps:',
     ...rankedActions.map((item, index) => `- ${index + 1}. ${item.title} (${item.rationale})`),
     noResultsRecovery.length ? `If signals are sparse: ${noResultsRecovery.join(' ')}` : '',
     cancelDraft.draft ? `Ready asset: A cancellation draft is available for ${String(cancelDraft.service || 'the selected service')}.` : '',
     `Confidence: ${confidence}.`,
     assumptions.length ? `Assumptions: ${assumptions.join(' ')}` : 'Assumptions: Minimal assumptions; most guidance is grounded in available signals.',
-    `Next Step: ${nextStep}`,
+    `Next Step: ${conclusion}`,
   ].filter(Boolean).join('\n');
 
   return {

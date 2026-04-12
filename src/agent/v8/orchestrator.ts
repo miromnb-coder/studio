@@ -16,11 +16,11 @@ function buildSafeFallbackReply(input: {
 
   if (intent === 'finance') {
     return [
-      'What I understood: You want a concrete financial recommendation, not generic tips.',
-      'What matters most: The current evidence is partial, so precision is limited.',
-      'Best recommendation now: Share one concrete monthly cost, bill, or subscription so I can prioritize correctly.',
-      'Why this first: A single number lets me rank high-impact actions instead of guessing.',
-      'Next actions:',
+      'Observation: You want a concrete financial move, but current evidence is still partial.',
+      'Interpretation: The main blocker is not options—it is missing numeric grounding for prioritization.',
+      'Next focus: Add one monthly cost, bill, or subscription so I can rank actions accurately.',
+      'Recommendation: Start with the highest recurring pressure item before broader budget changes.',
+      'Action steps:',
       '- Share one recurring charge or monthly spending target.',
       '- Ask for a subscription audit or savings plan.',
       '- Add Gmail or finance evidence if you want deeper analysis.',
@@ -33,8 +33,8 @@ function buildSafeFallbackReply(input: {
   }
 
   return clarificationQuestion
-    ? `I need one concrete detail to give a precise answer.\nQuestion: ${clarificationQuestion}`
-    : 'I need one concrete detail to give a precise answer.';
+    ? `Observation: I need one concrete detail to give a precise answer.\nNext focus: ${clarificationQuestion}`
+    : 'Observation: I need one concrete detail to give a precise answer.';
 }
 
 export async function runAgentV8(input: AgentRunInputV8): Promise<AgentResponseV8> {

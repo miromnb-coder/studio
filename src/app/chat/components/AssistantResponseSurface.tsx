@@ -65,6 +65,9 @@ export function AssistantResponseSurface({
     hasToolDetails ? 'details' : null,
   ].filter(Boolean);
 
+  const stagedPrefixes = ['Observation:', 'Interpretation:', 'Next focus:', 'Recommendation:'];
+  const contentLines = (message.content || '').split('\n').filter((line) => line.trim().length > 0);
+
   return (
     <motion.section
       initial={{ opacity: 0, y: 8 }}
@@ -73,9 +76,25 @@ export function AssistantResponseSurface({
       className="max-w-[96%] space-y-3"
     >
       <div className="px-0.5">
-        <div className="space-y-2 text-[15px] leading-8 tracking-[-0.01em] text-zinc-100/94">
-          {message.content || (message.isStreaming ? ' ' : '')}
-        </div>
+        {contentLines.length > 0 ? (
+          <div className="space-y-1.5 text-[15px] leading-8 tracking-[-0.01em] text-zinc-100/94">
+            {contentLines.map((line, idx) => {
+              const isStageLine = stagedPrefixes.some((prefix) => line.startsWith(prefix));
+              return (
+                <p
+                  key={`${message.id}-line-${idx}`}
+                  className={isStageLine ? 'rounded-xl border border-white/[0.04] bg-white/[0.015] px-2.5 py-1' : 'whitespace-pre-wrap'}
+                >
+                  {line}
+                </p>
+              );
+            })}
+          </div>
+        ) : (
+          <div className="space-y-2 text-[15px] leading-8 tracking-[-0.01em] text-zinc-100/94">
+            {message.isStreaming ? ' ' : ''}
+          </div>
+        )}
       </div>
 
       <AnimatePresence>

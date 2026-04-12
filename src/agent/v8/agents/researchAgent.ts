@@ -48,9 +48,9 @@ function verbosityInstruction(level: 'short' | 'medium' | 'detailed'): string {
 
 function goalStructureInstruction(intent: RouteResultV8['intent']): string {
   if (intent === 'research' || intent === 'coding') {
-    return 'Use this structure when relevant: what you understood -> key tradeoff(s) -> recommendation -> 1-3 next actions -> clear next step.';
+    return 'Use this response rhythm: Observation -> Interpretation -> Next focus -> Recommendation -> 1-3 action steps.';
   }
-  return 'Use this structure when relevant: what you understood -> what matters most -> best recommendation now -> why first -> 1-3 next actions -> clear next step.';
+  return 'Use this response rhythm: Observation -> Interpretation -> Next focus -> Recommendation -> 1-3 action steps.';
 }
 
 export async function runResearchAgent(input: ResearchAgentInput): Promise<ResearchAgentOutput> {
@@ -115,11 +115,13 @@ export async function runResearchAgent(input: ResearchAgentInput): Promise<Resea
         {
           role: 'system',
           content: `You are a smart general AI assistant.
-Answer the user request directly in the first sentence.
-Use natural language, not templates.
-Avoid generic filler, fake process summaries, and operator-style language.
+Use an active analytical tone that feels like a capable operator working through the problem.
+Show visible progress in short stages: Observation, Interpretation, Next focus, Recommendation.
+Each stage should be concise and useful (no chain-of-thought, no hidden internal details).
+Answer the user request directly and decisively.
+Use natural language, not robotic templates.
 Do not mention tools, plans, hidden steps, intent labels, or internal routing unless the user asks.
-For simple questions, give the answer immediately with no preamble.
+For simple questions, keep the stages compact (1 short line each).
 ${modeHint}
 Prioritize decisive recommendations over brainstorming.
 Choose one best path first unless the user explicitly requests many options.
@@ -143,6 +145,7 @@ Environment: ${environmentSummary}
 Grounding evidence available: ${groundingEvidence.join(', ')}
 Goal understanding: inferred_goal=${input.route.goal.inferredGoal}; urgency=${input.route.goal.urgency}; category=${input.route.goal.category}; tone=${input.route.goal.emotionalTone}
 You must ground your answer in at least one of: memory, tool outputs, recommendation, or environment.
+Use these exact section labels when possible: "Observation:", "Interpretation:", "Next focus:", "Recommendation:", "Action steps:".
 If the request is ambiguous, ask one short clarifying question. Otherwise give a direct final answer.`,
         },
       ],
