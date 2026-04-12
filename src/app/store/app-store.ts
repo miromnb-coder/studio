@@ -452,11 +452,23 @@ async function streamAssistantResponse(requestId: string, assistantMessageId: st
       setState((prev) => {
         const messages = prev.messageState[conversationId] ?? [];
         const content = event.content || streamedText || 'I could not generate a response.';
+        const fallbackSteps = prev.activeSteps.map((step) => ({
+          action: step.label,
+          status: step.status === 'running' ? 'completed' : step.status,
+          summary: undefined,
+        }));
+        const mergedMetadata = {
+          ...(event.metadata || {}),
+          steps:
+            Array.isArray(event.metadata?.steps) && event.metadata.steps.length > 0
+              ? event.metadata.steps
+              : fallbackSteps,
+        };
 
         return {
           ...prev,
           activeAgent: DEFAULT_ACTIVE_AGENT,
-          activeSteps: (event.metadata?.steps || prev.activeSteps).map((step) => ({
+          activeSteps: (mergedMetadata.steps || prev.activeSteps).map((step) => ({
             id: createId(),
             label: 'action' in step ? step.action : step.label,
             status:
@@ -473,7 +485,7 @@ async function streamAssistantResponse(requestId: string, assistantMessageId: st
                 ? {
                     ...message,
                     content,
-                    agentMetadata: event.metadata,
+                    agentMetadata: mergedMetadata,
                   }
                 : message,
             ),

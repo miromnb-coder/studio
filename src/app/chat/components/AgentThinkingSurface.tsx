@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useMemo } from 'react';
 import { ThinkingIndicator } from './ThinkingIndicator';
 import { AgentExecutionTimeline, type ExecutionStep } from './AgentExecutionTimeline';
 
@@ -10,8 +10,6 @@ type AgentThinkingSurfaceProps = {
 };
 
 export function AgentThinkingSurface({ statusText, steps }: AgentThinkingSurfaceProps) {
-  const [showDetails, setShowDetails] = useState(true);
-
   const running = steps.find((step) => step.status === 'running');
   const failed = steps.find((step) => step.status === 'failed');
   const completedCount = steps.filter((step) => step.status === 'completed').length;
@@ -32,10 +30,10 @@ export function AgentThinkingSurface({ statusText, steps }: AgentThinkingSurface
   }, [completedCount, steps]);
 
   return (
-    <div className="max-w-[94%] space-y-2.5 rounded-[20px] border border-white/[0.06] bg-[linear-gradient(170deg,rgba(255,255,255,0.03),rgba(255,255,255,0.012))] p-3.5 shadow-[0_14px_30px_rgba(0,0,0,0.24)]">
+    <div className="max-w-[96%] space-y-2.5 rounded-[22px] border border-white/[0.06] bg-[linear-gradient(170deg,rgba(255,255,255,0.04),rgba(255,255,255,0.015))] p-3.5 shadow-[0_14px_30px_rgba(0,0,0,0.24)]">
       <ThinkingIndicator phase={phase} detail={detail} />
 
-      <div className="rounded-xl border border-white/[0.05] bg-white/[0.015] px-2.5 py-2">
+      <div className="rounded-2xl border border-white/[0.06] bg-white/[0.02] px-2.5 py-2">
         <div className="mb-1.5 flex items-center justify-between text-[10.5px] text-zinc-400">
           <span>{progressLabel}</span>
           <span>{progress}%</span>
@@ -49,22 +47,18 @@ export function AgentThinkingSurface({ statusText, steps }: AgentThinkingSurface
       </div>
 
       {steps.length > 0 ? (
-        <div className="pl-0.5 pt-0.5">
-          <button
-            type="button"
-            onClick={() => setShowDetails((current) => !current)}
-            className="inline-flex items-center gap-1.5 rounded-full border border-white/[0.05] bg-white/[0.02] px-2.5 py-1 text-[10.5px] font-medium tracking-[0.005em] text-zinc-400 transition-all duration-200 hover:border-white/[0.09] hover:text-zinc-200"
-          >
-            <span className={`h-1.5 w-1.5 rounded-full ${failed ? 'bg-rose-300/90' : running ? 'bg-sky-300/90' : 'bg-emerald-300/90'}`} />
-            <span>{showDetails ? 'Hide run details' : 'Show run details'}</span>
-          </button>
+        <div className="px-0.5 pt-0.5">
+          <p className="mb-1.5 text-[10.5px] font-medium uppercase tracking-[0.08em] text-zinc-500">
+            Visible work
+          </p>
+          <AgentExecutionTimeline steps={steps} />
         </div>
       ) : null}
 
-      {showDetails ? (
-        <div className="pt-0.5 pl-0.5">
-          <AgentExecutionTimeline steps={steps} />
-        </div>
+      {!steps.length ? (
+        <p className="px-0.5 text-[11px] text-zinc-500">
+          Preparing stable work steps…
+        </p>
       ) : null}
     </div>
   );
