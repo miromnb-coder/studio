@@ -180,7 +180,7 @@ export default function ChatPage() {
 
   const onConversations = () => {
     closeAllSheets();
-    router.push('/history');
+    router.push('/memory');
   };
 
   const onSignOut = () => {
@@ -250,7 +250,7 @@ export default function ChatPage() {
                 return;
               }
               if (id === 'new-task') {
-                router.push('/tasks');
+                router.push('/actions');
                 return;
               }
               if (id === 'new-note') {

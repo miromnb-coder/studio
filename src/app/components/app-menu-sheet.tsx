@@ -55,7 +55,7 @@ export function AppMenuSheet() {
               return;
             }
             if (row.action === 'conversations') {
-              closeAndNavigate('/history');
+              closeAndNavigate('/memory');
               return;
             }
             if (row.href) {

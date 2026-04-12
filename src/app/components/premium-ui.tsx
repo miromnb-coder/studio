@@ -2,7 +2,8 @@
 
 import type { ReactNode } from 'react';
 import { motion } from 'framer-motion';
-import { Sparkles } from 'lucide-react';
+import { ChevronLeft, Sparkles } from 'lucide-react';
+import { useRouter } from 'next/navigation';
 
 type AppShellProps = {
   children: ReactNode;
@@ -11,6 +12,37 @@ type AppShellProps = {
 
 export function AppShell({ children, className = '' }: AppShellProps) {
   return <main className={`screen premium-bg pb-12 ${className}`.trim()}>{children}</main>;
+}
+
+export function ProductPageHeader({
+  pageTitle,
+  pageSubtitle,
+  showBack = false,
+}: {
+  pageTitle: string;
+  pageSubtitle: string;
+  showBack?: boolean;
+}) {
+  const router = useRouter();
+
+  return (
+    <header className="mb-4 rounded-[24px] border border-[#d9dde4] bg-[#f4f5f8] px-4 pb-4 pt-3 shadow-[0_8px_18px_rgba(66,72,88,0.06)]">
+      <div className="mb-3 flex items-center justify-between">
+        <button
+          type="button"
+          onClick={() => router.back()}
+          className={`inline-flex h-9 w-9 items-center justify-center rounded-full border border-[#d6dbe3] bg-[#eef1f5] text-[#5f6775] ${showBack ? '' : 'opacity-0 pointer-events-none'}`.trim()}
+          aria-label="Go back"
+        >
+          <ChevronLeft className="h-4 w-4" />
+        </button>
+        <p className="text-[36px] font-semibold leading-none tracking-[-0.04em] text-[#2a3140]">Kivo</p>
+        <span className="h-9 w-9" />
+      </div>
+      <h1 className="text-[40px] font-semibold leading-none tracking-[-0.04em] text-[#252c3a]">{pageTitle}</h1>
+      <p className="mt-1.5 text-base text-[#6f7786]">{pageSubtitle}</p>
+    </header>
+  );
 }
 
 type PremiumCardProps = {
@@ -50,8 +82,8 @@ export function SmartButton({
 }: React.ButtonHTMLAttributes<HTMLButtonElement> & { variant?: 'primary' | 'secondary' | 'ghost' }) {
   const base = 'tap-feedback inline-flex items-center justify-center rounded-[14px] px-4 py-2.5 text-sm font-medium tracking-[-0.01em]';
   const variants = {
-    primary: 'border border-white/16 bg-white text-[#1f2329] hover:bg-zinc-100 shadow-[0_10px_24px_rgba(0,0,0,0.38)]',
-    secondary: 'border border-white/6 bg-[#f8f9fb] text-zinc-200 hover:bg-white/[0.06]',
+    primary: 'border border-[#d0d6df] bg-[#ecf0f6] text-[#2f3644] hover:bg-[#e5eaf1] shadow-[0_8px_20px_rgba(66,72,88,0.08)]',
+    secondary: 'border border-[#d9dde4] bg-[#f7f8fb] text-[#4f5661] hover:bg-[#f0f3f7]',
     ghost: 'text-[#4f5661] hover:bg-[#f4f6f8]',
   } as const;
 
