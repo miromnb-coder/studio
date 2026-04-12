@@ -5,9 +5,13 @@ import type { ComponentType, ReactNode } from 'react';
 import { useRouter } from 'next/navigation';
 import {
   ArrowLeft,
+  Bell,
   ChevronRight,
   CircleUserRound,
+  ClipboardPlus,
   Crown,
+  FilePlus2,
+  Link2,
   LogOut,
   Menu,
   MessageSquare,
@@ -17,12 +21,8 @@ import {
   Settings,
   Speech,
   SquareCheckBig,
-  Wrench,
   Workflow,
-  Link2,
-  ClipboardPlus,
-  FilePlus2,
-  Bell,
+  Wrench,
 } from 'lucide-react';
 import { AnimatePresence, motion } from 'framer-motion';
 import { useAppStore } from '../store/app-store';
@@ -60,7 +60,7 @@ const primaryMenu = [
 
 const secondaryMenu = [
   { label: 'Profile', icon: CircleUserRound, href: '/profile' },
-  { label: 'Settings', icon: Settings, href: '/settings' },
+  { label: 'Settings', icon: Settings, href: '/settings', badge: 'New' },
   { label: 'Upgrade', icon: Crown, href: '/upgrade' },
 ];
 
@@ -77,6 +77,7 @@ const connectorActions = [
 
 export default function ChatPage() {
   const router = useRouter();
+
   const createConversation = useAppStore((s) => s.createConversation);
   const openConversation = useAppStore((s) => s.openConversation);
   const draftPrompt = useAppStore((s) => s.draftPrompt);
@@ -120,6 +121,7 @@ export default function ChatPage() {
 
   const handleSend = async () => {
     if (!hasText || isSending) return;
+
     setIsSending(true);
     try {
       await sendMessage(draftPrompt.trim());
@@ -132,6 +134,7 @@ export default function ChatPage() {
 
   const ensureSpeechRecognition = () => {
     if (recognitionRef.current) return recognitionRef.current;
+
     const SpeechRecognitionCtor = window.SpeechRecognition || window.webkitSpeechRecognition;
     if (!SpeechRecognitionCtor) return null;
 
@@ -142,13 +145,15 @@ export default function ChatPage() {
     recognition.onresult = (event) => {
       const transcript = event.results?.[0]?.[0]?.transcript?.trim();
       if (!transcript) return;
-      setDraftPrompt(`${draftPrompt ? `${draftPrompt} ` : ''}${transcript}`.trim());
+      const nextValue = draftPrompt ? `${draftPrompt} ${transcript}` : transcript;
+      setDraftPrompt(nextValue.trim());
     };
     recognition.onerror = () => {
       setListening(false);
       showNotice('Speech unavailable', 'Microphone input could not be captured.');
     };
     recognition.onend = () => setListening(false);
+
     recognitionRef.current = recognition;
     return recognition;
   };
@@ -207,19 +212,19 @@ export default function ChatPage() {
   };
 
   return (
-    <main className="min-h-screen bg-[#efeff2] px-3 py-3 text-[#4a5160] sm:px-6">
-      <section className="mx-auto flex min-h-[calc(100vh-24px)] w-full max-w-[430px] flex-col overflow-hidden rounded-[34px] border border-[#dfe2e8] bg-[#ececf1] shadow-[0_20px_40px_rgba(82,88,104,0.12)]">
+    <main className="min-h-screen bg-[#efeff2] px-3 py-3 text-[#4b5260] sm:px-6">
+      <section className="mx-auto flex min-h-[calc(100vh-24px)] w-full max-w-[430px] flex-col overflow-hidden rounded-[34px] border border-[#dfe2e8] bg-[#ececf1] shadow-[0_18px_38px_rgba(82,88,104,0.11)]">
         <header className="flex h-[72px] items-center justify-between border-b border-[#d9dde4] px-5">
           <button
             type="button"
             onClick={onBack}
             aria-label="Go back"
-            className="inline-flex h-10 w-10 items-center justify-center rounded-full text-[#616978] transition hover:bg-[#e7e9ee]"
+            className="inline-flex h-[40px] w-[40px] items-center justify-center rounded-full text-[#68707d] transition hover:bg-[#e7e9ee]"
           >
             <ArrowLeft className="h-[22px] w-[22px]" strokeWidth={1.9} />
           </button>
 
-          <h1 className="text-[24px] font-medium tracking-[-0.03em] text-[#4b5261]">Kivo</h1>
+          <h1 className="text-[23px] font-medium tracking-[-0.03em] text-[#4c5361]">Kivo</h1>
 
           <button
             type="button"
@@ -229,16 +234,16 @@ export default function ChatPage() {
               setConnectorsOpen(false);
             }}
             aria-label="Open menu"
-            className="inline-flex h-[42px] w-[42px] items-center justify-center rounded-full border border-[#cfd4dc] bg-[#ebecef] text-[#737b88] shadow-[0_2px_6px_rgba(67,74,88,0.03)]"
+            className="inline-flex h-[42px] w-[42px] items-center justify-center rounded-full border border-[#d0d5dd] bg-[#eceef2] text-[#767e8b] shadow-[0_2px_6px_rgba(67,74,88,0.03)]"
           >
             <Menu className="h-[20px] w-[20px]" strokeWidth={1.8} />
           </button>
         </header>
 
         <div className="relative flex flex-1 flex-col">
-          <div className="flex flex-1 items-center justify-center px-8 pb-[164px] pt-6">
+          <div className="flex flex-1 items-center justify-center px-8 pb-[168px] pt-8">
             <p
-              className="max-w-[300px] text-center text-[19px] font-normal leading-[1.15] tracking-[-0.02em] text-[#474d5b]"
+              className="max-w-[310px] text-center text-[18px] font-normal leading-[1.18] tracking-[-0.015em] text-[#474d5a]"
               style={{ fontFamily: 'ui-serif, Georgia, Times, serif' }}
             >
               What can I do for you?
@@ -251,7 +256,7 @@ export default function ChatPage() {
                 <motion.button
                   type="button"
                   aria-label="Close menu"
-                  className="absolute inset-0 z-20 bg-[#8f97a614]"
+                  className="absolute inset-0 z-20 bg-[#8f97a610]"
                   initial={{ opacity: 0 }}
                   animate={{ opacity: 1 }}
                   exit={{ opacity: 0 }}
@@ -259,13 +264,13 @@ export default function ChatPage() {
                 />
 
                 <motion.aside
-                  initial={{ y: 24, opacity: 0.7 }}
+                  initial={{ y: 22, opacity: 0.8 }}
                   animate={{ y: 0, opacity: 1 }}
-                  exit={{ y: 28, opacity: 0 }}
-                  transition={{ type: 'spring', stiffness: 280, damping: 28 }}
-                  className="absolute inset-x-0 bottom-0 z-30 rounded-t-[30px] border-t border-[#d9dde4] bg-[#ececf1] px-4 pb-[calc(16px+env(safe-area-inset-bottom))] pt-3 shadow-[0_-12px_28px_rgba(66,72,88,0.09)]"
+                  exit={{ y: 24, opacity: 0 }}
+                  transition={{ type: 'spring', stiffness: 300, damping: 30 }}
+                  className="absolute inset-x-0 bottom-0 z-30 rounded-t-[30px] border-t border-[#d9dde4] bg-[#ececf1] px-4 pb-[calc(16px+env(safe-area-inset-bottom))] pt-3 shadow-[0_-12px_26px_rgba(66,72,88,0.08)]"
                 >
-                  <div className="mx-auto mb-4 h-[5px] w-14 rounded-full bg-[#d2d5dc]" />
+                  <div className="mx-auto mb-4 h-[5px] w-14 rounded-full bg-[#d1d5dc]" />
                   <h2 className="mb-3 px-2 text-[18px] font-medium tracking-[-0.02em] text-[#5b6270]">Menu</h2>
 
                   <MenuGroup
@@ -297,7 +302,7 @@ export default function ChatPage() {
           </AnimatePresence>
 
           <div className="pointer-events-none absolute inset-x-5 bottom-[calc(20px+env(safe-area-inset-bottom))] z-10">
-            <div className="pointer-events-auto rounded-[28px] border border-[#d9dde4] bg-[#f3f4f7] px-4 pb-4 pt-4 shadow-[0_16px_24px_rgba(70,76,90,0.08)]">
+            <div className="pointer-events-auto rounded-[28px] border border-[#d9dde4] bg-[#f3f4f7] px-4 pb-4 pt-4 shadow-[0_14px_22px_rgba(70,76,90,0.07)]">
               <label htmlFor="chat-composer" className="sr-only">
                 Assign a task or ask anything
               </label>
@@ -314,7 +319,7 @@ export default function ChatPage() {
                   }
                 }}
                 placeholder="Assign a task or ask anything"
-                className="mb-4 w-full bg-transparent px-1 text-[16px] font-normal text-[#7b8290] placeholder:text-[#9ea4b0] outline-none"
+                className="mb-4 w-full bg-transparent px-1 text-[16px] font-normal text-[#7d8592] placeholder:text-[#9ea4b0] outline-none"
               />
 
               <div className="flex items-center justify-between">
@@ -386,7 +391,7 @@ export default function ChatPage() {
           />
         </div>
 
-        <div className="mx-auto mb-3 mt-auto h-1.5 w-[110px] rounded-full bg-[#14181f]/42" />
+        <div className="mx-auto mb-3 mt-auto h-1.5 w-[110px] rounded-full bg-[#14181f]/38" />
       </section>
 
       <AnimatePresence>
@@ -415,6 +420,7 @@ function MenuGroup({
     icon: ComponentType<{ className?: string; strokeWidth?: number }>;
     href?: string;
     action?: string;
+    badge?: string;
   }>;
   onClick: (row: { label: string; href?: string; action?: string }) => void;
 }) {
@@ -422,6 +428,7 @@ function MenuGroup({
     <div className="overflow-hidden rounded-[18px] border border-[#d7dbe2] bg-[#f4f5f8] shadow-[0_6px_14px_rgba(66,72,88,0.05)]">
       {rows.map((row) => {
         const Icon = row.icon;
+
         return (
           <button
             key={row.label}
@@ -431,11 +438,13 @@ function MenuGroup({
           >
             <Icon className="h-5 w-5 text-[#7d8492]" strokeWidth={1.8} />
             <span className="flex-1 text-[16px] font-normal text-[#59606d]">{row.label}</span>
-            {row.label === 'Settings' ? (
+
+            {row.badge ? (
               <span className="rounded-full bg-[#e7e9ee] px-2 py-0.5 text-[11px] font-medium text-[#9097a4]">
-                New
+                {row.badge}
               </span>
             ) : null}
+
             <ChevronRight className="h-5 w-5 text-[#a3a9b5]" strokeWidth={1.8} />
           </button>
         );
@@ -463,7 +472,7 @@ function SmallIconButton({
       onClick={onClick}
       aria-label={label}
       disabled={disabled}
-      className={`inline-flex h-[54px] w-[54px] items-center justify-center rounded-full border border-[#d2d6de] text-[#808896] transition ${
+      className={`inline-flex h-[50px] w-[50px] items-center justify-center rounded-full border border-[#d2d6de] text-[#848b98] transition ${
         active ? 'bg-[#e4e7ed]' : 'bg-[#eef0f4]'
       } disabled:opacity-50`}
     >
@@ -491,7 +500,7 @@ function BottomMiniSheet({
         <>
           <motion.button
             type="button"
-            className="absolute inset-0 z-20 bg-[#8f97a614]"
+            className="absolute inset-0 z-20 bg-[#8f97a610]"
             aria-label={`Close ${title}`}
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
@@ -500,13 +509,14 @@ function BottomMiniSheet({
           />
 
           <motion.aside
-            initial={{ y: 26, opacity: 0.72 }}
+            initial={{ y: 24, opacity: 0.82 }}
             animate={{ y: 0, opacity: 1 }}
-            exit={{ y: 30, opacity: 0 }}
-            transition={{ type: 'spring', stiffness: 280, damping: 28 }}
+            exit={{ y: 26, opacity: 0 }}
+            transition={{ type: 'spring', stiffness: 300, damping: 30 }}
             className="absolute inset-x-4 bottom-[calc(116px+env(safe-area-inset-bottom))] z-30 rounded-[24px] border border-[#d7dbe2] bg-[#f4f5f8] p-3 shadow-[0_12px_24px_rgba(66,72,88,0.08)]"
           >
             <p className="mb-2 px-1 text-[14px] font-medium text-[#636a77]">{title}</p>
+
             {items.map((item) => {
               const Icon = item.icon;
               return (
