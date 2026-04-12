@@ -93,6 +93,34 @@ function mergeStepInput(
   return input;
 }
 
+
+
+function summarizeToolGain(tool: ToolNameV8, output: Record<string, unknown>): string {
+  if (tool === 'finance_read') {
+    const profile = asRecord(output.profile);
+    const total = asNumber(profile.total_monthly_cost);
+    if (total) return `Baseline monthly cost identified (${total}).`;
+    return 'Finance baseline loaded but still sparse.';
+  }
+  if (tool === 'gmail_fetch') {
+    const analyzed = asNumber(output.emailsAnalyzed) || 0;
+    const recurring = asNumber(output.recurringPaymentsFound) || 0;
+    return analyzed > 0 ? `Scanned ${analyzed} emails; found ${recurring} recurring payment signals.` : 'No meaningful email signal found.';
+  }
+  if (tool === 'generate_recommendations') {
+    const count = Array.isArray(output.recommendations) ? output.recommendations.length : 0;
+    return count > 0 ? `Generated ${count} ranked recommendations.` : 'No ranked recommendations generated.';
+  }
+  if (tool === 'price_change_detector') {
+    const suspicious = asNumber(output.suspiciousCount) || 0;
+    return suspicious > 0 ? `Detected ${suspicious} suspicious price changes.` : 'No suspicious price change detected.';
+  }
+  if (tool === 'savings_plan_generator') {
+    const monthly = asNumber(output.recommendedMonthlySavings);
+    return monthly ? `Estimated automatable monthly savings of ${monthly}.` : 'Savings plan generated without numeric target.';
+  }
+  return Object.keys(output).length > 0 ? 'Tool returned usable structured data.' : 'Tool returned limited value.';
+}
 export async function executePlanV8(plan: ExecutionPlanV8, context: AgentContextV8): Promise<ExecutionResultV8> {
   const steps: ExecutionStepResultV8[] = [];
   let structuredData: Record<string, unknown> = {};
@@ -128,13 +156,15 @@ export async function executePlanV8(plan: ExecutionPlanV8, context: AgentContext
         throw new Error(lastError || 'Tool returned no result');
       }
 
+      const gainSummary = summarizeToolGain(planStep.tool, result.output || {});
+
       if (!result.ok && !planStep.required) {
         steps.push({
           stepId: planStep.id,
           title: planStep.title,
           tool: planStep.tool,
           status: 'skipped',
-          summary: `${planStep.description} (optional step skipped)`,
+          summary: `${planStep.description} (optional step skipped). ${gainSummary}`,
           input: resolvedInput,
           output: result.output,
           error: result.error,
@@ -147,15 +177,23 @@ export async function executePlanV8(plan: ExecutionPlanV8, context: AgentContext
         title: planStep.title,
         tool: planStep.tool,
         status: result.ok ? 'completed' : 'failed',
-        summary: planStep.description,
+        summary: `${planStep.description} ${gainSummary}`,
         input: resolvedInput,
         output: result.output,
         error: result.error,
       });
 
+      const toolInsights = asRecord(structuredData._toolInsights);
       structuredData = {
         ...structuredData,
         [planStep.tool]: result.output,
+        _toolInsights: {
+          ...toolInsights,
+          [planStep.tool]: {
+            gained: gainSummary,
+            ok: result.ok,
+          },
+        },
       };
       if (planStep.required && result.ok) completedRequired += 1;
     } catch (error) {
@@ -164,7 +202,7 @@ export async function executePlanV8(plan: ExecutionPlanV8, context: AgentContext
         title: planStep.title,
         tool: planStep.tool,
         status: planStep.required ? 'failed' : 'skipped',
-        summary: planStep.description,
+        summary: `${planStep.description} (execution failed before value assessment).`,
         input: planStep.input,
         output: {},
         error: error instanceof Error ? error.message : 'Unknown tool execution error',

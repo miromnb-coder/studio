@@ -100,6 +100,9 @@ export async function runAgentV8(input: AgentRunInputV8): Promise<AgentResponseV
     usedTools: execution.steps.filter((s) => s.status === 'completed').map((s) => s.tool),
     plan,
     structuredData: execution.structuredData,
+    responseLanguage: route.responseLanguage,
+    responseMode: route.responseMode,
+    goal: route.goal,
   });
 
   const finalReply =
@@ -152,6 +155,14 @@ export async function runAgentV8(input: AgentRunInputV8): Promise<AgentResponseV
     metadata: {
       ...response.metadata,
       state,
+      structuredData: {
+        ...response.metadata.structuredData,
+        thinkingLabels: route.responseLanguage === 'fi'
+          ? ['Ymmärretään pyyntöä', 'Tarkistetaan kontekstia', 'Tarkistetaan dataa', 'Arvioidaan vaihtoehtoja', 'Rakennetaan vastausta', 'Viimeistellään vastaus']
+          : route.responseLanguage === 'sv'
+            ? ['Förstår förfrågan', 'Granskar kontext', 'Kontrollerar data', 'Rangordnar alternativ', 'Bygger svar', 'Slutför svar']
+            : ['Understanding request', 'Reviewing context', 'Checking data', 'Ranking options', 'Building answer', 'Finalizing response'],
+      },
     },
   };
 }

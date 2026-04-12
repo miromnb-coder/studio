@@ -79,6 +79,53 @@ function buildNoResultsRecovery(gmailSignals: { connected: boolean; analyzed: nu
   ];
 }
 
+
+
+function labelsForLanguage(lang: string) {
+  if (lang === 'fi') {
+    return {
+      observation: 'Ymmärrys',
+      interpretation: 'Tulkinta',
+      keyInsight: 'Ydinoivallus',
+      recommendation: 'Suositus',
+      actionSteps: 'Seuraavat askeleet',
+      confidence: 'Varmuustaso',
+      assumptions: 'Oletukset',
+      nextStep: 'Seuraava askel',
+      currentAssessment: 'Nykytilan arvio',
+      fastestWin: 'Nopein voitto',
+      riskWatch: 'Seurattava riski',
+    };
+  }
+  if (lang === 'sv') {
+    return {
+      observation: 'Förståelse',
+      interpretation: 'Tolkning',
+      keyInsight: 'Nyckelinsikt',
+      recommendation: 'Rekommendation',
+      actionSteps: 'Nästa steg',
+      confidence: 'Säkerhet',
+      assumptions: 'Antaganden',
+      nextStep: 'Nästa steg',
+      currentAssessment: 'Lägesbild',
+      fastestWin: 'Snabbaste vinst',
+      riskWatch: 'Risk att bevaka',
+    };
+  }
+  return {
+    observation: 'Observation',
+    interpretation: 'Interpretation',
+    keyInsight: 'Key insight',
+    recommendation: 'Recommendation',
+    actionSteps: 'Action steps',
+    confidence: 'Confidence',
+    assumptions: 'Assumptions',
+    nextStep: 'Next Step',
+    currentAssessment: 'Current assessment',
+    fastestWin: 'Fastest win',
+    riskWatch: 'Risk to watch',
+  };
+}
 export async function runFinanceAgent(input: FinanceAgentInput): Promise<FinanceAgentOutput> {
   const financeRead = asRecord(input.execution.structuredData.finance_read);
   const profile = asRecord(financeRead.profile);
@@ -269,6 +316,8 @@ export async function runFinanceAgent(input: FinanceAgentInput): Promise<Finance
   ].filter(Boolean).join(' ');
 
   const focusObjective = input.route.goal.realObjective || input.route.goal.inferredGoal;
+  const language = input.route.responseLanguage || 'en';
+  const t = labelsForLanguage(language);
   const observation = totalMonthly > 0
     ? `I reviewed your current finance signals for "${focusObjective}". The main pressure point is recurring spend around ${formatMoney(totalMonthly)}/month.`
     : `I reviewed your current finance signals for "${focusObjective}". The biggest gap is that the recurring spend baseline is still incomplete.`;
@@ -282,24 +331,32 @@ export async function runFinanceAgent(input: FinanceAgentInput): Promise<Finance
     : 'Next I would focus on collecting one additional numeric anchor so the second move can be ranked with higher confidence.';
 
   const conclusion = mode === 'operator'
-    ? `The strongest next step is to execute "${highestImpact.title}" now. Reply "execute action 1" and I will generate the exact checklist/message.`
-    : `The strongest next step is to start with "${highestImpact.title}". Reply "build plan" and I will convert it into a practical 7-day plan.`;
+    ? language === 'fi'
+      ? `Paras seuraava siirto on toteuttaa "${highestImpact.title}" heti. Vastaa "toteuta askel 1", niin teen tarkan checklistan.`
+      : language === 'sv'
+        ? `Starkaste nästa steg är att genomföra "${highestImpact.title}" direkt. Svara "kör steg 1" så skriver jag en exakt checklista.`
+        : `The strongest next step is to execute "${highestImpact.title}" now. Reply "execute action 1" and I will generate the exact checklist/message.`
+    : language === 'fi'
+      ? `Paras seuraava siirto on aloittaa kohdasta "${highestImpact.title}". Vastaa "rakenna suunnitelma", niin teen käytännöllisen 7 päivän etenemisen.`
+      : language === 'sv'
+        ? `Starkaste nästa steg är att börja med "${highestImpact.title}". Svara "bygg plan" så gör jag en praktisk 7-dagarsplan.`
+        : `The strongest next step is to start with "${highestImpact.title}". Reply "build plan" and I will convert it into a practical 7-day plan.`;
 
   const answerDraft = [
-    `Observation: ${observation}`,
-    `Interpretation: ${interpretation}`,
-    `Next focus: ${nextFocus}`,
-    `Recommendation: ${conclusion}`,
-    `Current assessment: ${summary}`,
-    `Fastest win: ${fastestWin.title}.`,
-    biggestRisk ? `Risk to watch: ${biggestRisk.title}.` : '',
-    'Action steps:',
+    `${t.observation}: ${observation}`,
+    `${t.interpretation}: ${interpretation}`,
+    `${t.keyInsight}: ${highestImpact ? highestImpact.rationale : nextFocus}`,
+    `${t.recommendation}: ${conclusion}`,
+    `${t.currentAssessment}: ${summary}`,
+    `${t.fastestWin}: ${fastestWin.title}.`,
+    biggestRisk ? `${t.riskWatch}: ${biggestRisk.title}.` : '',
+    `${t.actionSteps}:`,
     ...rankedActions.map((item, index) => `- ${index + 1}. ${item.title} (${item.rationale})`),
     noResultsRecovery.length ? `If signals are sparse: ${noResultsRecovery.join(' ')}` : '',
     cancelDraft.draft ? `Ready asset: A cancellation draft is available for ${String(cancelDraft.service || 'the selected service')}.` : '',
-    `Confidence: ${confidence}.`,
-    assumptions.length ? `Assumptions: ${assumptions.join(' ')}` : 'Assumptions: Minimal assumptions; most guidance is grounded in available signals.',
-    `Next Step: ${conclusion}`,
+    `${t.confidence}: ${confidence}.`,
+    assumptions.length ? `${t.assumptions}: ${assumptions.join(' ')}` : `${t.assumptions}: Minimal assumptions; most guidance is grounded in available signals.`,
+    `${t.nextStep}: ${conclusion}`,
   ].filter(Boolean).join('\n');
 
   return {

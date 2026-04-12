@@ -39,12 +39,16 @@ export type ResponseModeV8 = 'analyst' | 'coach' | 'operator' | 'researcher';
 
 export type GoalUnderstandingV8 = {
   explicitRequest: string;
+  hiddenRequest: string;
   inferredGoal: string;
   realObjective?: string;
   urgency: 'low' | 'medium' | 'high';
   blockerLevel: 'none' | 'some' | 'high';
   riskLevel: 'low' | 'medium' | 'high';
   effortTolerance: 'low' | 'medium' | 'high';
+  speedVsDepth: 'speed' | 'balanced' | 'depth';
+  decisionType: 'informational' | 'choice' | 'execution' | 'emotional';
+  userConfidenceLevel: 'low' | 'medium' | 'high';
   horizon: 'immediate' | 'short_term' | 'long_term';
   preferredStyle: 'concise' | 'structured' | 'detailed' | 'supportive';
   category: 'cashflow' | 'savings' | 'debt' | 'subscriptions' | 'planning' | 'general';
@@ -52,6 +56,8 @@ export type GoalUnderstandingV8 = {
   priorityLens?: Array<'impact' | 'urgency' | 'effort' | 'certainty' | 'risk_reduction' | 'speed'>;
   missingCriticalData?: string[];
   emotionalTone: 'neutral' | 'stressed' | 'overwhelmed' | 'motivated';
+  inputLanguage: string;
+  responseLanguage: string;
 };
 
 export type AgentRole = 'system' | 'assistant' | 'user';
@@ -153,6 +159,8 @@ export type RouteResultV8 = {
   needsGmail: boolean;
   needsFinanceData: boolean;
   wantsRecommendations: boolean;
+  inputLanguage: string;
+  responseLanguage: string;
 };
 
 export type ToolNameV8 =
@@ -288,4 +296,7 @@ export type AgentCriticInputV8 = {
   usedTools: ToolNameV8[];
   plan: ExecutionPlanV8;
   structuredData?: Record<string, unknown>;
+  responseLanguage?: string;
+  responseMode?: ResponseModeV8;
+  goal?: GoalUnderstandingV8;
 };

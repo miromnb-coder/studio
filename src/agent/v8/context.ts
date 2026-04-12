@@ -28,9 +28,11 @@ function rankMemoriesByUsefulness(memories: AgentContextV8['memory']['relevantMe
     .map((item) => {
       const text = item.content.toLowerCase();
       const lexicalBoost = q.split(/\s+/).filter((token) => token.length > 3 && text.includes(token)).length * 0.07;
+      const languageBoost = /\b(language|kieli|språk|suomi|english|svenska)\b/.test(text) ? 0.08 : 0;
+      const preferenceBoost = /\b(prefer|like|avoid|simple|brief|step-by-step|lyhyt|selkeä|kort|enkel)\b/.test(text) ? 0.06 : 0;
       const importance = Number(item.importance || 0.5);
       const relevance = Number(item.relevanceScore || 0.6);
-      return { ...item, score: relevance * 0.65 + importance * 0.35 + lexicalBoost };
+      return { ...item, score: relevance * 0.6 + importance * 0.3 + lexicalBoost + languageBoost + preferenceBoost };
     })
     .sort((a, b) => b.score - a.score)
     .slice(0, 8);
@@ -101,8 +103,8 @@ function inferDecisionContext(params: {
             : 'unknown';
 
   const userPreferences = memoryTexts
-    .filter((text) => /prefer|like|avoid|monthly|yearly|automation|manual/i.test(text))
-    .slice(0, 5);
+    .filter((text) => /prefer|like|avoid|monthly|yearly|automation|manual|simple|brief|detailed|language|kieli|språk/i.test(text))
+    .slice(0, 6);
 
   return {
     activeGoal,
@@ -196,6 +198,20 @@ export async function buildContextV8(params: {
 
   const conversation = sanitizeHistory(params.history);
   const memorySummary = typeof safeMemory.summary === 'string' ? safeMemory.summary : 'No prior context available.';
+  const hasLanguagePrefMemory = filteredRelevantMemories.some((item) => /\b(language|kieli|språk|suomi|english|svenska)\b/i.test(item.content));
+
+  const enrichedRelevantMemories = hasLanguagePrefMemory
+    ? filteredRelevantMemories
+    : [
+        ...filteredRelevantMemories,
+        {
+          userId: params.userId,
+          content: `Preferred response language: ${params.route.responseLanguage}`,
+          type: 'preference' as const,
+          importance: 0.7,
+          relevanceScore: 0.9,
+        },
+      ].slice(0, includeFinance ? 8 : 4);
 
   return {
     supabase: params.supabase,
@@ -210,7 +226,7 @@ export async function buildContextV8(params: {
       financeProfile,
       financeEvents,
       semanticMemories: includeSemanticMemory ? safeMemory.semanticMemories || [] : [],
-      relevantMemories: filteredRelevantMemories,
+      relevantMemories: enrichedRelevantMemories,
     },
     intelligence: {
       operatorAlerts: params.operatorAlerts || [],
@@ -223,7 +239,7 @@ export async function buildContextV8(params: {
       route: params.route,
       message: params.message,
       memorySummary,
-      relevantMemories: filteredRelevantMemories,
+      relevantMemories: enrichedRelevantMemories,
       conversation,
       recommendations,
       outcomes,
