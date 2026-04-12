@@ -2,7 +2,7 @@
 
 import { AnimatePresence, motion } from 'framer-motion';
 import { useMemo, useState } from 'react';
-import { Check, CircleAlert, Loader2 } from 'lucide-react';
+import { Check, CircleAlert, Loader2, Sparkles, Zap } from 'lucide-react';
 import FinanceResultCard from '@/components/chat/FinanceResultCard';
 import FinanceActionResultCard from '@/components/chat/FinanceActionResultCard';
 import type { Message } from '@/app/store/app-store';
@@ -23,13 +23,14 @@ type ResponseSection = {
   body: string;
 };
 
-const DEFAULT_SECTION_ORDER = [
-  'What matters most now',
-  'Best recommendation',
-  'Why this matters',
-  'Next move',
-  'Deeper detail',
-] as const;
+
+const KEY_TITLES = {
+  mainInsight: 'Main insight',
+  bestRecommendation: 'Best recommendation',
+  whyThisMatters: 'Why this matters',
+  nextMove: 'Next move',
+  deepDetail: 'Deep detail',
+} as const;
 
 function cleanLine(value: string) {
   return value
@@ -54,22 +55,28 @@ function getReadingMinutes(text: string) {
   return Math.max(1, Math.round(words / 180));
 }
 
-function titleFromChunk(chunk: string, index: number) {
-  const explicitMatch = chunk.match(
-    /^(what matters most now|best recommendation|why this matters|next move|deeper detail|tärkein nyt|paras suositus|miksi tämä on tärkeää|seuraava askel|lisätiedot)\s*:?\s*/i,
-  );
+function matchNamedSection(chunk: string) {
+  const pairs = [
+    ['main insight', 'mainInsight'],
+    ['what matters most now', 'mainInsight'],
+    ['best recommendation', 'bestRecommendation'],
+    ['why this matters', 'whyThisMatters'],
+    ['next move', 'nextMove'],
+    ['deeper detail', 'deepDetail'],
+    ['deep detail', 'deepDetail'],
+  ] as const;
 
-  if (explicitMatch) {
-    return {
-      title: explicitMatch[1],
-      body: chunk.replace(explicitMatch[0], '').trim(),
-    };
+  for (const [label, key] of pairs) {
+    const regex = new RegExp(`^${label}\\s*:?\\s*`, 'i');
+    if (regex.test(chunk)) {
+      return {
+        key,
+        body: chunk.replace(regex, '').trim(),
+      };
+    }
   }
 
-  return {
-    title: DEFAULT_SECTION_ORDER[Math.min(index, DEFAULT_SECTION_ORDER.length - 1)],
-    body: cleanLine(chunk),
-  };
+  return null;
 }
 
 function buildResponseSections(text: string) {
@@ -80,26 +87,47 @@ function buildResponseSections(text: string) {
       mainInsight: '',
       sections: [] as ResponseSection[],
       fallbackLines: [] as string[],
+      quickActions: [] as string[],
     };
   }
 
   const mainInsight = cleanLine(paragraphs[0]);
-  const sections = paragraphs
-    .slice(1)
-    .map((chunk, index) => {
-      const { title, body } = titleFromChunk(chunk, index + 1);
-      return {
-        key: `${title}-${index}`,
-        title,
-        body,
-      };
-    })
+  const mapped = new Map<string, string>();
+
+  paragraphs.slice(1).forEach((chunk, index) => {
+    const named = matchNamedSection(chunk);
+    if (named) {
+      mapped.set(named.key, cleanLine(named.body));
+      return;
+    }
+
+    const defaultKey = ['bestRecommendation', 'whyThisMatters', 'nextMove', 'deepDetail'][Math.min(index, 3)];
+    mapped.set(defaultKey, cleanLine(chunk));
+  });
+
+  const sections: ResponseSection[] = Object.entries(KEY_TITLES)
+    .filter(([key]) => key !== 'mainInsight')
+    .map(([key, title]) => ({
+      key,
+      title,
+      body: mapped.get(key) || '',
+    }))
     .filter((section) => section.body.length > 0);
+
+  const fallbackLines = normalizeText(text).split('\n').map((line) => line.trim()).filter(Boolean);
+
+  const quickActions = mapped
+    .get('nextMove')
+    ?.split(/[.!?]\s+/)
+    .map((line) => cleanLine(line))
+    .filter((line) => line.length > 10)
+    .slice(0, 3) ?? [];
 
   return {
     mainInsight,
     sections,
-    fallbackLines: normalizeText(text).split('\n').map((line) => line.trim()).filter(Boolean),
+    fallbackLines,
+    quickActions,
   };
 }
 
@@ -206,7 +234,7 @@ export function AssistantResponseSurface({
       initial={{ opacity: 0, y: 8 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.24, ease: 'easeOut' }}
-      className="max-w-[96%] space-y-3"
+      className="max-w-[97%] space-y-3"
     >
       {timelineSteps.length ? (
         <div className="rounded-[22px] border border-white/[0.06] bg-[linear-gradient(180deg,rgba(255,255,255,0.035),rgba(255,255,255,0.015))] p-3 shadow-[0_12px_28px_rgba(0,0,0,0.2)] backdrop-blur-[14px]">
@@ -259,7 +287,8 @@ export function AssistantResponseSurface({
 
       <div className="rounded-[22px] border border-white/[0.07] bg-[linear-gradient(170deg,rgba(255,255,255,0.04),rgba(255,255,255,0.015))] px-4 py-3.5 shadow-[0_16px_34px_rgba(0,0,0,0.22)] backdrop-blur-xl">
         <div className="mb-3 flex items-center justify-between border-b border-white/[0.05] pb-2">
-          <p className="text-[11px] font-medium uppercase tracking-[0.16em] text-zinc-500">
+          <p className="inline-flex items-center gap-1.5 text-[11px] font-medium uppercase tracking-[0.16em] text-zinc-500">
+            <Sparkles className="h-3 w-3" />
             Kivo assistant
           </p>
           <p className="text-[10px] text-zinc-500">
@@ -269,9 +298,9 @@ export function AssistantResponseSurface({
 
         {responseSections.mainInsight ? (
           <div className="space-y-3">
-            <div className="rounded-[18px] border border-white/[0.06] bg-white/[0.024] px-3.5 py-3">
-              <p className="text-[10px] font-medium uppercase tracking-[0.08em] text-zinc-500">
-                What matters most now
+            <div className="rounded-[18px] border border-sky-300/20 bg-[linear-gradient(140deg,rgba(125,211,252,0.16),rgba(255,255,255,0.03)_64%)] px-3.5 py-3">
+              <p className="text-[10px] font-medium uppercase tracking-[0.1em] text-sky-100/80">
+                {KEY_TITLES.mainInsight}
               </p>
               <p className="mt-1.5 text-[15px] leading-6 tracking-[-0.012em] text-zinc-100/95">
                 {responseSections.mainInsight}
@@ -279,7 +308,7 @@ export function AssistantResponseSurface({
             </div>
 
             {responseSections.sections.length ? (
-              <div className="space-y-2">
+              <div className="grid grid-cols-1 gap-2">
                 {responseSections.sections.map((section, index) => (
                   <motion.div
                     key={`${message.id}-${section.key}`}
@@ -299,6 +328,26 @@ export function AssistantResponseSurface({
               </div>
             ) : null}
 
+            {responseSections.quickActions.length ? (
+              <div className="rounded-[16px] border border-white/[0.05] bg-white/[0.015] px-3 py-2.5">
+                <p className="mb-2 inline-flex items-center gap-1.5 text-[10px] font-medium uppercase tracking-[0.08em] text-zinc-500">
+                  <Zap className="h-3 w-3" />
+                  Quick actions
+                </p>
+                <div className="flex flex-wrap gap-1.5">
+                  {responseSections.quickActions.map((action, idx) => (
+                    <button
+                      key={`${message.id}-quick-${idx}`}
+                      type="button"
+                      className="rounded-full border border-white/[0.08] bg-white/[0.025] px-3 py-1.5 text-left text-[11px] text-zinc-300 transition hover:border-white/[0.13] hover:bg-white/[0.04]"
+                    >
+                      {action}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            ) : null}
+
             {!responseSections.sections.length && stagedLines.length ? (
               <div className="space-y-2">
                 {stagedLines.map((line, idx) => (
@@ -313,7 +362,19 @@ export function AssistantResponseSurface({
             ) : null}
 
             {message.isStreaming ? (
-              <span className="inline-block h-5 w-1.5 animate-pulse rounded bg-zinc-400/65" />
+              <motion.div
+                className="h-1.5 overflow-hidden rounded-full bg-white/[0.05]"
+                initial={{ opacity: 0.6 }}
+                animate={{ opacity: 1 }}
+                transition={{ duration: 0.5, repeat: Infinity, repeatType: 'reverse' }}
+              >
+                <motion.div
+                  className="h-full rounded-full bg-[linear-gradient(90deg,rgba(125,211,252,0.88),rgba(165,180,252,0.86))]"
+                  animate={{ x: ['-35%', '110%'] }}
+                  transition={{ duration: 1.3, repeat: Infinity, ease: 'easeInOut' }}
+                  style={{ width: '38%' }}
+                />
+              </motion.div>
             ) : null}
           </div>
         ) : (

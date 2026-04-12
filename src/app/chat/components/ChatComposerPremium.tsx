@@ -8,6 +8,8 @@ import {
   NotebookPen,
   Paperclip,
   Plus,
+  Sparkles,
+  Wand2,
 } from 'lucide-react';
 import { AnimatePresence, motion } from 'framer-motion';
 import type { RefObject } from 'react';
@@ -72,8 +74,9 @@ export function ChatComposerPremium(props: ChatComposerPremiumProps) {
             initial={{ opacity: 0, y: 4 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: 4 }}
-            className="mb-2 rounded-full border border-white/[0.06] bg-black/30 px-3 py-1.5 text-[11px] tracking-wide text-zinc-400 backdrop-blur"
+            className="mb-2 inline-flex items-center gap-1.5 rounded-full border border-white/[0.06] bg-black/35 px-3 py-1.5 text-[11px] tracking-wide text-zinc-300 backdrop-blur"
           >
+            <Sparkles className="h-3 w-3" />
             {notice}
           </motion.p>
         ) : null}
@@ -143,6 +146,14 @@ export function ChatComposerPremium(props: ChatComposerPremiumProps) {
             );
           }}
         />
+
+        <div className="mb-1.5 flex items-center justify-between px-1">
+          <p className="inline-flex items-center gap-1 text-[10px] uppercase tracking-[0.14em] text-zinc-500">
+            <Wand2 className="h-3 w-3" />
+            Premium composer
+          </p>
+          <p className="text-[10px] text-zinc-500">{isAgentResponding ? 'Agent is responding…' : 'Ready for your next instruction'}</p>
+        </div>
 
         <div className="flex items-end gap-2 px-1">
           <textarea
