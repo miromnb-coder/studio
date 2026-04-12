@@ -28,11 +28,14 @@ function rankMemoriesByUsefulness(memories: AgentContextV8['memory']['relevantMe
     .map((item) => {
       const text = item.content.toLowerCase();
       const lexicalBoost = q.split(/\s+/).filter((token) => token.length > 3 && text.includes(token)).length * 0.07;
+      const goalBoost = /\b(goal|target|deadline|save|reduce|cancel|budget|roadmap)\b/.test(text) ? 0.13 : 0;
+      const constraintBoost = /\b(constraint|rent|debt|income|cashflow|risk|family|student)\b/.test(text) ? 0.1 : 0;
       const languageBoost = /\b(language|kieli|språk|suomi|english|svenska)\b/.test(text) ? 0.08 : 0;
       const preferenceBoost = /\b(prefer|like|avoid|simple|brief|step-by-step|lyhyt|selkeä|kort|enkel)\b/.test(text) ? 0.06 : 0;
+      const outcomeBoost = /\b(worked|did not work|ignored|accepted|completed|failed|postponed)\b/.test(text) ? 0.1 : 0;
       const importance = Number(item.importance || 0.5);
       const relevance = Number(item.relevanceScore || 0.6);
-      return { ...item, score: relevance * 0.6 + importance * 0.3 + lexicalBoost + languageBoost + preferenceBoost };
+      return { ...item, score: relevance * 0.55 + importance * 0.25 + lexicalBoost + goalBoost + constraintBoost + languageBoost + preferenceBoost + outcomeBoost };
     })
     .sort((a, b) => b.score - a.score)
     .slice(0, 8);
@@ -106,6 +109,25 @@ function inferDecisionContext(params: {
     .filter((text) => /prefer|like|avoid|monthly|yearly|automation|manual|simple|brief|detailed|language|kieli|språk/i.test(text))
     .slice(0, 6);
 
+  const prefersConcise = userPreferences.some((text) => /brief|concise|simple|short|lyhyt|kort/i.test(text));
+  const speedFirst = prefersConcise || /urgent|asap|quick/i.test(corpus);
+  const activeTopic = params.route.subtype !== 'none'
+    ? params.route.subtype
+    : params.route.intent;
+  const unresolvedQuestions = params.conversation
+    .filter((item) => item.role === 'assistant')
+    .map((item) => item.content)
+    .filter((text) => /\?$/.test(text.trim()) || /question:/i.test(text))
+    .slice(-3);
+  const recentDecisions = params.conversation
+    .map((item) => item.content)
+    .filter((text) => /decide|choose|picked|selected|cancel|switch|downgrade/i.test(text))
+    .slice(-4);
+  const stablePatterns = [
+    ...userPreferences.filter((text) => /language|brief|detailed|automation|manual/i.test(text)),
+    ...decisionHistory,
+  ].slice(0, 6);
+
   return {
     activeGoal,
     knownConstraints,
@@ -116,6 +138,18 @@ function inferDecisionContext(params: {
     deprioritizedRecommendationIds,
     currentFinancialPressure,
     userPreferences,
+    outcomeLearning: {
+      ignoredRecommendationPattern: deprioritizedRecommendationIds.length >= 3,
+      acceptedRecommendationPattern: successfulRecommendationIds.length >= 2,
+      prefersConcise,
+      speedFirst,
+    },
+    workingMemory: {
+      activeTopic,
+      unresolvedQuestions,
+      recentDecisions,
+    },
+    stablePatterns,
   };
 }
 
@@ -169,6 +203,7 @@ export async function buildContextV8(params: {
       query: params.message,
       limit: includeFinance ? 8 : 4,
       financeOnly: includeFinance,
+      preferredTypes: includeFinance ? ['goal', 'preference', 'finance'] : ['goal', 'preference', 'fact'],
     }).catch(() => [])
     : [];
 

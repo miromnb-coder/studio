@@ -79,7 +79,7 @@ export async function runAgentV8(input: AgentRunInputV8): Promise<AgentResponseV
   });
 
   state = 'planning';
-  const plan = createPlanV8(route, input.input);
+  const plan = createPlanV8(route, input.input, context);
 
   state = 'executing';
   const execution = await executePlanV8(plan, context).catch((error) => {
@@ -88,7 +88,7 @@ export async function runAgentV8(input: AgentRunInputV8): Promise<AgentResponseV
       subtype: route.subtype,
       error: error instanceof Error ? error.message : 'Unknown execution failure',
     });
-    return { steps: [], structuredData: {}, partialSuccess: false };
+    return { steps: [], structuredData: {}, partialSuccess: false, confidence: 0, earlyStopped: false, replans: 0, decisionLog: [] };
   });
 
   let draftReply = '';
@@ -182,6 +182,12 @@ export async function runAgentV8(input: AgentRunInputV8): Promise<AgentResponseV
       state,
       structuredData: {
         ...response.metadata.structuredData,
+        executionMeta: {
+          confidence: execution.confidence,
+          earlyStopped: execution.earlyStopped,
+          replans: execution.replans,
+          decisions: execution.decisionLog,
+        },
         thinkingLabels: route.responseLanguage === 'fi'
           ? ['Ymmärretään pyyntöä', 'Tarkistetaan kontekstia', 'Tarkistetaan dataa', 'Arvioidaan vaihtoehtoja', 'Rakennetaan vastausta', 'Viimeistellään vastaus']
           : route.responseLanguage === 'sv'

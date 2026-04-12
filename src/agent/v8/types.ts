@@ -115,6 +115,18 @@ export type DecisionContextV8 = {
   deprioritizedRecommendationIds: string[];
   currentFinancialPressure: 'low' | 'medium' | 'high' | 'unknown';
   userPreferences: string[];
+  outcomeLearning: {
+    ignoredRecommendationPattern: boolean;
+    acceptedRecommendationPattern: boolean;
+    prefersConcise: boolean;
+    speedFirst: boolean;
+  };
+  workingMemory: {
+    activeTopic: string;
+    unresolvedQuestions: string[];
+    recentDecisions: string[];
+  };
+  stablePatterns: string[];
 };
 
 export type AgentContextV8 = {
@@ -199,6 +211,13 @@ export type PlanStepV8 = {
   description: string;
   input: Record<string, unknown>;
   required: boolean;
+  toolNecessity?: 'required' | 'high_value' | 'optional' | 'fallback';
+  expectedValue?: number;
+  costEstimate?: number;
+  confidenceDelta?: number;
+  stopIfConfidenceAbove?: number;
+  dependsOn?: string[];
+  decisionNote?: string;
 };
 
 export type ExecutionPlanV8 = {
@@ -210,6 +229,7 @@ export type ExecutionPlanV8 = {
   depth: AgentRouteDepthV8;
   clarificationQuestion?: string;
   steps: PlanStepV8[];
+  planningProfile?: 'minimal' | 'fast_path' | 'deep_analysis' | 'low_cognitive_load' | 'evidence_first';
 };
 
 export type ToolResultV8 = {
@@ -234,6 +254,10 @@ export type ExecutionResultV8 = {
   steps: ExecutionStepResultV8[];
   structuredData: Record<string, unknown>;
   partialSuccess: boolean;
+  confidence: number;
+  earlyStopped: boolean;
+  replans: number;
+  decisionLog: string[];
 };
 
 export type SuggestedActionV8 = {
