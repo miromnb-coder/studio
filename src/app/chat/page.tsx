@@ -18,7 +18,6 @@ import {
   Menu,
   MessageSquare,
   RefreshCw,
-  Sparkles,
   Wand2,
   X,
 } from 'lucide-react';
@@ -44,12 +43,6 @@ const THINKING_STEPS = [
   'Running tools',
   'Comparing options',
   'Finalizing answer',
-] as const;
-
-const QUICK_START_PROMPTS = [
-  'Review my monthly subscriptions and tell me what to cancel first.',
-  'Create a 30-day savings plan based on my current spending.',
-  'Check my recent billing risks and suggest next actions.',
 ] as const;
 
 const INTRO_LINES = [
@@ -88,8 +81,8 @@ function formatConversationTime(iso: string) {
   return timestamp.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
 }
 
-function formatUsageLine(current: number, limit: number, unlimited: boolean) {
-  return unlimited ? 'Unlimited (Dev Mode)' : `${Math.max(limit - current, 0)} / ${limit} uses left today`;
+function formatCompactUsage(current: number, limit: number, unlimited: boolean) {
+  return unlimited ? '∞' : `${Math.max(limit - current, 0)} left`;
 }
 
 function pickIntroLine(input: string) {
@@ -507,43 +500,36 @@ export default function ChatPage() {
   };
 
   return (
-    <AppShell className="relative isolate overflow-hidden pb-44 sm:pb-42">
-      <header className="sticky top-0 z-30 mb-4 rounded-[24px] border border-[#dce1e8] bg-[#f8f9fb]/95 px-4 py-3 shadow-sm backdrop-blur">
+    <AppShell className="relative isolate overflow-hidden bg-[#ededee] pb-44 sm:pb-42">
+      <header className="sticky top-0 z-30 mb-3 px-4 pb-2 pt-4 backdrop-blur">
         <div className="flex items-center justify-between gap-3">
-          <div className="inline-flex items-center gap-2">
+          <div className="inline-flex items-center">
             <button
               type="button"
               onClick={() => router.back()}
-              className="inline-flex h-9 w-9 items-center justify-center rounded-full border border-[#d6dce6] bg-white text-[#2a313a]"
+              className="inline-flex h-9 w-9 items-center justify-center rounded-full border border-[#d3d4d8] bg-[#f1f1f2] text-[#2d2f34]"
               aria-label="Back"
             >
               <ArrowLeft className="h-4 w-4" />
             </button>
-            <button
-              type="button"
-              onClick={() => setOpenPanel((prev) => (prev === 'conversations' ? null : 'conversations'))}
-              className="inline-flex h-9 items-center gap-1.5 rounded-full border border-[#d6dce6] bg-white px-3 text-xs text-[#4f5661]"
-            >
-              Workspace
-              <ChevronRight className="h-3.5 w-3.5" />
-            </button>
           </div>
-          <h1 className="text-[19px] font-semibold tracking-[-0.02em] text-[#242a31]">Kivo</h1>
+          <button
+            type="button"
+            onClick={() => setOpenPanel((prev) => (prev === 'conversations' ? null : 'conversations'))}
+            className="text-[22px] font-medium tracking-[-0.02em] text-[#2b2d31]"
+          >
+            Kivo
+          </button>
 
-          <div className="flex items-center gap-1.5">
-            <button
-              type="button"
-              onClick={() => setChatMenuOpen(true)}
-              className="inline-flex h-9 w-9 items-center justify-center rounded-full border border-[#d6dce6] bg-white text-[#2a313a]"
-              aria-label="Open menu"
-            >
+          <div className="flex items-center gap-2">
+            <span className="inline-flex items-center rounded-full border border-[#d1d3d8] bg-[#f3f3f4] px-2.5 py-1 text-[11px] text-[#666b74]">
+              {formatCompactUsage(usage.current, usage.limit, usage.unlimited)}
+            </span>
+            <button type="button" onClick={() => setChatMenuOpen(true)} className="inline-flex h-9 w-9 items-center justify-center rounded-full border border-[#d3d4d8] bg-[#f1f1f2] text-[#3a3d43]" aria-label="Open menu">
               <Menu className="h-4 w-4" />
             </button>
           </div>
         </div>
-        <p className="mt-2 truncate text-[11px] tracking-[0.01em] text-[#8b95a3]">
-          {formatUsageLine(usage.current, usage.limit, usage.unlimited)}
-        </p>
 
         <AnimatePresence>
           {openPanel === 'conversations' ? (
@@ -605,33 +591,11 @@ export default function ChatPage() {
                 initial={{ opacity: 0, y: 10 }}
                 animate={{ opacity: 1, y: 0 }}
                 exit={{ opacity: 0, y: -10 }}
-                className="flex min-h-[66vh] flex-col items-center justify-center px-5 text-center"
+                className="flex min-h-[68vh] flex-col items-center justify-center px-6 text-center"
               >
-                <div className="rounded-3xl border border-[#dce1e8] bg-white px-5 py-4 shadow-sm backdrop-blur-xl">
-                  <p className="inline-flex items-center gap-1.5 rounded-full border border-[#dce1e8] bg-[#f8f9fb] px-2.5 py-1 text-[10px] uppercase tracking-[0.12em] text-[#8791a0]">
-                    <Sparkles className="h-3 w-3" />
-                    Kivo Agent Mode
-                  </p>
-                  <h2 className="mt-3 text-[34px] font-semibold leading-[1.06] tracking-[-0.04em] text-[#22262c]">
-                    Ask once. Get a real plan.
-                  </h2>
-                  <p className="mt-3 max-w-[30ch] text-sm leading-6 text-zinc-500">
-                    Kivo thinks in visible steps, compares options, and returns structured recommendations you can act on immediately.
-                  </p>
-                </div>
-
-                <div className="mt-6 flex w-full max-w-sm flex-col gap-2.5">
-                  {QUICK_START_PROMPTS.map((prompt) => (
-                    <button
-                      key={prompt}
-                      type="button"
-                      onClick={() => applyTemplate(prompt, 'Prompt added. You can edit before sending.')}
-                      className="rounded-2xl border border-[#dce1e8] bg-[linear-gradient(155deg,rgba(255,255,255,0.04),rgba(255,255,255,0.014))] px-4 py-3 text-left text-xs leading-5 text-[#4b5360] transition hover:border-[#cfd6e0] hover:bg-[#f3f5f8]"
-                    >
-                      {prompt}
-                    </button>
-                  ))}
-                </div>
+                <h2 className="font-serif text-[54px] font-normal leading-[1.12] tracking-[-0.015em] text-[#2d3036] sm:text-[60px]">
+                  What can I do for you?
+                </h2>
               </motion.div>
             ) : null}
           </AnimatePresence>
