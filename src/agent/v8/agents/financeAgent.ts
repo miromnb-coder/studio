@@ -159,6 +159,7 @@ export async function runFinanceAgent(input: FinanceAgentInput): Promise<Finance
   const acceptedIds = new Set(decision.successfulRecommendationIds);
   const ignoredIds = new Set(decision.deprioritizedRecommendationIds);
   const repeatedFailureMode = decision.deprioritizedRecommendationIds.length >= 3;
+  const speedFirst = decision.outcomeLearning.speedFirst;
 
   const actionCandidates: ActionCandidate[] = [];
 
@@ -270,7 +271,7 @@ export async function runFinanceAgent(input: FinanceAgentInput): Promise<Finance
       };
     })
     .sort((a, b) => b.rankScore - a.rankScore)
-    .slice(0, 3);
+    .slice(0, speedFirst ? 2 : 3);
 
   const highestImpact = rankedActions[0];
   const fastestWin = [...rankedActions].sort((a, b) => b.ease - a.ease)[0];
@@ -308,6 +309,7 @@ export async function runFinanceAgent(input: FinanceAgentInput): Promise<Finance
     toolsCompleted: input.execution.steps.filter((s) => s.status === 'completed').length,
     assumptions: assumptions.length,
   });
+  const executionConfidence = input.execution.confidence || 0;
 
   const summary = [
     totalMonthly > 0 ? `Recurring baseline is ${formatMoney(totalMonthly)}/month.` : 'Recurring baseline is not fully available yet.',
@@ -348,13 +350,14 @@ export async function runFinanceAgent(input: FinanceAgentInput): Promise<Finance
     `${t.keyInsight}: ${highestImpact ? highestImpact.rationale : nextFocus}`,
     `${t.recommendation}: ${conclusion}`,
     `${t.currentAssessment}: ${summary}`,
+    `Working memory focus: ${decision.workingMemory.activeTopic}.`,
     `${t.fastestWin}: ${fastestWin.title}.`,
     biggestRisk ? `${t.riskWatch}: ${biggestRisk.title}.` : '',
     `${t.actionSteps}:`,
     ...rankedActions.map((item, index) => `- ${index + 1}. ${item.title} (${item.rationale})`),
     noResultsRecovery.length ? `If signals are sparse: ${noResultsRecovery.join(' ')}` : '',
     cancelDraft.draft ? `Ready asset: A cancellation draft is available for ${String(cancelDraft.service || 'the selected service')}.` : '',
-    `${t.confidence}: ${confidence}.`,
+    `${t.confidence}: ${confidence} (${Math.round(executionConfidence * 100)}% evidence confidence).`,
     assumptions.length ? `${t.assumptions}: ${assumptions.join(' ')}` : `${t.assumptions}: Minimal assumptions; most guidance is grounded in available signals.`,
     `${t.nextStep}: ${conclusion}`,
   ].filter(Boolean).join('\n');

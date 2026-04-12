@@ -14,9 +14,11 @@ export async function fetchRelevantUserMemory(params: {
   query: string;
   limit: number;
   financeOnly?: boolean;
+  preferredTypes?: UserMemoryTypeV8[];
 }): Promise<UserMemoryItemV8[]> {
   const { supabase } = params;
   const queryTokens = params.query.toLowerCase().split(/\s+/).filter(Boolean);
+  const preferredTypes = new Set(params.preferredTypes || []);
 
   let base = supabase
     .from(MEMORY_TABLE)
@@ -37,7 +39,12 @@ export async function fetchRelevantUserMemory(params: {
       if (!content) return null;
       const lower = content.toLowerCase();
       const tokenHits = queryTokens.reduce((hits, token) => (lower.includes(token) ? hits + 1 : hits), 0);
-      const relevanceScore = Number(((row.importance || 0.4) + tokenHits * 0.12).toFixed(3));
+      const recencyBoost = row.updated_at ? Math.max(0, 1 - (Date.now() - new Date(row.updated_at).getTime()) / (1000 * 60 * 60 * 24 * 60)) * 0.08 : 0;
+      const goalBoost = /goal|target|deadline|save|reduce|budget|plan/i.test(lower) ? 0.1 : 0;
+      const preferenceBoost = /prefer|avoid|style|brief|concise|language/i.test(lower) ? 0.09 : 0;
+      const constraintBoost = /constraint|rent|debt|income|cashflow|student|family|tight/i.test(lower) ? 0.08 : 0;
+      const typeBoost = preferredTypes.has(toType(row.type)) ? 0.14 : 0;
+      const relevanceScore = Number(((row.importance || 0.4) + tokenHits * 0.12 + recencyBoost + goalBoost + preferenceBoost + constraintBoost + typeBoost).toFixed(3));
 
       return {
         id: row.id,
