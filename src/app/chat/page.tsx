@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { ClipboardPlus, FilePlus2, Link2, MessageSquarePlus, Workflow, Wrench } from 'lucide-react';
+import { ClipboardPlus, FilePlus2, MessageSquarePlus } from 'lucide-react';
 import { AnimatePresence, motion } from 'framer-motion';
 import { useAppStore } from '../store/app-store';
 import { AppShell } from '@/components/chat/AppShell';
@@ -11,6 +11,7 @@ import { ChatHeader } from '@/components/chat/ChatHeader';
 import { Composer } from '@/components/chat/Composer';
 import { MessageThread } from '@/components/chat/MessageThread';
 import { MenuSheet } from '@/components/chat/MenuSheet';
+import { WorkspaceSheet } from '@/components/chat/WorkspaceSheet';
 import { sharedPrimaryMenu, sharedSecondaryMenu } from '@/components/chat/menu-config';
 
 type ActionNotice = { title: string; detail: string };
@@ -41,12 +42,6 @@ const createActions = [
   { id: 'new-chat', label: 'New Chat', icon: MessageSquarePlus },
   { id: 'new-task', label: 'New Task', icon: ClipboardPlus },
   { id: 'new-note', label: 'New Note', icon: FilePlus2 },
-];
-
-const connectorActions = [
-  { id: 'connectors', label: 'Connectors', icon: Link2 },
-  { id: 'tools-hub', label: 'Tools Hub', icon: Wrench },
-  { id: 'workflows', label: 'Workflows', icon: Workflow },
 ];
 
 export default function ChatPage() {
@@ -189,6 +184,16 @@ export default function ChatPage() {
     router.push('/login');
   };
 
+  const closeAndFocusComposer = () => {
+    setConnectorsOpen(false);
+    requestAnimationFrame(() => inputRef.current?.focus());
+  };
+
+  const openRouteFromSheet = (href: string) => {
+    setConnectorsOpen(false);
+    router.push(href);
+  };
+
   return (
     <AppShell>
       <div className="relative flex min-h-screen flex-col overflow-hidden">
@@ -259,18 +264,68 @@ export default function ChatPage() {
             }}
           />
 
-          <BottomActionSheet
+          <WorkspaceSheet
             open={connectorsOpen}
-            title="Tools & Connectors"
-            items={connectorActions}
             onClose={() => setConnectorsOpen(false)}
-            onSelect={(id) => {
-              setConnectorsOpen(false);
-              if (id === 'workflows') {
-                router.push('/agents');
+            onQuickAction={(id) => {
+              if (id === 'ask-agent') {
+                closeAndFocusComposer();
                 return;
               }
-              router.push('/tools');
+              if (id === 'analyze') {
+                openRouteFromSheet('/analyze');
+                return;
+              }
+              if (id === 'planner') {
+                openRouteFromSheet('/actions?type=planner');
+                return;
+              }
+              openRouteFromSheet('/money-saver');
+            }}
+            onConnectorAction={(connector, mode) => {
+              if (connector === 'gmail') {
+                openRouteFromSheet('/settings');
+                return;
+              }
+              if (connector === 'google-calendar' || connector === 'google-drive' || connector === 'outlook') {
+                openRouteFromSheet('/settings');
+                return;
+              }
+              if (connector === 'browser' && mode === 'connect') {
+                openRouteFromSheet('/tools');
+                return;
+              }
+              showNotice('Connector updated', `${connector.replace('-', ' ')} is now ${mode === 'toggle' ? 'toggled' : 'ready'}.`);
+            }}
+            onToolSelect={(id) => {
+              if (id === 'finance-scanner') {
+                openRouteFromSheet('/money');
+                return;
+              }
+              if (id === 'memory-search') {
+                openRouteFromSheet('/memory');
+                return;
+              }
+              if (id === 'research-mode') {
+                openRouteFromSheet('/agents');
+                return;
+              }
+              if (id === 'compare-tool') {
+                openRouteFromSheet('/actions');
+                return;
+              }
+              openRouteFromSheet('/tools');
+            }}
+            onRecentSelect={(id) => {
+              if (id === 'gmail-sync') {
+                openRouteFromSheet('/settings');
+                return;
+              }
+              if (id === 'subscription-scan') {
+                openRouteFromSheet('/money-saver');
+                return;
+              }
+              openRouteFromSheet('/actions?type=planner');
             }}
           />
         </div>
