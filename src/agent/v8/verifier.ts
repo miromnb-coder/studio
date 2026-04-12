@@ -40,20 +40,20 @@ function removeRepeatedSentences(text: string): string {
 
 function enforceStructure(reply: string): string {
   let refined = reply;
-  if (!/what i understood:|summary:/i.test(refined)) {
-    refined = `What I understood: ${refined}`;
+  if (!/observation:/i.test(refined)) {
+    refined = `Observation: ${refined}`;
   }
-  if (!/what matters most:|what matters most now:/i.test(refined)) {
-    refined = `${refined}\nWhat matters most: Focus on one high-leverage move before expanding scope.`;
+  if (!/interpretation:/i.test(refined)) {
+    refined = `${refined}\nInterpretation: The main issue is decision quality and prioritization, not a lack of options.`;
   }
-  if (!/best recommendation now:|top priority:/i.test(refined)) {
-    refined = `${refined}\nBest recommendation now: Execute the highest-impact, lowest-friction action first.`;
+  if (!/next focus:/i.test(refined)) {
+    refined = `${refined}\nNext focus: Validate one high-impact path and avoid splitting attention too early.`;
   }
-  if (!/why this first:/i.test(refined)) {
-    refined = `${refined}\nWhy this first: It gives the fastest value with lower execution risk.`;
+  if (!/recommendation:|best next step:/i.test(refined)) {
+    refined = `${refined}\nRecommendation: Prioritize the highest-leverage move first, then sequence follow-up actions.`;
   }
-  if (!/next actions:|ranked actions:|top actions:/i.test(refined)) {
-    refined = `${refined}\n\nNext actions:\n- 1. Execute the top move now.\n- 2. Complete one additional quick win.`;
+  if (!/action steps:|next actions:|ranked actions:/i.test(refined)) {
+    refined = `${refined}\n\nAction steps:\n- 1. Execute the top move now.\n- 2. Complete one additional quick win.`;
   }
   if (!/next step:/i.test(refined)) {
     refined = `${refined}\nNext Step: Confirm action 1 and I will convert it into a checklist.`;
@@ -75,11 +75,11 @@ function softenOverconfidence(reply: string, notes: string[]): string {
 
 function composeFallback(question?: string): string {
   return [
-    'What I understood: You want a useful, concrete recommendation, not generic advice.',
-    'What matters most: We need one numeric anchor to prioritize correctly.',
-    'Best recommendation now: Start with one recurring cost or savings target so we can optimize immediately.',
-    'Why this first: It creates fast value and avoids broad low-confidence advice.',
-    'Next actions:',
+    'Observation: I reviewed your request and the key gap is missing numeric grounding.',
+    'Interpretation: Without one concrete number, any ranking will be broad and lower-confidence.',
+    'Next focus: Add one recurring cost or savings target so I can prioritize accurately.',
+    'Recommendation: Start with the single highest monthly pressure item before optimizing anything else.',
+    'Action steps:',
     '- 1. Share one monthly bill, recurring charge, or savings target.',
     '- 2. If Gmail is connected, run a 90-day receipt scan with invoice/payment/renewal keywords.',
     `Question: ${question || 'Which single expense should we optimize first?'}.`,
@@ -106,13 +106,13 @@ export function verifyExecutionV8(input: AgentCriticInputV8): CriticResultV8 {
 
   const hasNumbers = /\$?\d+[\d,.]*/.test(refinedReply);
   const hasPersonalization = /goal|you|your|memory|profile|pressure|preference|situation/i.test(refinedReply);
-  const hasPrioritization = /best recommendation now:|ranked actions:|top priority:|fastest win:|biggest risk:/i.test(refinedReply);
+  const hasPrioritization = /recommendation:|best next step:|ranked actions:|top priority:|fastest win:|risk to watch:/i.test(refinedReply);
   const hasActionability = /-\s*1\.|checklist|reply\s+"|execute|cancel|switch|downgrade/i.test(refinedReply);
   const hasHonesty = /confidence:|assumptions:|missing|unknown|estimate/i.test(refinedReply);
-  const hasClarity = /what i understood:|summary:|next step:/i.test(refinedReply);
+  const hasClarity = /observation:|interpretation:|next focus:|recommendation:|next step:/i.test(refinedReply);
   const hasToolGrounding = input.usedTools.length > 0 || Object.keys(input.structuredData || {}).length > 0;
-  const hasReasoningFlow = /what matters most:|why this first:/i.test(refinedReply);
-  const hasRiskAndPriority = /top priority:|biggest risk:|fastest win:/i.test(refinedReply);
+  const hasReasoningFlow = /observation:|interpretation:|next focus:/i.test(refinedReply);
+  const hasRiskAndPriority = /top priority:|risk to watch:|fastest win:/i.test(refinedReply);
   const hasConcreteNext = /next step:\s*(reply|share|send|confirm|run|execute)/i.test(refinedReply);
   const conciseEnough = refinedReply.split(/\s+/).length <= 320;
   const noFiller = !/here are some ideas|it depends|you could consider/i.test(refinedReply);
