@@ -60,7 +60,7 @@ const primaryMenu = [
 
 const secondaryMenu = [
   { label: 'Profile', icon: CircleUserRound, href: '/profile' },
-  { label: 'Settings', icon: Settings, href: '/settings', badge: 'New' },
+  { label: 'Settings', icon: Settings, href: '/settings' },
   { label: 'Upgrade', icon: Crown, href: '/upgrade' },
 ];
 
@@ -207,19 +207,24 @@ export default function ChatPage() {
   };
 
   return (
-    <main className="min-h-screen bg-[#efeff3] px-3 py-4 text-[#3e4551] sm:px-6">
-      <section className="mx-auto flex min-h-[calc(100vh-2rem)] w-full max-w-[430px] flex-col overflow-hidden rounded-[34px] border border-[#dde0e6] bg-[#ebecf0] shadow-[0_22px_44px_rgba(38,47,64,0.14)]">
-        <header className="flex h-16 items-center justify-between border-b border-[#d8dce3] px-4">
+    <main className="min-h-screen bg-[#eeedf2] px-3 py-3 text-[#3e4450] sm:px-6">
+      <section className="mx-auto flex min-h-[calc(100vh-1.5rem)] w-full max-w-[410px] flex-col overflow-hidden rounded-[40px] border border-[#dde0e6] bg-[#e8e9ee] shadow-[0_20px_38px_rgba(54,61,78,0.16)]">
+        <div className="flex h-12 items-center justify-between px-8 text-[34px] font-medium tracking-[-0.01em] text-[#383e49]">
+          <span>21:04</span>
+          <span className="text-base">◔◔▭</span>
+        </div>
+
+        <header className="flex h-[74px] items-center justify-between border-b border-[#d8dce2] px-5">
           <button
             type="button"
             onClick={onBack}
             aria-label="Go back"
-            className="inline-flex h-9 w-9 items-center justify-center rounded-full text-[#4d5561] transition hover:bg-[#e2e6ed]"
+            className="inline-flex h-10 w-10 items-center justify-center rounded-full text-[#4f5662] transition hover:bg-[#e1e5ea]"
           >
-            <ArrowLeft className="h-5 w-5" strokeWidth={2} />
+            <ArrowLeft className="h-6 w-6" strokeWidth={1.8} />
           </button>
 
-          <h1 className="text-[2rem] font-medium leading-none tracking-[-0.02em] text-[#444b57]">Kivo</h1>
+          <h1 className="text-[49px] font-medium leading-none tracking-[-0.03em] text-[#454c58]">Kivo</h1>
 
           <button
             type="button"
@@ -229,16 +234,16 @@ export default function ChatPage() {
               setConnectorsOpen(false);
             }}
             aria-label="Open menu"
-            className="inline-flex h-9 w-9 items-center justify-center rounded-full border border-[#ccd1db] bg-[#e7e9ee] text-[#6d7481]"
+            className="inline-flex h-11 w-11 items-center justify-center rounded-full border border-[#cbd0d9] bg-[#e6e8ed] text-[#6d7481]"
           >
-            <Menu className="h-[18px] w-[18px]" strokeWidth={1.9} />
+            <Menu className="h-5 w-5" strokeWidth={1.8} />
           </button>
         </header>
 
         <div className="relative flex flex-1 flex-col">
-          <div className="flex flex-1 items-center justify-center px-10 pb-16">
+          <div className="flex flex-1 items-center justify-center px-10 pb-24">
             <p
-              className="text-center text-[22px] font-normal leading-[1.35] tracking-[-0.005em] text-[#3f4652]"
+              className="text-center text-[59px] font-normal leading-[1.12] tracking-[-0.01em] text-[#3f4652]"
               style={{ fontFamily: 'ui-serif, Georgia, Times, serif' }}
             >
               What can I do for you?
@@ -251,7 +256,7 @@ export default function ChatPage() {
                 <motion.button
                   type="button"
                   aria-label="Close menu"
-                  className="absolute inset-0 z-20 bg-[#8f95a51f]"
+                  className="absolute inset-0 z-20 bg-[#949baa26]"
                   initial={{ opacity: 0 }}
                   animate={{ opacity: 1 }}
                   exit={{ opacity: 0 }}
@@ -259,14 +264,14 @@ export default function ChatPage() {
                 />
 
                 <motion.aside
-                  initial={{ y: 28, opacity: 0.55 }}
+                  initial={{ y: 34, opacity: 0.55 }}
                   animate={{ y: 0, opacity: 1 }}
-                  exit={{ y: 32, opacity: 0 }}
-                  transition={{ type: 'spring', bounce: 0.13, duration: 0.3 }}
-                  className="absolute inset-x-0 bottom-0 z-30 rounded-t-[30px] border-t border-[#d8dce3] bg-[#eaebef] px-4 pb-[calc(12px+env(safe-area-inset-bottom))] pt-3 shadow-[0_-8px_24px_rgba(34,41,56,0.1)]"
+                  exit={{ y: 42, opacity: 0 }}
+                  transition={{ type: 'spring', bounce: 0.15, duration: 0.35 }}
+                  className="absolute inset-x-0 bottom-0 z-30 rounded-t-[34px] border-t border-[#d8dce3] bg-[#e9ebf0] px-4 pb-[calc(14px+env(safe-area-inset-bottom))] pt-3 shadow-[0_-8px_24px_rgba(34,41,56,0.12)]"
                 >
-                  <div className="mx-auto mb-3 h-1.5 w-14 rounded-full bg-[#cfd3db]" />
-                  <h2 className="mb-3 px-1 text-[34px] font-medium text-[#505764]">Menu</h2>
+                  <div className="mx-auto mb-4 h-1.5 w-16 rounded-full bg-[#cfd3db]" />
+                  <h2 className="mb-3 px-2 text-[44px] font-medium text-[#505764]">Menu</h2>
 
                   <MenuGroup
                     rows={primaryMenu}
@@ -277,17 +282,17 @@ export default function ChatPage() {
                     }}
                   />
 
-                  <p className="mb-2 mt-4 px-1 text-[20px] text-[#787f8c]">Secondary</p>
+                  <p className="mb-2 mt-4 px-2 text-[38px] text-[#787f8c]">Secondary</p>
                   <MenuGroup rows={secondaryMenu} onClick={(row) => row.href && onMenuRoute(row.href)} />
 
                   <div className="mt-4 overflow-hidden rounded-[18px] border border-[#d4d8df] bg-[#f1f2f6] shadow-[0_8px_18px_rgba(52,60,74,0.08)]">
                     <button
                       type="button"
                       onClick={onSignOut}
-                      className="flex h-[58px] w-full items-center gap-3 px-4 text-left"
+                      className="flex h-[62px] w-full items-center gap-3 px-4 text-left"
                     >
                       <LogOut className="h-5 w-5 text-[#757d8a]" strokeWidth={1.8} />
-                      <span className="flex-1 text-[16px] text-[#545b67]">Sign Out</span>
+                      <span className="flex-1 text-[38px] text-[#545b67]">Sign Out</span>
                       <ChevronRight className="h-5 w-5 text-[#9da4b1]" strokeWidth={1.8} />
                     </button>
                   </div>
@@ -296,8 +301,8 @@ export default function ChatPage() {
             ) : null}
           </AnimatePresence>
 
-          <div className="pointer-events-none absolute inset-x-3 bottom-[calc(10px+env(safe-area-inset-bottom))] z-10">
-            <div className="pointer-events-auto rounded-[28px] border border-[#d6dae2] bg-[#f0f2f6] px-4 pb-3 pt-3 shadow-[0_8px_20px_rgba(55,63,79,0.12)]">
+          <div className="pointer-events-none absolute inset-x-3 bottom-[calc(12px+env(safe-area-inset-bottom))] z-10">
+            <div className="pointer-events-auto rounded-[34px] border border-[#d5d9e1] bg-[#eff1f5] px-4 pb-3 pt-3 shadow-[0_8px_20px_rgba(55,63,79,0.13)]">
               <label htmlFor="chat-composer" className="sr-only">
                 Assign a task or ask anything
               </label>
@@ -314,7 +319,7 @@ export default function ChatPage() {
                   }
                 }}
                 placeholder="Assign a task or ask anything"
-                className="mb-3 w-full bg-transparent px-1 text-[16px] text-[#7a8190] placeholder:text-[#8e95a2] outline-none"
+                className="mb-3 w-full bg-transparent px-1 text-[13px] text-[#7a8190] placeholder:text-[#8e95a2] outline-none"
               />
 
               <div className="flex items-center justify-between">
@@ -380,6 +385,8 @@ export default function ChatPage() {
             }}
           />
         </div>
+
+        <div className="mx-auto mb-2 mt-auto h-1.5 w-24 rounded-full bg-[#0f1217]/45" />
       </section>
 
       <AnimatePresence>
@@ -403,7 +410,7 @@ function MenuGroup({
   rows,
   onClick,
 }: {
-  rows: Array<{ label: string; icon: ComponentType<{ className?: string; strokeWidth?: number }>; href?: string; action?: string; badge?: string }>;
+  rows: Array<{ label: string; icon: ComponentType<{ className?: string; strokeWidth?: number }>; href?: string; action?: string }>;
   onClick: (row: { label: string; href?: string; action?: string }) => void;
 }) {
   return (
@@ -415,11 +422,10 @@ function MenuGroup({
             key={row.label}
             type="button"
             onClick={() => onClick(row)}
-            className="flex h-[58px] w-full items-center gap-3 border-b border-[#e2e5ea] px-4 text-left last:border-b-0"
+            className="flex h-[62px] w-full items-center gap-3 border-b border-[#e2e5ea] px-4 text-left last:border-b-0"
           >
             <Icon className="h-5 w-5 text-[#757d8a]" strokeWidth={1.8} />
-            <span className="flex-1 text-[16px] text-[#545b67]">{row.label}</span>
-            {row.badge ? <span className="rounded-full bg-[#e0e4ea] px-2 py-0.5 text-[12px] text-[#7a818c]">{row.badge}</span> : null}
+            <span className="flex-1 text-[38px] text-[#545b67]">{row.label}</span>
             <ChevronRight className="h-5 w-5 text-[#9da4b1]" strokeWidth={1.8} />
           </button>
         );
@@ -488,7 +494,7 @@ function BottomMiniSheet({
             animate={{ y: 0, opacity: 1 }}
             exit={{ y: 38, opacity: 0 }}
             transition={{ type: 'spring', bounce: 0.15, duration: 0.3 }}
-            className="absolute inset-x-3 bottom-[calc(92px+env(safe-area-inset-bottom))] z-30 rounded-[24px] border border-[#d4d8df] bg-[#f1f2f6] p-3 shadow-[0_10px_24px_rgba(40,46,59,0.14)]"
+            className="absolute inset-x-3 bottom-[calc(98px+env(safe-area-inset-bottom))] z-30 rounded-[24px] border border-[#d4d8df] bg-[#f1f2f6] p-3 shadow-[0_10px_24px_rgba(40,46,59,0.14)]"
           >
             <p className="mb-2 px-1 text-sm font-medium text-[#616875]">{title}</p>
             {items.map((item) => {
