@@ -16,12 +16,14 @@ import { AppShell } from '../components/premium-ui';
 import { trackEvent } from '@/app/lib/analytics-client';
 
 const PREMIUM_UPLOAD_MESSAGE = 'File upload is a Premium feature. Upgrade to attach files.';
+const DRAFT_STORAGE_KEY = 'nova-operator-chat-draft';
+
 const THINKING_STEPS = [
-  'Understanding your goal',
-  'Checking context',
-  'Reviewing subscriptions',
-  'Ranking best actions',
-  'Preparing recommendation',
+  'Understanding your request',
+  'Reviewing context',
+  'Checking useful signals',
+  'Ranking best options',
+  'Building recommendation',
 ] as const;
 
 const QUICK_START_PROMPTS = [
@@ -30,9 +32,13 @@ const QUICK_START_PROMPTS = [
   'Check my recent billing risks and suggest next actions.',
 ] as const;
 
-const DRAFT_STORAGE_KEY = 'nova-operator-chat-draft';
+const INTRO_LINES = [
+  'Got it. I’ll work through this and give you the strongest next move.',
+  'Understood. I’m reviewing this now and narrowing the best path.',
+  'I’m on it. I’ll check the most important signals first.',
+] as const;
 
-const formatConversationTime = (iso: string) => {
+function formatConversationTime(iso: string) {
   const timestamp = new Date(iso);
   const diffMs = Date.now() - timestamp.getTime();
   const minutes = Math.floor(diffMs / (1000 * 60));
@@ -47,10 +53,34 @@ const formatConversationTime = (iso: string) => {
   if (days < 7) return `${days}d`;
 
   return timestamp.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
-};
+}
 
-const formatUsageLine = (current: number, limit: number, unlimited: boolean) =>
-  unlimited ? 'Unlimited (Dev Mode)' : `${Math.max(limit - current, 0)} / ${limit} uses left today`;
+function formatUsageLine(current: number, limit: number, unlimited: boolean) {
+  return unlimited ? 'Unlimited (Dev Mode)' : `${Math.max(limit - current, 0)} / ${limit} uses left today`;
+}
+
+function pickIntroLine(input: string) {
+  const normalized = input.toLowerCase();
+
+  if (/\b(overwhelmed|stressed|anxious|worried)\b/.test(normalized)) {
+    return 'I’ve got this. I’ll keep it simple and focus on the clearest next step.';
+  }
+
+  if (/\b(review|analy[sz]e|compare|audit|subscriptions?|billing|expenses?)\b/.test(normalized)) {
+    return 'Understood. I’m reviewing the key signals first so I can rank the best move.';
+  }
+
+  if (/\b(plan|roadmap|strategy|next step|what should i do)\b/.test(normalized)) {
+    return 'Got it. I’m mapping the strongest path before I answer.';
+  }
+
+  return INTRO_LINES[Math.abs(input.length) % INTRO_LINES.length];
+}
+
+function normalizeStepLabel(label?: string) {
+  if (!label) return 'Building recommendation';
+  return label;
+}
 
 export default function ChatPage() {
   const router = useRouter();
@@ -93,7 +123,7 @@ export default function ChatPage() {
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   const activeAssistantMessage = [...messages].reverse().find((message) => message.role === 'assistant');
-
+  const lastUserMessage = [...messages].reverse().find((message) => message.role === 'user');
   const empty = messages.length === 0;
   const showThinkingSurface = isAgentResponding;
 
@@ -103,10 +133,19 @@ export default function ChatPage() {
   );
 
   const derivedExecutionSteps = useMemo<ExecutionStep[]>(() => {
+    if (activeSteps.length) {
+      return activeSteps.map((step, idx) => ({
+        id: `${step.label}-${idx}`,
+        label: normalizeStepLabel(step.label),
+        summary: step.summary,
+        status: step.status,
+      }));
+    }
+
     if (activeAssistantMessage?.agentMetadata?.steps?.length) {
       return activeAssistantMessage.agentMetadata.steps.map((step, idx) => ({
         id: `${activeAssistantMessage.id}-${idx}`,
-        label: step.action,
+        label: normalizeStepLabel(step.action),
         summary: step.summary || step.error,
         status: step.status,
       }));
@@ -123,7 +162,22 @@ export default function ChatPage() {
             ? 'running'
             : 'pending',
     }));
-  }, [activeAssistantMessage, isAgentResponding, simulatedStepIndex]);
+  }, [activeAssistantMessage, activeSteps, isAgentResponding, simulatedStepIndex]);
+
+  const thinkingStatus = useMemo(() => {
+    const running = derivedExecutionSteps.find((step) => step.status === 'running');
+    if (running) return running.label;
+
+    const completed = [...derivedExecutionSteps].reverse().find((step) => step.status === 'completed');
+    if (completed && isAgentResponding) return completed.label;
+
+    return 'Preparing recommendation';
+  }, [derivedExecutionSteps, isAgentResponding]);
+
+  const liveIntro = useMemo(() => {
+    const latestUserInput = lastUserMessage?.content || draftPrompt || draft;
+    return pickIntroLine(latestUserInput || 'help');
+  }, [draft, draftPrompt, lastUserMessage?.content]);
 
   const requireAuth = () => {
     if (user) return false;
@@ -173,7 +227,7 @@ export default function ChatPage() {
   useEffect(() => {
     if (!listRef.current) return;
     listRef.current.scrollTop = listRef.current.scrollHeight;
-  }, [messages, isAgentResponding, activeConversationId, simulatedStepIndex]);
+  }, [messages, isAgentResponding, activeConversationId, simulatedStepIndex, activeSteps.length]);
 
   useEffect(() => {
     const listEl = listRef.current;
@@ -230,7 +284,7 @@ export default function ChatPage() {
   }, [streamError, refresh]);
 
   useEffect(() => {
-    if (!isAgentResponding) {
+    if (!isAgentResponding || activeSteps.length > 0) {
       setSimulatedStepIndex(0);
       return;
     }
@@ -241,10 +295,25 @@ export default function ChatPage() {
       setSimulatedStepIndex((current) =>
         current >= THINKING_STEPS.length - 1 ? current : current + 1,
       );
-    }, 980);
+    }, 920);
 
     return () => window.clearInterval(interval);
-  }, [isAgentResponding, activeConversationId]);
+  }, [isAgentResponding, activeConversationId, activeSteps.length]);
+
+  useEffect(() => {
+    if (!draft.trim()) return;
+
+    const handler = () => {
+      if (!draft.trim() || isAgentResponding) return;
+      trackEvent('chat_abandoned_send', {
+        conversationId: activeConversationId,
+        properties: { draftLength: draft.trim().length },
+      });
+    };
+
+    window.addEventListener('beforeunload', handler);
+    return () => window.removeEventListener('beforeunload', handler);
+  }, [draft, isAgentResponding, activeConversationId]);
 
   const applyTemplate = (template: string, notice: string) => {
     trackEvent('chat_prompt_template_used', { conversationId: activeConversationId, properties: { template } });
@@ -369,9 +438,7 @@ export default function ChatPage() {
     }
 
     setFinanceActionLoadingForMessage((prev) => ({ ...prev, [messageId]: actionType }));
-
     const result = await runFinanceAction(messageId, actionType);
-
     setFinanceActionLoadingForMessage((prev) => ({ ...prev, [messageId]: null }));
 
     if (!result.ok && result.errorCode === 'PREMIUM_REQUIRED') {
@@ -381,26 +448,6 @@ export default function ChatPage() {
 
     if (!result.ok) setComposerNotice('Action completed with partial result.');
   };
-
-  const thinkingStatus = activeSteps.length
-    ? activeSteps.find((step) => step.status === 'running')?.label || 'Preparing recommendation'
-    : derivedExecutionSteps.find((step) => step.status === 'running')?.label || 'Preparing recommendation';
-
-
-  useEffect(() => {
-    if (!draft.trim()) return;
-
-    const handler = () => {
-      if (!draft.trim() || isAgentResponding) return;
-      trackEvent('chat_abandoned_send', {
-        conversationId: activeConversationId,
-        properties: { draftLength: draft.trim().length },
-      });
-    };
-
-    window.addEventListener('beforeunload', handler);
-    return () => window.removeEventListener('beforeunload', handler);
-  }, [draft, isAgentResponding, activeConversationId]);
 
   const jumpToBottom = () => {
     if (!listRef.current) return;
@@ -480,8 +527,8 @@ export default function ChatPage() {
                 <h2 className="text-[34px] font-semibold leading-[1.08] tracking-[-0.036em] text-zinc-100">
                   How can Kivo help today?
                 </h2>
-                <p className="mt-3 max-w-[26ch] text-sm leading-6 text-zinc-500">
-                  Start with a question or a task. Kivo will handle the next steps.
+                <p className="mt-3 max-w-[28ch] text-sm leading-6 text-zinc-500">
+                  Ask a question or hand over a task. Kivo will work through it step by step.
                 </p>
 
                 <div className="mt-6 flex w-full max-w-sm flex-col gap-2">
@@ -538,7 +585,21 @@ export default function ChatPage() {
                 transition={{ duration: 0.26, ease: [0.22, 1, 0.36, 1] }}
                 className="px-1 pt-0.5"
               >
-                <AgentThinkingSurface statusText={thinkingStatus} steps={derivedExecutionSteps} />
+                <div className="max-w-[96%] space-y-3">
+                  <motion.div
+                    initial={{ opacity: 0, y: 6 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0, y: -6 }}
+                    transition={{ duration: 0.22 }}
+                    className="rounded-[22px] border border-white/[0.06] bg-[linear-gradient(155deg,rgba(255,255,255,0.07),rgba(255,255,255,0.025))] px-4 py-3.5 shadow-[0_12px_28px_rgba(0,0,0,0.22)] backdrop-blur-xl"
+                  >
+                    <p className="text-[15px] leading-7 tracking-[-0.012em] text-zinc-100/95">
+                      {liveIntro}
+                    </p>
+                  </motion.div>
+
+                  <AgentThinkingSurface statusText={thinkingStatus} steps={derivedExecutionSteps} />
+                </div>
               </motion.div>
             ) : null}
           </AnimatePresence>
