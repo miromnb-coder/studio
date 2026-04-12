@@ -6,9 +6,13 @@ import { AnimatePresence, motion } from 'framer-motion';
 type BottomActionSheetProps = {
   open: boolean;
   title: string;
-  items: Array<{ label: string; icon: ComponentType<{ className?: string; strokeWidth?: number }> }>;
+  items: Array<{
+    id: string;
+    label: string;
+    icon: ComponentType<{ className?: string; strokeWidth?: number }>;
+  }>;
   onClose: () => void;
-  onSelect: (label: string) => void;
+  onSelect: (id: string) => void;
 };
 
 export function BottomActionSheet({ open, title, items, onClose, onSelect }: BottomActionSheetProps) {
@@ -39,9 +43,9 @@ export function BottomActionSheet({ open, title, items, onClose, onSelect }: Bot
               const Icon = item.icon;
               return (
                 <button
-                  key={item.label}
+                  key={item.id}
                   type="button"
-                  onClick={() => onSelect(item.label)}
+                  onClick={() => onSelect(item.id)}
                   className="flex h-11 w-full items-center gap-3 rounded-xl px-2 text-left hover:bg-[#eaedf2]"
                 >
                   <Icon className="h-[18px] w-[18px] text-[#7d8492]" strokeWidth={1.9} />

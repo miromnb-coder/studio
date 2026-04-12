@@ -251,32 +251,47 @@ select {
   }
 }
 
-.composer-icon-btn {
+.composer-action-btn {
   display: inline-flex;
-  height: 50px;
-  width: 50px;
+  height: 44px;
+  width: 44px;
   align-items: center;
   justify-content: center;
   border-radius: 999px;
-  color: #848b98;
-  border: 1px solid #d2d6de;
-  background: #eef0f4;
+  color: #79818f;
+  border: 1px solid #d7dce4;
+  background: #f0f2f6;
+  box-shadow: 0 6px 16px rgba(68, 75, 90, 0.08);
   transition:
     background-color 0.2s ease,
     transform 0.18s ease,
     color 0.18s ease,
-    border-color 0.2s ease;
+    border-color 0.2s ease,
+    box-shadow 0.2s ease;
 }
 
-.composer-icon-btn:hover {
-  background: #e8ebf0;
-  border-color: #cfd6e0;
-  color: #6f7785;
+.composer-action-btn:hover:not(:disabled) {
+  background: #eaedf3;
+  border-color: #cfd5df;
+  color: #666f7e;
+  box-shadow: 0 8px 18px rgba(68, 75, 90, 0.1);
+}
+
+.composer-action-btn:active:not(:disabled) {
+  transform: scale(0.95);
+}
+
+.composer-action-btn:disabled {
+  opacity: 0.42;
   box-shadow: none;
+  cursor: not-allowed;
 }
 
-.composer-icon-btn:active {
-  transform: scale(0.96);
+.composer-action-btn-active {
+  background: #e5e9f1;
+  border-color: #c8d2e2;
+  color: #576073;
+  box-shadow: 0 8px 20px rgba(83, 95, 122, 0.2);
 }
 
 .composer-send-btn {

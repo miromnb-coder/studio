@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { ClipboardPlus, FilePlus2, Link2, Workflow, Wrench } from 'lucide-react';
+import { ClipboardPlus, FilePlus2, Link2, MessageSquarePlus, Workflow, Wrench } from 'lucide-react';
 import { AnimatePresence, motion } from 'framer-motion';
 import { useAppStore } from '../store/app-store';
 import { AppShell } from '@/components/chat/AppShell';
@@ -38,14 +38,15 @@ declare global {
 }
 
 const createActions = [
-  { label: 'Create Task', icon: ClipboardPlus },
-  { label: 'New Note', icon: FilePlus2 },
+  { id: 'new-chat', label: 'New Chat', icon: MessageSquarePlus },
+  { id: 'new-task', label: 'New Task', icon: ClipboardPlus },
+  { id: 'new-note', label: 'New Note', icon: FilePlus2 },
 ];
 
 const connectorActions = [
-  { label: 'Tools Hub', icon: Wrench },
-  { label: 'Connectors', icon: Link2 },
-  { label: 'Workflows', icon: Workflow },
+  { id: 'connectors', label: 'Connectors', icon: Link2 },
+  { id: 'tools-hub', label: 'Tools Hub', icon: Wrench },
+  { id: 'workflows', label: 'Workflows', icon: Workflow },
 ];
 
 export default function ChatPage() {
@@ -164,18 +165,6 @@ export default function ChatPage() {
     recognition.start();
   };
 
-  const handleVoiceUtility = () => {
-    if (!window.speechSynthesis) {
-      showNotice('Voice unavailable', 'Text-to-speech is not available in this browser.');
-      return;
-    }
-
-    const text = hasText ? draftPrompt.trim() : 'What can I do for you?';
-    window.speechSynthesis.cancel();
-    window.speechSynthesis.speak(new SpeechSynthesisUtterance(text));
-    showNotice('Voice utility', 'Assistant voice utility started.');
-  };
-
   const createNewChat = () => {
     const conversationId = createConversation();
     openConversation(conversationId);
@@ -240,12 +229,11 @@ export default function ChatPage() {
               setConnectorsOpen(false);
               setMenuOpen(false);
             }}
-            onOpenConnectors={() => {
+            onOpenTools={() => {
               setConnectorsOpen(true);
               setCreateOpen(false);
               setMenuOpen(false);
             }}
-            onVoiceUtility={handleVoiceUtility}
             onToggleMic={toggleMic}
             inputRef={inputRef}
           />
@@ -255,9 +243,19 @@ export default function ChatPage() {
             title="Create"
             items={createActions}
             onClose={() => setCreateOpen(false)}
-            onSelect={(label) => {
+            onSelect={(id) => {
               setCreateOpen(false);
-              showNotice(label, 'Create action opened.');
+              if (id === 'new-chat') {
+                createNewChat();
+                return;
+              }
+              if (id === 'new-task') {
+                router.push('/tasks');
+                return;
+              }
+              if (id === 'new-note') {
+                router.push('/notes');
+              }
             }}
           />
 
@@ -266,9 +264,13 @@ export default function ChatPage() {
             title="Tools & Connectors"
             items={connectorActions}
             onClose={() => setConnectorsOpen(false)}
-            onSelect={(label) => {
+            onSelect={(id) => {
               setConnectorsOpen(false);
-              showNotice(label, 'Connectors UI opened.');
+              if (id === 'workflows') {
+                router.push('/agents');
+                return;
+              }
+              router.push('/tools');
             }}
           />
         </div>
