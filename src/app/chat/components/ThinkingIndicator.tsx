@@ -4,8 +4,9 @@ import { KivoThinkingIndicator } from '@/components/ai/KivoThinkingIndicator';
 
 type ThinkingIndicatorProps = {
   phase: string;
+  detail?: string;
 };
 
-export function ThinkingIndicator({ phase }: ThinkingIndicatorProps) {
-  return <KivoThinkingIndicator phase={phase} size={28} compact />;
+export function ThinkingIndicator({ phase, detail }: ThinkingIndicatorProps) {
+  return <KivoThinkingIndicator phase={phase} detail={detail} size={34} compact />;
 }

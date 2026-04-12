@@ -16,13 +16,12 @@ import { AppShell } from '../components/premium-ui';
 
 const PREMIUM_UPLOAD_MESSAGE = 'File upload is a Premium feature. Upgrade to attach files.';
 const THINKING_STEPS = [
-  'Understanding request',
-  'Reading finance data',
-  'Checking subscriptions',
-  'Comparing options',
-  'Building recommendations',
-  'Verifying answer',
-  'Finalizing response',
+  'Understanding your request',
+  'Checking your context',
+  'Reviewing subscriptions',
+  'Finding highest-impact savings',
+  'Ranking best next actions',
+  'Preparing recommendation',
 ];
 const QUICK_START_PROMPTS = [
   'Review my monthly subscriptions and tell me what to cancel first.',
