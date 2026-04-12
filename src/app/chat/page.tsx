@@ -2,27 +2,16 @@
 
 import { useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import {
-  Bell,
-  CircleUserRound,
-  ClipboardPlus,
-  Crown,
-  FilePlus2,
-  Link2,
-  MessageSquare,
-  Settings,
-  SquareCheckBig,
-  Workflow,
-  Wrench,
-} from 'lucide-react';
+import { ClipboardPlus, FilePlus2, Link2, Workflow, Wrench } from 'lucide-react';
 import { AnimatePresence, motion } from 'framer-motion';
 import { useAppStore } from '../store/app-store';
 import { AppShell } from '@/components/chat/AppShell';
 import { BottomActionSheet } from '@/components/chat/BottomActionSheet';
 import { ChatHeader } from '@/components/chat/ChatHeader';
 import { Composer } from '@/components/chat/Composer';
-import { EmptyState } from '@/components/chat/EmptyState';
-import { type MenuRow, MenuSheet } from '@/components/chat/MenuSheet';
+import { MessageThread } from '@/components/chat/MessageThread';
+import { MenuSheet } from '@/components/chat/MenuSheet';
+import { sharedPrimaryMenu, sharedSecondaryMenu } from '@/components/chat/menu-config';
 
 type ActionNotice = { title: string; detail: string };
 
@@ -48,19 +37,6 @@ declare global {
   }
 }
 
-const primaryMenu: MenuRow[] = [
-  { label: 'New Chat', icon: MessageSquare, action: 'new-chat' },
-  { label: 'Conversations', icon: MessageSquare, action: 'conversations' },
-  { label: 'Tasks', icon: SquareCheckBig, href: '/tasks' },
-  { label: 'Alerts', icon: Bell, href: '/alerts' },
-];
-
-const secondaryMenu: MenuRow[] = [
-  { label: 'Profile', icon: CircleUserRound, href: '/profile' },
-  { label: 'Settings', icon: Settings, href: '/settings', badge: 'New' },
-  { label: 'Upgrade', icon: Crown, href: '/upgrade' },
-];
-
 const createActions = [
   { label: 'Create Task', icon: ClipboardPlus },
   { label: 'New Note', icon: FilePlus2 },
@@ -74,6 +50,13 @@ const connectorActions = [
 
 export default function ChatPage() {
   const router = useRouter();
+
+  const hydrated = useAppStore((s) => s.hydrated);
+  const hydrate = useAppStore((s) => s.hydrate);
+  const user = useAppStore((s) => s.user);
+  const messages = useAppStore((s) => s.messages);
+  const streamError = useAppStore((s) => s.streamError);
+  const isAgentResponding = useAppStore((s) => s.isAgentResponding);
 
   const createConversation = useAppStore((s) => s.createConversation);
   const openConversation = useAppStore((s) => s.openConversation);
@@ -93,6 +76,10 @@ export default function ChatPage() {
   const inputRef = useRef<HTMLInputElement | null>(null);
 
   const hasText = draftPrompt.trim().length > 0;
+
+  useEffect(() => {
+    if (!hydrated) hydrate();
+  }, [hydrate, hydrated]);
 
   useEffect(() => {
     if (!notice) return;
@@ -119,11 +106,16 @@ export default function ChatPage() {
   const handleSend = async () => {
     if (!hasText || isSending) return;
 
+    if (!user?.id) {
+      showNotice('Sign in required', 'Please sign in before sending messages.');
+      router.push('/login?next=/chat');
+      return;
+    }
+
     setIsSending(true);
     try {
       await sendMessage(draftPrompt.trim());
       setDraftPrompt('');
-      showNotice('Sent', 'Message added to conversation.');
     } finally {
       setIsSending(false);
     }
@@ -221,12 +213,12 @@ export default function ChatPage() {
         />
 
         <div className="relative flex flex-1 flex-col">
-          <EmptyState />
+          <MessageThread messages={messages} pending={isAgentResponding} />
 
           <MenuSheet
             open={menuOpen}
-            primaryRows={primaryMenu}
-            secondaryRows={secondaryMenu}
+            primaryRows={sharedPrimaryMenu}
+            secondaryRows={sharedSecondaryMenu}
             onClose={() => setMenuOpen(false)}
             onPrimaryClick={(row) => {
               if (row.action === 'new-chat') createNewChat();
@@ -283,15 +275,15 @@ export default function ChatPage() {
       </div>
 
       <AnimatePresence>
-        {notice ? (
+        {notice || streamError ? (
           <motion.div
             initial={{ opacity: 0, y: -8 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: -6 }}
             className="pointer-events-none fixed left-1/2 top-5 z-50 w-[min(92vw,340px)] -translate-x-1/2 rounded-2xl border border-[#d8dde5] bg-[#f6f7fa] px-4 py-2 text-center shadow-[0_6px_16px_rgba(70,76,90,0.07)]"
           >
-            <p className="text-sm font-medium text-[#505865]">{notice.title}</p>
-            <p className="text-xs text-[#7d8593]">{notice.detail}</p>
+            <p className="text-sm font-medium text-[#505865]">{notice?.title ?? 'Message issue'}</p>
+            <p className="text-xs text-[#7d8593]">{notice?.detail ?? streamError}</p>
           </motion.div>
         ) : null}
       </AnimatePresence>

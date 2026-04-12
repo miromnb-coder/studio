@@ -52,11 +52,11 @@ export function MenuSheet({
           />
 
           <motion.aside
-            initial={{ y: 40, opacity: 0.9 }}
+            initial={{ y: 54, opacity: 0.92 }}
             animate={{ y: 0, opacity: 1 }}
-            exit={{ y: 34, opacity: 0 }}
-            transition={{ type: 'spring', stiffness: 320, damping: 33, mass: 0.9 }}
-            className="absolute inset-x-0 bottom-0 z-30 rounded-t-[30px] border-t border-[#d9dde4] bg-[#ececf1] px-4 pb-[calc(20px+env(safe-area-inset-bottom))] pt-4 shadow-[0_-12px_28px_rgba(66,72,88,0.09)] sm:px-6"
+            exit={{ y: 48, opacity: 0 }}
+            transition={{ type: 'spring', stiffness: 300, damping: 34, mass: 0.95 }}
+            className="absolute inset-x-0 bottom-0 z-30 max-h-[calc(100vh-132px)] overflow-y-auto rounded-t-[32px] border-t border-[#d9dde4] bg-[#ececf1] px-4 pb-[calc(24px+env(safe-area-inset-bottom))] pt-5 shadow-[0_-14px_30px_rgba(66,72,88,0.1)] sm:px-6"
           >
             <div className="mx-auto mb-5 h-[5px] w-14 rounded-full bg-[#d1d5dc]" />
             <h2 className="mb-3 px-2 text-[18px] font-medium tracking-[-0.02em] text-[#5b6270]">Menu</h2>

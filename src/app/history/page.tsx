@@ -1,8 +1,9 @@
 'use client';
 
 import { useEffect, useMemo } from 'react';
-import { Clock3 } from 'lucide-react';
+import { Clock3, RotateCcw } from 'lucide-react';
 import { useAppStore, type HistoryEntry } from '../store/app-store';
+import { AppShell, PremiumCard, SectionHeader, SmartButton } from '../components/premium-ui';
 
 type GroupLabel = 'Today' | 'Yesterday' | 'Earlier';
 
@@ -34,41 +35,50 @@ export default function HistoryPage() {
   }, [history]);
 
   return (
-    <main className="screen app-bg">
-      <section className="card-surface p-5">
-        <div className="mb-4 flex items-center gap-3">
-          <div className="rounded-xl bg-white/5 p-2.5 text-[#c9ced6]"><Clock3 className="h-5 w-5" /></div>
+    <AppShell>
+      <PremiumCard className="space-y-4 p-5">
+        <div className="flex items-center gap-3">
+          <div className="rounded-2xl border border-[#d9dde4] bg-[#f8f9fb] p-2.5 text-[#59606d]"><Clock3 className="h-5 w-5" /></div>
           <div>
-            <h1 className="text-2xl font-semibold text-primary">History</h1>
-            <p className="text-sm text-secondary">Today, yesterday, and earlier timeline of operator actions.</p>
+            <h1 className="text-3xl font-semibold tracking-tight text-[#22262c]">Conversations</h1>
+            <p className="text-sm text-[#7a838f]">Review timeline events and jump back into context instantly.</p>
           </div>
         </div>
 
         {history.length === 0 ? (
-          <div className="card-elevated px-4 py-4 text-sm text-secondary">No timeline yet. Chat, alerts, and agents will appear here.</div>
+          <PremiumCard className="p-5 text-sm text-[#7a838f]">No timeline yet. Chat, alerts, and agent actions appear here.</PremiumCard>
         ) : (
           <div className="space-y-4">
             {(['Today', 'Yesterday', 'Earlier'] as GroupLabel[]).map((label) => (
-              <div key={label}>
-                <h2 className="mb-2 text-xs font-semibold uppercase tracking-wide text-secondary">{label}</h2>
+              <PremiumCard key={label} className="space-y-2.5 p-4">
+                <SectionHeader title={label} subtitle="Tap any item to continue in chat." />
                 <div className="space-y-2">
                   {grouped[label].length === 0 ? (
-                    <p className="card-elevated px-3 py-3 text-xs text-secondary">No entries</p>
+                    <p className="rounded-[16px] border border-[#d9dde4] bg-[#f7f8fa] px-3 py-3 text-xs text-[#8791a0]">No entries</p>
                   ) : (
                     grouped[label].map((entry) => (
-                      <button key={entry.id} onClick={() => enqueuePromptAndGoToChat(entry.prompt ?? `Continue this context: ${entry.title}. ${entry.description}`)} type="button" className="card-interactive w-full rounded-[14px] px-3 py-3 text-left">
-                        <p className="text-sm font-medium text-primary">{entry.title}</p>
-                        <p className="text-xs text-secondary">{entry.description}</p>
-                        <p className="mt-1 text-[11px] text-secondary">{new Date(entry.createdAt).toLocaleString()}</p>
+                      <button
+                        key={entry.id}
+                        onClick={() => enqueuePromptAndGoToChat(entry.prompt ?? `Continue this context: ${entry.title}. ${entry.description}`)}
+                        type="button"
+                        className="w-full rounded-[18px] border border-[#d9dde4] bg-[#f8f9fb] px-3.5 py-3 text-left shadow-[0_8px_18px_rgba(66,72,88,0.05)] transition hover:border-[#cfd5df]"
+                      >
+                        <p className="text-sm font-semibold text-[#22262c]">{entry.title}</p>
+                        <p className="text-xs text-[#7a838f]">{entry.description}</p>
+                        <p className="mt-1.5 text-[11px] text-[#8b95a3]">{new Date(entry.createdAt).toLocaleString()}</p>
                       </button>
                     ))
                   )}
                 </div>
-              </div>
+              </PremiumCard>
             ))}
           </div>
         )}
-      </section>
-    </main>
+
+        <SmartButton variant="secondary" onClick={() => enqueuePromptAndGoToChat('Summarize my recent timeline and recommend next actions.')}>
+          <RotateCcw className="mr-2 h-4 w-4" /> Continue from timeline
+        </SmartButton>
+      </PremiumCard>
+    </AppShell>
   );
 }

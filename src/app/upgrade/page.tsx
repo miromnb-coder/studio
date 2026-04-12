@@ -2,9 +2,10 @@
 
 import { useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { Crown, Zap, ShieldCheck, Sparkles } from 'lucide-react';
+import { Crown, ShieldCheck, Sparkles, Zap } from 'lucide-react';
 import { useAppStore } from '../store/app-store';
 import { useUserEntitlements } from '../hooks/use-user-entitlements';
+import { AppShell, PremiumCard, SectionHeader, SmartButton } from '../components/premium-ui';
 
 export default function UpgradePage() {
   const router = useRouter();
@@ -47,52 +48,40 @@ export default function UpgradePage() {
   };
 
   return (
-    <main className="screen app-bg">
-      <section className="card-surface p-5">
-        <div className="flex items-center gap-2 text-primary">
-          <Crown className="h-5 w-5" />
-          <h1 className="text-2xl font-semibold">Upgrade to Premium</h1>
-        </div>
-        <p className="mt-1 text-sm text-secondary">Get more daily intelligence runs, file tools, and a higher-throughput experience.</p>
+    <AppShell>
+      <PremiumCard className="space-y-4 p-5">
+        <SectionHeader title="Upgrade" subtitle="Unlock higher throughput and expanded automation capabilities." />
 
-        <div className="mt-4 grid gap-3">
-          <article className="rounded-2xl border border-black/10 bg-[#f2f2f2] p-4">
-            <p className="text-sm font-semibold">Free</p>
-            <ul className="mt-2 space-y-1 text-sm text-secondary">
+        <div className="grid gap-3">
+          <PremiumCard className="space-y-2 p-4">
+            <p className="inline-flex items-center gap-2 text-sm font-semibold text-[#22262c]"><Crown className="h-4 w-4" /> Free</p>
+            <ul className="space-y-1 text-sm text-[#7a838f]">
               <li>• 10 runs per day</li>
               <li>• Core chat tools</li>
               <li>• Standard queue</li>
             </ul>
-          </article>
+          </PremiumCard>
 
-          <article className="rounded-2xl border border-black/10 bg-[#eceff8] p-4">
-            <div className="flex items-center gap-2">
-              <Sparkles className="h-4 w-4" />
-              <p className="text-sm font-semibold">Premium</p>
-            </div>
-            <ul className="mt-2 space-y-1 text-sm text-secondary">
+          <PremiumCard className="space-y-2 border-[#cfd6e1] bg-[#eef1f7] p-4">
+            <p className="inline-flex items-center gap-2 text-sm font-semibold text-[#22262c]"><Sparkles className="h-4 w-4" /> Premium</p>
+            <ul className="space-y-1 text-sm text-[#5f6877]">
               <li className="inline-flex items-center gap-1"><Zap className="h-3.5 w-3.5" /> 1000 runs per day</li>
               <li className="inline-flex items-center gap-1"><ShieldCheck className="h-3.5 w-3.5" /> File attachments in composer</li>
               <li>• Priority access to heavier workloads</li>
             </ul>
-          </article>
+          </PremiumCard>
         </div>
 
-        <div className="mt-4 rounded-xl border border-black/10 bg-[#f7f7f7] px-3 py-2 text-sm text-secondary">
-          Current plan: <span className="font-medium text-primary">{plan}</span> · Today: {usage.unlimited ? `Unlimited (Dev Mode) • ${usage.current} runs today` : `${usage.current}/${usage.limit}`} runs used.
-        </div>
+        <PremiumCard className="p-4 text-sm text-[#7a838f]">
+          Current plan: <span className="font-medium text-[#22262c]">{plan}</span> · Today: {usage.unlimited ? `Unlimited (Dev Mode) • ${usage.current} runs today` : `${usage.current}/${usage.limit} runs used`}.
+        </PremiumCard>
 
-        {error ? <p className="mt-3 rounded-xl border border-[#dfc9c9] bg-[#f8eded] px-3 py-2 text-sm text-[#6e3030]">{error}</p> : null}
+        {error ? <p className="rounded-xl border border-[#dfc9c9] bg-[#f8eded] px-3 py-2 text-sm text-[#6e3030]">{error}</p> : null}
 
-        <button
-          type="button"
-          disabled={isPremium || isUpgrading}
-          onClick={() => void startUpgrade()}
-          className="btn-primary tap-feedback mt-4 w-full px-4 py-2 text-sm disabled:opacity-60"
-        >
+        <SmartButton type="button" disabled={isPremium || isUpgrading} onClick={() => void startUpgrade()} className="w-full" variant={isPremium ? 'secondary' : 'primary'}>
           {isPremium ? 'You are on Premium' : isUpgrading ? 'Upgrading…' : 'Upgrade to Premium'}
-        </button>
-      </section>
-    </main>
+        </SmartButton>
+      </PremiumCard>
+    </AppShell>
   );
 }

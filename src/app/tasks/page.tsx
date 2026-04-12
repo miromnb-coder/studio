@@ -26,10 +26,10 @@ export default function TasksPage() {
     <AppShell>
       <PremiumCard className="p-5">
         <div className="mb-4 flex items-center gap-3">
-          <div className="rounded-2xl bg-[#eef2f7] p-2.5 text-zinc-200"><Zap className="h-5 w-5" /></div>
+          <div className="rounded-2xl bg-[#eef2f7] p-2.5 text-[#59606d]"><Zap className="h-5 w-5" /></div>
           <div>
             <h1 className="text-3xl font-semibold tracking-tight text-[#22262c]">Tasks</h1>
-            <p className="text-sm text-[#8791a0]">Choose what to execute. Your operator structures the work instantly.</p>
+            <p className="text-sm text-[#7a838f]">Choose what to execute. Your operator structures the work instantly.</p>
           </div>
         </div>
 

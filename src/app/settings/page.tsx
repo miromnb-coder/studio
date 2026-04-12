@@ -2,8 +2,10 @@
 
 import { useCallback, useEffect, useState } from 'react';
 import Link from 'next/link';
+import { Mail, Shield, Sparkles } from 'lucide-react';
 import { useUserEntitlements } from '../hooks/use-user-entitlements';
 import { ConnectGmailCard, type GmailConnectionStatus } from '@/components/integrations/ConnectGmailCard';
+import { AppShell, PremiumCard, SectionHeader, SmartButton } from '../components/premium-ui';
 
 type GmailStatusPayload = {
   connected?: boolean;
@@ -84,37 +86,44 @@ export default function SettingsPage() {
   };
 
   return (
-    <main className="screen app-bg space-y-4 pb-24">
-      <section className="card-surface p-5">
-        <h1 className="text-2xl font-semibold text-primary">Settings</h1>
-        <p className="mt-1 text-sm text-secondary">Manage account-level preferences for your Kivo workspace.</p>
+    <AppShell>
+      <PremiumCard className="space-y-4 p-5">
+        <SectionHeader title="Settings" subtitle="Workspace controls, integrations, and security preferences." />
 
-        <div className="mt-4 rounded-xl border border-black/10 bg-[#f2f2f2] p-4 text-sm text-secondary">
-          <p>Current plan: <span className="font-medium text-primary">{plan}</span></p>
-          <p>Daily usage: {usage.unlimited ? 'Unlimited (Dev Mode)' : `${usage.current} / ${usage.limit}`}</p>
-        </div>
+        <PremiumCard className="space-y-2 p-4">
+          <p className="inline-flex items-center gap-2 text-sm font-semibold text-[#22262c]"><Sparkles className="h-4 w-4" /> Plan & usage</p>
+          <p className="text-sm text-[#7a838f]">Current plan: <span className="font-medium text-[#22262c]">{plan}</span></p>
+          <p className="text-sm text-[#7a838f]">Daily usage: {usage.unlimited ? 'Unlimited (Dev Mode)' : `${usage.current} / ${usage.limit}`}</p>
+          <div className="flex gap-2 pt-1">
+            <Link href="/upgrade" className="inline-flex"><SmartButton>Upgrade</SmartButton></Link>
+            <Link href="/profile" className="inline-flex"><SmartButton variant="secondary">Open profile</SmartButton></Link>
+          </div>
+        </PremiumCard>
 
-        <Link href="/upgrade" className="btn-primary tap-feedback mt-4 inline-flex px-4 py-2 text-sm">
-          Upgrade
-        </Link>
+        <PremiumCard className="space-y-2 p-4">
+          <p className="inline-flex items-center gap-2 text-sm font-semibold text-[#22262c]"><Shield className="h-4 w-4" /> Security</p>
+          <p className="text-sm text-[#7a838f]">Account sessions are protected through Supabase auth and token rotation.</p>
+          <p className="text-xs text-[#8b95a3]">Tip: connect Gmail only when you want proactive subscription intelligence.</p>
+        </PremiumCard>
 
-        <Link href="/profile" className="btn-secondary tap-feedback mt-3 inline-flex px-4 py-2 text-sm">
-          Open profile
-        </Link>
-      </section>
+        <PremiumCard className="space-y-2 p-4">
+          <p className="inline-flex items-center gap-2 text-sm font-semibold text-[#22262c]"><Mail className="h-4 w-4" /> Gmail intelligence</p>
+          <p className="text-sm text-[#7a838f]">Connect inbox data so Kivo can detect bills, renewals, and savings opportunities.</p>
+        </PremiumCard>
 
-      <ConnectGmailCard
-        connected={Boolean(gmail.connected)}
-        status={gmail.status}
-        lastSyncedAt={gmail.lastSyncedAt}
-        emailsAnalyzed={gmail.emailsAnalyzed}
-        subscriptionsFound={gmail.subscriptionsFound}
-        errorMessage={gmail.errorMessage}
-        onConnect={handleConnect}
-        onSync={handleSync}
-        onReconnect={handleConnect}
-        onDisconnect={handleDisconnect}
-      />
-    </main>
+        <ConnectGmailCard
+          connected={Boolean(gmail.connected)}
+          status={gmail.status}
+          lastSyncedAt={gmail.lastSyncedAt}
+          emailsAnalyzed={gmail.emailsAnalyzed}
+          subscriptionsFound={gmail.subscriptionsFound}
+          errorMessage={gmail.errorMessage}
+          onConnect={handleConnect}
+          onSync={handleSync}
+          onReconnect={handleConnect}
+          onDisconnect={handleDisconnect}
+        />
+      </PremiumCard>
+    </AppShell>
   );
 }
