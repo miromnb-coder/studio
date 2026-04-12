@@ -8,5 +8,5 @@ type ThinkingIndicatorProps = {
 };
 
 export function ThinkingIndicator({ phase, detail }: ThinkingIndicatorProps) {
-  return <KivoThinkingIndicator phase={phase} detail={detail} size={30} compact />;
+  return <KivoThinkingIndicator phase={phase} detail={detail} size={29} compact />;
 }
