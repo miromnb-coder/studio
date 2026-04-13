@@ -1,7 +1,7 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
-import { useRouter } from 'next/navigation';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { usePathname, useRouter } from 'next/navigation';
 import { AlarmClockPlus, ClipboardImage, ClipboardPlus, FilePlus2, MessageSquarePlus, Upload } from 'lucide-react';
 import { AnimatePresence, motion } from 'framer-motion';
 import { useAppStore } from '../store/app-store';
@@ -12,6 +12,8 @@ import { Composer } from '@/components/chat/Composer';
 import { MessageThread } from '@/components/chat/MessageThread';
 import { QuickCreateMenu } from '@/components/chat/QuickCreateMenu';
 import { WorkspaceSheet } from '@/components/chat/WorkspaceSheet';
+import { ConversationDrawer } from '@/components/chat/ConversationDrawer';
+import type { ConversationFilter } from '@/components/chat/ConversationFilters';
 
 type ActionNotice = { title: string; detail: string };
 
@@ -48,6 +50,7 @@ const createActions = [
 
 export default function ChatPage() {
   const router = useRouter();
+  const pathname = usePathname();
 
   const hydrated = useAppStore((s) => s.hydrated);
   const hydrate = useAppStore((s) => s.hydrate);
@@ -55,6 +58,9 @@ export default function ChatPage() {
   const messages = useAppStore((s) => s.messages);
   const streamError = useAppStore((s) => s.streamError);
   const isAgentResponding = useAppStore((s) => s.isAgentResponding);
+  const conversationList = useAppStore((s) => s.conversationList);
+  const messageState = useAppStore((s) => s.messageState);
+  const draftState = useAppStore((s) => s.draftState);
 
   const createConversation = useAppStore((s) => s.createConversation);
   const openConversation = useAppStore((s) => s.openConversation);
@@ -69,6 +75,10 @@ export default function ChatPage() {
   const [listening, setListening] = useState(false);
   const [composerAttachments, setComposerAttachments] = useState<MessageAttachment[]>([]);
   const [filePickerAccept, setFilePickerAccept] = useState<string>('');
+  const [conversationDrawerOpen, setConversationDrawerOpen] = useState(false);
+  const [conversationSearch, setConversationSearch] = useState('');
+  const [conversationFilter, setConversationFilter] = useState<ConversationFilter>('all');
+  const [savedConversationIds, setSavedConversationIds] = useState<string[]>([]);
 
   const recognitionRef = useRef<SpeechRecognitionLike | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
@@ -95,6 +105,25 @@ export default function ChatPage() {
     return () => window.clearTimeout(timeout);
   }, [notice]);
 
+  useEffect(() => {
+    try {
+      const raw = window.localStorage.getItem('kivo_saved_conversations_v1');
+      if (!raw) return;
+      const parsed = JSON.parse(raw);
+      if (Array.isArray(parsed)) setSavedConversationIds(parsed.filter((item) => typeof item === 'string'));
+    } catch {
+      // ignore malformed local state
+    }
+  }, []);
+
+  useEffect(() => {
+    window.localStorage.setItem('kivo_saved_conversations_v1', JSON.stringify(savedConversationIds));
+  }, [savedConversationIds]);
+
+  useEffect(() => {
+    setConversationDrawerOpen(false);
+  }, [pathname]);
+
   const showNotice = (title: string, detail: string) => setNotice({ title, detail });
 
   const closeAllSheets = () => {
@@ -102,13 +131,6 @@ export default function ChatPage() {
     setConnectorsOpen(false);
   };
 
-  const onBack = () => {
-    if (window.history.length > 1) {
-      router.back();
-      return;
-    }
-    router.push('/chat');
-  };
 
   const handleSend = async () => {
     if ((!hasText && composerAttachments.length === 0) || isSending) return;
@@ -232,6 +254,65 @@ export default function ChatPage() {
     fileInputRef.current?.click();
   };
 
+  const formatRelativeTime = (iso: string) => {
+    const delta = Date.now() - new Date(iso).getTime();
+    const minutes = Math.max(1, Math.floor(delta / 60000));
+    if (minutes < 60) return `${minutes}m ago`;
+    const hours = Math.floor(minutes / 60);
+    if (hours < 24) return `${hours}h ago`;
+    const days = Math.floor(hours / 24);
+    if (days < 7) return `${days}d ago`;
+    return new Intl.DateTimeFormat('en-US', { month: 'short', day: 'numeric' }).format(new Date(iso));
+  };
+
+  const drawerRows = useMemo(() => {
+    return conversationList
+      .map((conversation) => {
+        const threadMessages = messageState[conversation.id] ?? [];
+        const draftValue = draftState[conversation.id] ?? '';
+        const hasAgent = threadMessages.some((message) => message.agent || message.agentMetadata?.operatorModules?.length);
+        const lastMessage = threadMessages[threadMessages.length - 1];
+        const unfinished = Boolean(draftValue.trim()) || lastMessage?.role === 'user';
+        const running = lastMessage?.isStreaming;
+        const saved = savedConversationIds.includes(conversation.id);
+
+        return {
+          id: conversation.id,
+          title: conversation.title,
+          preview: conversation.lastMessagePreview,
+          timestamp: formatRelativeTime(conversation.updatedAt),
+          badge: hasAgent ? (running ? 'Running' : unfinished ? 'Needs Input' : 'Agent') : saved ? 'Saved' : unfinished ? 'Needs Input' : undefined,
+          hasAgent,
+          unfinished,
+          isSaved: saved,
+        };
+      })
+      .sort((a, b) => {
+        const aConv = conversationList.find((item) => item.id === a.id);
+        const bConv = conversationList.find((item) => item.id === b.id);
+        return new Date(bConv?.updatedAt ?? 0).getTime() - new Date(aConv?.updatedAt ?? 0).getTime();
+      });
+  }, [conversationList, draftState, messageState, savedConversationIds]);
+
+  const filteredRows = useMemo(() => {
+    const query = conversationSearch.trim().toLowerCase();
+    let rows = drawerRows;
+
+    if (conversationFilter === 'recent') rows = rows.slice(0, 8);
+    if (conversationFilter === 'agents') rows = rows.filter((row) => row.hasAgent);
+    if (conversationFilter === 'saved') rows = rows.filter((row) => row.isSaved);
+    if (conversationFilter === 'unfinished') rows = rows.filter((row) => row.unfinished);
+
+    if (!query) return rows;
+
+    return rows.filter((row) => `${row.title} ${row.preview} ${row.badge ?? ''}`.toLowerCase().includes(query));
+  }, [conversationFilter, conversationSearch, drawerRows]);
+
+  const continueItem = filteredRows.find((row) => row.unfinished) ?? drawerRows.find((row) => row.unfinished) ?? null;
+  const recentRows = filteredRows.slice(0, 12);
+  const agentRows = filteredRows.filter((row) => row.hasAgent);
+  const savedRows = filteredRows.filter((row) => row.isSaved);
+
   const tryPasteScreenshot = async () => {
     const hasClipboardRead = typeof navigator !== 'undefined' && 'clipboard' in navigator && 'read' in navigator.clipboard;
 
@@ -266,7 +347,7 @@ export default function ChatPage() {
   return (
     <AppShell>
       <div className="relative flex min-h-screen flex-col overflow-hidden">
-        <ChatHeader onBack={onBack} />
+        <ChatHeader onOpenConversations={() => setConversationDrawerOpen(true)} />
 
         <div className="relative flex flex-1 flex-col">
           <MessageThread messages={messages} pending={isAgentResponding} />
@@ -400,6 +481,27 @@ export default function ChatPage() {
                 return;
               }
               openRouteFromSheet('/actions?type=planner');
+            }}
+          />
+
+          <ConversationDrawer
+            open={conversationDrawerOpen}
+            onClose={() => setConversationDrawerOpen(false)}
+            search={conversationSearch}
+            onSearchChange={setConversationSearch}
+            filter={conversationFilter}
+            onFilterChange={setConversationFilter}
+            continueItem={continueItem}
+            recentRows={recentRows}
+            agentRows={agentRows}
+            savedRows={savedRows}
+            onOpenConversation={(conversationId) => {
+              openConversation(conversationId);
+            }}
+            onToggleSaved={(conversationId) => {
+              setSavedConversationIds((prev) =>
+                prev.includes(conversationId) ? prev.filter((id) => id !== conversationId) : [conversationId, ...prev],
+              );
             }}
           />
         </div>
