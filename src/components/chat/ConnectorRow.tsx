@@ -1,6 +1,6 @@
 'use client';
 
-import { CheckCircle2, ChevronRight } from 'lucide-react';
+import { CheckCircle2, ChevronRight, Loader2 } from 'lucide-react';
 import { motion } from 'framer-motion';
 import type { ReactNode } from 'react';
 
@@ -13,6 +13,8 @@ type ConnectorRowProps = {
   toggled?: boolean;
   detail?: string;
   onAction: () => void;
+  loading?: boolean;
+  disabled?: boolean;
 };
 
 export function ConnectorRow({
@@ -22,7 +24,26 @@ export function ConnectorRow({
   toggled = false,
   detail,
   onAction,
+  loading = false,
+  disabled = false,
 }: ConnectorRowProps) {
+  const isDisabled = disabled || loading;
+
+  const actionLabel =
+    mode === 'connect'
+      ? loading
+        ? 'Connecting...'
+        : 'Connect'
+      : mode === 'connected'
+        ? loading
+          ? 'Opening...'
+          : 'Connected'
+        : mode === 'manage'
+          ? loading
+            ? 'Opening...'
+            : 'Manage'
+          : '';
+
   return (
     <div className="flex min-h-[68px] items-center justify-between gap-3 border-b border-[#e7ebf1] px-4 py-3 last:border-b-0">
       <div className="flex min-w-0 items-center gap-3.5">
@@ -46,12 +67,13 @@ export function ConnectorRow({
         <button
           type="button"
           onClick={onAction}
+          disabled={isDisabled}
           aria-label={`${name} toggle`}
           className={`relative h-7 w-12 shrink-0 rounded-full border transition ${
             toggled
               ? 'border-[#a8d4b8] bg-[#b8e1c6]'
               : 'border-[#d8dde5] bg-[#eceff4]'
-          }`}
+          } ${isDisabled ? 'cursor-not-allowed opacity-60' : 'cursor-pointer active:scale-[0.98]'}`}
         >
           <motion.span
             layout
@@ -65,19 +87,24 @@ export function ConnectorRow({
         <button
           type="button"
           onClick={onAction}
-          className="inline-flex shrink-0 items-center gap-1.5 rounded-full border border-transparent px-1 py-1 text-[13px] font-medium text-[#6d7481] transition hover:bg-[#f1f4f8]"
+          disabled={isDisabled}
+          className={`inline-flex shrink-0 items-center gap-1.5 rounded-full border border-transparent px-2 py-1.5 text-[13px] font-medium text-[#6d7481] transition ${
+            isDisabled
+              ? 'cursor-not-allowed opacity-60'
+              : 'hover:bg-[#f1f4f8] active:scale-[0.98]'
+          }`}
         >
-          {mode === 'connected' ? (
+          {loading ? (
+            <Loader2 className="h-4 w-4 animate-spin text-[#7b8492]" />
+          ) : mode === 'connected' ? (
             <CheckCircle2 className="h-4 w-4 text-[#7fb693]" />
           ) : null}
 
-          <span>
-            {mode === 'connect' && 'Connect'}
-            {mode === 'connected' && 'Connected'}
-            {mode === 'manage' && 'Manage'}
-          </span>
+          <span>{actionLabel}</span>
 
-          <ChevronRight className="h-4 w-4 text-[#9aa2af]" />
+          {!loading ? (
+            <ChevronRight className="h-4 w-4 text-[#9aa2af]" />
+          ) : null}
         </button>
       )}
     </div>
