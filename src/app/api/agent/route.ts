@@ -25,7 +25,7 @@ import {
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
-const USE_NEW_AGENT = false;
+const USE_NEW_AGENT = true;
 
 const SAFE_AGENT_FALLBACK: AgentResponse = {
   reply: 'I ran into an issue, but here’s what I could analyze so far.',
