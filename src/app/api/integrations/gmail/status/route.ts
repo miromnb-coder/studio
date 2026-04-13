@@ -43,10 +43,14 @@ export async function GET() {
     if (storedStatus === 'error') status = 'error';
     if (!connected && storedStatus === 'error') status = 'error';
 
+    const scope = typeof gmail.scope === 'string' ? gmail.scope : '';
+
     return NextResponse.json(
       {
         connected,
         status,
+        accountEmail: typeof gmail.verified_email === 'string' ? gmail.verified_email : null,
+        permissions: scope ? scope.split(' ').filter(Boolean) : [],
         lastSyncedAt: userProfile?.gmail_last_sync_at
           ? String(userProfile.gmail_last_sync_at)
           : typeof gmailImport.last_synced_at === 'string'
