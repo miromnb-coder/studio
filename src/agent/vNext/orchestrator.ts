@@ -21,11 +21,22 @@ import type {
   AgentToolResult,
 } from './types';
 
+type ConversationMessage = {
+  id?: string;
+  role: 'system' | 'user' | 'assistant';
+  content: string;
+};
+
 function mergeRuntimeOptions(request: AgentRequest): AgentRuntimeOptions {
   return {
     ...AGENT_VNEXT_DEFAULT_RUNTIME_OPTIONS,
     ...request.options,
   };
+}
+
+function normalizeText(value: unknown): string {
+  if (typeof value !== 'string') return '';
+  return value.replace(/\s+/g, ' ').trim();
 }
 
 function getRequestText(request: AgentRequest): string {
@@ -36,46 +47,75 @@ function getRequestText(request: AgentRequest): string {
   ];
 
   for (const candidate of candidates) {
-    if (typeof candidate === 'string' && candidate.trim()) {
-      return candidate.trim();
-    }
+    const normalized = normalizeText(candidate);
+    if (normalized) return normalized;
   }
 
   return '';
+}
+
+function getConversationMessages(request: AgentRequest): ConversationMessage[] {
+  const raw =
+    (request as AgentRequest & { conversation?: unknown }).conversation ?? [];
+
+  if (!Array.isArray(raw)) return [];
+
+  return raw
+    .filter(
+      (
+        item,
+      ): item is {
+        id?: string;
+        role: 'system' | 'user' | 'assistant';
+        content: string;
+      } =>
+        Boolean(item) &&
+        typeof item === 'object' &&
+        ((item as { role?: unknown }).role === 'system' ||
+          (item as { role?: unknown }).role === 'user' ||
+          (item as { role?: unknown }).role === 'assistant') &&
+        typeof (item as { content?: unknown }).content === 'string',
+    )
+    .map((item) => ({
+      id: item.id,
+      role: item.role,
+      content: normalizeText(item.content),
+    }))
+    .filter((item) => item.content.length > 0);
+}
+
+function getRecentConversationSummary(request: AgentRequest): string {
+  const messages = getConversationMessages(request);
+  if (!messages.length) return '';
+
+  return messages
+    .slice(-6)
+    .map((message) => `${message.role}: ${message.content}`)
+    .join('\n');
 }
 
 function buildBaseContext(
   request: AgentRequest,
   runtime: AgentRuntimeOptions,
 ): AgentContext {
+  const conversationMessages = getConversationMessages(request);
+
   return {
     nowIso: new Date().toISOString(),
     request,
     runtime,
-  };
+    messages: conversationMessages,
+    conversation: {
+      id:
+        (request as AgentRequest & { conversationId?: string }).conversationId ??
+        undefined,
+      messages: conversationMessages,
+    },
+  } as AgentContext;
 }
 
 function shouldStopOnToolFailure(context: AgentContext): boolean {
   return !context.runtime.allowToolFallbacks;
-}
-
-function createToolCall(
-  stepId: string,
-  tool: NonNullable<AgentPlan['steps'][number]['requiredTool']>,
-  context: AgentContext,
-): AgentToolCall {
-  return {
-    callId: `call-${context.request.requestId}-${stepId}`,
-    stepId,
-    tool,
-    input: {
-      action: inferToolAction(tool, context.request),
-      message: getRequestText(context.request),
-      metadata: context.request.metadata ?? {},
-      requestId: context.request.requestId,
-      userId: context.request.userId,
-    },
-  };
 }
 
 function inferToolAction(
@@ -86,24 +126,50 @@ function inferToolAction(
 
   switch (tool) {
     case 'gmail':
-      if (text.includes('receipt')) return 'scan_receipts';
-      if (text.includes('subscription')) return 'scan_subscriptions';
-      if (text.includes('reply') || text.includes('draft')) return 'draft_reply';
-      if (text.includes('inbox') || text.includes('email')) return 'search';
+      if (
+        text.includes('receipt') ||
+        text.includes('kuitti') ||
+        text.includes('kuitti ')
+      ) {
+        return 'scan_receipts';
+      }
+      if (
+        text.includes('subscription') ||
+        text.includes('tilaus') ||
+        text.includes('unsubscribe')
+      ) {
+        return 'scan_subscriptions';
+      }
+      if (
+        text.includes('reply') ||
+        text.includes('draft') ||
+        text.includes('sähköposti') ||
+        text.includes('email')
+      ) {
+        return 'search';
+      }
       return 'status';
 
     case 'calendar':
       if (
         text.includes('meeting') ||
         text.includes('availability') ||
-        text.includes('schedule')
+        text.includes('schedule') ||
+        text.includes('calendar') ||
+        text.includes('kalenteri')
       ) {
         return 'availability';
       }
       return 'status';
 
     case 'memory':
-      if (text.includes('remember') || text.includes('history')) {
+      if (
+        text.includes('remember') ||
+        text.includes('history') ||
+        text.includes('muista') ||
+        text.includes('aiemmin') ||
+        text.includes('earlier')
+      ) {
         return 'retrieve';
       }
       return 'search';
@@ -118,14 +184,22 @@ function inferToolAction(
       return 'inspect';
 
     case 'finance':
-      if (text.includes('scan')) return 'scan';
+      if (
+        text.includes('scan') ||
+        text.includes('analysoi') ||
+        text.includes('analyze')
+      ) {
+        return 'scan';
+      }
       return 'overview';
 
     case 'notes':
       if (
         text.includes('create note') ||
         text.includes('save this') ||
-        text.includes('write this down')
+        text.includes('write this down') ||
+        text.includes('muista tämä') ||
+        text.includes('tallenna tämä')
       ) {
         return 'create';
       }
@@ -136,6 +210,150 @@ function inferToolAction(
   }
 }
 
+function extractCompareItems(text: string): string[] {
+  const normalized = normalizeText(text);
+
+  const patterns = [
+    /(?:compare|vertaa)\s+(.+?)\s+(?:vs|versus)\s+(.+?)(?:[.?!]|$)/i,
+    /(?:compare|vertaa)\s+(.+?)\s+(?:and|ja)\s+(.+?)(?:[.?!]|$)/i,
+    /(.+?)\s+(?:vs|versus)\s+(.+?)(?:[.?!]|$)/i,
+  ];
+
+  for (const pattern of patterns) {
+    const match = normalized.match(pattern);
+    if (!match) continue;
+
+    const left = normalizeCompareLabel(match[1]);
+    const right = normalizeCompareLabel(match[2]);
+
+    if (left && right) return [left, right];
+  }
+
+  return [];
+}
+
+function normalizeCompareLabel(value: string): string {
+  return value
+    .replace(
+      /\b(which is better|kumpi kannattaa|for budget users|budjetilla|minulle|for me)\b/gi,
+      '',
+    )
+    .replace(/[?!.]+$/g, '')
+    .trim();
+}
+
+function buildWebQuery(
+  request: AgentRequest,
+  routeIntent?: string,
+  compareItems?: string[],
+): string {
+  const text = getRequestText(request);
+
+  if (compareItems && compareItems.length >= 2) {
+    return `${compareItems[0]} vs ${compareItems[1]} comparison`;
+  }
+
+  if (routeIntent === 'research') return text;
+  if (routeIntent === 'compare') return text;
+  if (routeIntent === 'email') return `${text} email workflow`;
+
+  return text;
+}
+
+function buildToolInput(
+  stepId: string,
+  tool: NonNullable<AgentPlan['steps'][number]['requiredTool']>,
+  context: AgentContext,
+  plan: AgentPlan,
+): Record<string, unknown> {
+  const requestText = getRequestText(context.request);
+  const recentConversation = getRecentConversationSummary(context.request);
+  const compareItems = extractCompareItems(requestText);
+  const action = inferToolAction(tool, context.request);
+
+  const base: Record<string, unknown> = {
+    action,
+    message: requestText,
+    metadata: context.request.metadata ?? {},
+    requestId: context.request.requestId,
+    userId: context.request.userId,
+    recentConversation,
+    planIntent: plan.intent,
+    memorySummary: context.memoryContext?.summary ?? '',
+  };
+
+  switch (tool) {
+    case 'compare':
+      return {
+        ...base,
+        items: compareItems,
+        criteria:
+          /budget|budjet/i.test(requestText)
+            ? ['price', 'value', 'longevity']
+            : ['features', 'price', 'overall fit'],
+      };
+
+    case 'web':
+      return {
+        ...base,
+        query: buildWebQuery(context.request, plan.intent, compareItems),
+      };
+
+    case 'memory':
+      return {
+        ...base,
+        query: requestText || recentConversation || 'current conversation context',
+      };
+
+    case 'gmail':
+      return {
+        ...base,
+        query: requestText,
+      };
+
+    case 'calendar':
+      return {
+        ...base,
+        query: requestText,
+      };
+
+    case 'finance':
+      return {
+        ...base,
+        query: requestText,
+      };
+
+    case 'notes':
+      return {
+        ...base,
+        note: requestText,
+      };
+
+    case 'file':
+      return {
+        ...base,
+        query: requestText,
+      };
+
+    default:
+      return base;
+  }
+}
+
+function createToolCall(
+  stepId: string,
+  tool: NonNullable<AgentPlan['steps'][number]['requiredTool']>,
+  context: AgentContext,
+  plan: AgentPlan,
+): AgentToolCall {
+  return {
+    callId: `call-${context.request.requestId}-${stepId}`,
+    stepId,
+    tool,
+    input: buildToolInput(stepId, tool, context, plan),
+  };
+}
+
 function sortStepsForExecution(plan: AgentPlan): AgentPlan['steps'] {
   return [...plan.steps].sort((a, b) => a.priority - b.priority);
 }
@@ -144,13 +362,16 @@ export async function executePlanSteps(
   plan: AgentPlan,
   context: AgentContext,
 ): Promise<AgentToolResult[]> {
-  const steps = sortStepsForExecution(plan).filter((step) => Boolean(step.requiredTool));
+  const steps = sortStepsForExecution(plan).filter((step) =>
+    Boolean(step.requiredTool),
+  );
+
   const results: AgentToolResult[] = [];
 
   for (const step of steps) {
     if (!step.requiredTool) continue;
 
-    const call = createToolCall(step.id, step.requiredTool, context);
+    const call = createToolCall(step.id, step.requiredTool, context, plan);
     const result = await executeTool(call, context);
     results.push(result);
 
@@ -180,7 +401,7 @@ async function prepareMemory(
     return buildMemoryContext([]);
   }
 
-  const query = getRequestText(request);
+  const query = getRequestText(request) || getRecentConversationSummary(request);
   const fetched = await fetchMemory(request, context);
   const ranked = rankMemory(fetched, query);
   return buildMemoryContext(ranked);
@@ -226,7 +447,11 @@ export async function runAgentVNext(
     const planningMs = Date.now() - planningStarted;
 
     const memoryStarted = Date.now();
-    const memory = await prepareMemory(request, context, route.shouldFetchMemory);
+    const memory = await prepareMemory(
+      request,
+      context,
+      route.shouldFetchMemory,
+    );
     const memoryMs = Date.now() - memoryStarted;
 
     const executionContext: AgentContext = {
@@ -340,7 +565,11 @@ export async function* runAgentVNextStream(
 
     yield streamEvents.memoryStarted(request);
 
-    const memory = await prepareMemory(request, context, route.shouldFetchMemory);
+    const memory = await prepareMemory(
+      request,
+      context,
+      route.shouldFetchMemory,
+    );
 
     yield streamEvents.memoryCompleted(request, {
       memoryCount: memory.items.length,
@@ -366,7 +595,12 @@ export async function* runAgentVNextStream(
         tool: step.requiredTool,
       });
 
-      const call = createToolCall(step.id, step.requiredTool, executionContext);
+      const call = createToolCall(
+        step.id,
+        step.requiredTool,
+        executionContext,
+        plan,
+      );
       const result = await executeTool(call, executionContext);
       toolResults.push(result);
 
@@ -405,6 +639,7 @@ export async function* runAgentVNextStream(
     }
   } catch (error) {
     const normalized = normalizeAgentError(error);
+
     agentLogger.error('vNext streaming execution failed', {
       requestId: request.requestId,
       error: normalized,
