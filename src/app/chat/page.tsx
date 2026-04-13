@@ -10,10 +10,8 @@ import { AppShell } from '@/components/chat/AppShell';
 import { ChatHeader } from '@/components/chat/ChatHeader';
 import { Composer } from '@/components/chat/Composer';
 import { MessageThread } from '@/components/chat/MessageThread';
-import { MenuSheet } from '@/components/chat/MenuSheet';
 import { QuickCreateMenu } from '@/components/chat/QuickCreateMenu';
 import { WorkspaceSheet } from '@/components/chat/WorkspaceSheet';
-import { sharedPrimaryMenu, sharedSecondaryMenu } from '@/components/chat/menu-config';
 
 type ActionNotice = { title: string; detail: string };
 
@@ -63,9 +61,7 @@ export default function ChatPage() {
   const draftPrompt = useAppStore((s) => s.draftPrompt);
   const setDraftPrompt = useAppStore((s) => s.setDraftPrompt);
   const sendMessage = useAppStore((s) => s.sendMessage);
-  const logout = useAppStore((s) => s.logout);
 
-  const [menuOpen, setMenuOpen] = useState(false);
   const [createOpen, setCreateOpen] = useState(false);
   const [connectorsOpen, setConnectorsOpen] = useState(false);
   const [isSending, setIsSending] = useState(false);
@@ -102,7 +98,6 @@ export default function ChatPage() {
   const showNotice = (title: string, detail: string) => setNotice({ title, detail });
 
   const closeAllSheets = () => {
-    setMenuOpen(false);
     setCreateOpen(false);
     setConnectorsOpen(false);
   };
@@ -221,21 +216,6 @@ export default function ChatPage() {
     });
   };
 
-  const onMenuRoute = (href: string) => {
-    closeAllSheets();
-    router.push(href);
-  };
-
-  const onConversations = () => {
-    closeAllSheets();
-    router.push('/memory');
-  };
-
-  const onSignOut = () => {
-    logout();
-    closeAllSheets();
-    router.push('/login');
-  };
 
   const closeAndFocusComposer = () => {
     setConnectorsOpen(false);
@@ -286,31 +266,11 @@ export default function ChatPage() {
   return (
     <AppShell>
       <div className="relative flex min-h-screen flex-col overflow-hidden">
-        <ChatHeader
-          onBack={onBack}
-          onToggleMenu={() => {
-            setMenuOpen((v) => !v);
-            setCreateOpen(false);
-            setConnectorsOpen(false);
-          }}
-        />
+        <ChatHeader onBack={onBack} />
 
         <div className="relative flex flex-1 flex-col">
           <MessageThread messages={messages} pending={isAgentResponding} />
 
-          <MenuSheet
-            open={menuOpen}
-            primaryRows={sharedPrimaryMenu}
-            secondaryRows={sharedSecondaryMenu}
-            onClose={() => setMenuOpen(false)}
-            onPrimaryClick={(row) => {
-              if (row.action === 'new-chat') createNewChat();
-              if (row.action === 'conversations') onConversations();
-              if (row.href) onMenuRoute(row.href);
-            }}
-            onSecondaryClick={(row) => row.href && onMenuRoute(row.href)}
-            onSignOut={onSignOut}
-          />
 
           <Composer
             value={draftPrompt}
@@ -323,12 +283,10 @@ export default function ChatPage() {
             onOpenCreate={() => {
               setCreateOpen((prev) => !prev);
               setConnectorsOpen(false);
-              setMenuOpen(false);
             }}
             onOpenTools={() => {
               setConnectorsOpen(true);
               setCreateOpen(false);
-              setMenuOpen(false);
             }}
             onToggleMic={toggleMic}
             onRemoveAttachment={removeAttachment}
