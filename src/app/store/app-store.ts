@@ -10,12 +10,23 @@ export type AgentStatus = 'idle' | 'running' | 'completed';
 export type MessageRole = 'user' | 'assistant' | 'system';
 export type HistoryType = 'message' | 'agent' | 'alert' | 'memory' | 'account';
 export type AlertType = 'billing' | 'risk' | 'digest';
+export type MessageAttachmentKind = 'image' | 'file';
+
+export type MessageAttachment = {
+  id: string;
+  name: string;
+  kind: MessageAttachmentKind;
+  mimeType: string;
+  size: number;
+  previewUrl?: string;
+};
 
 export type Message = {
   id: string;
   role: MessageRole;
   content: string;
   createdAt: string;
+  attachments?: MessageAttachment[];
   agent?: AgentName;
   isStreaming?: boolean;
   error?: string;
@@ -91,7 +102,7 @@ type AppState = {
 type AppActions = {
   hydrate: () => void;
   setDraftPrompt: (prompt: string) => void;
-  sendMessage: (prompt: string) => Promise<void>;
+  sendMessage: (prompt: string, options?: { attachments?: MessageAttachment[] }) => Promise<void>;
   retryLastPrompt: () => Promise<void>;
   enqueuePromptAndGoToChat: (prompt: string) => void;
   addAlert: (alert: Omit<Alert, 'id' | 'createdAt' | 'resolved' | 'snoozedUntil'>) => void;
@@ -723,9 +734,10 @@ const actions: AppActions = {
     }
   },
 
-  sendMessage: async (prompt) => {
+  sendMessage: async (prompt, options) => {
     const cleanPrompt = prompt.trim();
-    if (!cleanPrompt) return;
+    const attachments = options?.attachments?.length ? options.attachments : undefined;
+    if (!cleanPrompt && !attachments?.length) return;
     if (!state.user?.id) {
       setState((prev) => ({ ...prev, streamError: 'AUTH_REQUIRED:Please sign in to continue.' }));
       return;
@@ -734,7 +746,15 @@ const actions: AppActions = {
     const conversationId = state.activeConversationId;
     const agent: AgentName = DEFAULT_ACTIVE_AGENT;
     const requestId = createId();
-    const userMessage: Message = { id: createId(), role: 'user', content: cleanPrompt, createdAt: nowIso(), agent };
+    const promptLabel = cleanPrompt || 'Sent attachment';
+    const userMessage: Message = {
+      id: createId(),
+      role: 'user',
+      content: cleanPrompt,
+      createdAt: nowIso(),
+      agent,
+      attachments,
+    };
     const assistantMessage: Message = {
       id: createId(),
       role: 'assistant',
@@ -750,6 +770,7 @@ const actions: AppActions = {
       requestId,
       properties: {
         promptLength: cleanPrompt.length,
+        attachmentCount: attachments?.length ?? 0,
         messageCountBefore: (state.messageState[conversationId] ?? []).length,
       },
     });
@@ -763,7 +784,7 @@ const actions: AppActions = {
         nextAgents[name] = {
           ...nextAgents[name],
           status: name === agent ? 'running' : 'idle',
-          ...(name === agent ? { lastTask: cleanPrompt, lastRun: nowIso() } : {}),
+          ...(name === agent ? { lastTask: promptLabel, lastRun: nowIso() } : {}),
         };
       });
 
@@ -780,7 +801,7 @@ const actions: AppActions = {
         conversationList: sortConversations(
           prev.conversationList.map((conversation) => {
             if (conversation.id !== conversationId) return conversation;
-            const shouldRetitle = conversation.messageCount === 0 || conversation.title === DEFAULT_NEW_CHAT_TITLE;
+            const shouldRetitle = cleanPrompt && (conversation.messageCount === 0 || conversation.title === DEFAULT_NEW_CHAT_TITLE);
             return {
               ...conversation,
               title: shouldRetitle ? deriveTitleFromPrompt(cleanPrompt) : conversation.title,
@@ -799,8 +820,8 @@ const actions: AppActions = {
       };
     });
 
-    addHistory({ title: 'User message sent', description: cleanPrompt, type: 'message', prompt: cleanPrompt });
-    addHistory({ title: `${agent} task started`, description: cleanPrompt, type: 'agent', prompt: cleanPrompt });
+    addHistory({ title: 'User message sent', description: promptLabel, type: 'message', prompt: cleanPrompt || undefined });
+    addHistory({ title: `${agent} task started`, description: promptLabel, type: 'agent', prompt: cleanPrompt || undefined });
     persist();
     emit();
 
@@ -854,7 +875,7 @@ const actions: AppActions = {
         };
       });
 
-      addHistory({ title: `${agent} task completed`, description: cleanPrompt, type: 'agent', prompt: cleanPrompt });
+      addHistory({ title: `${agent} task completed`, description: promptLabel, type: 'agent', prompt: cleanPrompt || undefined });
       trackEvent('chat_message_success', { conversationId, messageId: assistantMessage.id, requestId, properties: { attempts } });
       addHistory({
         title: 'Final answer delivered',

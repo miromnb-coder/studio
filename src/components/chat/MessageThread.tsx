@@ -1,6 +1,7 @@
 'use client';
 
 import type { Message } from '@/app/store/app-store';
+import { AttachmentPreview } from './AttachmentPreview';
 
 type MessageThreadProps = {
   messages: Message[];
@@ -38,6 +39,7 @@ export function MessageThread({ messages, pending }: MessageThreadProps) {
                 }`}
               >
                 <p className="whitespace-pre-wrap">{message.content || (message.isStreaming ? 'Thinking…' : '')}</p>
+                {message.attachments?.length ? <AttachmentPreview attachments={message.attachments} /> : null}
                 {isError ? <p className="mt-2 text-xs text-[#9b4d4d]">{message.error}</p> : null}
               </article>
             </div>
