@@ -161,7 +161,7 @@ function buildIntentSpecificSteps(
         }),
       ];
 
-    case 'execution':
+    case 'productivity':
       return [
         baseStep({
           id: 'step-validate',
@@ -181,7 +181,7 @@ function buildIntentSpecificSteps(
         }),
       ];
 
-    case 'scheduling':
+    case 'finance':
       return [
         baseStep({
           id: 'step-time-constraints',
@@ -193,13 +193,37 @@ function buildIntentSpecificSteps(
         }),
       ];
 
-    case 'memory_lookup':
+    case 'memory':
       return [
         baseStep({
           id: 'step-memory-filter',
           title: 'Filter memory',
           description:
             'Prioritize the most relevant historical context for this request.',
+          priority: 12,
+          dependsOn: dependency,
+        }),
+      ];
+
+    case 'coding':
+      return [
+        baseStep({
+          id: 'step-code-scope',
+          title: 'Clarify coding scope',
+          description:
+            'Identify stack, constraints, acceptance criteria, and likely failure modes.',
+          priority: 12,
+          dependsOn: dependency,
+        }),
+      ];
+
+    case 'shopping':
+      return [
+        baseStep({
+          id: 'step-shopping-criteria',
+          title: 'Define shopping criteria',
+          description:
+            'Clarify budget, constraints, preferences, and deal-breakers.',
           priority: 12,
           dependsOn: dependency,
         }),

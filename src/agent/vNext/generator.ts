@@ -76,7 +76,18 @@ function summarizeFailedTools(results: AgentToolResult[]): string[] {
 function determineLeadText(
   route: AgentRouteResult,
   requestText: string,
+  language: string,
 ): string {
+  const isFi = language.startsWith('fi');
+  const isEs = language.startsWith('es');
+  const isDe = language.startsWith('de');
+  const isSv = language.startsWith('sv');
+
+  if (isFi) return `Analysoin pyyntösi "${requestText}" ja koostin sinulle selkeän vastauksen.`;
+  if (isEs) return `Analicé tu solicitud "${requestText}" y preparé una respuesta clara.`;
+  if (isDe) return `Ich habe deine Anfrage "${requestText}" analysiert und eine klare Antwort vorbereitet.`;
+  if (isSv) return `Jag analyserade din begäran "${requestText}" och förberedde ett tydligt svar.`;
+
   switch (route.intent) {
     case 'research':
       return `I researched your request and pulled together the most relevant findings for "${requestText}".`;
@@ -84,19 +95,19 @@ function determineLeadText(
       return `I compared the main options related to "${requestText}" and prepared a structured answer.`;
     case 'planning':
       return `I turned "${requestText}" into a practical plan you can act on.`;
-    case 'execution':
-      return `I prepared the execution result for "${requestText}" and focused on direct action.`;
-    case 'email':
+    case 'productivity':
+      return `I prepared a focused productivity-oriented response for "${requestText}".`;
+    case 'gmail':
       return `I checked the email-related context for "${requestText}" and organized the next steps.`;
-    case 'scheduling':
-      return `I reviewed the scheduling context for "${requestText}" and prepared the clearest next move.`;
-    case 'memory_lookup':
+    case 'finance':
+      return `I analyzed the financial angle for "${requestText}" and structured practical recommendations.`;
+    case 'memory':
       return `I searched your relevant history for "${requestText}" and pulled back the strongest matches.`;
-    case 'tool_use':
-      return `I prepared the tool-driven response for "${requestText}".`;
-    case 'question':
-      return `Here is the clearest answer I can give for "${requestText}".`;
-    case 'chat':
+    case 'coding':
+      return `I prepared a coding-focused response for "${requestText}" with implementation-ready direction.`;
+    case 'shopping':
+      return `I reviewed the shopping context for "${requestText}" and prepared clear buying guidance.`;
+    case 'general':
       return `Here’s a direct response for "${requestText}".`;
     default:
       return `I analyzed "${requestText}" and prepared the best response I can from the available context.`;
@@ -145,22 +156,22 @@ function buildActionSection(route: AgentRouteResult): string[] {
         'Recommended next step:',
         '- Choose the option that best matches your highest-priority criteria, then I can help turn it into a decision table.',
       ];
-    case 'email':
+    case 'gmail':
       return [
         'Recommended next step:',
         '- Open the email-related workflow or tell me whether you want search, summary, receipt scan, or subscription scan.',
       ];
-    case 'execution':
+    case 'productivity':
       return [
         'Recommended next step:',
         '- Confirm the action you want me to carry out next, and I can continue step by step.',
       ];
-    case 'scheduling':
+    case 'finance':
       return [
         'Recommended next step:',
         '- Confirm the time or planning goal, and I can refine the schedule from there.',
       ];
-    case 'memory_lookup':
+    case 'memory':
       return [
         'Recommended next step:',
         '- Open the matching thread or ask me to summarize the most relevant memory items.',
@@ -190,17 +201,17 @@ function buildFollowUps(route: AgentRouteResult): string[] {
         'Would you like this as a step-by-step checklist?',
         'Should I convert this into a weekly plan?',
       ];
-    case 'email':
+    case 'gmail':
       return [
         'Do you want me to search inbox or scan subscriptions next?',
         'Should I draft an email response?',
       ];
-    case 'scheduling':
+    case 'finance':
       return [
         'Should I turn this into a calendar-ready plan?',
         'Do you want a simpler schedule recommendation?',
       ];
-    case 'memory_lookup':
+    case 'memory':
       return [
         'Should I summarize the matching memory?',
         'Do you want me to reopen the related thread?',
@@ -243,9 +254,15 @@ export async function generateFinalAnswer(
   input: GenerateFinalAnswerInput,
 ): Promise<AgentFinalAnswer> {
   const requestText = getRequestText(input.request);
+  const language =
+    normalizeText(input.route.responseLanguage) ||
+    normalizeText(input.route.inputLanguage) ||
+    normalizeText(input.request.responseLanguage) ||
+    normalizeText(input.request.inputLanguage) ||
+    'en';
   const { success, failed } = splitToolResults(input.toolResults);
 
-  const lead = determineLeadText(input.route, requestText);
+  const lead = determineLeadText(input.route, requestText, language);
   const planSummary = buildPlanSummary(input.plan);
 
   const evidenceSection = buildEvidenceSection(
@@ -271,6 +288,8 @@ export async function generateFinalAnswer(
     followUps: buildFollowUps(input.route),
     metadata: {
       intent: input.route.intent,
+      inputLanguage: input.route.inputLanguage,
+      responseLanguage: language,
       successfulTools: success.map((result) => result.tool),
       failedTools: failed.map((result) => result.tool),
       planId: input.plan.id,

@@ -567,20 +567,24 @@ export function getToolDescriptions(): Array<ReturnType<typeof describeTool>> {
 
 export function getToolNamesForIntent(intent: string): AgentToolName[] {
   switch (intent) {
-    case 'email':
+    case 'gmail':
       return ['gmail', 'memory'];
-    case 'scheduling':
-      return ['calendar', 'memory'];
+    case 'finance':
+      return ['finance', 'memory', 'notes'];
+    case 'productivity':
+      return ['calendar', 'notes', 'memory'];
+    case 'coding':
+      return ['file', 'web', 'memory'];
+    case 'shopping':
+      return ['compare', 'web', 'finance', 'memory'];
     case 'research':
       return ['web', 'compare', 'memory'];
-    case 'memory_lookup':
+    case 'memory':
       return ['memory', 'notes'];
+    case 'planning':
+      return ['calendar', 'memory'];
     case 'compare':
       return ['compare', 'web', 'memory'];
-    case 'execution':
-      return ['gmail', 'calendar', 'finance', 'notes', 'memory'];
-    case 'planning':
-      return ['calendar', 'notes', 'memory'];
     default:
       return ['memory'];
   }
