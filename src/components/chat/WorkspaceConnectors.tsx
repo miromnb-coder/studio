@@ -30,8 +30,14 @@ export function WorkspaceConnectors({ onAction }: WorkspaceConnectorsProps) {
 
   return (
     <section>
-      <h3 className="mb-3 text-[15px] font-semibold uppercase tracking-[0.08em] text-[#6f7786]">Connectors</h3>
-      <div className="overflow-hidden rounded-[24px] border border-[#dee3ec] bg-[#fafcff] shadow-[0_12px_28px_rgba(72,80,96,0.08)]">
+      <div className="mb-3 flex items-center justify-between">
+        <h3 className="text-[14px] font-semibold tracking-[-0.01em] text-[#4b5563]">
+          Connectors
+        </h3>
+        <span className="text-[12px] text-[#9aa3b2]">Linked services</span>
+      </div>
+
+      <div className="overflow-hidden rounded-[24px] border border-[#dde3ec] bg-[#fbfcfe] shadow-[0_8px_18px_rgba(64,72,88,0.06)]">
         {connectors.map((connector) => (
           <ConnectorRow
             key={connector.id}
@@ -42,8 +48,13 @@ export function WorkspaceConnectors({ onAction }: WorkspaceConnectorsProps) {
             toggled={connector.active}
             onAction={() => {
               if (connector.mode === 'toggle') {
-                setConnectors((prev) => prev.map((item) => (item.id === connector.id ? { ...item, active: !item.active } : item)));
+                setConnectors((prev) =>
+                  prev.map((item) =>
+                    item.id === connector.id ? { ...item, active: !item.active } : item,
+                  ),
+                );
               }
+
               onAction(connector.id, connector.mode);
             }}
           />
