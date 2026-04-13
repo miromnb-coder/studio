@@ -1,5 +1,7 @@
 import { NextResponse } from 'next/server';
 import { runAgentV8 } from '@/agent/v8/orchestrator';
+import { runAgentVNext } from '@/agent/vNext/orchestrator';
+import type { AgentResponseV8 } from '@/agent/v8/types';
 import type { AgentResponse } from '@/types/agent-response';
 import {
   normalizeFinanceAnalysis,
@@ -23,6 +25,7 @@ import {
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
+const USE_NEW_AGENT = false;
 
 const SAFE_AGENT_FALLBACK: AgentResponse = {
   reply: 'I ran into an issue, but here’s what I could analyze so far.',
@@ -118,6 +121,104 @@ function asArrayOfObjects(value: unknown): Array<Record<string, unknown>> {
   return Array.isArray(value)
     ? value.filter((item): item is Record<string, unknown> => !!item && typeof item === 'object')
     : [];
+}
+
+async function runOldAgent(input: Parameters<typeof runAgentV8>[0]): Promise<AgentResponseV8> {
+  return runAgentV8(input);
+}
+
+async function runNewAgent(input: Parameters<typeof runAgentV8>[0]): Promise<AgentResponseV8 | null> {
+  const result = await runAgentVNext({
+    requestId: crypto.randomUUID(),
+    userId: input.userId,
+    message: input.input,
+    conversation: (input.history || [])
+      .filter((message): message is { role: 'system' | 'user' | 'assistant'; content: string } => (
+        !!message &&
+        typeof message === 'object' &&
+        (message as { role?: unknown }).role !== undefined &&
+        ((message as { role?: unknown }).role === 'system' ||
+          (message as { role?: unknown }).role === 'user' ||
+          (message as { role?: unknown }).role === 'assistant') &&
+        typeof (message as { content?: unknown }).content === 'string'
+      ))
+      .map((message, index) => ({
+        id: `history-${index}`,
+        role: message.role,
+        content: message.content,
+      })),
+    metadata: {
+      productState: input.productState,
+      memory: input.memory || null,
+      operatorAlerts: input.operatorAlerts || [],
+      outcomes: input.outcomes || [],
+      userProfileIntelligence: input.userProfileIntelligence || null,
+    },
+  });
+
+  if (!result.ok || !result.response) {
+    return null;
+  }
+
+  return {
+    reply: result.response.answer.text,
+    metadata: {
+      intent: 'general',
+      subtype: 'none',
+      mode: 'general',
+      responseMode: 'operator',
+      goal: {
+        explicitRequest: input.input,
+        hiddenRequest: '',
+        inferredGoal: result.response.route.reason || 'Provide a helpful response.',
+        interpretationConfidence: 'medium',
+        urgency: 'medium',
+        complexityLevel: 'medium',
+        blockerLevel: 'none',
+        riskLevel: 'low',
+        effortTolerance: 'medium',
+        speedVsDepth: 'balanced',
+        decisionType: 'informational',
+        requestKind: 'advice',
+        userConfidenceLevel: 'medium',
+        horizon: 'short_term',
+        preferredStyle: 'structured',
+        category: 'general',
+        hiddenOpportunities: [],
+        clarificationNeeded: false,
+        wantsImmediateNextStep: true,
+        emotionalTone: 'neutral',
+        inputLanguage: 'en',
+        responseLanguage: 'en',
+      },
+      plan: result.response.plan.summary,
+      planModes: ['recommend'],
+      steps: result.response.plan.steps.map((step) => ({
+        stepId: step.id,
+        title: step.title,
+        tool: 'retrieve_semantic_memory',
+        status: step.status === 'failed' ? 'failed' : step.status === 'skipped' ? 'skipped' : 'completed',
+        summary: step.description,
+        input: step.input || {},
+        output: {},
+      })),
+      structuredData: {
+        route: result.response.route,
+        toolResults: result.response.toolResults,
+        evaluation: result.response.evaluation || null,
+      },
+      suggestedActions: [],
+      memoryUsed: result.response.memory.items.length > 0,
+      verificationPassed: result.response.evaluation?.passed ?? true,
+      critic: {
+        criticScore: result.response.evaluation?.score ?? 80,
+        passed: result.response.evaluation?.passed ?? true,
+        needsRewrite: false,
+        qualityNotes: result.response.warnings || [],
+      },
+      state: 'responding',
+    },
+  };
 }
 
 function inferMemorySummaryType(input: string): 'finance' | 'general' {
@@ -317,7 +418,7 @@ export async function POST(req: Request) {
       historyCount: safeHistory.length,
     });
 
-    const agentResult = await runAgentV8({
+    const agentInput = {
       supabase,
       input: safeInput || 'Continue',
       userId,
@@ -337,21 +438,32 @@ export async function POST(req: Request) {
           userProfile: (userProfile as Record<string, unknown> | null) || null,
         }),
       },
-    }).catch((error) => {
-      console.error('AGENT_V8_EXECUTION_ERROR:', error);
-      return null;
-    });
+    };
+
+    const result = USE_NEW_AGENT
+      ? await runNewAgent(agentInput)
+      : await runOldAgent(agentInput);
+
+    if (USE_NEW_AGENT && !result) {
+      console.error('AGENT_VNEXT_EXECUTION_ERROR:', { requestId });
+    }
+
+    const agentResult = result ?? null;
+
+    if (!agentResult) {
+      console.error('AGENT_EXECUTION_ERROR', {
+        requestId,
+        mode: USE_NEW_AGENT ? 'vNext' : 'v8',
+      });
+      return safeJsonResponse(SAFE_AGENT_FALLBACK);
+    }
 
     console.info('AGENT_ROUTE_ORCHESTRATOR_DONE', {
       requestId,
-      ok: Boolean(agentResult),
-      intent: agentResult?.metadata?.intent || 'unknown',
-      stepCount: agentResult?.metadata?.steps?.length || 0,
+      ok: true,
+      intent: agentResult.metadata?.intent || 'unknown',
+      stepCount: agentResult.metadata?.steps?.length || 0,
     });
-
-    if (!agentResult) {
-      return safeJsonResponse(SAFE_AGENT_FALLBACK);
-    }
 
     const normalizedFinance = normalizeFinanceAnalysis(agentResult.metadata?.structuredData || {});
     const shouldAttachFinance =
