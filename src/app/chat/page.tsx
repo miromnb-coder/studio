@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import { AlarmClockPlus, ClipboardImage, ClipboardPlus, FilePlus2, MessageSquarePlus, Upload } from 'lucide-react';
 import { AnimatePresence, motion } from 'framer-motion';
 import { useAppStore } from '../store/app-store';
+import type { MessageAttachment } from '../store/app-store';
 import { AppShell } from '@/components/chat/AppShell';
 import { ChatHeader } from '@/components/chat/ChatHeader';
 import { Composer } from '@/components/chat/Composer';
@@ -70,12 +71,23 @@ export default function ChatPage() {
   const [isSending, setIsSending] = useState(false);
   const [notice, setNotice] = useState<ActionNotice | null>(null);
   const [listening, setListening] = useState(false);
+  const [composerAttachments, setComposerAttachments] = useState<MessageAttachment[]>([]);
+  const [filePickerAccept, setFilePickerAccept] = useState<string>('');
 
   const recognitionRef = useRef<SpeechRecognitionLike | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const inputRef = useRef<HTMLInputElement | null>(null);
 
   const hasText = draftPrompt.trim().length > 0;
+
+  useEffect(
+    () => () => {
+      composerAttachments.forEach((attachment) => {
+        if (attachment.previewUrl) URL.revokeObjectURL(attachment.previewUrl);
+      });
+    },
+    [composerAttachments],
+  );
 
   useEffect(() => {
     if (!hydrated) hydrate();
@@ -104,7 +116,7 @@ export default function ChatPage() {
   };
 
   const handleSend = async () => {
-    if (!hasText || isSending) return;
+    if ((!hasText && composerAttachments.length === 0) || isSending) return;
 
     if (!user?.id) {
       showNotice('Sign in required', 'Please sign in before sending messages.');
@@ -114,8 +126,12 @@ export default function ChatPage() {
 
     setIsSending(true);
     try {
-      await sendMessage(draftPrompt.trim());
+      await sendMessage(draftPrompt.trim(), { attachments: composerAttachments });
       setDraftPrompt('');
+      composerAttachments.forEach((attachment) => {
+        if (attachment.previewUrl) URL.revokeObjectURL(attachment.previewUrl);
+      });
+      setComposerAttachments([]);
     } finally {
       setIsSending(false);
     }
@@ -168,8 +184,41 @@ export default function ChatPage() {
     const conversationId = createConversation();
     openConversation(conversationId);
     setDraftPrompt('');
+    setComposerAttachments((prev) => {
+      prev.forEach((attachment) => {
+        if (attachment.previewUrl) URL.revokeObjectURL(attachment.previewUrl);
+      });
+      return [];
+    });
     closeAllSheets();
     requestAnimationFrame(() => inputRef.current?.focus());
+  };
+
+  const toAttachment = (file: File): MessageAttachment => ({
+    id: `${Date.now()}-${Math.random().toString(16).slice(2)}`,
+    name: file.name,
+    size: file.size,
+    mimeType: file.type || 'application/octet-stream',
+    kind: file.type.startsWith('image/') ? 'image' : 'file',
+    previewUrl: file.type.startsWith('image/') ? URL.createObjectURL(file) : undefined,
+  });
+
+  const addAttachments = (files: FileList | File[]) => {
+    const nextAttachments = Array.from(files).map(toAttachment);
+    if (nextAttachments.length === 0) return;
+    setComposerAttachments((prev) => [...prev, ...nextAttachments]);
+    showNotice(
+      'Attachment added',
+      nextAttachments.length === 1 ? `${nextAttachments[0].name} is ready to send.` : `${nextAttachments.length} files are ready to send.`,
+    );
+  };
+
+  const removeAttachment = (attachmentId: string) => {
+    setComposerAttachments((prev) => {
+      const target = prev.find((attachment) => attachment.id === attachmentId);
+      if (target?.previewUrl) URL.revokeObjectURL(target.previewUrl);
+      return prev.filter((attachment) => attachment.id !== attachmentId);
+    });
   };
 
   const onMenuRoute = (href: string) => {
@@ -198,7 +247,8 @@ export default function ChatPage() {
     router.push(href);
   };
 
-  const openFilePicker = () => {
+  const openFilePicker = (accept = '') => {
+    setFilePickerAccept(accept);
     fileInputRef.current?.click();
   };
 
@@ -206,7 +256,7 @@ export default function ChatPage() {
     const hasClipboardRead = typeof navigator !== 'undefined' && 'clipboard' in navigator && 'read' in navigator.clipboard;
 
     if (!hasClipboardRead) {
-      openFilePicker();
+      openFilePicker('image/*');
       showNotice('Paste not supported', 'Clipboard image access is unavailable in this browser. Opened file picker instead.');
       return;
     }
@@ -216,12 +266,17 @@ export default function ChatPage() {
       const imageItem = clipboardItems.find((item) => item.types.some((type) => type.startsWith('image/')));
 
       if (!imageItem) {
-        openFilePicker();
+        openFilePicker('image/*');
         showNotice('No screenshot found', 'Clipboard did not include an image. Opened file picker instead.');
         return;
       }
 
-      showNotice('Screenshot ready', 'Clipboard image captured. Attachment flow can be connected next.');
+      const imageType = imageItem.types.find((type) => type.startsWith('image/')) ?? 'image/png';
+      const blob = await imageItem.getType(imageType);
+      const extension = imageType.split('/')[1] || 'png';
+      const file = new File([blob], `screenshot-${new Date().toISOString().replace(/[:.]/g, '-')}.${extension}`, { type: imageType });
+      addAttachments([file]);
+      requestAnimationFrame(() => inputRef.current?.focus());
     } catch {
       openFilePicker();
       showNotice('Clipboard blocked', 'Could not read clipboard image. Opened file picker instead.');
@@ -262,6 +317,7 @@ export default function ChatPage() {
             isSending={isSending}
             listening={listening}
             createOpen={createOpen}
+            attachments={composerAttachments}
             onChange={setDraftPrompt}
             onSend={() => void handleSend()}
             onOpenCreate={() => {
@@ -275,6 +331,7 @@ export default function ChatPage() {
               setMenuOpen(false);
             }}
             onToggleMic={toggleMic}
+            onRemoveAttachment={removeAttachment}
             inputRef={inputRef}
           />
 
@@ -314,10 +371,12 @@ export default function ChatPage() {
             ref={fileInputRef}
             type="file"
             className="sr-only"
+            accept={filePickerAccept}
+            multiple
             onChange={(event) => {
-              const hasFile = Boolean(event.target.files?.length);
-              if (hasFile) showNotice('File selected', 'Attachment upload can be connected to message send next.');
+              if (event.target.files?.length) addAttachments(event.target.files);
               event.target.value = '';
+              setFilePickerAccept('');
             }}
           />
 

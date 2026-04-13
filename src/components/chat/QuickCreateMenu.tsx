@@ -23,7 +23,7 @@ export function QuickCreateMenu({ open, items, onClose, onSelect }: QuickCreateM
         <>
           <motion.button
             type="button"
-            className="absolute inset-0 z-20 bg-transparent"
+            className="absolute inset-x-0 top-0 bottom-[calc(98px+env(safe-area-inset-bottom))] z-20 bg-transparent"
             aria-label="Close create menu"
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
@@ -36,6 +36,7 @@ export function QuickCreateMenu({ open, items, onClose, onSelect }: QuickCreateM
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: 10, scale: 0.985 }}
             transition={{ duration: 0.18, ease: 'easeOut' }}
+            onClick={(event) => event.stopPropagation()}
             className="absolute bottom-[calc(108px+env(safe-area-inset-bottom))] left-4 z-30 w-[min(82vw,295px)] overflow-hidden rounded-2xl border border-[#d7dbe3] bg-[#f5f6f9] shadow-[0_14px_30px_rgba(70,76,90,0.12)] sm:left-6"
           >
             <header className="border-b border-[#e1e4ea] px-4 py-3">
