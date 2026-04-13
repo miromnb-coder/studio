@@ -2,22 +2,33 @@
 
 import { X } from 'lucide-react';
 
-export function ConversationHeader({ onClose }: { onClose: () => void }) {
+type ConversationHeaderProps = {
+  onClose: () => void;
+};
+
+export function ConversationHeader({
+  onClose,
+}: ConversationHeaderProps) {
   return (
     <div className="mb-3">
-      <div className="mx-auto mb-3 h-1 w-12 rounded-full bg-[#cfd6df]" />
       <div className="flex items-start justify-between gap-3">
-        <div>
-          <p className="text-[21px] font-medium tracking-[-0.025em] text-[#262c36]">Conversations</p>
-          <p className="mt-1 text-xs text-[#7c8593]">Continue your work instantly</p>
+        <div className="min-w-0">
+          <p className="text-[22px] font-semibold tracking-[-0.03em] text-[#262d37]">
+            Conversations
+          </p>
+
+          <p className="mt-1 text-[12px] leading-snug text-[#7d8695]">
+            Continue your work instantly
+          </p>
         </div>
+
         <button
           type="button"
           onClick={onClose}
           aria-label="Close conversations drawer"
-          className="inline-flex h-9 w-9 items-center justify-center rounded-full border border-[#d7dde6] bg-white text-[#6a7280]"
+          className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-[#dde2ea] bg-white text-[#66707e] shadow-[0_2px_8px_rgba(45,52,64,0.05)] transition hover:bg-[#f7f9fc] active:scale-[0.97]"
         >
-          <X className="h-4 w-4" />
+          <X className="h-4 w-4" strokeWidth={2} />
         </button>
       </div>
     </div>
