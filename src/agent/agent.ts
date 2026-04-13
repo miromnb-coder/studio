@@ -44,7 +44,7 @@ export async function runAgent(input: string, history: any[] = [], memory: any =
       structuredData: response?.answer.structuredData || {},
     },
     intent: response?.route.intent,
-    mode: response?.route.intent === 'fallback' ? 'general' : 'analyst',
+    mode: response?.route.intent === 'unknown' ? 'general' : 'analyst',
     isActionable: true,
   };
 }

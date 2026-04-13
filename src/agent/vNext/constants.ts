@@ -5,17 +5,17 @@ export const AGENT_VNEXT_MAX_PLAN_STEPS = 8;
 export const AGENT_VNEXT_MAX_TOOL_CALLS = 6;
 
 export const AGENT_VNEXT_SUPPORTED_INTENTS: AgentIntent[] = [
-  'chat',
-  'question',
-  'research',
   'compare',
+  'finance',
   'planning',
-  'execution',
-  'memory_lookup',
-  'tool_use',
-  'email',
-  'scheduling',
-  'fallback',
+  'productivity',
+  'gmail',
+  'coding',
+  'memory',
+  'research',
+  'shopping',
+  'general',
+  'unknown',
 ];
 
 export const AGENT_VNEXT_SUPPORTED_TOOLS: AgentToolName[] = [

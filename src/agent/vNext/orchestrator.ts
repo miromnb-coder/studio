@@ -5,7 +5,7 @@ import { generateFinalAnswer, generateFinalAnswerStream } from './generator';
 import { agentLogger } from './logger';
 import { buildMemoryContext, fetchMemory, rankMemory } from './memory';
 import { createPlan } from './planner';
-import { routeIntent } from './router';
+import { detectLanguage, routeIntent } from './router';
 import { executeTool } from './tools';
 import { streamEvents } from './streaming';
 import type {
@@ -52,6 +52,45 @@ function getRequestText(request: AgentRequest): string {
   }
 
   return '';
+}
+
+function extractEntities(text: string): string[] {
+  const quoted = [...text.matchAll(/"([^"]+)"|'([^']+)'/g)]
+    .map((match) => (match[1] || match[2] || '').trim())
+    .filter(Boolean);
+
+  const comparePatterns = [
+    /(.+?)\s+(?:vs|versus|contra|gegen)\s+(.+?)(?:[.?!]|$)/i,
+    /(?:compare|vertaa|compara|jämför)\s+(.+?)\s+(?:and|ja|y|och|und)\s+(.+?)(?:[.?!]|$)/i,
+  ];
+
+  const fromComparison = comparePatterns.flatMap((pattern) => {
+    const match = text.match(pattern);
+    if (!match) return [];
+    return [match[1], match[2]].map((part) => part?.trim()).filter(Boolean) as string[];
+  });
+
+  return [...new Set([...quoted, ...fromComparison])]
+    .map((item) => item.replace(/^[,.\s]+|[,.\s]+$/g, ''))
+    .filter((item) => item.length > 1);
+}
+
+function normalizeMultilingualRequest(request: AgentRequest): AgentRequest {
+  const message = getRequestText(request);
+  const language = detectLanguage(message, request);
+
+  return {
+    ...request,
+    message,
+    inputLanguage: language.inputLanguage,
+    responseLanguage: language.responseLanguage,
+    languageConfidence: language.confidence,
+    metadata: {
+      ...(request.metadata ?? {}),
+      multilingual: language.multilingual,
+      entities: extractEntities(message),
+    },
+  };
 }
 
 function getConversationMessages(request: AgentRequest): ConversationMessage[] {
@@ -128,24 +167,17 @@ function inferToolAction(
     case 'gmail':
       if (
         text.includes('receipt') ||
-        text.includes('kuitti') ||
-        text.includes('kuitti ')
+        text.includes('invoice')
       ) {
         return 'scan_receipts';
       }
       if (
         text.includes('subscription') ||
-        text.includes('tilaus') ||
         text.includes('unsubscribe')
       ) {
         return 'scan_subscriptions';
       }
-      if (
-        text.includes('reply') ||
-        text.includes('draft') ||
-        text.includes('sähköposti') ||
-        text.includes('email')
-      ) {
+      if (text.includes('reply') || text.includes('draft') || text.includes('email')) {
         return 'search';
       }
       return 'status';
@@ -163,13 +195,7 @@ function inferToolAction(
       return 'status';
 
     case 'memory':
-      if (
-        text.includes('remember') ||
-        text.includes('history') ||
-        text.includes('muista') ||
-        text.includes('aiemmin') ||
-        text.includes('earlier')
-      ) {
+      if (text.includes('remember') || text.includes('history') || text.includes('earlier')) {
         return 'retrieve';
       }
       return 'search';
@@ -184,23 +210,13 @@ function inferToolAction(
       return 'inspect';
 
     case 'finance':
-      if (
-        text.includes('scan') ||
-        text.includes('analysoi') ||
-        text.includes('analyze')
-      ) {
+      if (text.includes('scan') || text.includes('analyze')) {
         return 'scan';
       }
       return 'overview';
 
     case 'notes':
-      if (
-        text.includes('create note') ||
-        text.includes('save this') ||
-        text.includes('write this down') ||
-        text.includes('muista tämä') ||
-        text.includes('tallenna tämä')
-      ) {
+      if (text.includes('create note') || text.includes('save this') || text.includes('write this down')) {
         return 'create';
       }
       return 'list';
@@ -255,7 +271,7 @@ function buildWebQuery(
 
   if (routeIntent === 'research') return text;
   if (routeIntent === 'compare') return text;
-  if (routeIntent === 'email') return `${text} email workflow`;
+  if (routeIntent === 'gmail') return `${text} email workflow`;
 
   return text;
 }
@@ -269,6 +285,7 @@ function buildToolInput(
   const requestText = getRequestText(context.request);
   const recentConversation = getRecentConversationSummary(context.request);
   const compareItems = extractCompareItems(requestText);
+  const normalizedEntities = extractEntities(requestText);
   const action = inferToolAction(tool, context.request);
 
   const base: Record<string, unknown> = {
@@ -280,13 +297,16 @@ function buildToolInput(
     recentConversation,
     planIntent: plan.intent,
     memorySummary: context.memoryContext?.summary ?? '',
+    inputLanguage: context.inputLanguage ?? context.request.inputLanguage ?? 'en',
+    responseLanguage: context.responseLanguage ?? context.request.responseLanguage ?? 'en',
+    entities: normalizedEntities,
   };
 
   switch (tool) {
     case 'compare':
       return {
         ...base,
-        items: compareItems,
+        items: compareItems.length ? compareItems : normalizedEntities.slice(0, 2),
         criteria:
           /budget|budjet/i.test(requestText)
             ? ['price', 'value', 'longevity']
@@ -435,11 +455,15 @@ export async function runAgentVNext(
   const startedAt = Date.now();
 
   try {
-    const runtime = mergeRuntimeOptions(request);
-    const context = buildBaseContext(request, runtime);
+    const normalizedRequest = normalizeMultilingualRequest(request);
+    const runtime = mergeRuntimeOptions(normalizedRequest);
+    const context = buildBaseContext(normalizedRequest, runtime);
+    context.inputLanguage = normalizedRequest.inputLanguage;
+    context.responseLanguage = normalizedRequest.responseLanguage;
+    context.languageConfidence = normalizedRequest.languageConfidence;
 
     const routingStarted = Date.now();
-    const route = routeIntent(request);
+    const route = routeIntent(normalizedRequest);
     const routingMs = Date.now() - routingStarted;
 
     const planningStarted = Date.now();
@@ -448,7 +472,7 @@ export async function runAgentVNext(
 
     const memoryStarted = Date.now();
     const memory = await prepareMemory(
-      request,
+      normalizedRequest,
       context,
       route.shouldFetchMemory,
     );
@@ -465,7 +489,7 @@ export async function runAgentVNext(
 
     const generationStarted = Date.now();
     const answer = await generateFinalAnswer({
-      request,
+      request: normalizedRequest,
       route,
       plan,
       context: {
@@ -488,7 +512,7 @@ export async function runAgentVNext(
     const evaluationMs = Date.now() - evaluationStarted;
 
     const response = buildResponse({
-      request,
+      request: normalizedRequest,
       route,
       plan,
       toolResults,
@@ -540,38 +564,42 @@ export async function runAgentVNext(
 export async function* runAgentVNextStream(
   request: AgentRequest,
 ): AsyncGenerator<AgentStreamEvent> {
-  const runtime = mergeRuntimeOptions(request);
-  const context = buildBaseContext(request, runtime);
+  const normalizedRequest = normalizeMultilingualRequest(request);
+  const runtime = mergeRuntimeOptions(normalizedRequest);
+  const context = buildBaseContext(normalizedRequest, runtime);
+  context.inputLanguage = normalizedRequest.inputLanguage;
+  context.responseLanguage = normalizedRequest.responseLanguage;
+  context.languageConfidence = normalizedRequest.languageConfidence;
 
   try {
-    yield streamEvents.routerStarted(request);
+    yield streamEvents.routerStarted(normalizedRequest);
 
-    const route = routeIntent(request);
+    const route = routeIntent(normalizedRequest);
 
-    yield streamEvents.routerCompleted(request, {
+    yield streamEvents.routerCompleted(normalizedRequest, {
       intent: route.intent,
       confidence: route.confidence,
       requiresTools: route.requiresTools,
     });
 
-    yield streamEvents.planningStarted(request);
+    yield streamEvents.planningStarted(normalizedRequest);
 
     const plan = createPlan(route, context);
 
-    yield streamEvents.planningCompleted(request, {
+    yield streamEvents.planningCompleted(normalizedRequest, {
       stepCount: plan.steps.length,
       intent: plan.intent,
     });
 
-    yield streamEvents.memoryStarted(request);
+    yield streamEvents.memoryStarted(normalizedRequest);
 
     const memory = await prepareMemory(
-      request,
+      normalizedRequest,
       context,
       route.shouldFetchMemory,
     );
 
-    yield streamEvents.memoryCompleted(request, {
+    yield streamEvents.memoryCompleted(normalizedRequest, {
       memoryCount: memory.items.length,
       source: memory.source,
     });
@@ -590,7 +618,7 @@ export async function* runAgentVNextStream(
     for (const step of orderedSteps) {
       if (!step.requiredTool) continue;
 
-      yield streamEvents.toolStarted(request, {
+      yield streamEvents.toolStarted(normalizedRequest, {
         stepId: step.id,
         tool: step.requiredTool,
       });
@@ -604,7 +632,7 @@ export async function* runAgentVNextStream(
       const result = await executeTool(call, executionContext);
       toolResults.push(result);
 
-      yield streamEvents.toolCompleted(request, {
+      yield streamEvents.toolCompleted(normalizedRequest, {
         stepId: result.stepId,
         tool: result.tool,
         ok: result.ok,
@@ -625,7 +653,7 @@ export async function* runAgentVNextStream(
     }
 
     for await (const event of generateFinalAnswerStream({
-      request,
+      request: normalizedRequest,
       route,
       plan,
       context: {
@@ -646,7 +674,7 @@ export async function* runAgentVNextStream(
     });
 
     yield streamEvents.error(
-      request,
+      normalizedRequest,
       normalized as unknown as Record<string, unknown>,
     );
   }

@@ -1,17 +1,17 @@
 export type AgentRole = 'system' | 'user' | 'assistant' | 'tool';
 
 export type AgentIntent =
-  | 'chat'
-  | 'question'
-  | 'research'
   | 'compare'
+  | 'finance'
   | 'planning'
-  | 'execution'
-  | 'memory_lookup'
-  | 'tool_use'
-  | 'email'
-  | 'scheduling'
-  | 'fallback';
+  | 'productivity'
+  | 'gmail'
+  | 'coding'
+  | 'memory'
+  | 'research'
+  | 'shopping'
+  | 'general'
+  | 'unknown';
 
 export type AgentExecutionMode = 'sync' | 'stream';
 
@@ -40,6 +40,9 @@ export type AgentRequest = {
   userId: string;
   sessionId?: string;
   message: string;
+  inputLanguage?: string;
+  responseLanguage?: string;
+  languageConfidence?: number;
   conversation?: AgentMessage[];
   metadata?: Record<string, unknown>;
   options?: Partial<AgentRuntimeOptions>;
@@ -59,6 +62,9 @@ export type AgentContext = {
   nowIso: string;
   request: AgentRequest;
   runtime: AgentRuntimeOptions;
+  inputLanguage?: string;
+  responseLanguage?: string;
+  languageConfidence?: number;
   memoryContext?: AgentMemoryContext;
   toolResults?: AgentToolResult[];
 };
@@ -67,6 +73,10 @@ export type AgentRouteResult = {
   intent: AgentIntent;
   confidence: number;
   reason: string;
+  inputLanguage?: string;
+  responseLanguage?: string;
+  languageConfidence?: number;
+  multilingual?: boolean;
   requiresTools: AgentToolName[];
   shouldFetchMemory: boolean;
   suggestedExecutionMode: AgentExecutionMode;
