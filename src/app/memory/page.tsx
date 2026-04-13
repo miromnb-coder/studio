@@ -1,85 +1,62 @@
 'use client';
 
-import { useEffect, useMemo } from 'react';
-import { ArrowUpRight, Bookmark, Clock3 } from 'lucide-react';
-import { useAppStore, type HistoryEntry } from '../store/app-store';
+import { useEffect, useMemo, useState } from 'react';
+import { Pin, Search } from 'lucide-react';
+import { useAppStore } from '../store/app-store';
 import { AppShell, PremiumCard, ProductPageHeader, SectionHeader } from '../components/premium-ui';
-
-type GroupLabel = 'Today' | 'Yesterday' | 'Older';
-
-const toDayStart = (date: Date) => new Date(date.getFullYear(), date.getMonth(), date.getDate()).getTime();
-
-const getGroupLabel = (createdAt: string): GroupLabel => {
-  const eventDay = toDayStart(new Date(createdAt));
-  const today = toDayStart(new Date());
-  const yesterday = today - 24 * 60 * 60 * 1000;
-  if (eventDay === today) return 'Today';
-  if (eventDay === yesterday) return 'Yesterday';
-  return 'Older';
-};
-
-const toMeaningful = (entry: HistoryEntry) => ({
-  ...entry,
-  title: entry.title.replace(/^user message sent:?\s*/i, '').replace(/^supervisor task started:?\s*/i, '').trim() || 'Untitled work item',
-});
+import { EmptyIllustration } from '../components/product-sections';
 
 export default function MemoryPage() {
   const hydrated = useAppStore((s) => s.hydrated);
   const hydrate = useAppStore((s) => s.hydrate);
   const history = useAppStore((s) => s.history);
   const enqueuePromptAndGoToChat = useAppStore((s) => s.enqueuePromptAndGoToChat);
+  const [query, setQuery] = useState('');
 
   useEffect(() => {
     if (!hydrated) hydrate();
   }, [hydrate, hydrated]);
 
-  const grouped = useMemo(() => {
-    const groups: Record<GroupLabel, HistoryEntry[]> = { Today: [], Yesterday: [], Older: [] };
-    history.map(toMeaningful).forEach((entry) => groups[getGroupLabel(entry.createdAt)].push(entry));
-    return groups;
-  }, [history]);
-
-  const continueItems = history.slice(0, 3).map(toMeaningful);
+  const filtered = useMemo(
+    () => history.filter((item) => `${item.title} ${item.description}`.toLowerCase().includes(query.toLowerCase())).slice(0, 8),
+    [history, query],
+  );
 
   return (
     <AppShell>
-      <ProductPageHeader pageTitle="Memory" pageSubtitle="Meaningful work you can continue" />
-
+      <ProductPageHeader pageTitle="Memory" pageSubtitle="Knowledge center with searchable history" />
       <div className="space-y-3">
-        <PremiumCard className="space-y-2 p-4">
-          <SectionHeader title="Continue where you left off" subtitle="Recent threads with unfinished momentum" />
-          {continueItems.length ? continueItems.map((item) => (
-            <button
-              key={item.id}
-              onClick={() => enqueuePromptAndGoToChat(item.prompt ?? `Continue: ${item.title}`)}
-              type="button"
-              className="flex w-full items-center justify-between rounded-[16px] border border-[#d9dde4] bg-[#f8f9fb] px-3.5 py-3"
-            >
-              <span className="text-left">
-                <p className="text-sm font-semibold text-[#2b3341]">{item.title}</p>
-                <p className="text-xs text-[#6f7786]">{item.description}</p>
-              </span>
-              <ArrowUpRight className="h-4 w-4 text-[#7a838f]" />
-            </button>
-          )) : <p className="text-sm text-[#7a838f]">No memory items yet. Start in Chat and Kivo will build your memory timeline.</p>}
+        <PremiumCard className="p-4">
+          <SectionHeader title="Search memory" subtitle="Find facts, threads, and decisions quickly" />
+          <label className="flex items-center gap-2 rounded-[14px] border border-[#e4e7ed] bg-[#fafbfc] px-3 py-2.5">
+            <Search className="h-4 w-4 text-[#7a818d]" />
+            <input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search saved facts or prior threads" className="w-full bg-transparent text-sm text-[#111111] outline-none placeholder:text-[#9299a4]" />
+          </label>
         </PremiumCard>
 
-        {(['Today', 'Yesterday', 'Older'] as GroupLabel[]).map((label) => (
-          <PremiumCard key={label} className="space-y-2 p-4">
-            <SectionHeader title={label} subtitle={label === 'Older' ? 'Saved conversations and project threads' : 'Recent work sessions'} />
-            {grouped[label].length ? grouped[label].map((item) => (
-              <button key={item.id} type="button" onClick={() => enqueuePromptAndGoToChat(item.prompt ?? item.title)} className="block w-full rounded-[16px] border border-[#d9dde4] bg-[#f8f9fb] px-3.5 py-3 text-left">
-                <p className="text-sm font-semibold text-[#2b3341]">{item.title}</p>
-                <p className="text-xs text-[#6f7786]">{item.description}</p>
-                <p className="mt-1 inline-flex items-center gap-1 text-[11px] text-[#8a93a1]"><Clock3 className="h-3.5 w-3.5" /> {new Date(item.createdAt).toLocaleString()}</p>
-              </button>
-            )) : <p className="text-sm text-[#7a838f]">No entries yet.</p>}
-          </PremiumCard>
-        ))}
+        <PremiumCard className="space-y-2 p-4">
+          <SectionHeader title="Pinned threads" subtitle="Always-on memory for active projects" />
+          <button type="button" onClick={() => enqueuePromptAndGoToChat('Continue my weekly planning thread.')} className="tap-feedback flex w-full items-center justify-between rounded-[16px] border border-[#e7eaf0] bg-[#fcfcfd] p-3 text-left">
+            <span>
+              <p className="text-sm font-semibold text-[#111111]">Weekly planning system</p>
+              <p className="text-xs text-[#636a76]">Last updated yesterday • 4 pending actions</p>
+            </span>
+            <Pin className="h-4 w-4 text-[#111111]" />
+          </button>
+        </PremiumCard>
 
-        <PremiumCard className="space-y-1.5 p-4">
-          <p className="inline-flex items-center gap-2 text-sm font-semibold text-[#2b3341]"><Bookmark className="h-4 w-4" /> Saved threads</p>
-          <p className="text-xs text-[#6f7786]">Pin important projects like “Weekly savings plan”, “Client onboarding notes”, and “Decision journal” in chat to keep them here.</p>
+        <PremiumCard className="space-y-2 p-4">
+          <SectionHeader title="Search results" subtitle="Recent memory items and saved facts" />
+          {filtered.length === 0 ? (
+            <EmptyIllustration title="No memory found" message="Try another keyword or create a new thread in chat." />
+          ) : (
+            filtered.map((item) => (
+              <button key={item.id} onClick={() => enqueuePromptAndGoToChat(item.prompt ?? item.title)} type="button" className="tap-feedback block w-full rounded-[16px] border border-[#e7eaf0] bg-[#fcfcfd] px-3 py-2.5 text-left">
+                <p className="text-sm font-semibold text-[#111111]">{item.title}</p>
+                <p className="text-xs text-[#636a76]">{item.description}</p>
+              </button>
+            ))
+          )}
         </PremiumCard>
       </div>
     </AppShell>

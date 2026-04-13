@@ -2,10 +2,11 @@
 
 import { useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { Crown, ShieldCheck, Sparkles, Zap } from 'lucide-react';
+import { CheckCircle2, Crown, Gem, Sparkles, Zap } from 'lucide-react';
 import { useAppStore } from '../store/app-store';
 import { useUserEntitlements } from '../hooks/use-user-entitlements';
-import { AppShell, PremiumCard, SectionHeader, SmartButton } from '../components/premium-ui';
+import { AppShell, PremiumCard, ProductPageHeader, SectionHeader, SmartButton } from '../components/premium-ui';
+import { MetricGrid } from '../components/product-sections';
 
 export default function UpgradePage() {
   const router = useRouter();
@@ -21,10 +22,8 @@ export default function UpgradePage() {
       router.push('/login?next=/upgrade');
       return;
     }
-
     setError(null);
     setIsUpgrading(true);
-
     try {
       const response = await fetch('/api/checkout', {
         method: 'POST',
@@ -32,56 +31,59 @@ export default function UpgradePage() {
         body: JSON.stringify({ userId: user.id, planId: 'PREMIUM' }),
       });
       const data = await response.json();
-
-      if (!response.ok) {
-        setError(data?.error || 'Upgrade failed. Please try again.');
-        setIsUpgrading(false);
-        return;
-      }
-
+      if (!response.ok) throw new Error(data?.error || 'Upgrade failed.');
       await refresh();
       router.push('/chat');
-    } catch {
-      setError('Upgrade failed. Please try again.');
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Upgrade failed. Please try again.');
       setIsUpgrading(false);
     }
   };
 
   return (
     <AppShell>
-      <PremiumCard className="space-y-4 p-5">
-        <SectionHeader title="Upgrade" subtitle="Unlock higher throughput and expanded automation capabilities." />
-
-        <div className="grid gap-3">
-          <PremiumCard className="space-y-2 p-4">
-            <p className="inline-flex items-center gap-2 text-sm font-semibold text-[#22262c]"><Crown className="h-4 w-4" /> Free</p>
-            <ul className="space-y-1 text-sm text-[#7a838f]">
-              <li>• 10 runs per day</li>
-              <li>• Core chat tools</li>
-              <li>• Standard queue</li>
-            </ul>
-          </PremiumCard>
-
-          <PremiumCard className="space-y-2 border-[#cfd6e1] bg-[#eef1f7] p-4">
-            <p className="inline-flex items-center gap-2 text-sm font-semibold text-[#22262c]"><Sparkles className="h-4 w-4" /> Premium</p>
-            <ul className="space-y-1 text-sm text-[#5f6877]">
-              <li className="inline-flex items-center gap-1"><Zap className="h-3.5 w-3.5" /> 1000 runs per day</li>
-              <li className="inline-flex items-center gap-1"><ShieldCheck className="h-3.5 w-3.5" /> File attachments in composer</li>
-              <li>• Priority access to heavier workloads</li>
-            </ul>
-          </PremiumCard>
-        </div>
-
-        <PremiumCard className="p-4 text-sm text-[#7a838f]">
-          Current plan: <span className="font-medium text-[#22262c]">{plan}</span> · Today: {usage.unlimited ? `Unlimited (Dev Mode) • ${usage.current} runs today` : `${usage.current}/${usage.limit} runs used`}.
+      <ProductPageHeader pageTitle="Upgrade" pageSubtitle="Premium plans for power users and teams" />
+      <div className="space-y-3">
+        <PremiumCard className="overflow-hidden p-0">
+          <div className="bg-gradient-to-br from-[#111111] to-[#2a2a2d] p-5 text-white">
+            <p className="inline-flex items-center gap-2 text-xs uppercase tracking-[0.14em] text-white/80"><Gem className="h-3.5 w-3.5" /> Premium Intelligence</p>
+            <h2 className="mt-2 text-2xl font-semibold">Ship faster with Kivo Pro</h2>
+            <p className="mt-1 text-sm text-white/80">Higher limits, smarter automations, and priority execution quality.</p>
+          </div>
+          <div className="p-4">
+            <MetricGrid items={[
+              { label: 'Runs', value: usage.unlimited ? '∞' : String(usage.limit), detail: 'daily limit' },
+              { label: 'Used', value: String(usage.current), detail: 'today' },
+              { label: 'Plan', value: isPremium ? 'Pro' : 'Free', detail: 'current' },
+            ]} />
+          </div>
         </PremiumCard>
 
-        {error ? <p className="rounded-xl border border-[#dfc9c9] bg-[#f8eded] px-3 py-2 text-sm text-[#6e3030]">{error}</p> : null}
+        <PremiumCard className="space-y-2 p-4">
+          <SectionHeader title="Plan comparison" subtitle="Clear benefits and usage limits" />
+          <div className="grid grid-cols-2 gap-2">
+            <div className="rounded-[16px] border border-[#e7eaf0] bg-[#fcfcfd] p-3">
+              <p className="inline-flex items-center gap-1 text-sm font-semibold text-[#111111]"><Crown className="h-4 w-4" /> Free</p>
+              <p className="mt-2 text-xs text-[#616773]">10 runs/day · core tools · standard queue</p>
+            </div>
+            <div className="rounded-[16px] border border-[#111111] bg-[#111111] p-3 text-white">
+              <p className="inline-flex items-center gap-1 text-sm font-semibold"><Sparkles className="h-4 w-4" /> Premium</p>
+              <p className="mt-2 text-xs text-white/80">1000 runs/day · attachments · priority execution</p>
+            </div>
+          </div>
+          <ul className="space-y-1 text-sm text-[#111111]">
+            <li className="inline-flex items-center gap-2"><CheckCircle2 className="h-4 w-4" /> Advanced memory and workflow automations</li>
+            <li className="inline-flex items-center gap-2"><CheckCircle2 className="h-4 w-4" /> Premium connectors and richer context windows</li>
+            <li className="inline-flex items-center gap-2"><CheckCircle2 className="h-4 w-4" /> Priority model orchestration and faster response times</li>
+          </ul>
+        </PremiumCard>
 
-        <SmartButton type="button" disabled={isPremium || isUpgrading} onClick={() => void startUpgrade()} className="w-full" variant={isPremium ? 'secondary' : 'primary'}>
-          {isPremium ? 'You are on Premium' : isUpgrading ? 'Upgrading…' : 'Upgrade to Premium'}
+        {error ? <p className="rounded-xl border border-[#f0d0d0] bg-[#fff5f5] px-3 py-2 text-sm text-[#913c3c]">{error}</p> : null}
+
+        <SmartButton type="button" disabled={isPremium || isUpgrading} onClick={() => void startUpgrade()} className="w-full">
+          <Zap className="mr-2 h-4 w-4" /> {isPremium ? 'You are on Premium' : isUpgrading ? 'Upgrading…' : 'Upgrade to Premium'}
         </SmartButton>
-      </PremiumCard>
+      </div>
     </AppShell>
   );
 }
