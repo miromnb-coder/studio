@@ -2,8 +2,9 @@
 
 import type { ReactNode } from 'react';
 import { motion } from 'framer-motion';
-import { ChevronLeft, Sparkles } from 'lucide-react';
+import { Sparkles } from 'lucide-react';
 import { useRouter } from 'next/navigation';
+import { PageHeader } from '@/components/chat/PageHeader';
 
 type AppShellProps = {
   children: ReactNode;
@@ -26,22 +27,12 @@ export function ProductPageHeader({
   const router = useRouter();
 
   return (
-    <header className="mb-4 rounded-[24px] border border-[#d9dde4] bg-[#f4f5f8] px-4 pb-4 pt-3 shadow-[0_8px_18px_rgba(66,72,88,0.06)]">
-      <div className="mb-3 flex items-center justify-between">
-        <button
-          type="button"
-          onClick={() => router.back()}
-          className={`inline-flex h-9 w-9 items-center justify-center rounded-full border border-[#d6dbe3] bg-[#eef1f5] text-[#5f6775] ${showBack ? '' : 'opacity-0 pointer-events-none'}`.trim()}
-          aria-label="Go back"
-        >
-          <ChevronLeft className="h-4 w-4" />
-        </button>
-        <p className="text-[36px] font-semibold leading-none tracking-[-0.04em] text-[#2a3140]">Kivo</p>
-        <span className="h-9 w-9" />
-      </div>
-      <h1 className="text-[40px] font-semibold leading-none tracking-[-0.04em] text-[#252c3a]">{pageTitle}</h1>
-      <p className="mt-1.5 text-base text-[#6f7786]">{pageSubtitle}</p>
-    </header>
+    <PageHeader
+      title={pageTitle}
+      subtitle={pageSubtitle}
+      showBack={showBack}
+      onBack={showBack ? () => router.back() : undefined}
+    />
   );
 }
 
