@@ -23,7 +23,7 @@ export function QuickCreateMenu({ open, items, onClose, onSelect }: QuickCreateM
         <>
           <motion.button
             type="button"
-            className="absolute inset-x-0 top-0 bottom-[calc(98px+env(safe-area-inset-bottom))] z-20 bg-transparent"
+            className="fixed inset-0 z-40 bg-transparent"
             aria-label="Close create menu"
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
@@ -32,15 +32,15 @@ export function QuickCreateMenu({ open, items, onClose, onSelect }: QuickCreateM
           />
 
           <motion.aside
-            initial={{ opacity: 0, y: 8, scale: 0.98 }}
+            initial={{ opacity: 0, y: 10, scale: 0.98 }}
             animate={{ opacity: 1, y: 0, scale: 1 }}
-            exit={{ opacity: 0, y: 10, scale: 0.985 }}
+            exit={{ opacity: 0, y: 8, scale: 0.985 }}
             transition={{ duration: 0.18, ease: 'easeOut' }}
             onClick={(event) => event.stopPropagation()}
-            className="absolute bottom-[calc(108px+env(safe-area-inset-bottom))] left-4 z-30 w-[min(82vw,295px)] overflow-hidden rounded-2xl border border-[#d7dbe3] bg-[#f5f6f9] shadow-[0_14px_30px_rgba(70,76,90,0.12)] sm:left-6"
+            className="fixed bottom-[calc(116px+env(safe-area-inset-bottom))] left-4 z-50 w-[min(86vw,312px)] overflow-hidden rounded-2xl border border-[#d8dde5] bg-[#f7f8fb] shadow-[0_18px_34px_rgba(53,61,75,0.18)] sm:left-6"
           >
-            <header className="border-b border-[#e1e4ea] px-4 py-3">
-              <p className="text-[13px] font-semibold tracking-[0.01em] text-[#5f6675]">Create</p>
+            <header className="border-b border-[#e2e6ed] px-4 py-3">
+              <p className="text-[13px] font-semibold tracking-[0.02em] text-[#5d6574]">Quick Create</p>
             </header>
 
             <div className="p-1.5">
@@ -51,12 +51,14 @@ export function QuickCreateMenu({ open, items, onClose, onSelect }: QuickCreateM
                     <button
                       type="button"
                       onClick={() => onSelect(item.id)}
-                      className="flex h-11 w-full items-center gap-3 rounded-[12px] px-3 text-left transition-colors hover:bg-[#eceff4]"
+                      className="flex h-12 w-full items-center gap-3 rounded-[12px] px-3 text-left transition-colors hover:bg-[#edf1f7]"
                     >
-                      <Icon className="h-[16px] w-[16px] text-[#7b8393]" strokeWidth={1.9} />
-                      <span className="text-[14px] font-medium text-[#555d6a]">{item.label}</span>
+                      <span className="flex h-8 w-8 items-center justify-center rounded-lg border border-[#e1e5ec] bg-white text-[#6b7382]">
+                        <Icon className="h-[16px] w-[16px]" strokeWidth={1.9} />
+                      </span>
+                      <span className="text-[14px] font-medium text-[#4f5663]">{item.label}</span>
                     </button>
-                    {index < items.length - 1 ? <div className="mx-3 h-px bg-[#e6e9ef]" /> : null}
+                    {index < items.length - 1 ? <div className="mx-3 h-px bg-[#e7eaf0]" /> : null}
                   </div>
                 );
               })}

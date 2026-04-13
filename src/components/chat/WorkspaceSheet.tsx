@@ -24,7 +24,7 @@ export function WorkspaceSheet({ open, onClose, onQuickAction, onConnectorAction
         <>
           <motion.button
             type="button"
-            className="absolute inset-0 z-20 bg-[#788091]/25"
+            className="fixed inset-0 z-40 bg-[#7a8191]/30 backdrop-blur-[1px]"
             aria-label="Close Workspace Hub"
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
@@ -33,7 +33,7 @@ export function WorkspaceSheet({ open, onClose, onQuickAction, onConnectorAction
           />
 
           <motion.aside
-            className="absolute inset-x-0 bottom-0 z-30 max-h-[85vh] overflow-hidden rounded-t-[30px] border border-[#d9dde5] bg-[#f5f7fb] shadow-[0_-10px_30px_rgba(66,72,88,0.14)]"
+            className="fixed inset-x-0 bottom-0 z-50 max-h-[88vh] overflow-hidden rounded-t-[32px] border border-[#d9dee7] bg-[#f4f7fb] shadow-[0_-18px_44px_rgba(51,59,75,0.24)]"
             initial={{ y: '100%' }}
             animate={{ y: 0 }}
             exit={{ y: '100%' }}
@@ -46,21 +46,21 @@ export function WorkspaceSheet({ open, onClose, onQuickAction, onConnectorAction
             }}
           >
             <div className="px-4 pb-5 pt-3 sm:px-5">
-              <div className="mx-auto mb-2 h-1.5 w-14 rounded-full bg-[#dce1ea]" />
+              <div className="mx-auto mb-3 h-1.5 w-14 rounded-full bg-[#d8dee8]" />
               <div className="mb-4 grid grid-cols-[40px_1fr_40px] items-center">
+                <span />
+                <h2 className="text-center text-[28px] font-semibold tracking-[-0.02em] text-[#2f3644]">Workspace Hub</h2>
                 <button
                   type="button"
                   onClick={onClose}
-                  className="inline-flex h-10 w-10 items-center justify-center rounded-full border border-[#dde1e8] bg-[#f8f9fc] text-[#5d6572]"
+                  className="inline-flex h-10 w-10 items-center justify-center rounded-full border border-[#dde2ea] bg-[#f8fafe] text-[#5d6572]"
                   aria-label="Close workspace hub"
                 >
                   <X className="h-5 w-5" />
                 </button>
-                <h2 className="text-center text-[34px] leading-none font-semibold tracking-[-0.02em] text-[#2d3441]">Workspace Hub</h2>
-                <span />
               </div>
 
-              <div className="max-h-[calc(85vh-82px)] space-y-5 overflow-y-auto pb-[max(8px,env(safe-area-inset-bottom))]">
+              <div className="max-h-[calc(88vh-88px)] space-y-5 overflow-y-auto pb-[max(10px,env(safe-area-inset-bottom))]">
                 <WorkspaceQuickActions onAction={onQuickAction} />
                 <WorkspaceConnectors onAction={onConnectorAction} />
                 <div className="grid gap-4 md:grid-cols-2">

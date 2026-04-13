@@ -131,6 +131,14 @@ export default function ChatPage() {
     setConnectorsOpen(false);
   };
 
+  const toggleCreateMenu = () => {
+    setCreateOpen((prev) => {
+      const next = !prev;
+      if (next) setConnectorsOpen(false);
+      return next;
+    });
+  };
+
 
   const handleSend = async () => {
     if ((!hasText && composerAttachments.length === 0) || isSending) return;
@@ -346,10 +354,10 @@ export default function ChatPage() {
 
   return (
     <AppShell>
-      <div className="relative flex min-h-screen flex-col overflow-hidden">
+      <div className="relative flex h-[100dvh] min-h-0 flex-col overflow-hidden">
         <ChatHeader onOpenConversations={() => setConversationDrawerOpen(true)} />
 
-        <div className="relative flex flex-1 flex-col">
+        <div className="relative flex min-h-0 flex-1 flex-col">
           <MessageThread messages={messages} pending={isAgentResponding} />
 
 
@@ -361,10 +369,7 @@ export default function ChatPage() {
             attachments={composerAttachments}
             onChange={setDraftPrompt}
             onSend={() => void handleSend()}
-            onOpenCreate={() => {
-              setCreateOpen((prev) => !prev);
-              setConnectorsOpen(false);
-            }}
+            onOpenCreate={toggleCreateMenu}
             onOpenTools={() => {
               setConnectorsOpen(true);
               setCreateOpen(false);

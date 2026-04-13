@@ -1,7 +1,7 @@
 'use client';
 
-import { useState, type ReactNode } from 'react';
-import { CalendarDays, Github, Globe, Mail, HardDrive, Inbox } from 'lucide-react';
+import { useState } from 'react';
+import { ConnectorLogo } from '@/app/components/connector-logos';
 import { ConnectorRow, type ConnectorMode } from './ConnectorRow';
 
 type WorkspaceConnectorsProps = {
@@ -10,19 +10,19 @@ type WorkspaceConnectorsProps = {
 
 type Connector = {
   id: string;
-  name: string;
+  name: 'Gmail' | 'Google Calendar' | 'Google Drive' | 'GitHub' | 'Outlook' | 'Browser';
   mode: ConnectorMode;
   active?: boolean;
-  icon: ReactNode;
+  detail: string;
 };
 
 const initialConnectors: Connector[] = [
-  { id: 'gmail', name: 'Gmail', mode: 'connected', icon: <Mail className="h-5 w-5" /> },
-  { id: 'google-calendar', name: 'Google Calendar', mode: 'connected', icon: <CalendarDays className="h-5 w-5" /> },
-  { id: 'google-drive', name: 'Google Drive', mode: 'connected', icon: <HardDrive className="h-5 w-5" /> },
-  { id: 'github', name: 'GitHub', mode: 'toggle', active: true, icon: <Github className="h-5 w-5" /> },
-  { id: 'browser', name: 'Browser', mode: 'connect', icon: <Globe className="h-5 w-5" /> },
-  { id: 'outlook', name: 'Outlook', mode: 'manage', icon: <Inbox className="h-5 w-5" /> },
+  { id: 'gmail', name: 'Gmail', mode: 'connected', detail: 'Inbox sync is current' },
+  { id: 'google-calendar', name: 'Google Calendar', mode: 'connected', detail: 'Planner synced for this week' },
+  { id: 'google-drive', name: 'Google Drive', mode: 'connected', detail: 'Drive documents indexed' },
+  { id: 'github', name: 'GitHub', mode: 'toggle', active: true, detail: 'PR summaries enabled' },
+  { id: 'browser', name: 'Browser', mode: 'connect', detail: 'Connect for research capture' },
+  { id: 'outlook', name: 'Outlook', mode: 'manage', detail: 'Optional enterprise mailbox' },
 ];
 
 export function WorkspaceConnectors({ onAction }: WorkspaceConnectorsProps) {
@@ -30,13 +30,14 @@ export function WorkspaceConnectors({ onAction }: WorkspaceConnectorsProps) {
 
   return (
     <section>
-      <h3 className="mb-3 text-[17px] font-semibold text-[#4a5160]">Connectors</h3>
-      <div className="overflow-hidden rounded-[22px] border border-[#e0e4ea] bg-[#fbfcfe] shadow-[0_6px_18px_rgba(80,87,101,0.05)]">
+      <h3 className="mb-3 text-[15px] font-semibold uppercase tracking-[0.08em] text-[#6f7786]">Connectors</h3>
+      <div className="overflow-hidden rounded-[24px] border border-[#dee3ec] bg-[#fafcff] shadow-[0_12px_28px_rgba(72,80,96,0.08)]">
         {connectors.map((connector) => (
           <ConnectorRow
             key={connector.id}
             name={connector.name}
-            icon={connector.icon}
+            icon={<ConnectorLogo name={connector.name} />}
+            detail={connector.detail}
             mode={connector.mode}
             toggled={connector.active}
             onAction={() => {
