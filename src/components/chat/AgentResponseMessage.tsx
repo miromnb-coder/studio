@@ -1,79 +1,59 @@
 'use client';
 
 import type { Message } from '@/app/store/app-store';
-import type { AgentResponseStep, AgentSuggestedAction } from '@/types/agent-response';
-import { AgentExecutionPanel, type AgentWorkflowStatus } from './AgentExecutionPanel';
-import type { AgentExecutionStepStatus } from './AgentExecutionStepRow';
+import type { AgentSuggestedAction } from '@/types/agent-response';
 import { ActionSuggestions } from './ActionSuggestions';
+import { AgentWorkflowBoxes } from './AgentWorkflowBoxes';
 
 type AgentResponseMessageProps = {
   message: Message;
   latestUserContent?: string;
 };
 
+type SupportedLocale = 'en' | 'fi' | 'sv' | 'es';
+
 type LocaleCopy = {
   intro: string[];
-  workflowTitle: string;
-  status: {
-    running: string;
-    completed: string;
-    needs_attention: string;
-  };
-  nowLabel: string;
-  fallbackStep: string;
 };
 
-const COPY: Record<'en' | 'fi' | 'sv', LocaleCopy> = {
+const COPY: Record<SupportedLocale, LocaleCopy> = {
   en: {
     intro: [
-      'Got it — I\'ll analyze this for you.',
-      'I\'ll review this step by step and give you the best answer.',
-      'Let me examine this and give you a clear recommendation.',
+      'Perfect — I\'m on it.',
+      'Great request. I\'m working through it now.',
+      'Absolutely — I\'ll handle this step by step.',
     ],
-    workflowTitle: 'Agent workflow',
-    status: {
-      running: 'Running',
-      completed: 'Completed',
-      needs_attention: 'Needs attention',
-    },
-    nowLabel: 'Now:',
-    fallbackStep: 'Processing request',
   },
   fi: {
     intro: [
-      'Selvä — analysoin tämän sinulle.',
-      'Käyn tämän läpi vaihe vaiheelta ja annan parhaan vastauksen.',
-      'Tutkin tämän ja annan selkeän suosituksen.',
+      'Selvä — hoidan tämän nyt.',
+      'Hyvä pyyntö. Käyn sen läpi juuri nyt.',
+      'Totta kai — etenen tämän kanssa vaiheittain.',
     ],
-    workflowTitle: 'Agentin työnkulku',
-    status: {
-      running: 'Käynnissä',
-      completed: 'Valmis',
-      needs_attention: 'Vaatii huomiota',
-    },
-    nowLabel: 'Nyt:',
-    fallbackStep: 'Pyyntöä käsitellään',
   },
   sv: {
     intro: [
-      'Absolut — jag analyserar detta åt dig.',
-      'Jag går igenom detta steg för steg och ger dig det bästa svaret.',
-      'Låt mig granska detta och ge en tydlig rekommendation.',
+      'Absolut — jag tar hand om detta nu.',
+      'Bra begäran. Jag går igenom den nu.',
+      'Självklart — jag hanterar detta steg för steg.',
     ],
-    workflowTitle: 'Agentens arbetsflöde',
-    status: {
-      running: 'Pågår',
-      completed: 'Slutförd',
-      needs_attention: 'Behöver åtgärd',
-    },
-    nowLabel: 'Nu:',
-    fallbackStep: 'Bearbetar begäran',
+  },
+  es: {
+    intro: [
+      'Perfecto — ya me encargo.',
+      'Excelente solicitud. La estoy resolviendo ahora.',
+      'Claro — voy a manejar esto paso a paso.',
+    ],
   },
 };
 
-function detectLanguage(input?: string): keyof typeof COPY {
+function detectLanguage(input?: string): SupportedLocale {
   const text = input?.trim().toLowerCase();
   if (!text) return 'en';
+
+  if (/[ñ¿¡]/.test(text) || /\b(el|la|los|las|que|para|con|esto|respuesta)\b/.test(text)) {
+    return 'es';
+  }
 
   if (/[åäö]/.test(text) || /\b(och|inte|jag|detta|för|att|som)\b/.test(text)) {
     return 'sv';
@@ -84,21 +64,6 @@ function detectLanguage(input?: string): keyof typeof COPY {
   }
 
   return 'en';
-}
-
-function normalizeStepStatus(status?: string): AgentExecutionStepStatus {
-  if (status === 'completed') return 'completed';
-  if (status === 'running') return 'running';
-  if (status === 'failed') return 'failed';
-  return 'pending';
-}
-
-function panelStatus(steps: AgentResponseStep[]): AgentWorkflowStatus {
-  if (steps.some((step) => step.status === 'failed')) return 'needs_attention';
-  if (steps.some((step) => step.status === 'running' || step.status === 'pending')) {
-    return 'running';
-  }
-  return 'completed';
 }
 
 function hashIndex(value: string, mod: number) {
@@ -120,33 +85,17 @@ export function AgentResponseMessage({ message, latestUserContent }: AgentRespon
   const steps = metadata?.steps ?? [];
   const actions = mapActions(metadata?.suggestedActions);
 
-  const runningStep = steps.find((step) => step.status === 'running');
-  const currentFocus = runningStep?.action ?? runningStep?.summary;
-
   const introIndex = hashIndex(message.id, copy.intro.length);
 
   return (
     <>
       <p className="mb-2 text-[14px] text-[#4f5969]">{copy.intro[introIndex]}</p>
 
-      {steps.length > 0 ? (
-        <AgentExecutionPanel
-          title={copy.workflowTitle}
-          status={panelStatus(steps)}
-          statusLabel={copy.status[panelStatus(steps)]}
-          currentFocusLabel={copy.nowLabel}
-          currentFocus={currentFocus}
-          steps={steps.map((step) => ({
-            label: step.action || copy.fallbackStep,
-            detail: step.summary,
-            status: normalizeStepStatus(step.status),
-          }))}
-        />
-      ) : null}
+      <AgentWorkflowBoxes steps={steps} locale={locale} />
 
       <p className="whitespace-pre-wrap text-[14px] leading-6 text-[#424a59]">{message.content}</p>
 
-      <ActionSuggestions actions={actions} />
+      <ActionSuggestions actions={actions} locale={locale} />
     </>
   );
 }
