@@ -1,7 +1,5 @@
 import { NextResponse } from 'next/server';
-import { runAgentV8 } from '@/agent/v8/orchestrator';
 import { runAgentVNext } from '@/agent/vNext/orchestrator';
-import type { AgentResponseV8 } from '@/agent/v8/types';
 import type { AgentResponse } from '@/types/agent-response';
 import {
   normalizeFinanceAnalysis,
@@ -12,7 +10,7 @@ import type { FinanceActionType } from '@/lib/finance/types';
 import { createClient as createSupabaseServerClient } from '@/lib/supabase/server';
 import { getUserProfileIntelligence, updateUserProfileIntelligence } from '@/lib/operator/personalization';
 import type { OperatorAlertType } from '@/lib/operator/alerts';
-import { fetchRelevantUserMemory } from '@/agent/v8/tools/memory-store';
+import { fetchRelevantUserMemory } from '@/agent/memory-store';
 import { fetchRecentRecommendationOutcomes } from '@/lib/operator/outcomes';
 import {
   getUserPlanAndUsage,
@@ -25,7 +23,6 @@ import {
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
-const USE_NEW_AGENT = true;
 
 const SAFE_AGENT_FALLBACK: AgentResponse = {
   reply: 'I ran into an issue, but here’s what I could analyze so far.',
@@ -40,6 +37,22 @@ const SAFE_AGENT_FALLBACK: AgentResponse = {
     verificationPassed: false,
     iterationCount: 0,
   },
+};
+
+type AgentRouteInput = {
+  input: string;
+  userId: string;
+  history: Array<{ role: string; content: string }>;
+  memory?: Record<string, unknown> | null;
+  operatorAlerts?: unknown[];
+  outcomes?: unknown[];
+  userProfileIntelligence?: Record<string, unknown> | null;
+  productState?: Record<string, unknown>;
+};
+
+type CompatibleAgentResponse = {
+  reply: string;
+  metadata?: Record<string, any>;
 };
 
 function safeJsonResponse(payload: unknown, status = 200) {
@@ -123,11 +136,7 @@ function asArrayOfObjects(value: unknown): Array<Record<string, unknown>> {
     : [];
 }
 
-async function runOldAgent(input: Parameters<typeof runAgentV8>[0]): Promise<AgentResponseV8> {
-  return runAgentV8(input);
-}
-
-async function runNewAgent(input: Parameters<typeof runAgentV8>[0]): Promise<AgentResponseV8 | null> {
+async function runNewAgent(input: AgentRouteInput): Promise<CompatibleAgentResponse | null> {
   const result = await runAgentVNext({
     requestId: crypto.randomUUID(),
     userId: input.userId,
@@ -419,7 +428,6 @@ export async function POST(req: Request) {
     });
 
     const agentInput = {
-      supabase,
       input: safeInput || 'Continue',
       userId,
       history: safeHistory,
@@ -440,20 +448,13 @@ export async function POST(req: Request) {
       },
     };
 
-    const result = USE_NEW_AGENT
-      ? await runNewAgent(agentInput)
-      : await runOldAgent(agentInput);
-
-    if (USE_NEW_AGENT && !result) {
-      console.error('AGENT_VNEXT_EXECUTION_ERROR:', { requestId });
-    }
-
-    const agentResult = result ?? null;
+    const agentResult = await runNewAgent(agentInput);
 
     if (!agentResult) {
+      console.error('AGENT_VNEXT_EXECUTION_ERROR:', { requestId });
       console.error('AGENT_EXECUTION_ERROR', {
         requestId,
-        mode: USE_NEW_AGENT ? 'vNext' : 'v8',
+        mode: 'vNext',
       });
       return safeJsonResponse(SAFE_AGENT_FALLBACK);
     }
