@@ -84,7 +84,7 @@ export function GlobalMenuProvider({ children }: { children: ReactNode }) {
     <GlobalMenuContext.Provider value={value}>
       {children}
       <div className="pointer-events-none fixed inset-0 z-50 mx-auto w-full max-w-md">
-        <div className={`relative h-full w-full ${open ? 'pointer-events-auto' : 'pointer-events-none'}`}>
+        <div className="pointer-events-auto relative h-full w-full">
           <MenuSheet
             open={open}
             primaryRows={sharedPrimaryMenu}
