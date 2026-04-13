@@ -1,12 +1,30 @@
 'use client';
 
-import { AnimatePresence, motion } from 'framer-motion';
+import { AnimatePresence, motion, type PanInfo } from 'framer-motion';
 import { useEffect } from 'react';
 import { ConversationFilters, type ConversationFilter } from './ConversationFilters';
 import { ConversationHeader } from './ConversationHeader';
 import { ConversationSearch } from './ConversationSearch';
 import { ContinueCard } from './ContinueCard';
-import { ConversationList, type ConversationRow } from './ConversationList';
+import {
+  ConversationList,
+  type ConversationRow,
+} from './ConversationList';
+
+type ConversationDrawerProps = {
+  open: boolean;
+  onClose: () => void;
+  search: string;
+  onSearchChange: (value: string) => void;
+  filter: ConversationFilter;
+  onFilterChange: (next: ConversationFilter) => void;
+  continueItem: ConversationRow | null;
+  recentRows: ConversationRow[];
+  agentRows: ConversationRow[];
+  savedRows: ConversationRow[];
+  onOpenConversation: (id: string) => void;
+  onToggleSaved: (id: string) => void;
+};
 
 export function ConversationDrawer({
   open,
@@ -21,36 +39,29 @@ export function ConversationDrawer({
   savedRows,
   onOpenConversation,
   onToggleSaved,
-}: {
-  open: boolean;
-  onClose: () => void;
-  search: string;
-  onSearchChange: (value: string) => void;
-  filter: ConversationFilter;
-  onFilterChange: (next: ConversationFilter) => void;
-  continueItem: ConversationRow | null;
-  recentRows: ConversationRow[];
-  agentRows: ConversationRow[];
-  savedRows: ConversationRow[];
-  onOpenConversation: (id: string) => void;
-  onToggleSaved: (id: string) => void;
-}) {
+}: ConversationDrawerProps) {
   useEffect(() => {
     if (!open) return;
-    const previous = document.body.style.overflow;
+
+    const previousOverflow = document.body.style.overflow;
+    const previousTouch = document.body.style.touchAction;
+
     document.body.style.overflow = 'hidden';
+    document.body.style.touchAction = 'none';
+
     return () => {
-      document.body.style.overflow = previous;
+      document.body.style.overflow = previousOverflow;
+      document.body.style.touchAction = previousTouch;
     };
   }, [open]);
 
-  const openAndClose = (id: string) => {
+  const handleOpen = (id: string) => {
     onOpenConversation(id);
     onClose();
   };
 
   return (
-    <AnimatePresence>
+    <AnimatePresence mode="wait">
       {open ? (
         <>
           <motion.button
@@ -60,31 +71,80 @@ export function ConversationDrawer({
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            className="fixed inset-0 z-40 bg-[#20242d]/26 backdrop-blur-[2px]"
+            transition={{ duration: 0.18 }}
+            className="fixed inset-0 z-40 bg-[#1f2430]/18 backdrop-blur-[3px]"
           />
 
           <motion.aside
-            initial={{ y: '-104%', opacity: 0.75 }}
+            initial={{ y: '-104%', opacity: 0.78 }}
             animate={{ y: 0, opacity: 1 }}
-            exit={{ y: '-104%', opacity: 0.75 }}
-            transition={{ type: 'spring', stiffness: 320, damping: 32, mass: 0.7 }}
+            exit={{ y: '-104%', opacity: 0.78 }}
+            transition={{
+              type: 'spring',
+              stiffness: 340,
+              damping: 34,
+              mass: 0.72,
+            }}
             drag="y"
             dragConstraints={{ top: 0, bottom: 120 }}
-            dragElastic={{ top: 0, bottom: 0.35 }}
-            onDragEnd={(_, info) => {
-              if (info.offset.y > 90 || info.velocity.y > 600) onClose();
+            dragElastic={{ top: 0, bottom: 0.22 }}
+            onDragEnd={(_, info: PanInfo) => {
+              if (info.offset.y > 90 || info.velocity.y > 650) {
+                onClose();
+              }
             }}
-            className="fixed inset-x-0 top-0 z-50 mx-auto flex max-h-[88vh] w-full max-w-xl flex-col rounded-b-[30px] border-b border-[#d8dde6] bg-[#f8f9fc]/98 px-3 pb-[calc(16px+env(safe-area-inset-bottom))] pt-2.5 shadow-[0_20px_40px_rgba(56,62,75,0.16)] backdrop-blur-xl"
+            className="fixed inset-x-0 top-0 z-50 mx-auto flex h-[88dvh] w-full max-w-xl flex-col overflow-hidden rounded-b-[32px] border-b border-[#dde2ea] bg-[#f9fafd]/98 shadow-[0_22px_48px_rgba(44,50,64,0.14)] backdrop-blur-xl"
           >
-            <ConversationHeader onClose={onClose} />
-            <ConversationSearch value={search} onChange={onSearchChange} />
-            <ConversationFilters value={filter} onChange={onFilterChange} />
+            {/* Handle */}
+            <div className="flex justify-center pt-2.5">
+              <div className="h-1.5 w-14 rounded-full bg-[#d8dde6]" />
+            </div>
 
-            <div className="min-h-0 flex-1 overflow-y-auto pr-1">
-              <ContinueCard item={continueItem} onResume={openAndClose} />
-              <ConversationList title="Recent Conversations" rows={recentRows} empty="No recent conversations found." onOpen={openAndClose} onToggleSaved={onToggleSaved} />
-              <ConversationList title="Agent Conversations" rows={agentRows} empty="No agent runs yet." onOpen={openAndClose} onToggleSaved={onToggleSaved} />
-              <ConversationList title="Saved Threads" rows={savedRows} empty="Saved threads appear here." onOpen={openAndClose} onToggleSaved={onToggleSaved} />
+            {/* Fixed Header Area */}
+            <div className="shrink-0 px-3 pb-3 pt-2 sm:px-4">
+              <ConversationHeader onClose={onClose} />
+              <ConversationSearch
+                value={search}
+                onChange={onSearchChange}
+              />
+              <ConversationFilters
+                value={filter}
+                onChange={onFilterChange}
+              />
+            </div>
+
+            {/* Scroll Area */}
+            <div className="min-h-0 flex-1 overflow-y-auto px-3 pb-[calc(20px+env(safe-area-inset-bottom))] sm:px-4">
+              <div className="space-y-5">
+                <ContinueCard
+                  item={continueItem}
+                  onResume={handleOpen}
+                />
+
+                <ConversationList
+                  title="Recent Conversations"
+                  rows={recentRows}
+                  empty="No recent conversations found."
+                  onOpen={handleOpen}
+                  onToggleSaved={onToggleSaved}
+                />
+
+                <ConversationList
+                  title="Agent Conversations"
+                  rows={agentRows}
+                  empty="No agent runs yet."
+                  onOpen={handleOpen}
+                  onToggleSaved={onToggleSaved}
+                />
+
+                <ConversationList
+                  title="Saved Threads"
+                  rows={savedRows}
+                  empty="Saved threads appear here."
+                  onOpen={handleOpen}
+                  onToggleSaved={onToggleSaved}
+                />
+              </div>
             </div>
           </motion.aside>
         </>
