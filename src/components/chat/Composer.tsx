@@ -40,7 +40,7 @@ export function Composer({
 
   return (
     <div className="pointer-events-none absolute inset-x-4 bottom-[calc(14px+env(safe-area-inset-bottom))] z-10 sm:inset-x-6">
-      <div className="pointer-events-auto rounded-[26px] border border-[#d9dde4] bg-[#f4f5f8] px-4 pb-3 pt-3 shadow-[0_10px_22px_rgba(70,76,90,0.06)]">
+      <div className="surface-chat pointer-events-auto rounded-[28px] px-4 pb-3 pt-3 shadow-[0_16px_32px_rgba(71,85,105,0.12)]">
         <label htmlFor="chat-composer" className="sr-only">
           Assign a task or ask anything
         </label>
@@ -56,8 +56,8 @@ export function Composer({
               onSend();
             }
           }}
-          placeholder="Message Kivo..."
-          className="mb-3 w-full bg-transparent px-1 text-[16px] font-normal text-[#717988] placeholder:text-[#a1a7b4] outline-none"
+          placeholder="Ask Kivo anything..."
+          className="mb-3 w-full bg-transparent px-1 text-[16px] font-normal text-[#4b5563] placeholder:text-[#9aa3b2] outline-none"
         />
 
         {hasAttachments ? (

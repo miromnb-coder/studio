@@ -11,6 +11,7 @@ export function ChatHeader({ onOpenConversations }: ChatHeaderProps) {
   return (
     <PageHeader
       title="Kivo"
+      mood="chat"
       showBack
       onLeftAction={onOpenConversations}
       leftButtonAriaLabel="Open conversations drawer"

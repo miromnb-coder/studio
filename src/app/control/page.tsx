@@ -1,68 +1,57 @@
 'use client';
 
-import { useCallback, useEffect, useState } from 'react';
-import { Bell, ChevronRight, Globe, Mail, Palette, Shield, Sparkles, Star, ToyBrick, Waypoints } from 'lucide-react';
+import { useMemo } from 'react';
+import { ArrowRight, Lock, Settings2, Shield, UserCircle2, Waypoints } from 'lucide-react';
 import { useUserEntitlements } from '../hooks/use-user-entitlements';
 import { AppShell, PremiumCard, ProductPageHeader, SectionHeader, SmartButton } from '../components/premium-ui';
-
-type GmailStatusPayload = {
-  connected?: boolean;
-  status: 'disconnected' | 'connecting' | 'connected' | 'syncing' | 'error';
-  errorMessage?: string | null;
-};
-
-function Row({ icon: Icon, label, value, onClick }: { icon: React.ComponentType<{ className?: string }>; label: string; value?: string; onClick?: () => void }) {
-  return (
-    <button type="button" onClick={onClick} className="flex w-full items-center gap-3 border-b border-[#e3e6ec] px-1 py-3 text-left last:border-b-0">
-      <span className="rounded-xl border border-[#d8dce4] bg-[#eef1f6] p-2 text-[#677083]"><Icon className="h-4 w-4" /></span>
-      <span className="flex-1 text-sm font-medium text-[#2f3644]">{label}</span>
-      {value ? <span className="text-xs text-[#6f7786]">{value}</span> : null}
-      <ChevronRight className="h-4 w-4 text-[#98a0ad]" />
-    </button>
-  );
-}
+import { ConnectorLogo } from '../components/connector-logos';
 
 export default function ControlPage() {
   const { plan } = useUserEntitlements();
-  const [gmail, setGmail] = useState<GmailStatusPayload>({ status: 'disconnected', connected: false });
-
-  const loadGmail = useCallback(async () => {
-    const response = await fetch('/api/integrations/gmail/status', { cache: 'no-store' });
-    if (!response.ok) return;
-    const payload = (await response.json()) as GmailStatusPayload;
-    setGmail(payload);
-  }, []);
-
-  useEffect(() => {
-    void loadGmail();
-  }, [loadGmail]);
+  const connectors = useMemo(() => ['Gmail', 'Google Calendar', 'Google Drive', 'GitHub', 'Outlook', 'Browser'] as const, []);
 
   return (
     <AppShell>
-      <ProductPageHeader pageTitle="Control" pageSubtitle="Everything important in one place" />
-
+      <ProductPageHeader pageTitle="Control" pageSubtitle="Settings, privacy, account, and integrations" />
       <div className="space-y-3">
-        <PremiumCard className="p-4">
-          <SectionHeader title="Connected apps" subtitle="Data sources powering your operator" />
-          <Row icon={Mail} label="Gmail" value={gmail.connected ? 'Connected' : 'Not connected'} onClick={() => window.location.assign('/profile')} />
-          <Row icon={Waypoints} label="Finance sync" value="Daily" />
+        <PremiumCard className="space-y-3 p-4">
+          <SectionHeader title="Integrations" subtitle="Premium connectors with real service visuals" />
+          <div className="grid grid-cols-3 gap-2">
+            {connectors.map((name) => (
+              <button key={name} type="button" className="tap-feedback rounded-[14px] border border-[#e7eaf0] bg-[#fcfcfd] p-2 text-center">
+                <div className="mb-1 flex justify-center"><ConnectorLogo name={name} /></div>
+                <p className="text-[11px] font-medium text-[#111111]">{name}</p>
+              </button>
+            ))}
+          </div>
+        </PremiumCard>
+
+        <PremiumCard className="space-y-2 p-4">
+          <SectionHeader title="System center" subtitle="Everything important in one place" />
+          {[
+            { title: 'Account', icon: UserCircle2, detail: 'Manage profile, security, and identity' },
+            { title: 'Privacy', icon: Shield, detail: 'Data controls, retention, and permissions' },
+            { title: 'App preferences', icon: Settings2, detail: 'Theme, notifications, and workspace defaults' },
+            { title: 'Automations', icon: Waypoints, detail: 'Connected triggers and execution limits' },
+          ].map((row) => {
+            const Icon = row.icon;
+            return (
+            <button key={row.title} className="tap-feedback flex w-full items-center gap-3 rounded-[16px] border border-[#e7eaf0] bg-[#fcfcfd] p-3 text-left" type="button">
+              <Icon className="h-4 w-4 text-[#111111]" />
+              <span className="flex-1">
+                <p className="text-sm font-semibold text-[#111111]">{row.title}</p>
+                <p className="text-xs text-[#636a76]">{row.detail}</p>
+              </span>
+              <ArrowRight className="h-4 w-4 text-[#9aa1ab]" />
+            </button>
+            );
+          })}
         </PremiumCard>
 
         <PremiumCard className="p-4">
-          <SectionHeader title="Workspace" subtitle="Model, language, notifications, and interface" />
-          <Row icon={ToyBrick} label="AI model" value="GPT-5.4" />
-          <Row icon={Bell} label="Notifications" value="Important only" />
-          <Row icon={Shield} label="Privacy" value="Standard protection" />
-          <Row icon={Globe} label="Language" value="English" />
-          <Row icon={Palette} label="Appearance" value="System light" />
-        </PremiumCard>
-
-        <PremiumCard className="p-4">
-          <SectionHeader title="Premium" subtitle="Plan and benefit controls" />
-          <Row icon={Star} label="Plan" value={plan === 'premium' ? 'Premium active' : 'Free'} onClick={() => window.location.assign('/upgrade')} />
-          <SmartButton className="mt-3 w-full justify-center" onClick={() => window.location.assign('/upgrade')}>
-            <Sparkles className="mr-2 h-4 w-4" /> Manage Premium
-          </SmartButton>
+          <SectionHeader title="Plan" subtitle="Premium control and usage" />
+          <p className="rounded-[14px] border border-[#e7eaf0] bg-[#fcfcfd] px-3 py-2 text-sm text-[#111111]">Current plan: <strong>{plan}</strong></p>
+          <SmartButton className="mt-3 w-full" onClick={() => window.location.assign('/upgrade')}><Lock className="mr-2 h-4 w-4" />Manage subscription</SmartButton>
         </PremiumCard>
       </div>
     </AppShell>
