@@ -28,34 +28,142 @@ function mergeRuntimeOptions(request: AgentRequest): AgentRuntimeOptions {
   };
 }
 
-async function executePlanSteps(plan: AgentPlan, context: AgentContext): Promise<AgentToolResult[]> {
-  const toolSteps = plan.steps.filter((step) => Boolean(step.requiredTool));
+function getRequestText(request: AgentRequest): string {
+  const candidates = [
+    (request as AgentRequest & { message?: string }).message,
+    (request as AgentRequest & { input?: string }).input,
+    (request as AgentRequest & { prompt?: string }).prompt,
+  ];
+
+  for (const candidate of candidates) {
+    if (typeof candidate === 'string' && candidate.trim()) {
+      return candidate.trim();
+    }
+  }
+
+  return '';
+}
+
+function buildBaseContext(
+  request: AgentRequest,
+  runtime: AgentRuntimeOptions,
+): AgentContext {
+  return {
+    nowIso: new Date().toISOString(),
+    request,
+    runtime,
+  };
+}
+
+function shouldStopOnToolFailure(context: AgentContext): boolean {
+  return !context.runtime.allowToolFallbacks;
+}
+
+function createToolCall(
+  stepId: string,
+  tool: NonNullable<AgentPlan['steps'][number]['requiredTool']>,
+  context: AgentContext,
+): AgentToolCall {
+  return {
+    callId: `call-${context.request.requestId}-${stepId}`,
+    stepId,
+    tool,
+    input: {
+      action: inferToolAction(tool, context.request),
+      message: getRequestText(context.request),
+      metadata: context.request.metadata ?? {},
+      requestId: context.request.requestId,
+      userId: context.request.userId,
+    },
+  };
+}
+
+function inferToolAction(
+  tool: NonNullable<AgentPlan['steps'][number]['requiredTool']>,
+  request: AgentRequest,
+): string {
+  const text = getRequestText(request).toLowerCase();
+
+  switch (tool) {
+    case 'gmail':
+      if (text.includes('receipt')) return 'scan_receipts';
+      if (text.includes('subscription')) return 'scan_subscriptions';
+      if (text.includes('reply') || text.includes('draft')) return 'draft_reply';
+      if (text.includes('inbox') || text.includes('email')) return 'search';
+      return 'status';
+
+    case 'calendar':
+      if (
+        text.includes('meeting') ||
+        text.includes('availability') ||
+        text.includes('schedule')
+      ) {
+        return 'availability';
+      }
+      return 'status';
+
+    case 'memory':
+      if (text.includes('remember') || text.includes('history')) {
+        return 'retrieve';
+      }
+      return 'search';
+
+    case 'web':
+      return 'search';
+
+    case 'compare':
+      return 'compare';
+
+    case 'file':
+      return 'inspect';
+
+    case 'finance':
+      if (text.includes('scan')) return 'scan';
+      return 'overview';
+
+    case 'notes':
+      if (
+        text.includes('create note') ||
+        text.includes('save this') ||
+        text.includes('write this down')
+      ) {
+        return 'create';
+      }
+      return 'list';
+
+    default:
+      return 'default';
+  }
+}
+
+function sortStepsForExecution(plan: AgentPlan): AgentPlan['steps'] {
+  return [...plan.steps].sort((a, b) => a.priority - b.priority);
+}
+
+export async function executePlanSteps(
+  plan: AgentPlan,
+  context: AgentContext,
+): Promise<AgentToolResult[]> {
+  const steps = sortStepsForExecution(plan).filter((step) => Boolean(step.requiredTool));
   const results: AgentToolResult[] = [];
 
-  for (const step of toolSteps) {
-    if (!step.requiredTool) {
-      continue;
-    }
+  for (const step of steps) {
+    if (!step.requiredTool) continue;
 
-    const call: AgentToolCall = {
-      callId: `call-${context.request.requestId}-${step.id}`,
-      stepId: step.id,
-      tool: step.requiredTool,
-      input: {
-        message: context.request.message,
-        metadata: context.request.metadata ?? {},
-      },
-    };
-
+    const call = createToolCall(step.id, step.requiredTool, context);
     const result = await executeTool(call, context);
     results.push(result);
 
-    if (!result.ok && !context.runtime.allowToolFallbacks) {
+    if (!result.ok && shouldStopOnToolFailure(context)) {
       throw new AgentExecutionError({
         code: 'TOOL_EXECUTION_FAILED',
         message: `Tool step failed: ${step.id}`,
         retryable: true,
-        details: { stepId: step.id, tool: step.requiredTool },
+        details: {
+          stepId: step.id,
+          tool: step.requiredTool,
+          error: result.error,
+        },
       });
     }
   }
@@ -63,13 +171,51 @@ async function executePlanSteps(plan: AgentPlan, context: AgentContext): Promise
   return results;
 }
 
-export async function runAgentVNext(request: AgentRequest): Promise<AgentExecutionResult> {
+async function prepareMemory(
+  request: AgentRequest,
+  context: AgentContext,
+  shouldFetch: boolean,
+): Promise<AgentMemoryContext> {
+  if (!shouldFetch) {
+    return buildMemoryContext([]);
+  }
+
+  const query = getRequestText(request);
+  const fetched = await fetchMemory(request, context);
+  const ranked = rankMemory(fetched, query);
+  return buildMemoryContext(ranked);
+}
+
+function buildResponse(params: {
+  request: AgentRequest;
+  route: AgentResponse['route'];
+  plan: AgentPlan;
+  toolResults: AgentToolResult[];
+  memory: AgentMemoryContext;
+  answer: AgentResponse['answer'];
+  evaluation?: AgentResponse['evaluation'];
+}): AgentResponse {
+  return {
+    requestId: params.request.requestId,
+    route: params.route,
+    plan: params.plan,
+    toolResults: params.toolResults,
+    memory: params.memory,
+    answer: params.answer,
+    evaluation: params.evaluation,
+    warnings: params.evaluation?.issues ?? [],
+    createdAt: new Date().toISOString(),
+  };
+}
+
+export async function runAgentVNext(
+  request: AgentRequest,
+): Promise<AgentExecutionResult> {
   const startedAt = Date.now();
-  const nowIso = new Date().toISOString();
 
   try {
     const runtime = mergeRuntimeOptions(request);
-    const context: AgentContext = { nowIso, request, runtime };
+    const context = buildBaseContext(request, runtime);
 
     const routingStarted = Date.now();
     const route = routeIntent(request);
@@ -80,12 +226,16 @@ export async function runAgentVNext(request: AgentRequest): Promise<AgentExecuti
     const planningMs = Date.now() - planningStarted;
 
     const memoryStarted = Date.now();
-    const memoryItems = route.shouldFetchMemory ? rankMemory(await fetchMemory(request, context), request.message) : [];
-    const memory = buildMemoryContext(memoryItems);
+    const memory = await prepareMemory(request, context, route.shouldFetchMemory);
     const memoryMs = Date.now() - memoryStarted;
 
+    const executionContext: AgentContext = {
+      ...context,
+      memoryContext: memory,
+    };
+
     const toolsStarted = Date.now();
-    const toolResults = await executePlanSteps(plan, { ...context, memoryContext: memory });
+    const toolResults = await executePlanSteps(plan, executionContext);
     const toolsMs = Date.now() - toolsStarted;
 
     const generationStarted = Date.now();
@@ -93,32 +243,42 @@ export async function runAgentVNext(request: AgentRequest): Promise<AgentExecuti
       request,
       route,
       plan,
-      context: { ...context, memoryContext: memory, toolResults },
+      context: {
+        ...executionContext,
+        toolResults,
+      },
       toolResults,
       memorySummary: memory.summary,
     });
     const generationMs = Date.now() - generationStarted;
 
     const evaluationStarted = Date.now();
-    const evaluation = runtime.enableEvaluation ? evaluateExecution({ plan, toolResults, answer }) : undefined;
+    const evaluation = runtime.enableEvaluation
+      ? evaluateExecution({
+          plan,
+          toolResults,
+          answer,
+        })
+      : undefined;
     const evaluationMs = Date.now() - evaluationStarted;
 
-    const response: AgentResponse = {
-      requestId: request.requestId,
+    const response = buildResponse({
+      request,
       route,
       plan,
       toolResults,
-      memory: memory as AgentMemoryContext,
+      memory,
       answer,
       evaluation,
-      warnings: evaluation?.issues ?? [],
-      createdAt: new Date().toISOString(),
-    };
+    });
 
     agentLogger.info('vNext agent execution completed', {
       requestId: request.requestId,
       intent: route.intent,
+      confidence: answer.confidence,
       score: evaluation?.score,
+      stepCount: plan.steps.length,
+      toolCount: toolResults.length,
     });
 
     return {
@@ -136,7 +296,11 @@ export async function runAgentVNext(request: AgentRequest): Promise<AgentExecuti
     };
   } catch (error) {
     const normalized = normalizeAgentError(error);
-    agentLogger.error('vNext agent execution failed', { requestId: request.requestId, error: normalized });
+
+    agentLogger.error('vNext agent execution failed', {
+      requestId: request.requestId,
+      error: normalized,
+    });
 
     return {
       ok: false,
@@ -148,39 +312,92 @@ export async function runAgentVNext(request: AgentRequest): Promise<AgentExecuti
   }
 }
 
-export async function* runAgentVNextStream(request: AgentRequest): AsyncGenerator<AgentStreamEvent> {
+export async function* runAgentVNextStream(
+  request: AgentRequest,
+): AsyncGenerator<AgentStreamEvent> {
   const runtime = mergeRuntimeOptions(request);
-  const context: AgentContext = { nowIso: new Date().toISOString(), request, runtime };
+  const context = buildBaseContext(request, runtime);
 
   try {
     yield streamEvents.routerStarted(request);
+
     const route = routeIntent(request);
-    yield streamEvents.routerCompleted(request, { intent: route.intent, confidence: route.confidence });
+
+    yield streamEvents.routerCompleted(request, {
+      intent: route.intent,
+      confidence: route.confidence,
+      requiresTools: route.requiresTools,
+    });
 
     yield streamEvents.planningStarted(request);
+
     const plan = createPlan(route, context);
-    yield streamEvents.planningCompleted(request, { stepCount: plan.steps.length });
+
+    yield streamEvents.planningCompleted(request, {
+      stepCount: plan.steps.length,
+      intent: plan.intent,
+    });
 
     yield streamEvents.memoryStarted(request);
-    const memoryItems = route.shouldFetchMemory ? rankMemory(await fetchMemory(request, context), request.message) : [];
-    const memory = buildMemoryContext(memoryItems);
-    yield streamEvents.memoryCompleted(request, { memoryCount: memory.items.length });
 
-    const toolResults = await executePlanSteps(plan, { ...context, memoryContext: memory });
+    const memory = await prepareMemory(request, context, route.shouldFetchMemory);
 
-    for (const toolResult of toolResults) {
-      yield streamEvents.toolCompleted(request, {
-        stepId: toolResult.stepId,
-        tool: toolResult.tool,
-        ok: toolResult.ok,
+    yield streamEvents.memoryCompleted(request, {
+      memoryCount: memory.items.length,
+      source: memory.source,
+    });
+
+    const executionContext: AgentContext = {
+      ...context,
+      memoryContext: memory,
+    };
+
+    const orderedSteps = sortStepsForExecution(plan).filter((step) =>
+      Boolean(step.requiredTool),
+    );
+
+    const toolResults: AgentToolResult[] = [];
+
+    for (const step of orderedSteps) {
+      if (!step.requiredTool) continue;
+
+      yield streamEvents.toolStarted(request, {
+        stepId: step.id,
+        tool: step.requiredTool,
       });
+
+      const call = createToolCall(step.id, step.requiredTool, executionContext);
+      const result = await executeTool(call, executionContext);
+      toolResults.push(result);
+
+      yield streamEvents.toolCompleted(request, {
+        stepId: result.stepId,
+        tool: result.tool,
+        ok: result.ok,
+      });
+
+      if (!result.ok && shouldStopOnToolFailure(executionContext)) {
+        throw new AgentExecutionError({
+          code: 'TOOL_EXECUTION_FAILED',
+          message: `Tool step failed: ${step.id}`,
+          retryable: true,
+          details: {
+            stepId: step.id,
+            tool: step.requiredTool,
+            error: result.error,
+          },
+        });
+      }
     }
 
     for await (const event of generateFinalAnswerStream({
       request,
       route,
       plan,
-      context: { ...context, memoryContext: memory, toolResults },
+      context: {
+        ...executionContext,
+        toolResults,
+      },
       toolResults,
       memorySummary: memory.summary,
     })) {
@@ -188,8 +405,14 @@ export async function* runAgentVNextStream(request: AgentRequest): AsyncGenerato
     }
   } catch (error) {
     const normalized = normalizeAgentError(error);
-    yield streamEvents.error(request, normalized as unknown as Record<string, unknown>);
+    agentLogger.error('vNext streaming execution failed', {
+      requestId: request.requestId,
+      error: normalized,
+    });
+
+    yield streamEvents.error(
+      request,
+      normalized as unknown as Record<string, unknown>,
+    );
   }
 }
-
-export { executePlanSteps };
