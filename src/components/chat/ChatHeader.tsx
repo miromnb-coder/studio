@@ -1,6 +1,6 @@
 'use client';
 
-import { PanelLeft } from 'lucide-react';
+import { LayoutGrid } from 'lucide-react';
 import { PageHeader } from './PageHeader';
 
 type ChatHeaderProps = {
@@ -14,8 +14,13 @@ export function ChatHeader({ onOpenConversations }: ChatHeaderProps) {
       mood="chat"
       showBack
       onLeftAction={onOpenConversations}
-      leftButtonAriaLabel="Open conversations drawer"
-      leftButtonIcon={<PanelLeft className="h-[18px] w-[18px]" strokeWidth={1.9} />}
+      leftButtonAriaLabel="Open conversations and memory drawer"
+      leftButtonIcon={
+        <LayoutGrid
+          className="h-[18px] w-[18px]"
+          strokeWidth={1.9}
+        />
+      }
     />
   );
 }
