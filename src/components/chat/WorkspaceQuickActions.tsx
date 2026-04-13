@@ -9,30 +9,70 @@ type WorkspaceQuickActionsProps = {
 };
 
 const actions = [
-  { id: 'analyze' as const, label: 'Analyze Screenshot', icon: ScanSearch, tone: 'from-[#f8fbff] to-[#edf4ff]' },
-  { id: 'planner' as const, label: 'Plan My Week', icon: CalendarDays, tone: 'from-[#f8fcff] to-[#edf7f5]' },
-  { id: 'money-saver' as const, label: 'Save Money Scan', icon: PiggyBank, tone: 'from-[#f8fcf8] to-[#ecf5ee]' },
-  { id: 'ask-agent' as const, label: 'Ask AI Agent', icon: Bot, tone: 'from-[#fbfbff] to-[#eff0fa]' },
+  {
+    id: 'analyze' as const,
+    label: 'Analyze Screenshot',
+    subtitle: 'Inspect images instantly',
+    icon: ScanSearch,
+    tone: 'from-[#fbfcff] to-[#eef4ff]',
+  },
+  {
+    id: 'planner' as const,
+    label: 'Plan My Week',
+    subtitle: 'Organize tasks and time',
+    icon: CalendarDays,
+    tone: 'from-[#fbfcff] to-[#eef8f4]',
+  },
+  {
+    id: 'money-saver' as const,
+    label: 'Save Money Scan',
+    subtitle: 'Find hidden waste',
+    icon: PiggyBank,
+    tone: 'from-[#fbfdf9] to-[#eef6ef]',
+  },
+  {
+    id: 'ask-agent' as const,
+    label: 'Ask AI Agent',
+    subtitle: 'Delegate a task now',
+    icon: Bot,
+    tone: 'from-[#fcfcff] to-[#f0f1fb]',
+  },
 ];
 
-export function WorkspaceQuickActions({ onAction }: WorkspaceQuickActionsProps) {
+export function WorkspaceQuickActions({
+  onAction,
+}: WorkspaceQuickActionsProps) {
   return (
     <section>
-      <h3 className="mb-3 text-[15px] font-semibold uppercase tracking-[0.08em] text-[#6f7786]">Quick Actions</h3>
+      <div className="mb-3 flex items-center justify-between">
+        <h3 className="text-[14px] font-semibold tracking-[-0.01em] text-[#4b5563]">
+          Quick Actions
+        </h3>
+        <span className="text-[12px] text-[#9aa3b2]">Instant tools</span>
+      </div>
+
       <div className="grid grid-cols-2 gap-3">
         {actions.map((action) => {
           const Icon = action.icon;
+
           return (
             <button
               key={action.id}
               type="button"
               onClick={() => onAction(action.id)}
-              className={`rounded-[20px] border border-[#dde3ec] bg-gradient-to-b ${action.tone} px-3.5 py-3.5 text-left shadow-[0_10px_22px_rgba(74,83,99,0.08)] transition hover:-translate-y-[1px]`}
+              className={`group rounded-[22px] border border-[#dde3ec] bg-gradient-to-b ${action.tone} px-4 py-4 text-left shadow-[0_8px_18px_rgba(64,72,88,0.06)] transition duration-200 hover:-translate-y-[1px] hover:shadow-[0_12px_22px_rgba(64,72,88,0.08)] active:scale-[0.99]`}
             >
-              <span className="mb-2 inline-flex h-9 w-9 items-center justify-center rounded-xl border border-[#dfe5ef] bg-white text-[#5a6272] shadow-[0_3px_9px_rgba(67,76,91,0.08)]">
-                <Icon className="h-[17px] w-[17px]" strokeWidth={1.8} />
+              <span className="mb-3 inline-flex h-10 w-10 items-center justify-center rounded-2xl border border-[#e2e7ef] bg-white text-[#4e5665] shadow-[0_3px_8px_rgba(60,68,82,0.06)]">
+                <Icon className="h-[18px] w-[18px]" strokeWidth={1.8} />
               </span>
-              <p className="text-[14px] font-semibold leading-tight text-[#303845]">{action.label}</p>
+
+              <p className="text-[14px] font-semibold leading-tight text-[#2f3744]">
+                {action.label}
+              </p>
+
+              <p className="mt-1 text-[12px] leading-snug text-[#7d8696]">
+                {action.subtitle}
+              </p>
             </button>
           );
         })}
