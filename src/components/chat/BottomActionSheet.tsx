@@ -10,12 +10,20 @@ type BottomActionSheetProps = {
     id: string;
     label: string;
     icon: ComponentType<{ className?: string; strokeWidth?: number }>;
+    subtitle?: string;
+    disabled?: boolean;
   }>;
   onClose: () => void;
   onSelect: (id: string) => void;
 };
 
-export function BottomActionSheet({ open, title, items, onClose, onSelect }: BottomActionSheetProps) {
+export function BottomActionSheet({
+  open,
+  title,
+  items,
+  onClose,
+  onSelect,
+}: BottomActionSheetProps) {
   return (
     <AnimatePresence>
       {open ? (
@@ -45,11 +53,24 @@ export function BottomActionSheet({ open, title, items, onClose, onSelect }: Bot
                 <button
                   key={item.id}
                   type="button"
-                  onClick={() => onSelect(item.id)}
-                  className="flex h-11 w-full items-center gap-3 rounded-xl px-2 text-left hover:bg-[#eaedf2]"
+                  onClick={() => !item.disabled && onSelect(item.id)}
+                  disabled={item.disabled}
+                  className={`flex min-h-11 w-full items-center gap-3 rounded-xl px-2 py-1 text-left transition ${
+                    item.disabled
+                      ? 'cursor-not-allowed opacity-50'
+                      : 'tap-feedback hover:bg-[#eaedf2]'
+                  }`}
                 >
-                  <Icon className="h-[18px] w-[18px] text-[#7d8492]" strokeWidth={1.9} />
-                  <span className="text-sm text-[#575e6b]">{item.label}</span>
+                  <Icon
+                    className="h-[18px] w-[18px] text-[#7d8492]"
+                    strokeWidth={1.9}
+                  />
+                  <span className="flex-1">
+                    <span className="block text-sm text-[#575e6b]">{item.label}</span>
+                    {item.subtitle ? (
+                      <span className="block text-xs text-[#8a92a0]">{item.subtitle}</span>
+                    ) : null}
+                  </span>
                 </button>
               );
             })}

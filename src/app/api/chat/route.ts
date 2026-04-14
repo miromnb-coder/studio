@@ -313,8 +313,10 @@ export async function POST(request: NextRequest) {
 
   const stream = new ReadableStream<Uint8Array>({
     async start(controller) {
-      const send = (payloadLine: Record<string, unknown>) =>
+      const send = (payloadLine: Record<string, unknown>) => {
+        console.debug('CHAT_STREAM_EVENT', { requestId, ...payloadLine });
         controller.enqueue(streamLine(payloadLine));
+      };
 
       send({
         type: 'router_started',
@@ -327,7 +329,7 @@ export async function POST(request: NextRequest) {
       send({
         type: 'router_completed',
         stepId: 'router',
-        label: 'Request analyzed',
+        label: 'Analyzing request',
         requestId,
       });
 
@@ -343,27 +345,29 @@ export async function POST(request: NextRequest) {
       send({
         type: 'planning_completed',
         stepId: 'planning',
-        label: 'Plan ready',
+        label: 'Building execution plan',
         requestId,
       });
 
-      if (memoryUsed) {
-        await delay(40);
-        send({
-          type: 'memory_started',
-          stepId: 'memory',
-          label: 'Checking memory',
-          requestId,
-        });
+      await delay(40);
+      send({
+        type: 'memory_started',
+        stepId: 'memory',
+        label: 'Checking memory',
+        requestId,
+      });
 
-        await delay(40);
-        send({
-          type: 'memory_completed',
-          stepId: 'memory',
-          label: 'Memory checked',
-          requestId,
-        });
-      }
+      await delay(40);
+      send({
+        type: 'memory_completed',
+        stepId: 'memory',
+        label: 'Checking memory',
+        status: memoryUsed ? 'completed' : 'skipped',
+        summary: memoryUsed
+          ? 'Relevant memory was incorporated.'
+          : 'No relevant memory found for this request.',
+        requestId,
+      });
 
       for (const step of toolSteps) {
         await delay(45);
