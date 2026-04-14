@@ -12,13 +12,17 @@ export function KivoChatHeader({ onOpenQuickSheet }: KivoChatHeaderProps) {
   const router = useRouter();
   const { openMenu } = useGlobalMenu();
 
+  const handleLeftAction = () => {
+    router.push('/home');
+  };
+
   return (
     <header className="sticky top-0 z-30 border-b border-black/[0.04] bg-[rgba(245,245,247,0.78)] backdrop-blur-2xl">
-      <div className="flex h-[76px] items-center justify-between px-6">
+      <div className="relative flex h-[76px] items-center justify-between px-6">
         <button
           type="button"
-          onClick={() => router.back()}
-          aria-label="Go back"
+          onClick={handleLeftAction}
+          aria-label="Open home"
           className="inline-flex h-11 w-11 items-center justify-center rounded-full border border-black/[0.06] bg-white/40 text-[#4b5563] transition-all duration-200 ease-out hover:bg-white/60 active:scale-[0.985]"
         >
           <ArrowLeft className="h-5 w-5" strokeWidth={1.9} />
