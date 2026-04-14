@@ -3,6 +3,7 @@
 import type { AgentResponseStep } from '@/types/agent-response';
 import {
   AgentWorkflowStepBox,
+  type WorkflowStepIcon,
   type WorkflowStepStatus,
 } from './AgentWorkflowStepBox';
 
@@ -16,8 +17,11 @@ type AgentWorkflowBoxesProps = {
 type StepKey =
   | 'understanding'
   | 'memory'
+  | 'gmail'
+  | 'research'
   | 'compare'
-  | 'tool'
+  | 'finance'
+  | 'file'
   | 'build'
   | 'quality'
   | 'process';
@@ -31,191 +35,109 @@ type StepUiModel = {
   priority: number;
 };
 
-const COPY: Record<
-  SupportedLocale,
-  {
-    title: string;
-    subtitle: string;
-    labels: Record<StepKey, string>;
-    helpers: Record<
-      StepKey,
-      {
-        running?: string;
-        failed?: string;
-      }
-    >;
-  }
-> = {
+const COPY: Record<SupportedLocale, { labels: Record<StepKey, string>; helpers: Record<StepKey, string> }> = {
   en: {
-    title: 'Workflow panel',
-    subtitle: 'Agent workflow',
     labels: {
       understanding: 'Understanding request',
       memory: 'Retrieving memory',
+      gmail: 'Checking Gmail context',
+      research: 'Researching references',
       compare: 'Comparing options',
-      tool: 'Investigating data',
+      finance: 'Reviewing finance context',
+      file: 'Reviewing files',
       build: 'Building response',
-      quality: 'Quality check',
+      quality: 'Checking quality',
       process: 'Processing request',
     },
     helpers: {
-      understanding: {
-        running: 'Interpreting the request and locking the right direction.',
-        failed: 'The request interpretation step had an issue.',
-      },
-      memory: {
-        running: 'Looking for relevant context from this conversation.',
-        failed: 'Memory retrieval was incomplete.',
-      },
-      compare: {
-        running: 'Evaluating tradeoffs and decision criteria.',
-        failed: 'Comparison logic could not complete cleanly.',
-      },
-      tool: {
-        running: 'Using the most relevant tools and context.',
-        failed: 'A tool step did not complete successfully.',
-      },
-      build: {
-        running: 'Composing the clearest final answer.',
-        failed: 'Answer generation was interrupted.',
-      },
-      quality: {
-        running: 'Doing a final quality pass.',
-        failed: 'Quality verification did not complete.',
-      },
-      process: {
-        running: 'Processing the request.',
-        failed: 'Processing was incomplete.',
-      },
+      understanding: 'Interpreting the request and setting direction.',
+      memory: 'Looking up relevant context from memory.',
+      gmail: 'Gathering email-related details relevant to the answer.',
+      research: 'Collecting and validating relevant external context.',
+      compare: 'Evaluating alternatives and tradeoffs.',
+      finance: 'Checking financial context and calculations.',
+      file: 'Reading and extracting key points from files.',
+      build: 'Structuring the best possible response.',
+      quality: 'Final pass for clarity and correctness.',
+      process: 'Executing the request workflow.',
     },
   },
   fi: {
-    title: 'Workflow panel',
-    subtitle: 'Agentin työnkulku',
     labels: {
       understanding: 'Ymmärretään pyyntö',
       memory: 'Haetaan muistia',
+      gmail: 'Tarkistetaan Gmail-konteksti',
+      research: 'Tutkitaan lähteitä',
       compare: 'Verrataan vaihtoehdot',
-      tool: 'Tutkitaan data',
+      finance: 'Tarkistetaan talouskonteksti',
+      file: 'Käydään tiedostot läpi',
       build: 'Rakennetaan vastaus',
       quality: 'Tarkistetaan laatu',
       process: 'Käsitellään pyyntöä',
     },
     helpers: {
-      understanding: {
-        running: 'Tulkitaan pyyntö ja lukitaan oikea suunta.',
-        failed: 'Pyynnön tulkinnassa tuli ongelma.',
-      },
-      memory: {
-        running: 'Haetaan tästä keskustelusta olennaista kontekstia.',
-        failed: 'Muistin haku jäi kesken.',
-      },
-      compare: {
-        running: 'Arvioidaan vaihtoehtoja ja tärkeimpiä eroja.',
-        failed: 'Vertailua ei saatu tehtyä puhtaasti loppuun.',
-      },
-      tool: {
-        running: 'Käytetään tähän tehtävään sopivia työkaluja.',
-        failed: 'Jokin työkaluvaihe epäonnistui.',
-      },
-      build: {
-        running: 'Muodostetaan paras mahdollinen lopullinen vastaus.',
-        failed: 'Vastauksen rakentaminen keskeytyi.',
-      },
-      quality: {
-        running: 'Tehdään vielä viimeinen laatutarkistus.',
-        failed: 'Laatutarkistus ei valmistunut.',
-      },
-      process: {
-        running: 'Käsitellään pyyntöä.',
-        failed: 'Käsittely jäi kesken.',
-      },
+      understanding: 'Tulkitaan pyyntö ja asetetaan oikea suunta.',
+      memory: 'Haetaan muistista olennaista taustaa.',
+      gmail: 'Haetaan vastaukseen liittyvää sähköpostikontekstia.',
+      research: 'Kerätään ja varmistetaan olennaiset lähteet.',
+      compare: 'Arvioidaan vaihtoehtoja ja eroja.',
+      finance: 'Tarkistetaan taloustiedot ja laskelmat.',
+      file: 'Luetaan tiedostoista tärkeimmät asiat.',
+      build: 'Muotoillaan paras mahdollinen vastaus.',
+      quality: 'Viimeinen tarkistus selkeydelle ja laadulle.',
+      process: 'Suoritetaan pyynnön työnkulku.',
     },
   },
   sv: {
-    title: 'Workflow panel',
-    subtitle: 'Agentens arbetsflöde',
     labels: {
       understanding: 'Förstår begäran',
       memory: 'Hämtar minne',
+      gmail: 'Kontrollerar Gmail-kontext',
+      research: 'Undersöker källor',
       compare: 'Jämför alternativ',
-      tool: 'Undersöker data',
+      finance: 'Kontrollerar finanskontext',
+      file: 'Går igenom filer',
       build: 'Bygger svar',
-      quality: 'Kvalitetskontroll',
+      quality: 'Kontrollerar kvalitet',
       process: 'Bearbetar begäran',
     },
     helpers: {
-      understanding: {
-        running: 'Tolkar begäran och låser rätt riktning.',
-        failed: 'Det uppstod ett problem i tolkningen.',
-      },
-      memory: {
-        running: 'Hämtar relevant kontext från denna konversation.',
-        failed: 'Minneshämtningen blev ofullständig.',
-      },
-      compare: {
-        running: 'Väger alternativ och viktiga skillnader.',
-        failed: 'Jämförelsen kunde inte slutföras rent.',
-      },
-      tool: {
-        running: 'Använder rätt verktyg för uppgiften.',
-        failed: 'Ett verktygssteg misslyckades.',
-      },
-      build: {
-        running: 'Formar det tydligaste slutliga svaret.',
-        failed: 'Svarsgenereringen avbröts.',
-      },
-      quality: {
-        running: 'Gör en sista kvalitetskontroll.',
-        failed: 'Kvalitetskontrollen slutfördes inte.',
-      },
-      process: {
-        running: 'Bearbetar begäran.',
-        failed: 'Bearbetningen blev ofullständig.',
-      },
+      understanding: 'Tolkar begäran och sätter rätt riktning.',
+      memory: 'Hämtar relevant bakgrund från minnet.',
+      gmail: 'Samlar e-postkontext som behövs i svaret.',
+      research: 'Samlar in och validerar relevanta källor.',
+      compare: 'Väger alternativ och skillnader.',
+      finance: 'Kontrollerar finansiella uppgifter och beräkningar.',
+      file: 'Läser ut de viktigaste punkterna från filer.',
+      build: 'Formar det bästa möjliga svaret.',
+      quality: 'Sista kontroll för tydlighet och kvalitet.',
+      process: 'Kör arbetsflödet för begäran.',
     },
   },
   es: {
-    title: 'Workflow panel',
-    subtitle: 'Flujo del agente',
     labels: {
       understanding: 'Entendiendo solicitud',
       memory: 'Recuperando memoria',
+      gmail: 'Revisando contexto de Gmail',
+      research: 'Investigando referencias',
       compare: 'Comparando opciones',
-      tool: 'Investigando datos',
+      finance: 'Revisando contexto financiero',
+      file: 'Revisando archivos',
       build: 'Construyendo respuesta',
-      quality: 'Revisión de calidad',
+      quality: 'Verificando calidad',
       process: 'Procesando solicitud',
     },
     helpers: {
-      understanding: {
-        running: 'Interpretando la solicitud y fijando la dirección correcta.',
-        failed: 'Hubo un problema al interpretar la solicitud.',
-      },
-      memory: {
-        running: 'Buscando contexto relevante de esta conversación.',
-        failed: 'La recuperación de memoria quedó incompleta.',
-      },
-      compare: {
-        running: 'Evaluando alternativas y diferencias importantes.',
-        failed: 'La comparación no pudo terminarse limpiamente.',
-      },
-      tool: {
-        running: 'Usando las herramientas más adecuadas.',
-        failed: 'Un paso de herramienta falló.',
-      },
-      build: {
-        running: 'Redactando la mejor respuesta final.',
-        failed: 'La generación de respuesta se interrumpió.',
-      },
-      quality: {
-        running: 'Haciendo una revisión final de calidad.',
-        failed: 'La verificación de calidad no terminó.',
-      },
-      process: {
-        running: 'Procesando la solicitud.',
-        failed: 'El procesamiento quedó incompleto.',
-      },
+      understanding: 'Interpretando la solicitud y fijando dirección.',
+      memory: 'Buscando contexto útil desde la memoria.',
+      gmail: 'Recopilando contexto de correo relevante.',
+      research: 'Recolectando y validando fuentes relevantes.',
+      compare: 'Evaluando alternativas y diferencias.',
+      finance: 'Verificando contexto financiero y cálculos.',
+      file: 'Extrayendo puntos clave de archivos.',
+      build: 'Estructurando la mejor respuesta posible.',
+      quality: 'Última revisión de claridad y calidad.',
+      process: 'Ejecutando el flujo de la solicitud.',
     },
   },
 };
@@ -232,123 +154,75 @@ function normalizeStatus(status?: string): WorkflowStepStatus {
   return 'pending';
 }
 
-function getStepText(step: AgentResponseStep): string {
-  return [
-    normalizeText(step.action),
-    normalizeText(step.summary),
-    normalizeText(step.tool),
-  ]
+function stepText(step: AgentResponseStep): string {
+  return [normalizeText(step.id), normalizeText(step.action), normalizeText(step.summary), normalizeText(step.tool)]
     .filter(Boolean)
     .join(' ')
     .toLowerCase();
 }
 
 function resolveStepKey(step: AgentResponseStep, index: number): StepKey {
-  const id = normalizeText(step.id).toLowerCase();
   const tool = normalizeText(step.tool).toLowerCase();
-  const title = getStepText(step);
+  const text = stepText(step);
 
-  if (id.includes('intake') || /understand|interpret|request|intent|pyyntö|begäran|solicitud/.test(title)) {
-    return 'understanding';
-  }
-
-  if (id.includes('memory') || tool === 'memory' || /memory|context|history|muisti|minne|historia/.test(title)) {
-    return 'memory';
-  }
-
-  if (
-    id.includes('criteria') ||
-    id.includes('ranking') ||
-    id.includes('compare') ||
-    tool === 'compare' ||
-    /compare|rank|criteria|option|verta|jämför|compara/.test(title)
-  ) {
-    return 'compare';
-  }
-
-  if (
-    id.includes('generate') ||
-    id.includes('synthesize') ||
-    id.includes('build') ||
-    /build|generate|answer|response|write|vastaus|svar|respuesta/.test(title)
-  ) {
-    return 'build';
-  }
-
-  if (
-    id.includes('evaluate') ||
-    id.includes('quality') ||
-    id.includes('verify') ||
-    /quality|verify|review|check|laatu|tarkistus|kvalitet|calidad/.test(title)
-  ) {
-    return 'quality';
-  }
-
-  if (
-    id.includes('tool-') ||
-    ['gmail', 'web', 'calendar', 'file', 'finance', 'notes'].includes(tool)
-  ) {
-    return 'tool';
-  }
+  if (tool === 'memory' || /memory|context|history|muisti|minne|memoria/.test(text)) return 'memory';
+  if (tool === 'gmail' || /gmail|email|mail|sähköposti|correo/.test(text)) return 'gmail';
+  if (tool === 'web' || tool === 'research' || /research|search|web|browse|source|lähde|källa|fuente/.test(text)) return 'research';
+  if (tool === 'compare' || /compare|rank|criteria|option|vertaa|jämför|compara/.test(text)) return 'compare';
+  if (tool === 'finance' || /finance|budget|cost|price|money|talous|finans|dinero/.test(text)) return 'finance';
+  if (tool === 'file' || tool === 'notes' || /file|document|pdf|docs|tiedosto|fil|archivo/.test(text)) return 'file';
+  if (/quality|verify|review|check|laatu|kvalitet|calidad/.test(text)) return 'quality';
+  if (/build|generate|answer|response|write|compose|vastaus|svar|respuesta/.test(text)) return 'build';
+  if (/understand|interpret|intent|request|pyyntö|begäran|solicitud/.test(text)) return 'understanding';
 
   if (index === 0) return 'understanding';
   if (index === 1) return 'memory';
-  if (index === 2) return 'tool';
+  if (index === 2) return 'research';
   if (index === 3) return 'build';
-  return 'process';
+  return 'quality';
 }
 
-function getPriority(key: StepKey): number {
-  switch (key) {
-    case 'understanding':
-      return 10;
-    case 'memory':
-      return 20;
-    case 'compare':
-      return 30;
-    case 'tool':
-      return 40;
-    case 'build':
-      return 50;
-    case 'quality':
-      return 60;
-    default:
-      return 70;
-  }
+function priority(key: StepKey): number {
+  const order: StepKey[] = [
+    'understanding',
+    'memory',
+    'gmail',
+    'research',
+    'compare',
+    'finance',
+    'file',
+    'build',
+    'quality',
+    'process',
+  ];
+  return order.indexOf(key) + 1;
 }
 
-function mergeStatus(
-  current: WorkflowStepStatus,
-  next: WorkflowStepStatus,
-): WorkflowStepStatus {
-  const rank: Record<WorkflowStepStatus, number> = {
-    failed: 4,
-    running: 3,
-    completed: 2,
-    pending: 1,
-  };
-
+function mergeStatus(current: WorkflowStepStatus, next: WorkflowStepStatus): WorkflowStepStatus {
+  const rank: Record<WorkflowStepStatus, number> = { failed: 4, running: 3, completed: 2, pending: 1 };
   return rank[next] > rank[current] ? next : current;
 }
 
-function buildUiSteps(
-  steps: AgentResponseStep[],
-  locale: SupportedLocale,
-): StepUiModel[] {
-  const copy = COPY[locale];
+function getIcon(key: StepKey): WorkflowStepIcon {
+  if (key === 'memory') return 'memory';
+  if (key === 'gmail') return 'gmail';
+  if (key === 'research') return 'research';
+  if (key === 'compare') return 'compare';
+  if (key === 'finance') return 'finance';
+  if (key === 'file') return 'file';
+  if (key === 'quality') return 'quality';
+  if (key === 'build' || key === 'understanding') return 'build';
+  return 'process';
+}
+
+function buildUiSteps(steps: AgentResponseStep[], locale: SupportedLocale): StepUiModel[] {
   const grouped = new Map<StepKey, StepUiModel>();
+  const copy = COPY[locale];
 
   steps.forEach((step, index) => {
     const key = resolveStepKey(step, index);
     const status = normalizeStatus(step.status);
-
     const existing = grouped.get(key);
-    const helper =
-      status === 'running'
-        ? copy.helpers[key].running
-        : status === 'failed'
-          ? copy.helpers[key].failed
-          : undefined;
 
     if (!existing) {
       grouped.set(key, {
@@ -356,8 +230,8 @@ function buildUiSteps(
         key,
         label: copy.labels[key],
         status,
-        helper,
-        priority: getPriority(key),
+        helper: normalizeText(step.summary) || (status === 'running' ? copy.helpers[key] : ''),
+        priority: priority(key),
       });
       return;
     }
@@ -365,7 +239,7 @@ function buildUiSteps(
     grouped.set(key, {
       ...existing,
       status: mergeStatus(existing.status, status),
-      helper: helper || existing.helper,
+      helper: existing.helper || normalizeText(step.summary),
     });
   });
 
@@ -374,48 +248,28 @@ function buildUiSteps(
     .slice(0, 5);
 }
 
-function shouldShowHelper(step: StepUiModel): boolean {
-  return step.status === 'running' || step.status === 'failed';
+function showHelper(step: StepUiModel): boolean {
+  return Boolean(step.helper) && (step.status === 'running' || step.status === 'failed');
 }
 
-export function AgentWorkflowBoxes({
-  steps,
-  locale,
-}: AgentWorkflowBoxesProps) {
+export function AgentWorkflowBoxes({ steps, locale }: AgentWorkflowBoxesProps) {
   if (!steps.length) return null;
 
-  const copy = COPY[locale];
   const uiSteps = buildUiSteps(steps, locale);
-
   if (!uiSteps.length) return null;
 
   return (
-    <section className="rounded-[24px] border border-[#e6eaf0] bg-[linear-gradient(180deg,rgba(255,255,255,0.94),rgba(249,250,252,0.98))] px-4 py-4 shadow-[0_10px_30px_rgba(15,23,42,0.04)] backdrop-blur-sm">
-      <div className="mb-3">
-        <div className="text-[11px] font-medium uppercase tracking-[0.16em] text-[#98a1af]">
-          {copy.title}
+    <section className="space-y-2.5">
+      {uiSteps.map((step) => (
+        <div key={step.id}>
+          <AgentWorkflowStepBox label={step.label} status={step.status} icon={getIcon(step.key)} />
+          {showHelper(step) ? (
+            <p className="ml-6 mt-1.5 text-[13px] leading-[1.45] tracking-[-0.008em] text-[#6f7d8d]">
+              {step.helper}
+            </p>
+          ) : null}
         </div>
-        <div className="mt-1 text-[16px] font-medium tracking-[-0.02em] text-[#3e4653]">
-          {copy.subtitle}
-        </div>
-      </div>
-
-      <div className="space-y-2.5">
-        {uiSteps.map((step) => (
-          <div key={step.id} className="space-y-1.5">
-            <AgentWorkflowStepBox
-              label={step.label}
-              status={step.status}
-            />
-
-            {shouldShowHelper(step) && step.helper ? (
-              <p className="px-1.5 text-[12px] leading-5 tracking-[-0.01em] text-[#7a8392]">
-                {step.helper}
-              </p>
-            ) : null}
-          </div>
-        ))}
-      </div>
+      ))}
     </section>
   );
 }
