@@ -63,6 +63,7 @@ export function KivoChatScreen() {
   const recognitionRef = useRef<SpeechRecognitionLike | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const noticeTimeoutRef = useRef<number | null>(null);
+  const mainScrollRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
     if (!hydrated) hydrate();
@@ -102,6 +103,20 @@ export function KivoChatScreen() {
       }
     };
   }, [notice]);
+
+  useEffect(() => {
+    if (!messages.length) return;
+
+    const scroller = mainScrollRef.current;
+    if (!scroller) return;
+
+    requestAnimationFrame(() => {
+      scroller.scrollTo({
+        top: scroller.scrollHeight,
+        behavior: 'smooth',
+      });
+    });
+  }, [messages.length, isAgentResponding]);
 
   const hasMessages = messages.length > 0;
   const canSend = draftPrompt.trim().length > 0 || attachments.length > 0;
@@ -206,7 +221,6 @@ export function KivoChatScreen() {
 
     recognition.onresult = (event) => {
       const transcript = event.results?.[0]?.[0]?.transcript?.trim();
-
       if (!transcript) return;
 
       const currentDraft =
@@ -279,7 +293,10 @@ export function KivoChatScreen() {
       <div className="mx-auto flex min-h-screen w-full max-w-[560px] flex-col bg-[radial-gradient(circle_at_50%_18%,rgba(255,255,255,0.92),rgba(245,245,247,1)_58%)] shadow-[0_24px_80px_rgba(31,41,55,0.08)]">
         <KivoChatHeader />
 
-        <main className="relative flex min-h-0 flex-1 flex-col">
+        <main
+          ref={mainScrollRef}
+          className="relative flex min-h-0 flex-1 flex-col overflow-y-auto"
+        >
           {streamError ? (
             <div className="px-6 pt-4">
               <div className="flex items-start gap-2 rounded-[18px] border border-[#edd5d5] bg-[#fff6f6] px-4 py-3 text-sm text-[#8b4a4a] shadow-[0_8px_20px_rgba(127,29,29,0.05)]">
@@ -290,7 +307,7 @@ export function KivoChatScreen() {
           ) : null}
 
           {!hasMessages ? (
-            <div className="flex min-h-0 flex-1 items-start justify-center px-8 pb-[240px] pt-[18vh]">
+            <div className="flex min-h-0 flex-1 items-start justify-center px-8 pt-[18vh] pb-[250px]">
               <h2
                 className="max-w-[340px] text-center text-[34px] font-normal leading-[1.08] tracking-[-0.05em] text-[#353b45] sm:text-[40px]"
                 style={{ fontFamily: 'ui-serif, Georgia, Times, serif' }}
@@ -299,7 +316,7 @@ export function KivoChatScreen() {
               </h2>
             </div>
           ) : (
-            <div className="min-h-0 flex-1 pb-[158px]">
+            <div className="flex min-h-0 flex-1 flex-col px-1 pb-[170px] pt-2">
               <MessageThread
                 messages={messages}
                 pending={isAgentResponding || isSending}
