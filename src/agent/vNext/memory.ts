@@ -84,19 +84,34 @@ function safeArray<T>(value: unknown): T[] {
 function tokenize(text: string): string[] {
   return normalizeText(text)
     .toLowerCase()
-    .split(/[^a-z0-9äöå_-]+/i)
+    .split(/[^a-z0-9äöåáéíóúñüß_-]+/i)
     .filter((token) => token.length > 1);
 }
 
 function uniqueStrings(values: string[]): string[] {
-  return [...new Set(values.filter(Boolean))];
+  return [...new Set(values.map((value) => normalizeText(value)).filter(Boolean))];
 }
 
 function overlapScore(queryTokens: string[], haystack: string): number {
   if (!queryTokens.length) return 0;
-  const text = haystack.toLowerCase();
-  const matches = queryTokens.filter((token) => text.includes(token)).length;
+
+  const lowered = haystack.toLowerCase();
+  const matches = queryTokens.filter((token) => lowered.includes(token)).length;
+
   return matches / queryTokens.length;
+}
+
+function phraseBoost(queryText: string, haystack: string): number {
+  const normalizedQuery = normalizeText(queryText).toLowerCase();
+  if (!normalizedQuery) return 0;
+
+  const lowered = haystack.toLowerCase();
+  if (lowered.includes(normalizedQuery)) return 1;
+  if (normalizedQuery.length > 12 && lowered.includes(normalizedQuery.slice(0, 12))) {
+    return 0.45;
+  }
+
+  return 0;
 }
 
 function recencyScore(iso?: string): number {
@@ -124,7 +139,7 @@ function kindBaseScore(kind: AgentMemoryItem['kind']): number {
     case 'task':
       return 0.62;
     case 'preference':
-      return 0.66;
+      return 0.68;
     case 'entity':
       return 0.58;
     case 'history':
@@ -153,9 +168,34 @@ function getQueryText(request: AgentRequest): string {
   return normalizeText(direct || message || prompt);
 }
 
+function classifyMemoryKind(
+  content: string,
+  tags: string[] = [],
+): AgentMemoryItem['kind'] {
+  const lowered = `${content} ${tags.join(' ')}`.toLowerCase();
+
+  if (/\b(prefer|preference|like|avoid|always|never|haluan|pidän|vältä|mieluummin)\b/.test(lowered)) {
+    return 'preference';
+  }
+
+  if (/\b(deadline|task|todo|next step|milestone|tehtävä|seuraava askel)\b/.test(lowered)) {
+    return 'task';
+  }
+
+  if (/\b(fact|known|is|are|works with|supports|tieto|tosiasia)\b/.test(lowered)) {
+    return 'fact';
+  }
+
+  if (/\b(project|repo|device|product|model|entity|halo|iphone|brilliant)\b/.test(lowered)) {
+    return 'entity';
+  }
+
+  return 'summary';
+}
+
 function toMemoryItem(params: {
   id: string;
-  userId: string;
+  userId?: string;
   kind: AgentMemoryItem['kind'];
   content: string;
   createdAt?: string;
@@ -175,7 +215,7 @@ function toMemoryItem(params: {
   };
 }
 
-function extractStructuredMemory(
+function extractExplicitMemory(
   context: RawMemoryContext,
   request: AgentRequest,
 ): AgentMemoryItem[] {
@@ -190,11 +230,11 @@ function extractStructuredMemory(
       Boolean(item && typeof item === 'object' && 'content' in item),
   );
 
-  const normalizedExplicit = explicitMemory.map((item, index) =>
+  return explicitMemory.map((item, index) =>
     toMemoryItem({
       id: item.id || `existing-memory-${index}`,
       userId,
-      kind: item.kind || 'summary',
+      kind: item.kind || classifyMemoryKind(item.content, item.tags),
       content: item.content,
       createdAt: item.createdAt,
       tags: item.tags,
@@ -202,39 +242,67 @@ function extractStructuredMemory(
       metadata: item.metadata,
     }),
   );
+}
 
-  const notes = [...safeArray<RawNote>(context.notes), ...safeArray<RawNote>(context.userNotes)].map(
-    (note, index) =>
-      toMemoryItem({
-        id: note.id || `note-${index}`,
-        userId,
-        kind: 'summary',
-        content: [note.title, note.content].filter(Boolean).join(' — '),
-        createdAt: note.updatedAt || note.createdAt,
-        tags: ['note', ...(note.tags ?? [])],
-        metadata: {
-          sourceType: 'note',
-          title: note.title,
-        },
-      }),
+function extractNotes(
+  context: RawMemoryContext,
+  request: AgentRequest,
+): AgentMemoryItem[] {
+  const userId = request.userId;
+
+  return [
+    ...safeArray<RawNote>(context.notes),
+    ...safeArray<RawNote>(context.userNotes),
+  ].map((note, index) =>
+    toMemoryItem({
+      id: note.id || `note-${index}`,
+      userId,
+      kind: classifyMemoryKind(
+        [note.title, note.content].filter(Boolean).join(' '),
+        note.tags ?? [],
+      ),
+      content: [note.title, note.content].filter(Boolean).join(' — '),
+      createdAt: note.updatedAt || note.createdAt,
+      tags: ['note', ...(note.tags ?? [])],
+      metadata: {
+        sourceType: 'note',
+        title: note.title,
+      },
+    }),
   );
+}
 
-  const facts = [...safeArray<RawFact>(context.facts), ...safeArray<RawFact>(context.savedFacts)].map(
-    (fact, index) =>
-      toMemoryItem({
-        id: fact.id || `fact-${index}`,
-        userId,
-        kind: 'fact',
-        content: fact.content || '',
-        createdAt: fact.createdAt,
-        tags: ['fact', ...(fact.tags ?? [])],
-        metadata: {
-          sourceType: 'fact',
-        },
-      }),
+function extractFacts(
+  context: RawMemoryContext,
+  request: AgentRequest,
+): AgentMemoryItem[] {
+  const userId = request.userId;
+
+  return [
+    ...safeArray<RawFact>(context.facts),
+    ...safeArray<RawFact>(context.savedFacts),
+  ].map((fact, index) =>
+    toMemoryItem({
+      id: fact.id || `fact-${index}`,
+      userId,
+      kind: 'fact',
+      content: fact.content || '',
+      createdAt: fact.createdAt,
+      tags: ['fact', ...(fact.tags ?? [])],
+      metadata: {
+        sourceType: 'fact',
+      },
+    }),
   );
+}
 
-  const conversations = [
+function extractConversations(
+  context: RawMemoryContext,
+  request: AgentRequest,
+): AgentMemoryItem[] {
+  const userId = request.userId;
+
+  return [
     ...safeArray<RawConversation>(context.conversations),
     ...safeArray<RawConversation>(context.conversationList),
   ].map((conversation, index) =>
@@ -242,10 +310,7 @@ function extractStructuredMemory(
       id: conversation.id || `conversation-${index}`,
       userId,
       kind: 'history',
-      content: [
-        conversation.title,
-        conversation.lastMessagePreview,
-      ]
+      content: [conversation.title, conversation.lastMessagePreview]
         .filter(Boolean)
         .join(' — '),
       createdAt: conversation.updatedAt || conversation.createdAt,
@@ -262,85 +327,79 @@ function extractStructuredMemory(
       },
     }),
   );
+}
 
-  const currentMessages = safeArray<RawMessage>(context.messages).map((message, index) =>
+function extractMessageItems(
+  messages: RawMessage[],
+  request: AgentRequest,
+  sourceType: string,
+  conversationId?: string,
+): AgentMemoryItem[] {
+  const userId = request.userId;
+
+  return messages.map((message, index) =>
     toMemoryItem({
-      id: message.id || `message-${index}`,
+      id: message.id || `${sourceType}-${conversationId || 'default'}-${index}`,
       userId,
       kind: message.role === 'user' ? 'history' : 'summary',
       content: message.content || '',
       createdAt: message.createdAt,
       tags: [
-        'message',
+        sourceType,
         message.role || 'unknown',
         message.agent || message.agentMetadata?.operatorModules?.length
           ? 'agent'
           : '',
       ],
       metadata: {
-        sourceType: 'message',
+        sourceType,
         role: message.role,
+        conversationId,
       },
     }),
+  );
+}
+
+function extractStructuredMemory(
+  context: RawMemoryContext,
+  request: AgentRequest,
+): AgentMemoryItem[] {
+  const explicit = extractExplicitMemory(context, request);
+  const notes = extractNotes(context, request);
+  const facts = extractFacts(context, request);
+  const conversations = extractConversations(context, request);
+
+  const currentMessages = extractMessageItems(
+    safeArray<RawMessage>(context.messages),
+    request,
+    'message',
   );
 
   const threadedMessages = Object.entries(context.messageState ?? {}).flatMap(
     ([conversationId, messages]) =>
-      safeArray<RawMessage>(messages).map((message, index) =>
-        toMemoryItem({
-          id: message.id || `${conversationId}-message-${index}`,
-          userId,
-          kind: message.role === 'user' ? 'history' : 'summary',
-          content: message.content || '',
-          createdAt: message.createdAt,
-          tags: [
-            'thread-message',
-            message.role || 'unknown',
-            message.agent || message.agentMetadata?.operatorModules?.length
-              ? 'agent'
-              : '',
-          ],
-          metadata: {
-            sourceType: 'thread-message',
-            conversationId,
-            role: message.role,
-          },
-        }),
+      extractMessageItems(
+        safeArray<RawMessage>(messages),
+        request,
+        'thread-message',
+        conversationId,
       ),
   );
 
-  const conversationObjectMessages = safeArray<RawMessage>(
-    context.conversation?.messages,
-  ).map((message, index) =>
-    toMemoryItem({
-      id: message.id || `active-conversation-message-${index}`,
-      userId,
-      kind: message.role === 'user' ? 'history' : 'summary',
-      content: message.content || '',
-      createdAt: message.createdAt,
-      tags: [
-        'active-conversation',
-        message.role || 'unknown',
-        message.agent || message.agentMetadata?.operatorModules?.length
-          ? 'agent'
-          : '',
-      ],
-      metadata: {
-        sourceType: 'active-conversation-message',
-        conversationId: context.conversation?.id,
-        role: message.role,
-      },
-    }),
+  const activeConversationMessages = extractMessageItems(
+    safeArray<RawMessage>(context.conversation?.messages),
+    request,
+    'active-conversation-message',
+    context.conversation?.id,
   );
 
   return [
-    ...normalizedExplicit,
+    ...explicit,
     ...notes,
     ...facts,
     ...conversations,
     ...currentMessages,
     ...threadedMessages,
-    ...conversationObjectMessages,
+    ...activeConversationMessages,
   ].filter((item) => Boolean(item.content));
 }
 
@@ -369,17 +428,33 @@ function scoreMemoryItem(
     .join(' ');
 
   const lexical = overlapScore(queryTokens, haystack);
+  const phrase = phraseBoost(queryText, haystack);
   const recency = recencyScore(item.createdAt);
-  const base = typeof item.relevanceScore === 'number' ? item.relevanceScore : 0.5;
+  const base =
+    typeof item.relevanceScore === 'number' ? item.relevanceScore : 0.5;
 
   const relevanceScore = Number(
-    Math.min(1, base * 0.45 + lexical * 0.4 + recency * 0.15).toFixed(4),
+    Math.min(
+      1,
+      base * 0.35 + lexical * 0.35 + phrase * 0.18 + recency * 0.12,
+    ).toFixed(4),
   );
 
   return {
     ...item,
     relevanceScore,
   };
+}
+
+function sortMemory(items: AgentMemoryItem[]): AgentMemoryItem[] {
+  return [...items].sort((a, b) => {
+    const scoreDiff = b.relevanceScore - a.relevanceScore;
+    if (scoreDiff !== 0) return scoreDiff;
+
+    return (
+      new Date(b.createdAt ?? 0).getTime() - new Date(a.createdAt ?? 0).getTime()
+    );
+  });
 }
 
 export async function fetchMemory(
@@ -392,15 +467,7 @@ export async function fetchMemory(
   const extracted = extractStructuredMemory(rawContext, request);
   const deduped = dedupeMemory(extracted);
   const scored = deduped.map((item) => scoreMemoryItem(item, queryText));
-
-  const sorted = scored.sort((a, b) => {
-    const scoreDiff = b.relevanceScore - a.relevanceScore;
-    if (scoreDiff !== 0) return scoreDiff;
-
-    return (
-      new Date(b.createdAt ?? 0).getTime() - new Date(a.createdAt ?? 0).getTime()
-    );
-  });
+  const sorted = sortMemory(scored);
 
   if (sorted.length > 0) {
     return sorted.slice(0, DEFAULT_FETCH_LIMIT);
@@ -427,15 +494,7 @@ export function rankMemory(
   items: AgentMemoryItem[],
   query: string,
 ): AgentMemoryItem[] {
-  return [...items]
-    .map((item) => scoreMemoryItem(item, query))
-    .sort((a, b) => {
-      const scoreDiff = b.relevanceScore - a.relevanceScore;
-      if (scoreDiff !== 0) return scoreDiff;
-      return (
-        new Date(b.createdAt ?? 0).getTime() - new Date(a.createdAt ?? 0).getTime()
-      );
-    });
+  return sortMemory(items.map((item) => scoreMemoryItem(item, query)));
 }
 
 export function buildMemoryContext(
@@ -470,6 +529,22 @@ export function buildMemoryContext(
   };
 }
 
+function shouldStoreAsPreference(queryText: string, answer: string): boolean {
+  const combined = `${queryText} ${answer}`.toLowerCase();
+
+  return /\b(i want|i prefer|always|never|haluan|mieluummin|älä|don’t)\b/.test(
+    combined,
+  );
+}
+
+function shouldStoreAsFact(queryText: string, answer: string): boolean {
+  const combined = `${queryText} ${answer}`.toLowerCase();
+
+  return /\b(is|are|works|supports|contains|on|has|voi|toimii|sisältää)\b/.test(
+    combined,
+  );
+}
+
 export async function maybeStoreMemory(
   request: AgentRequest,
   answer: string,
@@ -483,6 +558,27 @@ export async function maybeStoreMemory(
     (queryText.length > 0 || normalizedAnswer.length > 120);
 
   if (!shouldConsiderStoring) return;
+
+  const proposedKind = shouldStoreAsPreference(queryText, normalizedAnswer)
+    ? 'preference'
+    : shouldStoreAsFact(queryText, normalizedAnswer)
+      ? 'fact'
+      : 'summary';
+
+  const candidate = {
+    userId: request.userId,
+    kind: proposedKind,
+    content: clampText(
+      queryText
+        ? `${queryText} — ${normalizedAnswer}`
+        : normalizedAnswer,
+      280,
+    ),
+    createdAt: new Date().toISOString(),
+    tags: ['candidate-memory', proposedKind],
+  };
+
+  void candidate;
 
   // TODO:
   // - Apply policy-based memory write decisions.
