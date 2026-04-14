@@ -1,39 +1,25 @@
 import { AGENT_VNEXT_FALLBACK_MESSAGES } from './constants';
-import type { AgentIntent, AgentRequest, AgentRouteResult, AgentToolName } from './types';
+import type {
+  AgentIntent,
+  AgentRequest,
+  AgentRouteResult,
+  AgentToolName,
+} from './types';
 
-type LanguageDetectionResult = {
+type ModelRouteSchema = {
   inputLanguage: string;
   responseLanguage: string;
-  confidence: number;
+  languageConfidence: number;
   multilingual: boolean;
-};
-
-type SemanticSignal = {
   intent: AgentIntent;
-  score: number;
+  confidence: number;
+  userGoal: string;
+  entities: string[];
+  requiresTools: AgentToolName[];
+  shouldFetchMemory: boolean;
+  suggestedExecutionMode: 'sync' | 'stream';
+  reason: string;
 };
-
-const LANGUAGE_OVERRIDES: Array<{ pattern: RegExp; language: string }> = [
-  { pattern: /\b(answer|respond|reply)\s+in\s+(english|en)\b/i, language: 'en' },
-  { pattern: /\b(vastaa|vastaa minulle)\s+(englanniksi|englanniksi.)/i, language: 'en' },
-  { pattern: /\b(answer|respond|reply)\s+in\s+(finnish|fi)\b/i, language: 'fi' },
-  { pattern: /\b(responde|contesta)\s+en\s+(español|es)\b/i, language: 'es' },
-  { pattern: /\b(antworte|antworten)\s+auf\s+deutsch\b/i, language: 'de' },
-  { pattern: /\b(svara|svara gärna)\s+på\s+svenska\b/i, language: 'sv' },
-];
-
-const INTENT_EMBEDDINGS: Array<{ intent: AgentIntent; seedTerms: string[]; tools: AgentToolName[] }> = [
-  { intent: 'compare', seedTerms: ['compare', 'versus', 'difference', 'which is better', 'vertaa', 'compara'], tools: ['compare', 'web', 'memory'] },
-  { intent: 'finance', seedTerms: ['budget', 'save money', 'finance', 'spending', 'invest', 'rahaa', 'dinero'], tools: ['finance', 'memory', 'notes'] },
-  { intent: 'planning', seedTerms: ['plan', 'roadmap', 'timeline', 'strategy', 'suunnitelma', 'planifica'], tools: ['calendar', 'notes', 'memory'] },
-  { intent: 'productivity', seedTerms: ['organize', 'prioritize', 'focus', 'workflow', 'productive'], tools: ['notes', 'calendar', 'memory'] },
-  { intent: 'gmail', seedTerms: ['gmail', 'inbox', 'email', 'mailbox', 'subscription', 'receipt'], tools: ['gmail', 'memory'] },
-  { intent: 'coding', seedTerms: ['code', 'refactor', 'debug', 'typescript', 'api', 'algorithm'], tools: ['file', 'memory', 'web'] },
-  { intent: 'memory', seedTerms: ['remember', 'muista', 'record this', 'what did i say', 'previous context'], tools: ['memory', 'notes'] },
-  { intent: 'research', seedTerms: ['research', 'latest', 'sources', 'news', 'analyze', 'investigate'], tools: ['web', 'memory'] },
-  { intent: 'shopping', seedTerms: ['buy', 'purchase', 'best price', 'product recommendation', 'shop'], tools: ['compare', 'web', 'finance', 'memory'] },
-  { intent: 'general', seedTerms: ['hello', 'thanks', 'help', 'question'], tools: [] },
-];
 
 function normalizeText(value: unknown): string {
   if (typeof value !== 'string') return '';
@@ -51,103 +37,272 @@ function getRequestText(request: AgentRequest): string {
     const normalized = normalizeText(candidate);
     if (normalized) return normalized;
   }
+
   return '';
 }
 
-function tokenize(text: string): string[] {
-  return text
-    .toLowerCase()
-    .split(/[^a-zåäöáéíóúñüß0-9]+/i)
-    .filter(Boolean);
+function getConversationText(request: AgentRequest): string {
+  const raw =
+    (request as AgentRequest & {
+      conversation?: Array<{ role?: string; content?: string }>;
+    }).conversation ?? [];
+
+  if (!Array.isArray(raw)) return '';
+
+  return raw
+    .filter(
+      (item) =>
+        item &&
+        typeof item === 'object' &&
+        typeof item.content === 'string' &&
+        item.content.trim().length > 0,
+    )
+    .slice(-8)
+    .map((item) => `${item.role || 'user'}: ${item.content?.trim()}`)
+    .join('\n');
 }
 
-function detectLanguage(text: string, request: AgentRequest): LanguageDetectionResult {
-  const lowered = text.toLowerCase();
-  const requested = normalizeText(request.responseLanguage || request.inputLanguage).toLowerCase();
+function defaultResponseLanguage(request: AgentRequest): string | undefined {
+  const explicit = normalizeText(
+    (request as AgentRequest & { responseLanguage?: string }).responseLanguage,
+  );
+  if (explicit) return explicit.toLowerCase();
 
-  const hasNordic = /[åäö]/i.test(text);
-  const hasSpanishChars = /[ñáéíóúü¿¡]/i.test(text);
-  const hasGermanChars = /[ß]/i.test(text);
+  const inputLanguage = normalizeText(
+    (request as AgentRequest & { inputLanguage?: string }).inputLanguage,
+  );
+  if (inputLanguage) return inputLanguage.toLowerCase();
 
-  const scoreMap: Record<string, number> = {
-    en: 0.2,
-    fi: hasNordic ? 0.45 : 0.1,
-    sv: hasNordic ? 0.35 : 0.08,
-    de: hasGermanChars ? 0.45 : 0.1,
-    es: hasSpanishChars ? 0.45 : 0.1,
+  return undefined;
+}
+
+function isAgentIntent(value: unknown): value is AgentIntent {
+  return (
+    value === 'general' ||
+    value === 'finance' ||
+    value === 'gmail' ||
+    value === 'productivity' ||
+    value === 'coding' ||
+    value === 'memory' ||
+    value === 'research' ||
+    value === 'compare' ||
+    value === 'planning' ||
+    value === 'execution' ||
+    value === 'email' ||
+    value === 'scheduling' ||
+    value === 'tool_use' ||
+    value === 'shopping' ||
+    value === 'unknown'
+  );
+}
+
+function isToolName(value: unknown): value is AgentToolName {
+  return (
+    value === 'gmail' ||
+    value === 'memory' ||
+    value === 'calendar' ||
+    value === 'web' ||
+    value === 'compare' ||
+    value === 'file' ||
+    value === 'finance' ||
+    value === 'notes'
+  );
+}
+
+function clamp01(value: unknown, fallback: number): number {
+  if (typeof value !== 'number' || Number.isNaN(value)) return fallback;
+  return Math.max(0, Math.min(1, Number(value.toFixed(2))));
+}
+
+function uniqueTools(values: unknown): AgentToolName[] {
+  if (!Array.isArray(values)) return [];
+  return [...new Set(values.filter(isToolName))];
+}
+
+function uniqueEntities(values: unknown): string[] {
+  if (!Array.isArray(values)) return [];
+  return [
+    ...new Set(
+      values
+        .filter((item): item is string => typeof item === 'string')
+        .map((item) => normalizeText(item))
+        .filter(Boolean),
+    ),
+  ].slice(0, 8);
+}
+
+function normalizeModelRoute(raw: unknown): ModelRouteSchema | null {
+  if (!raw || typeof raw !== 'object') return null;
+  const record = raw as Record<string, unknown>;
+
+  if (!isAgentIntent(record.intent)) return null;
+
+  const suggestedExecutionMode =
+    record.suggestedExecutionMode === 'stream' ? 'stream' : 'sync';
+
+  const normalized: ModelRouteSchema = {
+    inputLanguage: normalizeText(record.inputLanguage) || 'unknown',
+    responseLanguage:
+      normalizeText(record.responseLanguage) ||
+      normalizeText(record.inputLanguage) ||
+      'en',
+    languageConfidence: clamp01(record.languageConfidence, 0.7),
+    multilingual: Boolean(record.multilingual),
+    intent: record.intent,
+    confidence: clamp01(record.confidence, 0.72),
+    userGoal: normalizeText(record.userGoal) || 'Help the user effectively.',
+    entities: uniqueEntities(record.entities),
+    requiresTools: uniqueTools(record.requiresTools),
+    shouldFetchMemory:
+      typeof record.shouldFetchMemory === 'boolean'
+        ? record.shouldFetchMemory
+        : record.intent !== 'general',
+    suggestedExecutionMode,
+    reason:
+      normalizeText(record.reason) ||
+      'Model-based routing selected the most likely intent.',
   };
 
-  const weightedTerms: Record<string, string[]> = {
-    en: ['the', 'and', 'compare', 'answer', 'please', 'how', 'what'],
-    fi: ['ja', 'että', 'minulle', 'vertaa', 'muista', 'suunnitelma'],
-    sv: ['och', 'jag', 'jämför', 'planera', 'svenska'],
-    de: ['und', 'ich', 'vergleiche', 'planung', 'deutsch'],
-    es: ['y', 'para', 'compara', 'responde', 'español'],
+  return normalized;
+}
+
+function extractJsonBlock(text: string): string | null {
+  const trimmed = text.trim();
+  if (!trimmed) return null;
+
+  if (trimmed.startsWith('{') && trimmed.endsWith('}')) {
+    return trimmed;
+  }
+
+  const fenced = trimmed.match(/```(?:json)?\s*([\s\S]*?)```/i);
+  if (fenced?.[1]) return fenced[1].trim();
+
+  const start = trimmed.indexOf('{');
+  const end = trimmed.lastIndexOf('}');
+  if (start >= 0 && end > start) {
+    return trimmed.slice(start, end + 1);
+  }
+
+  return null;
+}
+
+async function routeIntentWithModel(
+  request: AgentRequest,
+  text: string,
+): Promise<ModelRouteSchema | null> {
+  const conversationText = getConversationText(request);
+  const requestedLanguage = defaultResponseLanguage(request);
+
+  const prompt = [
+    'You are a routing model for a multilingual AI agent.',
+    'Return JSON only.',
+    'Do not explain your reasoning.',
+    'Infer meaning semantically, not by keyword matching.',
+    'Understand any language you can.',
+    '',
+    'Schema:',
+    '{',
+    '  "inputLanguage": "string",',
+    '  "responseLanguage": "string",',
+    '  "languageConfidence": 0.0,',
+    '  "multilingual": false,',
+    '  "intent": "general | finance | gmail | productivity | coding | memory | research | compare | planning | execution | email | scheduling | tool_use | shopping | unknown",',
+    '  "confidence": 0.0,',
+    '  "userGoal": "string",',
+    '  "entities": ["string"],',
+    '  "requiresTools": ["gmail" | "memory" | "calendar" | "web" | "compare" | "file" | "finance" | "notes"],',
+    '  "shouldFetchMemory": true,',
+    '  "suggestedExecutionMode": "sync" | "stream",',
+    '  "reason": "short reason"',
+    '}',
+    '',
+    'Rules:',
+    '- The entire output must be valid JSON.',
+    '- responseLanguage should follow explicit user language instruction when present.',
+    '- If no explicit override exists, use the language of the latest user message.',
+    '- Use tools only when genuinely helpful.',
+    '- entities should contain concrete items, products, people, documents, or topics when present.',
+    '- userGoal should describe what the user is actually trying to achieve.',
+    '',
+    `Requested response language: ${requestedLanguage || 'none'}`,
+    `Latest user message: ${text}`,
+    `Recent conversation context: ${conversationText || 'none'}`,
+  ].join('\n');
+
+  const metadata = (request.metadata ?? {}) as Record<string, unknown>;
+  const routerModel = normalizeText(metadata.routerModel) || 'gpt-4.1-mini';
+
+  const response = await fetch('https://api.openai.com/v1/responses', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${process.env.OPENAI_API_KEY}`,
+    },
+    body: JSON.stringify({
+      model: routerModel,
+      temperature: 0,
+      input: [
+        {
+          role: 'system',
+          content: [
+            {
+              type: 'input_text',
+              text: 'You are a strict multilingual routing engine. Output JSON only.',
+            },
+          ],
+        },
+        {
+          role: 'user',
+          content: [{ type: 'input_text', text: prompt }],
+        },
+      ],
+    }),
+  });
+
+  if (!response.ok) return null;
+
+  const payload = (await response.json()) as {
+    output_text?: string;
   };
 
-  for (const [lang, terms] of Object.entries(weightedTerms)) {
-    const hits = terms.reduce((count, term) => count + (lowered.includes(term) ? 1 : 0), 0);
-    scoreMap[lang] += hits * 0.1;
-  }
+  const textOutput = normalizeText(payload.output_text);
+  if (!textOutput) return null;
 
-  for (const rule of LANGUAGE_OVERRIDES) {
-    if (rule.pattern.test(text)) {
-      return {
-        inputLanguage: request.inputLanguage || 'auto',
-        responseLanguage: rule.language,
-        confidence: 0.98,
-        multilingual: true,
-      };
-    }
-  }
+  const jsonBlock = extractJsonBlock(textOutput);
+  if (!jsonBlock) return null;
 
-  const sorted = Object.entries(scoreMap).sort((a, b) => b[1] - a[1]);
-  const [bestLang, bestScore] = sorted[0] ?? ['en', 0.4];
-  const second = sorted[1]?.[1] ?? 0;
-  const multilingual = Math.abs(bestScore - second) < 0.18;
-  const confidence = Math.max(0.4, Math.min(0.98, Number((bestScore - second + 0.55).toFixed(2))));
-  const responseLanguage = requested || bestLang;
+  try {
+    const parsed = JSON.parse(jsonBlock) as unknown;
+    return normalizeModelRoute(parsed);
+  } catch {
+    return null;
+  }
+}
+
+function routeIntentFallback(request: AgentRequest, text: string): AgentRouteResult {
+  const requestedLanguage = defaultResponseLanguage(request);
 
   return {
-    inputLanguage: bestLang,
-    responseLanguage,
-    confidence,
-    multilingual,
+    intent: 'general',
+    confidence: 0.45,
+    reason: 'Fallback routing was used because model routing was unavailable.',
+    requiresTools: [],
+    shouldFetchMemory: true,
+    suggestedExecutionMode: 'sync',
+    fallbackMessage: AGENT_VNEXT_FALLBACK_MESSAGES.missingContext,
+    inputLanguage:
+      normalizeText((request as AgentRequest & { inputLanguage?: string }).inputLanguage) ||
+      'unknown',
+    responseLanguage: requestedLanguage || 'en',
+    languageConfidence: clamp01(
+      (request as AgentRequest & { languageConfidence?: number }).languageConfidence,
+      0.35,
+    ),
+    multilingual: false,
   };
 }
 
-function scoreSemanticIntents(text: string): SemanticSignal[] {
-  const lowered = text.toLowerCase();
-  const tokens = new Set(tokenize(text));
-
-  return INTENT_EMBEDDINGS.map((embedding) => {
-    const score = embedding.seedTerms.reduce((total, term) => {
-      const normalizedTerm = term.toLowerCase();
-      if (normalizedTerm.includes(' ') && lowered.includes(normalizedTerm)) return total + 2.2;
-      if (tokens.has(normalizedTerm)) return total + 1.7;
-      if ([...tokens].some((token) => token.startsWith(normalizedTerm.slice(0, 4)))) return total + 0.7;
-      return total;
-    }, 0);
-
-    const structuralBoost =
-      embedding.intent === 'compare' && /(vs|versus|contra|gegen|jämför|vertaa)/i.test(text)
-        ? 1.5
-        : 0;
-
-    return {
-      intent: embedding.intent,
-      score: score + structuralBoost,
-    };
-  }).sort((a, b) => b.score - a.score);
-}
-
-function toolsForIntent(intent: AgentIntent): AgentToolName[] {
-  return INTENT_EMBEDDINGS.find((item) => item.intent === intent)?.tools ?? ['memory'];
-}
-
-export { detectLanguage };
-
-export function routeIntent(request: AgentRequest): AgentRouteResult {
+export async function routeIntent(request: AgentRequest): Promise<AgentRouteResult> {
   const text = getRequestText(request);
 
   if (!text) {
@@ -159,43 +314,44 @@ export function routeIntent(request: AgentRequest): AgentRouteResult {
       shouldFetchMemory: true,
       suggestedExecutionMode: 'sync',
       fallbackMessage: AGENT_VNEXT_FALLBACK_MESSAGES.missingContext,
-      inputLanguage: request.inputLanguage,
-      responseLanguage: request.responseLanguage,
-      languageConfidence: request.languageConfidence,
+      inputLanguage:
+        normalizeText((request as AgentRequest & { inputLanguage?: string }).inputLanguage) ||
+        'unknown',
+      responseLanguage: defaultResponseLanguage(request),
+      languageConfidence: clamp01(
+        (request as AgentRequest & { languageConfidence?: number }).languageConfidence,
+        0.2,
+      ),
       multilingual: false,
     };
   }
 
-  const language = detectLanguage(text, request);
-  const semantic = scoreSemanticIntents(text);
-  const top = semantic[0];
+  try {
+    const routed = await routeIntentWithModel(request, text);
 
-  if (!top || top.score < 0.8) {
+    if (!routed) {
+      return routeIntentFallback(request, text);
+    }
+
     return {
-      intent: 'unknown',
-      confidence: 0.44,
-      reason: 'No stable semantic intent signal was found.',
-      requiresTools: ['memory'],
-      shouldFetchMemory: true,
-      suggestedExecutionMode: 'sync',
-      fallbackMessage: AGENT_VNEXT_FALLBACK_MESSAGES.missingContext,
-      inputLanguage: language.inputLanguage,
-      responseLanguage: language.responseLanguage,
-      languageConfidence: language.confidence,
-      multilingual: language.multilingual,
+      intent: routed.intent,
+      confidence: routed.confidence,
+      reason: routed.reason,
+      requiresTools: routed.requiresTools,
+      shouldFetchMemory: routed.shouldFetchMemory,
+      suggestedExecutionMode: routed.suggestedExecutionMode,
+      fallbackMessage:
+        routed.intent === 'unknown'
+          ? AGENT_VNEXT_FALLBACK_MESSAGES.missingContext
+          : undefined,
+      inputLanguage: routed.inputLanguage,
+      responseLanguage: routed.responseLanguage,
+      languageConfidence: routed.languageConfidence,
+      multilingual: routed.multilingual,
+      userGoal: routed.userGoal,
+      entities: routed.entities,
     };
+  } catch {
+    return routeIntentFallback(request, text);
   }
-
-  return {
-    intent: top.intent,
-    confidence: Math.max(0.52, Math.min(0.96, Number((0.5 + top.score / 10).toFixed(2)))),
-    reason: `Semantic routing selected "${top.intent}" from intent-embedding similarity.`,
-    requiresTools: toolsForIntent(top.intent),
-    shouldFetchMemory: !['general'].includes(top.intent),
-    suggestedExecutionMode: ['research', 'coding'].includes(top.intent) ? 'stream' : 'sync',
-    inputLanguage: language.inputLanguage,
-    responseLanguage: language.responseLanguage,
-    languageConfidence: language.confidence,
-    multilingual: language.multilingual,
-  };
 }
