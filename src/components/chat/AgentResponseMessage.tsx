@@ -18,6 +18,7 @@ type SupportedLocale = 'en' | 'fi' | 'sv' | 'es';
 
 type LocaleCopy = {
   intro: string[];
+  fallback: string;
 };
 
 const COPY: Record<SupportedLocale, LocaleCopy> = {
@@ -27,6 +28,7 @@ const COPY: Record<SupportedLocale, LocaleCopy> = {
       "Great request. I'm working through it now.",
       "Absolutely — I'll handle this step by step.",
     ],
+    fallback: 'Done — here is the answer for you.',
   },
   fi: {
     intro: [
@@ -34,6 +36,7 @@ const COPY: Record<SupportedLocale, LocaleCopy> = {
       'Hyvä pyyntö. Käyn tämän läpi nyt.',
       'Totta kai — etenen tämän kanssa vaiheittain.',
     ],
+    fallback: 'Valmis — tässä vastaus sinulle.',
   },
   sv: {
     intro: [
@@ -41,6 +44,7 @@ const COPY: Record<SupportedLocale, LocaleCopy> = {
       'Bra begäran. Jag går igenom detta nu.',
       'Absolut — jag hanterar detta steg för steg.',
     ],
+    fallback: 'Klart — här är svaret till dig.',
   },
   es: {
     intro: [
@@ -48,6 +52,7 @@ const COPY: Record<SupportedLocale, LocaleCopy> = {
       'Buena solicitud. La reviso ahora mismo.',
       'Claro — voy a resolver esto paso a paso.',
     ],
+    fallback: 'Listo — aquí tienes la respuesta.',
   },
 };
 
@@ -58,8 +63,20 @@ const HIDDEN_PATTERNS = [
   /^recommended next step:/i,
   /^what was incomplete:/i,
   /^i compared the main options/i,
-  /^here’s a direct response/i,
+  /^here[’']?s a direct response/i,
   /^i checked the email-related context/i,
+  /^-?\s*memory:/i,
+  /^-?\s*gmail:/i,
+  /^-?\s*web:/i,
+  /^-?\s*compare:/i,
+  /^-?\s*calendar:/i,
+  /^-?\s*finance:/i,
+  /^-?\s*notes:/i,
+  /^-?\s*file:/i,
+  /^-?\s*tool:/i,
+  /^relevant memory\b/i,
+  /^what i used\b/i,
+  /^recommended next step\b/i,
 ];
 
 function normalizeText(value?: string): string {
@@ -67,17 +84,28 @@ function normalizeText(value?: string): string {
   return value.replace(/\r/g, '').trim();
 }
 
+function countMatches(text: string, words: string[]): number {
+  let score = 0;
+
+  for (const word of words) {
+    const escaped = word.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    if (new RegExp(`\\b${escaped}\\b`, 'i').test(text)) {
+      score += 1;
+    }
+  }
+
+  return score;
+}
+
 function detectLanguage(input?: string): SupportedLocale {
   const text = normalizeText(input).toLowerCase();
   if (!text) return 'en';
 
   const finnishScore =
-    (text.match(/[äö]/g) ?? []).length * 3 +
+    (text.match(/[äö]/g) ?? []).length * 4 +
     countMatches(text, [
       'mitä',
       'mita',
-      'sinä',
-      'sina',
       'sinulle',
       'kuuluu',
       'että',
@@ -89,16 +117,21 @@ function detectLanguage(input?: string): SupportedLocale {
       'suomeksi',
       'haluan',
       'kanssa',
-      'käy',
+      'käyn',
       'tee',
       'minulle',
       'vertaa',
       'rakennetaan',
       'tarkistetaan',
+      'haetaan',
+      'pyyntö',
+      'laatu',
+      'nyt',
+      'selvä',
     ]);
 
   const swedishScore =
-    (text.match(/[å]/g) ?? []).length * 3 +
+    (text.match(/[å]/g) ?? []).length * 4 +
     countMatches(text, [
       'jag',
       'och',
@@ -116,10 +149,14 @@ function detectLanguage(input?: string): SupportedLocale {
       'vad',
       'med',
       'inte',
+      'hämtar',
+      'bygger',
+      'kvalitet',
+      'nu',
     ]);
 
   const spanishScore =
-    (text.match(/[ñ¿¡]/g) ?? []).length * 3 +
+    (text.match(/[ñ¿¡]/g) ?? []).length * 4 +
     countMatches(text, [
       'hola',
       'respuesta',
@@ -134,13 +171,15 @@ function detectLanguage(input?: string): SupportedLocale {
       'analiza',
       'compara',
       'español',
+      'ahora',
+      'construyendo',
     ]);
 
   if (finnishScore >= swedishScore && finnishScore >= spanishScore && finnishScore > 0) {
     return 'fi';
   }
 
-  if (swedishScore >= finnishScore && swedishScore >= spanishScore && swedishScore > 0) {
+  if (swedishScore > finnishScore && swedishScore >= spanishScore && swedishScore > 0) {
     return 'sv';
   }
 
@@ -151,20 +190,7 @@ function detectLanguage(input?: string): SupportedLocale {
   return 'en';
 }
 
-function countMatches(text: string, words: string[]): number {
-  let score = 0;
-
-  for (const word of words) {
-    const escaped = word.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-    if (new RegExp(`\\b${escaped}\\b`, 'i').test(text)) {
-      score += 1;
-    }
-  }
-
-  return score;
-}
-
-function hashIndex(value: string, mod: number) {
+function hashIndex(value: string, mod: number): number {
   return [...value].reduce((acc, char) => acc + char.charCodeAt(0), 0) % mod;
 }
 
@@ -173,7 +199,8 @@ function mapActions(actions?: AgentSuggestedAction[] | string[]): string[] {
 
   return actions
     .map((action) => (typeof action === 'string' ? action : action.label))
-    .filter((label): label is string => Boolean(label?.trim()))
+    .map((label) => normalizeText(label))
+    .filter((label): label is string => Boolean(label))
     .slice(0, 4);
 }
 
@@ -187,74 +214,83 @@ function dedupeSteps(steps?: AgentResponseStep[]): AgentResponseStep[] {
     const action = normalizeText(step?.action);
     if (!action) continue;
 
-    const key = action.toLowerCase();
-    if (seen.has(key)) continue;
+    const summary = normalizeText(step?.summary);
+    const tool = normalizeText(step?.tool);
+    const key = `${action.toLowerCase()}|${tool.toLowerCase()}`;
 
+    if (seen.has(key)) continue;
     seen.add(key);
+
     result.push({
       ...step,
       action,
+      summary,
+      tool,
     });
   }
 
   return result;
 }
 
-function shouldHideParagraph(paragraph: string): boolean {
-  const normalized = paragraph.trim();
-
+function shouldHideLine(line: string): boolean {
+  const normalized = line.trim();
   if (!normalized) return true;
 
   return HIDDEN_PATTERNS.some((pattern) => pattern.test(normalized));
 }
 
-function sanitizeVisibleContent(
-  content: string,
-  metadata?: AgentResponseMetadata,
-): string {
+function sanitizeVisibleContent(content: string): string {
   const normalized = normalizeText(content);
   if (!normalized) return '';
 
   const paragraphs = normalized
     .split(/\n{2,}/)
     .map((item) => item.trim())
-    .filter(Boolean);
+    .filter(Boolean)
+    .filter((paragraph) => !shouldHideLine(paragraph));
 
-  const safeParagraphs = paragraphs.filter((paragraph) => !shouldHideParagraph(paragraph));
-
-  let joined = safeParagraphs.join('\n\n').trim();
-
-  if (!joined && metadata?.intent === 'general') {
-    return '';
-  }
+  let joined = paragraphs.join('\n\n').trim();
 
   if (!joined) {
     joined = normalized
       .split('\n')
       .map((line) => line.trim())
-      .filter(
-        (line) =>
-          line &&
-          !HIDDEN_PATTERNS.some((pattern) => pattern.test(line)),
-      )
+      .filter((line) => line && !shouldHideLine(line))
       .join(' ')
+      .replace(/\s{2,}/g, ' ')
       .trim();
   }
 
   return joined;
 }
 
-function buildFallbackAnswer(locale: SupportedLocale): string {
-  switch (locale) {
-    case 'fi':
-      return 'Valmis — tässä vastaus sinulle.';
-    case 'sv':
-      return 'Klart — här är svaret till dig.';
-    case 'es':
-      return 'Listo — aquí tienes la respuesta.';
-    default:
-      return 'Done — here is the answer for you.';
+function shouldShowIntro(
+  visibleContent: string,
+  steps: AgentResponseStep[],
+): boolean {
+  return Boolean(steps.length || visibleContent);
+}
+
+function shouldShowActions(
+  actions: string[],
+  visibleContent: string,
+): boolean {
+  return actions.length > 0 && Boolean(visibleContent);
+}
+
+function getSafeContent(
+  content: string,
+  metadata: AgentResponseMetadata | undefined,
+  locale: SupportedLocale,
+): string {
+  const sanitized = sanitizeVisibleContent(content);
+  if (sanitized) return sanitized;
+
+  if (metadata?.intent === 'general') {
+    return COPY[locale].fallback;
   }
+
+  return COPY[locale].fallback;
 }
 
 export function AgentResponseMessage({
@@ -265,35 +301,36 @@ export function AgentResponseMessage({
   const copy = COPY[locale];
 
   const metadata = message.agentMetadata;
-  const steps = dedupeSteps(metadata?.steps);
+  const steps = dedupeSteps(metadata?.steps).slice(0, 4);
   const actions = mapActions(metadata?.suggestedActions);
+  const visibleContent = getSafeContent(message.content, metadata, locale);
   const introIndex = hashIndex(message.id, copy.intro.length);
-
-  const visibleContent =
-    sanitizeVisibleContent(message.content, metadata) ||
-    buildFallbackAnswer(locale);
+  const showIntro = shouldShowIntro(visibleContent, steps);
+  const showActions = shouldShowActions(actions, visibleContent);
 
   return (
-    <>
-      <p className="mb-3 text-[15px] leading-7 tracking-[-0.015em] text-[#4c5564]">
-        {copy.intro[introIndex]}
-      </p>
+    <div className="max-w-full">
+      {showIntro ? (
+        <p className="mb-4 text-[16px] leading-[1.72] tracking-[-0.018em] text-[#4e5664]">
+          {copy.intro[introIndex]}
+        </p>
+      ) : null}
 
       {steps.length > 0 ? (
-        <div className="mb-4">
+        <div className="mb-5">
           <AgentWorkflowBoxes steps={steps} locale={locale} />
         </div>
       ) : null}
 
-      <div className="whitespace-pre-wrap text-[17px] leading-[1.78] tracking-[-0.015em] text-[#454d5b]">
+      <div className="whitespace-pre-wrap text-[18px] leading-[1.8] tracking-[-0.02em] text-[#434b58]">
         {visibleContent}
       </div>
 
-      {actions.length > 0 ? (
-        <div className="mt-4">
+      {showActions ? (
+        <div className="mt-5">
           <ActionSuggestions actions={actions} locale={locale} />
         </div>
       ) : null}
-    </>
+    </div>
   );
 }
