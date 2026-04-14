@@ -76,6 +76,91 @@ function defaultResponseLanguage(request: AgentRequest): string | undefined {
   return undefined;
 }
 
+function detectLanguageFromText(text: string): {
+  inputLanguage: string;
+  responseLanguage: string;
+  languageConfidence: number;
+} {
+  const normalized = normalizeText(text).toLowerCase();
+  if (!normalized) {
+    return {
+      inputLanguage: 'unknown',
+      responseLanguage: 'en',
+      languageConfidence: 0.2,
+    };
+  }
+
+  const compact = normalized
+    .normalize('NFKD')
+    .replace(/[^\p{L}\p{N}\s?!.,]/gu, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+
+  const directMap: Record<string, 'fi' | 'sv' | 'es' | 'en'> = {
+    'hei': 'fi',
+    'moi': 'fi',
+    'mita kuuluu': 'fi',
+    'mita kuuluu?': 'fi',
+    'mitä kuuluu': 'fi',
+    'mitä kuuluu?': 'fi',
+    'vad hander': 'sv',
+    'vad hander?': 'sv',
+    'vad händer': 'sv',
+    'vad händer?': 'sv',
+    'hola': 'es',
+    'hola!': 'es',
+    'hello': 'en',
+    'hello!': 'en',
+  };
+
+  const direct = directMap[compact];
+  if (direct) {
+    return {
+      inputLanguage: direct,
+      responseLanguage: direct,
+      languageConfidence: 0.98,
+    };
+  }
+
+  if (/\b(että|mikä|mitä|kuuluu|suomi|minä|sinä|tämä|ole|kiitos)\b/.test(compact)) {
+    return {
+      inputLanguage: 'fi',
+      responseLanguage: 'fi',
+      languageConfidence: 0.86,
+    };
+  }
+
+  if (/\b(vad|händer|hej|jag|du|och|är|detta)\b/.test(compact)) {
+    return {
+      inputLanguage: 'sv',
+      responseLanguage: 'sv',
+      languageConfidence: 0.86,
+    };
+  }
+
+  if (/[\u00e1\u00e9\u00ed\u00f3\u00fa\u00f1\u00bf\u00a1]/.test(compact) || /\b(hola|gracias|que|cómo|puedo|ayudar|está)\b/.test(compact)) {
+    return {
+      inputLanguage: 'es',
+      responseLanguage: 'es',
+      languageConfidence: 0.84,
+    };
+  }
+
+  if (/\b(hello|hi|what|how|can|help|please|thanks)\b/.test(compact)) {
+    return {
+      inputLanguage: 'en',
+      responseLanguage: 'en',
+      languageConfidence: 0.8,
+    };
+  }
+
+  return {
+    inputLanguage: 'unknown',
+    responseLanguage: 'en',
+    languageConfidence: 0.35,
+  };
+}
+
 function isAgentIntent(value: unknown): value is AgentIntent {
   return (
     value === 'general' ||
@@ -304,6 +389,7 @@ function routeIntentFallback(request: AgentRequest, text: string): AgentRouteRes
 
 export async function routeIntent(request: AgentRequest): Promise<AgentRouteResult> {
   const text = getRequestText(request);
+  const detectedLanguage = detectLanguageFromText(text);
 
   if (!text) {
     return {
@@ -316,11 +402,11 @@ export async function routeIntent(request: AgentRequest): Promise<AgentRouteResu
       fallbackMessage: AGENT_VNEXT_FALLBACK_MESSAGES.missingContext,
       inputLanguage:
         normalizeText((request as AgentRequest & { inputLanguage?: string }).inputLanguage) ||
-        'unknown',
-      responseLanguage: defaultResponseLanguage(request),
+        detectedLanguage.inputLanguage,
+      responseLanguage: defaultResponseLanguage(request) || detectedLanguage.responseLanguage,
       languageConfidence: clamp01(
         (request as AgentRequest & { languageConfidence?: number }).languageConfidence,
-        0.2,
+        detectedLanguage.languageConfidence,
       ),
       multilingual: false,
     };
@@ -333,6 +419,19 @@ export async function routeIntent(request: AgentRequest): Promise<AgentRouteResu
       return routeIntentFallback(request, text);
     }
 
+    const resolvedInputLanguage =
+      routed.inputLanguage === 'unknown' || !routed.inputLanguage
+        ? detectedLanguage.inputLanguage
+        : routed.inputLanguage;
+    const resolvedResponseLanguage =
+      normalizeText(defaultResponseLanguage(request)) ||
+      normalizeText(routed.responseLanguage) ||
+      (resolvedInputLanguage !== 'unknown' ? resolvedInputLanguage : detectedLanguage.responseLanguage);
+    const resolvedLanguageConfidence =
+      routed.inputLanguage === 'unknown'
+        ? Math.max(routed.languageConfidence, detectedLanguage.languageConfidence)
+        : routed.languageConfidence;
+
     return {
       intent: routed.intent,
       confidence: routed.confidence,
@@ -344,9 +443,9 @@ export async function routeIntent(request: AgentRequest): Promise<AgentRouteResu
         routed.intent === 'unknown'
           ? AGENT_VNEXT_FALLBACK_MESSAGES.missingContext
           : undefined,
-      inputLanguage: routed.inputLanguage,
-      responseLanguage: routed.responseLanguage,
-      languageConfidence: routed.languageConfidence,
+      inputLanguage: resolvedInputLanguage,
+      responseLanguage: resolvedResponseLanguage,
+      languageConfidence: clamp01(resolvedLanguageConfidence, detectedLanguage.languageConfidence),
       multilingual: routed.multilingual,
       userGoal: routed.userGoal,
       entities: routed.entities,

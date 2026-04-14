@@ -454,15 +454,35 @@ export async function runAgentVNext(
     context.languageConfidence =
       route.languageConfidence ?? normalizedRequest.languageConfidence;
 
+    const resolvedInputLanguage = context.inputLanguage ?? normalizedRequest.inputLanguage;
+    const resolvedResponseLanguage =
+      context.responseLanguage ?? normalizedRequest.responseLanguage;
+    const resolvedLanguageConfidence =
+      context.languageConfidence ?? normalizedRequest.languageConfidence;
+
+    const requestWithLanguage: AgentRequest = {
+      ...normalizedRequest,
+      inputLanguage: resolvedInputLanguage,
+      responseLanguage: resolvedResponseLanguage,
+      languageConfidence: resolvedLanguageConfidence,
+    };
+
+    const routeWithLanguage = {
+      ...route,
+      inputLanguage: resolvedInputLanguage,
+      responseLanguage: resolvedResponseLanguage,
+      languageConfidence: resolvedLanguageConfidence,
+    };
+
     const planningStarted = Date.now();
-    const plan = createPlan(route, context);
+    const plan = createPlan(routeWithLanguage, context);
     const planningMs = Date.now() - planningStarted;
 
     const memoryStarted = Date.now();
     const memory = await prepareMemory(
-      normalizedRequest,
+      requestWithLanguage,
       context,
-      route.shouldFetchMemory,
+      routeWithLanguage.shouldFetchMemory,
     );
     const memoryMs = Date.now() - memoryStarted;
 
@@ -477,8 +497,8 @@ export async function runAgentVNext(
 
     const generationStarted = Date.now();
     const answer = await generateFinalAnswer({
-      request: normalizedRequest,
-      route,
+      request: requestWithLanguage,
+      route: routeWithLanguage,
       plan,
       context: {
         ...executionContext,
@@ -500,8 +520,8 @@ export async function runAgentVNext(
     const evaluationMs = Date.now() - evaluationStarted;
 
     const response = buildResponse({
-      request: normalizedRequest,
-      route,
+      request: requestWithLanguage,
+      route: routeWithLanguage,
       plan,
       toolResults,
       memory,
@@ -511,7 +531,7 @@ export async function runAgentVNext(
 
     agentLogger.info('vNext agent execution completed', {
       requestId: request.requestId,
-      intent: route.intent,
+      intent: routeWithLanguage.intent,
       confidence: answer.confidence,
       score: evaluation?.score,
       stepCount: plan.steps.length,
@@ -567,15 +587,38 @@ export async function* runAgentVNextStream(
     context.languageConfidence =
       route.languageConfidence ?? normalizedRequest.languageConfidence;
 
+    const resolvedInputLanguage = context.inputLanguage ?? normalizedRequest.inputLanguage;
+    const resolvedResponseLanguage =
+      context.responseLanguage ?? normalizedRequest.responseLanguage;
+    const resolvedLanguageConfidence =
+      context.languageConfidence ?? normalizedRequest.languageConfidence;
+
+    const requestWithLanguage: AgentRequest = {
+      ...normalizedRequest,
+      inputLanguage: resolvedInputLanguage,
+      responseLanguage: resolvedResponseLanguage,
+      languageConfidence: resolvedLanguageConfidence,
+    };
+
+    const routeWithLanguage = {
+      ...route,
+      inputLanguage: resolvedInputLanguage,
+      responseLanguage: resolvedResponseLanguage,
+      languageConfidence: resolvedLanguageConfidence,
+    };
+
     yield streamEvents.routerCompleted(normalizedRequest, {
-      intent: route.intent,
-      confidence: route.confidence,
-      requiresTools: route.requiresTools,
+      intent: routeWithLanguage.intent,
+      confidence: routeWithLanguage.confidence,
+      requiresTools: routeWithLanguage.requiresTools,
+      inputLanguage: routeWithLanguage.inputLanguage,
+      responseLanguage: routeWithLanguage.responseLanguage,
+      languageConfidence: routeWithLanguage.languageConfidence,
     });
 
     yield streamEvents.planningStarted(normalizedRequest);
 
-    const plan = createPlan(route, context);
+    const plan = createPlan(routeWithLanguage, context);
 
     yield streamEvents.planningCompleted(normalizedRequest, {
       stepCount: plan.steps.length,
@@ -585,9 +628,9 @@ export async function* runAgentVNextStream(
     yield streamEvents.memoryStarted(normalizedRequest);
 
     const memory = await prepareMemory(
-      normalizedRequest,
+      requestWithLanguage,
       context,
-      route.shouldFetchMemory,
+      routeWithLanguage.shouldFetchMemory,
     );
 
     yield streamEvents.memoryCompleted(normalizedRequest, {
@@ -644,8 +687,8 @@ export async function* runAgentVNextStream(
     }
 
     for await (const event of generateFinalAnswerStream({
-      request: normalizedRequest,
-      route,
+      request: requestWithLanguage,
+      route: routeWithLanguage,
       plan,
       context: {
         ...executionContext,
