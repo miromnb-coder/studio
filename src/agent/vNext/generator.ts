@@ -1,3 +1,5 @@
+import { groq } from '@/ai/groq';
+
 import type {
   AgentContext,
   AgentFinalAnswer,
@@ -53,10 +55,7 @@ function getConversationMessages(
   if (!Array.isArray(raw)) return [];
 
   return raw
-    .filter(
-      (item): item is { role?: string; content?: string } =>
-        Boolean(item) && typeof item === 'object',
-    )
+    .filter((item) => Boolean(item) && typeof item === 'object')
     .map((item) => ({
       role: normalizeText(item.role) || 'user',
       content: normalizeText(item.content),
@@ -170,40 +169,31 @@ function buildFallbackAnswer(
   const requestText = getRequestText(input.request);
   const { successful, failed } = summarizeToolResults(input.toolResults);
 
-  const directAnswer =
-    language.startsWith('fi')
-      ? [
-          `Tässä paras vastaus pyyntöösi: ${requestText}.`,
-          input.memorySummary
-            ? `Hyödynsin myös tätä keskustelukontekstia: ${input.memorySummary}`
-            : '',
-          successful.length
-            ? `Käytin näitä tietolähteitä tai työkaluja: ${successful.join(', ')}.`
-            : '',
-          failed.length
-            ? `Kaikkea ei saatu haettua täydellisesti: ${failed.join(', ')}.`
-            : '',
-        ]
-          .filter(Boolean)
-          .join(' ')
-      : [
-          `Here is the best answer I can give for: ${requestText}.`,
-          input.memorySummary
-            ? `I also used this relevant context: ${input.memorySummary}`
-            : '',
-          successful.length
-            ? `I used these tools or sources: ${successful.join(', ')}.`
-            : '',
-          failed.length
-            ? `Some parts were incomplete: ${failed.join(', ')}.`
-            : '',
-        ]
-          .filter(Boolean)
-          .join(' ');
+  const directAnswer = language.startsWith('fi')
+    ? [
+        `Yhteenveto pyyntöäsi varten: ${requestText || 'Kerro tarkemmin, niin autan mielelläni.'}`,
+        input.memorySummary ? `Aiempi konteksti huomioituna: ${input.memorySummary}` : '',
+        successful.length ? `Tärkeimmät löydökset: ${successful.join(', ')}.` : '',
+        failed.length
+          ? `Osa tiedoista jäi epävarmaksi, joten täydennä tarvittaessa: ${failed.join(', ')}.`
+          : '',
+      ]
+        .filter(Boolean)
+        .join(' ')
+    : [
+        `Here is a clear answer for your request: ${requestText || 'Share a bit more detail and I can refine this for you.'}`,
+        input.memorySummary ? `Considering earlier context: ${input.memorySummary}` : '',
+        successful.length ? `Key findings: ${successful.join(', ')}.` : '',
+        failed.length
+          ? `A few details may be incomplete: ${failed.join(', ')}.`
+          : '',
+      ]
+        .filter(Boolean)
+        .join(' ');
 
   const followUps = language.startsWith('fi')
-    ? ['Haluatko tästä tarkemman version?', 'Teenkö tästä checklistin?']
-    : ['Do you want a more detailed version?', 'Should I turn this into a checklist?'];
+    ? ['Haluatko tiiviimmän version?', 'Haluatko, että teen tästä toimintalistan?']
+    : ['Would you like a shorter version?', 'Want me to turn this into an action checklist?'];
 
   return {
     text: directAnswer,
@@ -245,22 +235,23 @@ function extractJsonBlock(text: string): string | null {
 async function generateWithModel(
   input: GenerateFinalAnswerInput,
 ): Promise<LlmAnswerSchema | null> {
-  const apiKey = process.env.OPENAI_API_KEY;
-  if (!apiKey) return null;
+  if (!process.env.GROQ_API_KEY) return null;
 
   const requestText = getRequestText(input.request);
   const language = getLanguage(input);
   const conversation = getConversationMessages(input.request);
   const { compactJson } = summarizeToolResults(input.toolResults);
+  const metadata = (input.request.metadata ?? {}) as Record<string, unknown>;
+  const generatorModel =
+    normalizeText(metadata.generatorModel) || 'openai/gpt-oss-120b';
 
   const systemPrompt = [
-    'You are the final answer generator for a premium AI agent.',
-    'Your job is to answer the user directly and intelligently.',
-    'Never expose internal reasoning, plan summaries, tool logs, chain-of-thought, or debug text.',
-    'Do not write sections like "Plan used", "What I used", "Relevant memory", or "Recommended next step".',
-    'Use tool results and memory silently to improve the answer.',
-    'Be concrete, helpful, and decisive.',
-    'If data is incomplete, still give the best useful answer possible instead of sounding broken.',
+    'You are the final answer generator for a premium AI assistant.',
+    'Answer the user directly in a natural and friendly way.',
+    'Never expose reasoning traces, tool logs, or internal process details.',
+    'Do not add sections about memory, planning, or what tools were used.',
+    'Use available context silently and focus on practical value.',
+    'If data is partial, still provide the most useful answer possible.',
     buildLanguageInstruction(language),
     'Return JSON only with this schema:',
     '{ "answer": "string", "followUps": ["string"] }',
@@ -280,41 +271,26 @@ async function generateWithModel(
     'Tool results JSON:',
     compactJson,
     `Plan steps: ${input.plan.steps.map((step) => step.title).join(' -> ')}`,
-    'Now produce the final user-facing answer only.',
+    'Now produce the final user-facing answer.',
   ].join('\n\n');
 
-  const response = await fetch('https://api.openai.com/v1/responses', {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      Authorization: `Bearer ${apiKey}`,
-    },
-    body: JSON.stringify({
-      model: 'gpt-4.1-mini',
-      temperature: 0.35,
-      input: [
-        {
-          role: 'system',
-          content: [{ type: 'input_text', text: systemPrompt }],
-        },
-        {
-          role: 'user',
-          content: [{ type: 'input_text', text: userPrompt }],
-        },
-      ],
-    }),
-  });
-
-  if (!response.ok) return null;
-
-  const payload = (await response.json()) as { output_text?: string };
-  const textOutput = normalizeText(payload.output_text);
-  if (!textOutput) return null;
-
-  const jsonBlock = extractJsonBlock(textOutput);
-  if (!jsonBlock) return null;
-
   try {
+    const completion = await groq.chat.completions.create({
+      model: generatorModel,
+      temperature: 0.35,
+      messages: [
+        { role: 'system', content: systemPrompt },
+        { role: 'user', content: userPrompt },
+      ],
+      response_format: { type: 'json_object' },
+    });
+
+    const textOutput = normalizeText(completion.choices?.[0]?.message?.content);
+    if (!textOutput) return null;
+
+    const jsonBlock = extractJsonBlock(textOutput);
+    if (!jsonBlock) return null;
+
     const parsed = JSON.parse(jsonBlock) as Partial<LlmAnswerSchema>;
     const answer = normalizeText(parsed.answer);
     const followUps = Array.isArray(parsed.followUps)
