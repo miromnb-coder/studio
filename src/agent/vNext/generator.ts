@@ -17,9 +17,9 @@ export type GenerateFinalAnswerInput = {
   memorySummary: string;
 };
 
-type ToolOutcome = {
-  success: AgentToolResult[];
-  failed: AgentToolResult[];
+type LlmAnswerSchema = {
+  answer: string;
+  followUps: string[];
 };
 
 function normalizeText(value: unknown): string {
@@ -42,273 +42,351 @@ function getRequestText(request: AgentRequest): string {
   return '';
 }
 
-function splitToolResults(results: AgentToolResult[]): ToolOutcome {
-  return {
-    success: results.filter((result) => result.ok),
-    failed: results.filter((result) => !result.ok),
-  };
+function getConversationMessages(
+  request: AgentRequest,
+): Array<{ role: string; content: string }> {
+  const raw =
+    (request as AgentRequest & {
+      conversation?: Array<{ role?: string; content?: string }>;
+    }).conversation ?? [];
+
+  if (!Array.isArray(raw)) return [];
+
+  return raw
+    .filter(
+      (item): item is { role?: string; content?: string } =>
+        Boolean(item) && typeof item === 'object',
+    )
+    .map((item) => ({
+      role: normalizeText(item.role) || 'user',
+      content: normalizeText(item.content),
+    }))
+    .filter((item) => item.content.length > 0)
+    .slice(-8);
 }
 
-function summarizeSuccessfulTools(results: AgentToolResult[]): string[] {
-  return results.map((result) => {
-    const metaSummary =
-      typeof result.data?.meta === 'object' &&
-      result.data?.meta &&
-      'summary' in result.data.meta &&
-      typeof (result.data.meta as { summary?: unknown }).summary === 'string'
-        ? (result.data.meta as { summary: string }).summary
-        : '';
+function getLanguage(input: GenerateFinalAnswerInput): string {
+  return (
+    normalizeText(input.route.responseLanguage) ||
+    normalizeText(input.route.inputLanguage) ||
+    normalizeText(input.request.responseLanguage) ||
+    normalizeText(input.request.inputLanguage) ||
+    'en'
+  ).toLowerCase();
+}
 
-    if (metaSummary) {
-      return `${result.tool}: ${metaSummary}`;
+function summarizeToolResults(toolResults: AgentToolResult[]): {
+  successful: string[];
+  failed: string[];
+  compactJson: string;
+} {
+  const successful: string[] = [];
+  const failed: string[] = [];
+
+  const compact = toolResults.map((result) => {
+    const summary =
+      typeof result.data?.summary === 'string'
+        ? normalizeText(result.data.summary)
+        : typeof result.data?.message === 'string'
+          ? normalizeText(result.data.message)
+          : typeof result.data?.meta === 'object' &&
+              result.data?.meta &&
+              'summary' in result.data.meta &&
+              typeof (result.data.meta as { summary?: unknown }).summary ===
+                'string'
+            ? normalizeText((result.data.meta as { summary: string }).summary)
+            : '';
+
+    const item = {
+      tool: result.tool,
+      ok: result.ok,
+      summary,
+      error: normalizeText(result.error),
+      data:
+        typeof result.data === 'object' && result.data
+          ? result.data
+          : {},
+    };
+
+    if (result.ok) {
+      successful.push(summary ? `${result.tool}: ${summary}` : `${result.tool}`);
+    } else {
+      failed.push(
+        `${result.tool}${item.error ? `: ${item.error}` : ': failed'}`,
+      );
     }
 
-    return `${result.tool}: completed successfully`;
+    return item;
   });
-}
 
-function summarizeFailedTools(results: AgentToolResult[]): string[] {
-  return results.map(
-    (result) => `${result.tool}: ${normalizeText(result.error) || 'failed'}`,
-  );
-}
-
-function determineLeadText(
-  route: AgentRouteResult,
-  requestText: string,
-  language: string,
-): string {
-  const isFi = language.startsWith('fi');
-  const isEs = language.startsWith('es');
-  const isDe = language.startsWith('de');
-  const isSv = language.startsWith('sv');
-
-  if (isFi) return `Analysoin pyyntösi "${requestText}" ja koostin sinulle selkeän vastauksen.`;
-  if (isEs) return `Analicé tu solicitud "${requestText}" y preparé una respuesta clara.`;
-  if (isDe) return `Ich habe deine Anfrage "${requestText}" analysiert und eine klare Antwort vorbereitet.`;
-  if (isSv) return `Jag analyserade din begäran "${requestText}" och förberedde ett tydligt svar.`;
-
-  switch (route.intent) {
-    case 'research':
-      return `I researched your request and pulled together the most relevant findings for "${requestText}".`;
-    case 'compare':
-      return `I compared the main options related to "${requestText}" and prepared a structured answer.`;
-    case 'planning':
-      return `I turned "${requestText}" into a practical plan you can act on.`;
-    case 'productivity':
-      return `I prepared a focused productivity-oriented response for "${requestText}".`;
-    case 'gmail':
-      return `I checked the email-related context for "${requestText}" and organized the next steps.`;
-    case 'finance':
-      return `I analyzed the financial angle for "${requestText}" and structured practical recommendations.`;
-    case 'memory':
-      return `I searched your relevant history for "${requestText}" and pulled back the strongest matches.`;
-    case 'coding':
-      return `I prepared a coding-focused response for "${requestText}" with implementation-ready direction.`;
-    case 'shopping':
-      return `I reviewed the shopping context for "${requestText}" and prepared clear buying guidance.`;
-    case 'general':
-      return `Here’s a direct response for "${requestText}".`;
-    default:
-      return `I analyzed "${requestText}" and prepared the best response I can from the available context.`;
-  }
-}
-
-function buildEvidenceSection(
-  successfulToolSummaries: string[],
-  failedToolSummaries: string[],
-  memorySummary: string,
-): string[] {
-  const lines: string[] = [];
-
-  if (successfulToolSummaries.length) {
-    lines.push('What I used:');
-    successfulToolSummaries.forEach((summary) => lines.push(`- ${summary}`));
-  }
-
-  if (memorySummary) {
-    lines.push('Relevant memory:');
-    lines.push(`- ${memorySummary}`);
-  }
-
-  if (failedToolSummaries.length) {
-    lines.push('What was incomplete:');
-    failedToolSummaries.forEach((summary) => lines.push(`- ${summary}`));
-  }
-
-  return lines;
-}
-
-function buildActionSection(route: AgentRouteResult): string[] {
-  switch (route.intent) {
-    case 'planning':
-      return [
-        'Recommended next step:',
-        '- Start with the first concrete milestone and keep the scope narrow.',
-      ];
-    case 'research':
-      return [
-        'Recommended next step:',
-        '- Review the strongest sources first, then decide whether you want a deeper comparison or summary.',
-      ];
-    case 'compare':
-      return [
-        'Recommended next step:',
-        '- Choose the option that best matches your highest-priority criteria, then I can help turn it into a decision table.',
-      ];
-    case 'gmail':
-      return [
-        'Recommended next step:',
-        '- Open the email-related workflow or tell me whether you want search, summary, receipt scan, or subscription scan.',
-      ];
-    case 'productivity':
-      return [
-        'Recommended next step:',
-        '- Confirm the action you want me to carry out next, and I can continue step by step.',
-      ];
-    case 'finance':
-      return [
-        'Recommended next step:',
-        '- Confirm the time or planning goal, and I can refine the schedule from there.',
-      ];
-    case 'memory':
-      return [
-        'Recommended next step:',
-        '- Open the matching thread or ask me to summarize the most relevant memory items.',
-      ];
-    default:
-      return [
-        'Recommended next step:',
-        '- Tell me whether you want this turned into a checklist, draft, or deeper analysis.',
-      ];
-  }
-}
-
-function buildFollowUps(route: AgentRouteResult): string[] {
-  switch (route.intent) {
-    case 'research':
-      return [
-        'Would you like a shorter summary?',
-        'Should I turn this into a comparison table?',
-      ];
-    case 'compare':
-      return [
-        'Do you want a winner + reasons?',
-        'Should I make a scoring table?',
-      ];
-    case 'planning':
-      return [
-        'Would you like this as a step-by-step checklist?',
-        'Should I convert this into a weekly plan?',
-      ];
-    case 'gmail':
-      return [
-        'Do you want me to search inbox or scan subscriptions next?',
-        'Should I draft an email response?',
-      ];
-    case 'finance':
-      return [
-        'Should I turn this into a calendar-ready plan?',
-        'Do you want a simpler schedule recommendation?',
-      ];
-    case 'memory':
-      return [
-        'Should I summarize the matching memory?',
-        'Do you want me to reopen the related thread?',
-      ];
-    default:
-      return [
-        'Would you like me to make this more actionable?',
-      ];
-  }
+  return {
+    successful,
+    failed,
+    compactJson: JSON.stringify(compact, null, 2),
+  };
 }
 
 function estimateConfidence(
   route: AgentRouteResult,
   toolResults: AgentToolResult[],
+  answerText: string,
 ): number {
-  const { success, failed } = splitToolResults(toolResults);
+  let confidence = typeof route.confidence === 'number' ? route.confidence : 0.6;
 
-  let confidence = route.confidence ?? 0.6;
+  const okCount = toolResults.filter((item) => item.ok).length;
+  const failCount = toolResults.filter((item) => !item.ok).length;
 
-  if (success.length > 0) confidence += 0.06;
-  if (success.length > 1) confidence += 0.04;
-  if (failed.length > 0) confidence -= 0.1;
-  if (failed.length > success.length && failed.length > 0) confidence -= 0.06;
+  if (okCount > 0) confidence += 0.07;
+  if (okCount > 1) confidence += 0.04;
+  if (failCount > 0) confidence -= 0.1;
+  if (failCount > okCount) confidence -= 0.08;
+  if (answerText.length < 80) confidence -= 0.08;
+  if (answerText.length > 180) confidence += 0.03;
 
-  return Math.max(0.2, Math.min(0.97, Number(confidence.toFixed(2))));
+  return Math.max(0.22, Math.min(0.97, Number(confidence.toFixed(2))));
 }
 
-function buildPlanSummary(plan: AgentPlan): string {
-  const completedShape = plan.steps
-    .map((step) => step.title)
-    .slice(0, 4)
-    .join(' → ');
+function buildLanguageInstruction(language: string): string {
+  if (language.startsWith('fi')) {
+    return 'Respond entirely in Finnish. Do not mix languages.';
+  }
+  if (language.startsWith('sv')) {
+    return 'Respond entirely in Swedish. Do not mix languages.';
+  }
+  if (language.startsWith('es')) {
+    return 'Respond entirely in Spanish. Do not mix languages.';
+  }
+  if (language.startsWith('de')) {
+    return 'Respond entirely in German. Do not mix languages.';
+  }
 
-  return completedShape
-    ? `Plan used: ${completedShape}.`
-    : 'Plan used: direct response flow.';
+  return 'Respond entirely in English. Do not mix languages.';
+}
+
+function buildFallbackAnswer(
+  input: GenerateFinalAnswerInput,
+  language: string,
+): AgentFinalAnswer {
+  const requestText = getRequestText(input.request);
+  const { successful, failed } = summarizeToolResults(input.toolResults);
+
+  const directAnswer =
+    language.startsWith('fi')
+      ? [
+          `Tässä paras vastaus pyyntöösi: ${requestText}.`,
+          input.memorySummary
+            ? `Hyödynsin myös tätä keskustelukontekstia: ${input.memorySummary}`
+            : '',
+          successful.length
+            ? `Käytin näitä tietolähteitä tai työkaluja: ${successful.join(', ')}.`
+            : '',
+          failed.length
+            ? `Kaikkea ei saatu haettua täydellisesti: ${failed.join(', ')}.`
+            : '',
+        ]
+          .filter(Boolean)
+          .join(' ')
+      : [
+          `Here is the best answer I can give for: ${requestText}.`,
+          input.memorySummary
+            ? `I also used this relevant context: ${input.memorySummary}`
+            : '',
+          successful.length
+            ? `I used these tools or sources: ${successful.join(', ')}.`
+            : '',
+          failed.length
+            ? `Some parts were incomplete: ${failed.join(', ')}.`
+            : '',
+        ]
+          .filter(Boolean)
+          .join(' ');
+
+  const followUps = language.startsWith('fi')
+    ? ['Haluatko tästä tarkemman version?', 'Teenkö tästä checklistin?']
+    : ['Do you want a more detailed version?', 'Should I turn this into a checklist?'];
+
+  return {
+    text: directAnswer,
+    confidence: estimateConfidence(input.route, input.toolResults, directAnswer),
+    followUps,
+    metadata: {
+      intent: input.route.intent,
+      inputLanguage: input.route.inputLanguage,
+      responseLanguage: language,
+      successfulTools: input.toolResults.filter((item) => item.ok).map((item) => item.tool),
+      failedTools: input.toolResults.filter((item) => !item.ok).map((item) => item.tool),
+      planId: input.plan.id,
+      stepCount: input.plan.steps.length,
+      mode: 'fallback',
+    },
+  };
+}
+
+function extractJsonBlock(text: string): string | null {
+  const trimmed = normalizeText(text);
+  if (!trimmed) return null;
+
+  if (trimmed.startsWith('{') && trimmed.endsWith('}')) {
+    return trimmed;
+  }
+
+  const fenced = trimmed.match(/```(?:json)?\s*([\s\S]*?)```/i);
+  if (fenced?.[1]) return fenced[1].trim();
+
+  const start = trimmed.indexOf('{');
+  const end = trimmed.lastIndexOf('}');
+  if (start >= 0 && end > start) {
+    return trimmed.slice(start, end + 1);
+  }
+
+  return null;
+}
+
+async function generateWithModel(
+  input: GenerateFinalAnswerInput,
+): Promise<LlmAnswerSchema | null> {
+  const apiKey = process.env.OPENAI_API_KEY;
+  if (!apiKey) return null;
+
+  const requestText = getRequestText(input.request);
+  const language = getLanguage(input);
+  const conversation = getConversationMessages(input.request);
+  const { compactJson } = summarizeToolResults(input.toolResults);
+
+  const systemPrompt = [
+    'You are the final answer generator for a premium AI agent.',
+    'Your job is to answer the user directly and intelligently.',
+    'Never expose internal reasoning, plan summaries, tool logs, chain-of-thought, or debug text.',
+    'Do not write sections like "Plan used", "What I used", "Relevant memory", or "Recommended next step".',
+    'Use tool results and memory silently to improve the answer.',
+    'Be concrete, helpful, and decisive.',
+    'If data is incomplete, still give the best useful answer possible instead of sounding broken.',
+    buildLanguageInstruction(language),
+    'Return JSON only with this schema:',
+    '{ "answer": "string", "followUps": ["string"] }',
+    'Keep followUps short and useful. Max 3.',
+  ].join('\n');
+
+  const userPrompt = [
+    `User request: ${requestText}`,
+    `Intent: ${input.route.intent}`,
+    `User goal: ${normalizeText(input.route.userGoal) || 'Help with the user request.'}`,
+    `Entities: ${Array.isArray(input.route.entities) ? input.route.entities.join(', ') : ''}`,
+    `Memory summary: ${normalizeText(input.memorySummary) || 'none'}`,
+    'Recent conversation:',
+    conversation.length
+      ? conversation.map((item) => `${item.role}: ${item.content}`).join('\n')
+      : 'none',
+    'Tool results JSON:',
+    compactJson,
+    `Plan steps: ${input.plan.steps.map((step) => step.title).join(' -> ')}`,
+    'Now produce the final user-facing answer only.',
+  ].join('\n\n');
+
+  const response = await fetch('https://api.openai.com/v1/responses', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${apiKey}`,
+    },
+    body: JSON.stringify({
+      model: 'gpt-4.1-mini',
+      temperature: 0.35,
+      input: [
+        {
+          role: 'system',
+          content: [{ type: 'input_text', text: systemPrompt }],
+        },
+        {
+          role: 'user',
+          content: [{ type: 'input_text', text: userPrompt }],
+        },
+      ],
+    }),
+  });
+
+  if (!response.ok) return null;
+
+  const payload = (await response.json()) as { output_text?: string };
+  const textOutput = normalizeText(payload.output_text);
+  if (!textOutput) return null;
+
+  const jsonBlock = extractJsonBlock(textOutput);
+  if (!jsonBlock) return null;
+
+  try {
+    const parsed = JSON.parse(jsonBlock) as Partial<LlmAnswerSchema>;
+    const answer = normalizeText(parsed.answer);
+    const followUps = Array.isArray(parsed.followUps)
+      ? parsed.followUps
+          .map((item) => normalizeText(item))
+          .filter(Boolean)
+          .slice(0, 3)
+      : [];
+
+    if (!answer) return null;
+
+    return {
+      answer,
+      followUps,
+    };
+  } catch {
+    return null;
+  }
 }
 
 export async function generateFinalAnswer(
   input: GenerateFinalAnswerInput,
 ): Promise<AgentFinalAnswer> {
-  const requestText = getRequestText(input.request);
-  const language =
-    normalizeText(input.route.responseLanguage) ||
-    normalizeText(input.route.inputLanguage) ||
-    normalizeText(input.request.responseLanguage) ||
-    normalizeText(input.request.inputLanguage) ||
-    'en';
-  const { success, failed } = splitToolResults(input.toolResults);
+  const language = getLanguage(input);
+  const llmAnswer = await generateWithModel(input);
 
-  const lead = determineLeadText(input.route, requestText, language);
-  const planSummary = buildPlanSummary(input.plan);
+  if (!llmAnswer) {
+    return buildFallbackAnswer(input, language);
+  }
 
-  const evidenceSection = buildEvidenceSection(
-    summarizeSuccessfulTools(success),
-    summarizeFailedTools(failed),
-    normalizeText(input.memorySummary),
-  );
-
-  const actionSection = buildActionSection(input.route);
-
-  const textBlocks = [
-    lead,
-    planSummary,
-    ...evidenceSection,
-    ...actionSection,
-  ].filter(Boolean);
-
-  const text = textBlocks.join('\n\n');
+  const text = llmAnswer.answer;
+  const confidence = estimateConfidence(input.route, input.toolResults, text);
 
   return {
     text,
-    confidence: estimateConfidence(input.route, input.toolResults),
-    followUps: buildFollowUps(input.route),
+    confidence,
+    followUps: llmAnswer.followUps,
     metadata: {
       intent: input.route.intent,
       inputLanguage: input.route.inputLanguage,
       responseLanguage: language,
-      successfulTools: success.map((result) => result.tool),
-      failedTools: failed.map((result) => result.tool),
+      successfulTools: input.toolResults
+        .filter((result) => result.ok)
+        .map((result) => result.tool),
+      failedTools: input.toolResults
+        .filter((result) => !result.ok)
+        .map((result) => result.tool),
       planId: input.plan.id,
       stepCount: input.plan.steps.length,
+      mode: 'model',
     },
   };
 }
 
-function chunkText(text: string, chunkSize = 140): string[] {
+function chunkText(text: string, chunkSize = 110): string[] {
   const normalized = normalizeText(text);
   if (!normalized) return [];
 
   const chunks: string[] = [];
-  let index = 0;
+  let rest = normalized;
 
-  while (index < normalized.length) {
-    chunks.push(normalized.slice(index, index + chunkSize));
-    index += chunkSize;
+  while (rest.length > chunkSize) {
+    let splitIndex = rest.lastIndexOf(' ', chunkSize);
+    if (splitIndex < Math.floor(chunkSize * 0.55)) {
+      splitIndex = chunkSize;
+    }
+
+    chunks.push(rest.slice(0, splitIndex).trim());
+    rest = rest.slice(splitIndex).trim();
   }
+
+  if (rest) chunks.push(rest);
 
   return chunks;
 }
@@ -334,7 +412,9 @@ export async function* generateFinalAnswerStream(
       type: 'answer_delta',
       requestId: input.request.requestId,
       timestamp: new Date().toISOString(),
-      payload: { delta: chunk },
+      payload: {
+        delta: `${chunk}${chunk === chunks[chunks.length - 1] ? '' : ' '}`,
+      },
     };
   }
 
