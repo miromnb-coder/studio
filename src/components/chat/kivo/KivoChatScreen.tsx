@@ -6,9 +6,9 @@ import { AlertCircle, Paperclip, X } from 'lucide-react';
 import { useAppStore } from '@/app/store/app-store';
 import type { MessageAttachment } from '@/app/store/app-store';
 import { MessageThread } from '@/components/chat/MessageThread';
+import { WorkspaceSheet } from '@/components/chat/WorkspaceSheet';
 import { KivoChatHeader } from './KivoChatHeader';
 import { KivoComposerDock } from './KivoComposerDock';
-import { KivoQuickSheet } from './KivoQuickSheet';
 
 type SpeechRecognitionEventLike = Event & {
   results: ArrayLike<ArrayLike<{ transcript: string }>>;
@@ -57,7 +57,7 @@ export function KivoChatScreen() {
   const [isListening, setIsListening] = useState(false);
   const [attachments, setAttachments] = useState<MessageAttachment[]>([]);
   const [filePickerAccept, setFilePickerAccept] = useState('');
-  const [quickSheetOpen, setQuickSheetOpen] = useState(false);
+  const [workspaceOpen, setWorkspaceOpen] = useState(false);
   const [notice, setNotice] = useState<Notice | null>(null);
 
   const recognitionRef = useRef<SpeechRecognitionLike | null>(null);
@@ -79,7 +79,7 @@ export function KivoChatScreen() {
   }, [attachments]);
 
   useEffect(() => {
-    setQuickSheetOpen(false);
+    setWorkspaceOpen(false);
   }, [pathname]);
 
   useEffect(() => {
@@ -141,7 +141,7 @@ export function KivoChatScreen() {
     cleanupAttachments(attachments);
     setAttachments([]);
     setDraftPrompt('');
-    setQuickSheetOpen(false);
+    setWorkspaceOpen(false);
     router.push('/chat');
     focusComposer();
   };
@@ -267,22 +267,17 @@ export function KivoChatScreen() {
       setDraftPrompt('');
       cleanupAttachments(attachments);
       setAttachments([]);
-      setQuickSheetOpen(false);
+      setWorkspaceOpen(false);
       focusComposer();
     } finally {
       setIsSending(false);
     }
   };
 
-  const handleQuickNavigate = (href: string) => {
-    setQuickSheetOpen(false);
-    router.push(href);
-  };
-
   return (
     <div className="min-h-screen bg-[#f5f5f7] text-[#2f3640]">
       <div className="mx-auto flex min-h-screen w-full max-w-[560px] flex-col bg-[radial-gradient(circle_at_50%_18%,rgba(255,255,255,0.92),rgba(245,245,247,1)_58%)] shadow-[0_24px_80px_rgba(31,41,55,0.08)]">
-        <KivoChatHeader onOpenQuickSheet={() => setQuickSheetOpen(true)} />
+        <KivoChatHeader />
 
         <main className="relative flex min-h-0 flex-1 flex-col">
           {streamError ? (
@@ -305,7 +300,10 @@ export function KivoChatScreen() {
             </div>
           ) : (
             <div className="min-h-0 flex-1 pb-[158px]">
-              <MessageThread messages={messages} pending={isAgentResponding || isSending} />
+              <MessageThread
+                messages={messages}
+                pending={isAgentResponding || isSending}
+              />
             </div>
           )}
         </main>
@@ -352,7 +350,7 @@ export function KivoChatScreen() {
           onChange={setDraftPrompt}
           onSend={handleSend}
           onPlusClick={() => openFilePicker()}
-          onQuickActionClick={() => setQuickSheetOpen(true)}
+          onQuickActionClick={() => setWorkspaceOpen(true)}
           onMicClick={toggleMic}
           canSend={canSend}
           isListening={isListening}
@@ -360,14 +358,105 @@ export function KivoChatScreen() {
           placeholder={placeholder}
         />
 
-        <KivoQuickSheet
-          open={quickSheetOpen}
-          onClose={() => setQuickSheetOpen(false)}
-          onNewChat={createNewChat}
-          onOpenFiles={() => openFilePicker()}
-          onOpenImages={() => openFilePicker('image/*')}
-          onToggleMic={toggleMic}
-          onNavigate={handleQuickNavigate}
+        <WorkspaceSheet
+          open={workspaceOpen}
+          onClose={() => setWorkspaceOpen(false)}
+          onQuickAction={(id) => {
+            if (id === 'ask-agent') {
+              setWorkspaceOpen(false);
+              focusComposer();
+              return;
+            }
+
+            if (id === 'analyze') {
+              setWorkspaceOpen(false);
+              router.push('/analyze');
+              return;
+            }
+
+            if (id === 'planner') {
+              setWorkspaceOpen(false);
+              router.push('/actions?type=planner');
+              return;
+            }
+
+            setWorkspaceOpen(false);
+            router.push('/money-saver');
+          }}
+          onConnectorAction={(connector, mode) => {
+            setWorkspaceOpen(false);
+
+            if (connector === 'gmail') {
+              router.push('/control');
+              return;
+            }
+
+            if (connector === 'google-calendar') {
+              router.push('/control');
+              return;
+            }
+
+            if (connector === 'google-drive') {
+              router.push('/control');
+              return;
+            }
+
+            if (connector === 'outlook') {
+              router.push('/control');
+              return;
+            }
+
+            if (connector === 'browser' && mode === 'connect') {
+              router.push('/tools');
+              return;
+            }
+
+            if (connector === 'github') {
+              return;
+            }
+
+            router.push('/tools');
+          }}
+          onToolSelect={(id) => {
+            setWorkspaceOpen(false);
+
+            if (id === 'finance-scanner') {
+              router.push('/money');
+              return;
+            }
+
+            if (id === 'memory-search') {
+              router.push('/memory');
+              return;
+            }
+
+            if (id === 'research-mode') {
+              router.push('/agents');
+              return;
+            }
+
+            if (id === 'compare-tool') {
+              router.push('/actions');
+              return;
+            }
+
+            router.push('/tools');
+          }}
+          onRecentSelect={(id) => {
+            setWorkspaceOpen(false);
+
+            if (id === 'gmail-sync') {
+              router.push('/control');
+              return;
+            }
+
+            if (id === 'subscription-scan') {
+              router.push('/money-saver');
+              return;
+            }
+
+            router.push('/actions?type=planner');
+          }}
         />
 
         <input
