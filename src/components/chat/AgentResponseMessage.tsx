@@ -180,11 +180,19 @@ function detectLanguage(input?: string): SupportedLocale {
       'construyendo',
     ]);
 
-  if (finnishScore >= swedishScore && finnishScore >= spanishScore && finnishScore > 0) {
+  if (
+    finnishScore >= swedishScore &&
+    finnishScore >= spanishScore &&
+    finnishScore > 0
+  ) {
     return 'fi';
   }
 
-  if (swedishScore > finnishScore && swedishScore >= spanishScore && swedishScore > 0) {
+  if (
+    swedishScore > finnishScore &&
+    swedishScore >= spanishScore &&
+    swedishScore > 0
+  ) {
     return 'sv';
   }
 
@@ -269,11 +277,17 @@ function sanitizeVisibleContent(content: string): string {
   return joined;
 }
 
-function shouldShowIntro(visibleContent: string, steps: AgentResponseStep[]): boolean {
+function shouldShowIntro(
+  visibleContent: string,
+  steps: AgentResponseStep[],
+): boolean {
   return Boolean(steps.length || visibleContent);
 }
 
-function shouldShowActions(actions: string[], visibleContent: string): boolean {
+function shouldShowActions(
+  actions: string[],
+  visibleContent: string,
+): boolean {
   return actions.length > 0 && Boolean(visibleContent);
 }
 
@@ -292,7 +306,10 @@ function getSafeContent(
   return COPY[locale].fallback;
 }
 
-export function AgentResponseMessage({ message, latestUserContent }: AgentResponseMessageProps) {
+export function AgentResponseMessage({
+  message,
+  latestUserContent,
+}: AgentResponseMessageProps) {
   const locale = detectLanguage(latestUserContent);
   const copy = COPY[locale];
 
@@ -308,18 +325,24 @@ export function AgentResponseMessage({ message, latestUserContent }: AgentRespon
     <div className="max-w-full">
       <div className="mb-4 flex items-center gap-3">
         <span
-          className="text-[20px] font-normal leading-none tracking-[-0.03em] text-[#202734]"
-          style={{ fontFamily: 'ui-serif, Georgia, Cambria, "Times New Roman", Times, serif' }}
+          className="text-[21px] font-normal leading-none tracking-[-0.035em] text-[#232c39]"
+          style={{
+            fontFamily:
+              'ui-serif, Georgia, Cambria, "Times New Roman", Times, serif',
+          }}
         >
           Kivo
         </span>
-        <span className="rounded-xl border border-[#d7dce4] bg-[#eceff3] px-2.5 py-0.5 text-[12px] font-medium tracking-[-0.01em] text-[#5f6c7b]">
+
+        <span className="rounded-[999px] border border-[#d7dce4] bg-[#eceff3] px-2.5 py-0.5 text-[12px] font-medium tracking-[-0.01em] text-[#647181] shadow-[inset_0_1px_0_rgba(255,255,255,0.45)]">
           {copy.brand}
         </span>
       </div>
 
       {showIntro ? (
-        <p className="mb-5 text-[18px] leading-[1.5] tracking-[-0.02em] text-[#2f3947]">{copy.intro[introIndex]}</p>
+        <p className="mb-5 text-[18px] leading-[1.48] tracking-[-0.022em] text-[#2f3947]">
+          {copy.intro[introIndex]}
+        </p>
       ) : null}
 
       {steps.length > 0 ? (
@@ -329,7 +352,7 @@ export function AgentResponseMessage({ message, latestUserContent }: AgentRespon
       ) : null}
 
       <div className="max-w-none">
-        <div className="whitespace-pre-wrap text-[17px] leading-[1.72] tracking-[-0.015em] text-[#353f4d]">
+        <div className="whitespace-pre-wrap text-[17px] leading-[1.68] tracking-[-0.016em] text-[#36414f]">
           {visibleContent}
         </div>
       </div>
