@@ -111,14 +111,12 @@ export function MessageThread({ messages, pending }: MessageThreadProps) {
   if (messages.length === 0) {
     return (
       <div className="flex min-h-0 flex-1 items-center justify-center px-8 pb-[188px] pt-8">
-        <div className="rounded-[32px] border border-[#ebeef3] bg-[linear-gradient(180deg,rgba(255,255,255,0.9),rgba(248,250,252,0.92))] px-8 py-10 shadow-[0_18px_50px_rgba(15,23,42,0.05)] backdrop-blur-sm">
-          <p
-            className="max-w-[340px] text-center text-[20px] font-normal leading-[1.2] tracking-[-0.02em] text-[#4a5160]"
-            style={{ fontFamily: 'ui-serif, Georgia, Times, serif' }}
-          >
-            What can I do for you?
-          </p>
-        </div>
+        <p
+          className="max-w-[340px] text-center text-[20px] font-normal leading-[1.18] tracking-[-0.02em] text-[#4a5160]"
+          style={{ fontFamily: 'ui-serif, Georgia, Times, serif' }}
+        >
+          What can I do for you?
+        </p>
       </div>
     );
   }
@@ -129,11 +127,11 @@ export function MessageThread({ messages, pending }: MessageThreadProps) {
       onScroll={handleScroll}
       className="min-h-0 flex-1 overflow-y-auto px-4 pb-[196px] pt-5 sm:px-6"
     >
-      <div className="mx-auto w-full max-w-[920px] space-y-5">
+      <div className="mx-auto w-full max-w-[920px] space-y-6">
         {rows.map((row) => {
           if (row.type === 'divider') {
             return (
-              <div key={row.id} className="flex items-center gap-3 py-1">
+              <div key={row.id} className="flex items-center gap-3 py-1.5">
                 <div className="h-px flex-1 bg-[#e8ecf2]" />
                 <span className="text-[11px] font-medium uppercase tracking-[0.16em] text-[#9ca4b2]">
                   {row.label}
@@ -160,11 +158,13 @@ export function MessageThread({ messages, pending }: MessageThreadProps) {
               }`}
             >
               <article
-                className={`w-full ${isUser ? 'max-w-[78%] sm:max-w-[70%]' : 'max-w-full sm:max-w-[92%]'}`}
+                className={`w-full ${
+                  isUser ? 'max-w-[78%] sm:max-w-[70%]' : 'max-w-full sm:max-w-[92%]'
+                }`}
               >
                 {isUser ? (
-                  <div className="rounded-[28px] border border-[#dde2ea] bg-[linear-gradient(180deg,rgba(247,248,251,0.96),rgba(243,245,248,0.98))] px-4 py-3.5 shadow-[0_8px_24px_rgba(15,23,42,0.04)]">
-                    <p className="whitespace-pre-wrap text-[15px] leading-[1.7] tracking-[-0.016em] text-[#424a59]">
+                  <div className="rounded-[26px] border border-[#dde2ea] bg-[linear-gradient(180deg,rgba(247,248,251,0.96),rgba(243,245,248,0.98))] px-4 py-3 shadow-[0_8px_24px_rgba(15,23,42,0.04)]">
+                    <p className="whitespace-pre-wrap text-[15px] leading-[1.65] tracking-[-0.016em] text-[#424a59]">
                       {message.content}
                     </p>
 
@@ -218,7 +218,7 @@ export function MessageThread({ messages, pending }: MessageThreadProps) {
 
         {pending ? (
           <div className="flex justify-start">
-            <div className="rounded-full border border-[#e0e5ec] bg-[linear-gradient(180deg,rgba(255,255,255,0.92),rgba(247,249,252,0.96))] px-4 py-2 shadow-[0_8px_24px_rgba(15,23,42,0.04)]">
+            <div className="rounded-full border border-[#e0e5ec] bg-[linear-gradient(180deg,rgba(255,255,255,0.92),rgba(247,249,252,0.96))] px-3.5 py-1.5 shadow-[0_8px_24px_rgba(15,23,42,0.04)]">
               <div className="inline-flex items-center gap-2.5 text-[12px] font-medium tracking-[-0.01em] text-[#727c8d]">
                 <CircleDashed className="h-4 w-4 animate-spin" />
                 Assistant is responding…
