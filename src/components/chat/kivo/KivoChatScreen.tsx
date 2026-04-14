@@ -71,7 +71,9 @@ export function KivoChatScreen() {
   useEffect(() => {
     return () => {
       attachments.forEach((attachment) => {
-        if (attachment.previewUrl) URL.revokeObjectURL(attachment.previewUrl);
+        if (attachment.previewUrl) {
+          URL.revokeObjectURL(attachment.previewUrl);
+        }
       });
     };
   }, [attachments]);
@@ -118,13 +120,17 @@ export function KivoChatScreen() {
 
   const cleanupAttachments = (items: MessageAttachment[]) => {
     items.forEach((attachment) => {
-      if (attachment.previewUrl) URL.revokeObjectURL(attachment.previewUrl);
+      if (attachment.previewUrl) {
+        URL.revokeObjectURL(attachment.previewUrl);
+      }
     });
   };
 
   const focusComposer = () => {
     requestAnimationFrame(() => {
-      const textarea = document.getElementById('kivo-composer-textarea') as HTMLTextAreaElement | null;
+      const textarea = document.getElementById(
+        'kivo-composer-textarea',
+      ) as HTMLTextAreaElement | null;
       textarea?.focus();
     });
   };
@@ -146,25 +152,34 @@ export function KivoChatScreen() {
     size: file.size,
     mimeType: file.type || 'application/octet-stream',
     kind: file.type.startsWith('image/') ? 'image' : 'file',
-    previewUrl: file.type.startsWith('image/') ? URL.createObjectURL(file) : undefined,
+    previewUrl: file.type.startsWith('image/')
+      ? URL.createObjectURL(file)
+      : undefined,
   });
 
   const addAttachments = (files: FileList | File[]) => {
     const next = Array.from(files).map(toAttachment);
+
     if (!next.length) return;
 
     setAttachments((prev) => [...prev, ...next]);
 
     showNotice(
       'Attachment added',
-      next.length === 1 ? `${next[0].name} is ready to send.` : `${next.length} files are ready to send.`,
+      next.length === 1
+        ? `${next[0].name} is ready to send.`
+        : `${next.length} files are ready to send.`,
     );
   };
 
   const removeAttachment = (attachmentId: string) => {
     setAttachments((prev) => {
       const target = prev.find((item) => item.id === attachmentId);
-      if (target?.previewUrl) URL.revokeObjectURL(target.previewUrl);
+
+      if (target?.previewUrl) {
+        URL.revokeObjectURL(target.previewUrl);
+      }
+
       return prev.filter((item) => item.id !== attachmentId);
     });
   };
@@ -191,9 +206,15 @@ export function KivoChatScreen() {
 
     recognition.onresult = (event) => {
       const transcript = event.results?.[0]?.[0]?.transcript?.trim();
+
       if (!transcript) return;
 
-      setDraftPrompt(draftPrompt ? `${draftPrompt} ${transcript}` : transcript);
+      const currentDraft =
+        typeof useAppStore.getState === 'function'
+          ? useAppStore.getState().draftPrompt
+          : draftPrompt;
+
+      setDraftPrompt(currentDraft ? `${currentDraft} ${transcript}` : transcript);
     };
 
     recognition.onerror = () => {
@@ -213,7 +234,10 @@ export function KivoChatScreen() {
     const recognition = ensureSpeechRecognition();
 
     if (!recognition) {
-      showNotice('Speech unavailable', 'This browser does not support speech recognition.');
+      showNotice(
+        'Speech unavailable',
+        'This browser does not support speech recognition.',
+      );
       return;
     }
 
@@ -256,8 +280,8 @@ export function KivoChatScreen() {
   };
 
   return (
-    <div className="min-h-screen bg-[#f3f3f5] text-[#2f3640]">
-      <div className="mx-auto flex min-h-screen w-full max-w-[560px] flex-col bg-[radial-gradient(circle_at_top,rgba(255,255,255,0.78),rgba(243,243,245,1)_58%)] shadow-[0_24px_80px_rgba(31,41,55,0.10)]">
+    <div className="min-h-screen bg-[#f5f5f7] text-[#2f3640]">
+      <div className="mx-auto flex min-h-screen w-full max-w-[560px] flex-col bg-[radial-gradient(circle_at_50%_18%,rgba(255,255,255,0.92),rgba(245,245,247,1)_58%)] shadow-[0_24px_80px_rgba(31,41,55,0.08)]">
         <KivoChatHeader onOpenQuickSheet={() => setQuickSheetOpen(true)} />
 
         <main className="relative flex min-h-0 flex-1 flex-col">
@@ -271,26 +295,28 @@ export function KivoChatScreen() {
           ) : null}
 
           {!hasMessages ? (
-            <div className="flex min-h-0 flex-1 items-center justify-center px-8 pb-[190px] pt-8">
+            <div className="flex min-h-0 flex-1 items-start justify-center px-8 pb-[240px] pt-[18vh]">
               <h2
-                className="max-w-[340px] text-center text-[34px] font-normal leading-[1.12] tracking-[-0.04em] text-[#3a404a] sm:text-[40px]"
+                className="max-w-[340px] text-center text-[34px] font-normal leading-[1.08] tracking-[-0.05em] text-[#353b45] sm:text-[40px]"
                 style={{ fontFamily: 'ui-serif, Georgia, Times, serif' }}
               >
                 What can I do for you?
               </h2>
             </div>
           ) : (
-            <MessageThread messages={messages} pending={isAgentResponding || isSending} />
+            <div className="min-h-0 flex-1 pb-[158px]">
+              <MessageThread messages={messages} pending={isAgentResponding || isSending} />
+            </div>
           )}
         </main>
 
         {attachments.length > 0 ? (
-          <div className="pointer-events-none fixed inset-x-0 bottom-[122px] z-20 mx-auto w-full max-w-[560px] px-6">
-            <div className="pointer-events-auto mx-auto flex max-w-[440px] flex-wrap gap-2">
+          <div className="pointer-events-none fixed inset-x-0 bottom-[124px] z-20 mx-auto w-full max-w-[560px] px-6">
+            <div className="pointer-events-auto mx-auto flex max-w-[470px] flex-wrap gap-2">
               {attachments.map((attachment) => (
                 <div
                   key={attachment.id}
-                  className="inline-flex items-center gap-2 rounded-full border border-[#e2e4ea] bg-white/96 px-3 py-2 text-[12px] text-[#5e6573] shadow-[0_8px_22px_rgba(17,24,39,0.06)] backdrop-blur"
+                  className="inline-flex items-center gap-2 rounded-full border border-black/[0.05] bg-white/96 px-3 py-2 text-[12px] text-[#5e6573] shadow-[0_8px_22px_rgba(17,24,39,0.06)] backdrop-blur"
                 >
                   <Paperclip className="h-3.5 w-3.5" />
                   <span className="max-w-[140px] truncate">{attachment.name}</span>
@@ -298,7 +324,7 @@ export function KivoChatScreen() {
                     type="button"
                     onClick={() => removeAttachment(attachment.id)}
                     aria-label={`Remove ${attachment.name}`}
-                    className="inline-flex h-4 w-4 items-center justify-center rounded-full text-[#7d8593] transition hover:text-[#2f3640]"
+                    className="inline-flex h-4 w-4 items-center justify-center rounded-full text-[#7d8593] transition-all duration-200 ease-out hover:text-[#2f3640] active:scale-[0.97]"
                   >
                     <X className="h-3.5 w-3.5" />
                   </button>
@@ -310,9 +336,13 @@ export function KivoChatScreen() {
 
         {notice ? (
           <div className="pointer-events-none fixed inset-x-0 top-[88px] z-40 mx-auto w-full max-w-[560px] px-5">
-            <div className="pointer-events-auto ml-auto w-fit max-w-[320px] rounded-[18px] border border-[#dde2ea] bg-white/92 px-4 py-3 shadow-[0_14px_30px_rgba(15,23,42,0.08)] backdrop-blur">
-              <p className="text-[13px] font-semibold tracking-[-0.01em] text-[#364152]">{notice.title}</p>
-              <p className="mt-1 text-[12px] leading-5 text-[#6a7382]">{notice.detail}</p>
+            <div className="pointer-events-auto ml-auto w-fit max-w-[320px] rounded-[18px] border border-black/[0.05] bg-white/92 px-4 py-3 shadow-[0_14px_30px_rgba(15,23,42,0.08)] backdrop-blur">
+              <p className="text-[13px] font-semibold tracking-[-0.01em] text-[#364152]">
+                {notice.title}
+              </p>
+              <p className="mt-1 text-[12px] leading-5 text-[#6a7382]">
+                {notice.detail}
+              </p>
             </div>
           </div>
         ) : null}
@@ -349,6 +379,7 @@ export function KivoChatScreen() {
           onChange={(event) => {
             addAttachments(event.target.files ?? []);
             event.currentTarget.value = '';
+            setFilePickerAccept('');
           }}
         />
       </div>
