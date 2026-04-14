@@ -12,6 +12,7 @@ import { AgentWorkflowBoxes } from './AgentWorkflowBoxes';
 type AgentResponseMessageProps = {
   message: Message;
   latestUserContent?: string;
+  liveSteps?: AgentResponseStep[];
 };
 
 type SupportedLocale = 'en' | 'fi' | 'sv' | 'es';
@@ -224,7 +225,13 @@ function dedupeSteps(steps?: AgentResponseStep[]): AgentResponseStep[] {
   const result: AgentResponseStep[] = [];
 
   for (const step of steps) {
-    const action = normalizeText(step?.action);
+    const action = normalizeText(
+      step?.action ||
+        (step as AgentResponseStep & { label?: string; title?: string; id?: string }).label ||
+        (step as AgentResponseStep & { label?: string; title?: string; id?: string }).title ||
+        (step as AgentResponseStep & { label?: string; title?: string; id?: string }).id,
+    );
+
     if (!action) continue;
 
     const summary = normalizeText(step?.summary);
@@ -309,16 +316,22 @@ function getSafeContent(
 export function AgentResponseMessage({
   message,
   latestUserContent,
+  liveSteps,
 }: AgentResponseMessageProps) {
   const locale = detectLanguage(latestUserContent);
   const copy = COPY[locale];
 
   const metadata = message.agentMetadata;
-  const steps = dedupeSteps(metadata?.steps).slice(0, 5);
+  const resolvedSteps = dedupeSteps(
+    message.isStreaming && Array.isArray(liveSteps) && liveSteps.length > 0
+      ? liveSteps
+      : metadata?.steps,
+  ).slice(0, 5);
+
   const actions = mapActions(metadata?.suggestedActions);
   const visibleContent = getSafeContent(message.content, metadata, locale);
   const introIndex = hashIndex(message.id, copy.intro.length);
-  const showIntro = shouldShowIntro(visibleContent, steps);
+  const showIntro = shouldShowIntro(visibleContent, resolvedSteps);
   const showActions = shouldShowActions(actions, visibleContent);
 
   return (
@@ -345,9 +358,9 @@ export function AgentResponseMessage({
         </p>
       ) : null}
 
-      {steps.length > 0 ? (
+      {resolvedSteps.length > 0 ? (
         <div className="mb-6">
-          <AgentWorkflowBoxes steps={steps} locale={locale} />
+          <AgentWorkflowBoxes steps={resolvedSteps} locale={locale} />
         </div>
       ) : null}
 
