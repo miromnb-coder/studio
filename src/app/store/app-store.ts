@@ -155,14 +155,6 @@ const nowIso = () => new Date().toISOString();
 const DEFAULT_NEW_CHAT_TITLE = 'New chat';
 const DEFAULT_ACTIVE_AGENT: AgentName = 'Supervisor Agent';
 
-type StreamPhase =
-  | 'planning'
-  | 'memory'
-  | 'tool_running'
-  | 'synthesizing'
-  | 'retrying'
-  | 'completed';
-
 type AgentStepLike = {
   action?: string;
   label?: string;
@@ -179,28 +171,104 @@ type AgentStructuredDataLike = {
 };
 
 type ChatStreamEvent =
-  | { type: 'typing'; requestId?: string }
   | {
-      type: 'status';
-      phase?: StreamPhase;
+      type:
+        | 'router_started'
+        | 'router_completed'
+        | 'planning_started'
+        | 'planning_completed'
+        | 'memory_started'
+        | 'memory_completed'
+        | 'tool_started'
+        | 'tool_completed';
+      stepId?: string;
       label?: string;
-      detail?: string;
+      summary?: string;
+      tool?: string;
+      status?: string;
+      error?: string;
       requestId?: string;
     }
   | {
-      type: 'text-delta';
+      type: 'answer_delta';
       delta?: string;
       emittedChars?: number;
       requestId?: string;
     }
   | {
-      type: 'final';
+      type: 'answer_completed';
       content?: string;
       metadata?: AgentResponseMetadata;
       metrics?: { ttfbMs?: number; completionMs?: number; charCount?: number };
       requestId?: string;
-    }
-  | { type: 'done'; requestId?: string };
+    };
+
+const STREAM_STEP_EVENT_TYPES = new Set<ChatStreamEvent['type']>([
+  'router_started',
+  'router_completed',
+  'planning_started',
+  'planning_completed',
+  'memory_started',
+  'memory_completed',
+  'tool_started',
+  'tool_completed',
+]);
+
+function eventStatusToStepStatus(
+  type: ChatStreamEvent['type'],
+  explicitStatus?: string,
+): 'running' | 'completed' | 'failed' {
+  if (explicitStatus === 'failed') return 'failed';
+  if (type.endsWith('_completed')) return 'completed';
+  return 'running';
+}
+
+function upsertLiveStep(
+  steps: AgentResponseMetadata['steps'],
+  event: Extract<ChatStreamEvent, { stepId?: string; label?: string }>,
+): AgentResponseMetadata['steps'] {
+  const label = String(event.label || '').trim();
+  if (!label) return steps;
+
+  const status = eventStatusToStepStatus(event.type, event.status);
+  const findIndex = steps.findIndex((step) => {
+    const action = String(step.action || '').trim().toLowerCase();
+    return action === label.toLowerCase();
+  });
+
+  const nextStep = {
+    action: label,
+    status,
+    summary: event.summary,
+    tool: event.tool,
+    error: event.error,
+  } as const;
+
+  if (findIndex === -1) {
+    return [...steps, nextStep];
+  }
+
+  return steps.map((step, index) => {
+    if (index !== findIndex) return step;
+    const existingStatus = normalizeStepStatus(step.status);
+    const mergedStatus =
+      status === 'failed' || existingStatus === 'failed'
+        ? 'failed'
+        : status === 'completed' || existingStatus === 'completed'
+          ? 'completed'
+          : 'running';
+
+    return {
+      ...step,
+      ...nextStep,
+      action: label,
+      status: mergedStatus,
+      summary: nextStep.summary || step.summary,
+      tool: nextStep.tool || step.tool,
+      error: nextStep.error || step.error,
+    };
+  });
+}
 
 const defaultAgents = (): Record<AgentName, Agent> => ({
   'Supervisor Agent': {
@@ -627,35 +695,54 @@ async function streamAssistantResponse(
   };
 
   const handleStreamEvent = (event: ChatStreamEvent) => {
-    if (event.type === 'status') {
-      const label = event.label || 'Processing';
+    if (STREAM_STEP_EVENT_TYPES.has(event.type)) {
+      const label = String(event.label || '').trim();
+      if (!label) return;
 
       trackEvent('chat_phase_transition', {
         conversationId,
         messageId: assistantMessageId,
         requestId,
-        properties: {
-          phase: event.phase || 'tool_running',
-          label,
-        },
+        properties: { phase: event.type, label },
       });
 
-      setState((prev) => ({
-        ...prev,
-        activeSteps: [
-          ...prev.activeSteps,
-          {
-            id: createId(),
-            label,
-            status: event.phase === 'retrying' ? 'failed' : 'running',
-          },
-        ].slice(-8),
-      }));
+      setState((prev) => {
+        const messages = prev.messageState[conversationId] ?? [];
+        const assistantMessage = messages.find(
+          (message) => message.id === assistantMessageId,
+        );
+        const existingMetadata = assistantMessage?.agentMetadata;
+        const existingSteps = Array.isArray(existingMetadata?.steps)
+          ? existingMetadata.steps
+          : [];
+        const nextSteps = upsertLiveStep(existingSteps, event);
 
+        return {
+          ...prev,
+          activeSteps: deriveActiveStepsFromMetadata(
+            { ...(existingMetadata ?? mergeAgentMetadata()), steps: nextSteps },
+            prev.activeSteps,
+          ),
+          messageState: {
+            ...prev.messageState,
+            [conversationId]: messages.map((message) =>
+              message.id === assistantMessageId
+                ? {
+                    ...message,
+                    agentMetadata: {
+                      ...mergeAgentMetadata(message.agentMetadata),
+                      steps: nextSteps,
+                    },
+                  }
+                : message,
+            ),
+          },
+        };
+      });
       return;
     }
 
-    if (event.type === 'text-delta' && event.delta) {
+    if (event.type === 'answer_delta' && event.delta) {
       streamedText += event.delta;
       bufferedDelta += event.delta;
       queueDeltaFlush();
@@ -674,7 +761,7 @@ async function streamAssistantResponse(
       return;
     }
 
-    if (event.type === 'final') {
+    if (event.type === 'answer_completed') {
       flushDelta();
       streamComplete = true;
 
@@ -683,10 +770,13 @@ async function streamAssistantResponse(
         const content =
           event.content || streamedText || 'I could not generate a response.';
 
-        const fallbackSteps = prev.activeSteps.map((step) => ({
-          action: step.label,
+        const inFlightSteps =
+          messages.find((message) => message.id === assistantMessageId)
+            ?.agentMetadata?.steps ?? [];
+        const fallbackSteps = inFlightSteps.map((step) => ({
+          action: step.action,
           status: step.status === 'running' ? 'completed' : step.status,
-          summary: undefined,
+          summary: step.summary,
         }));
 
         const mergedMetadata = mergeAgentMetadata(

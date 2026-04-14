@@ -322,11 +322,11 @@ export function AgentResponseMessage({
   const copy = COPY[locale];
 
   const metadata = message.agentMetadata;
-  const resolvedSteps = dedupeSteps(
-    message.isStreaming && Array.isArray(liveSteps) && liveSteps.length > 0
+  const steps =
+    message.isStreaming && liveSteps?.length
       ? liveSteps
-      : metadata?.steps,
-  ).slice(0, 5);
+      : message.agentMetadata?.steps ?? [];
+  const resolvedSteps = dedupeSteps(steps).slice(0, 5);
 
   const actions = mapActions(metadata?.suggestedActions);
   const visibleContent = getSafeContent(message.content, metadata, locale);

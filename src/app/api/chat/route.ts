@@ -22,6 +22,7 @@ type AgentStep = {
   status?: string;
   summary?: string;
   error?: string;
+  tool?: string;
 };
 
 function streamLine(payload: Record<string, unknown>) {
@@ -181,18 +182,16 @@ function getMemoryUsed(
 
 function getSuggestedActions(result: AgentResponse | null): string[] {
   return Array.isArray(result?.metadata?.suggestedActions)
-    ? result!.metadata!.suggestedActions.filter(
-        (item): item is string =>
-          typeof item === 'string' && item.trim().length > 0,
-      )
+    ? result!.metadata!.suggestedActions
+        .map((item) =>
+          typeof item === 'string'
+            ? item
+            : typeof item?.label === 'string'
+              ? item.label
+              : '',
+        )
+        .filter((item): item is string => item.trim().length > 0)
     : [];
-}
-
-function statusPhaseFromStep(step: AgentStep): string {
-  if (step.status === 'failed') return 'retrying';
-  if (step.status === 'running') return 'tool_running';
-  if (step.status === 'pending') return 'planning';
-  return 'tool_running';
 }
 
 function tokenChunks(text: string): string[] {
@@ -288,82 +287,107 @@ export async function POST(request: NextRequest) {
   const suggestedActions = getSuggestedActions(result);
   const route = result?.metadata?.intent || 'general';
   const tokens = tokenChunks(final);
+  const normalizedSteps = steps.slice(0, 8).map((step, index) => ({
+    stepId: `tool-${index + 1}`,
+    label:
+      step.action?.trim() ||
+      step.tool?.trim() ||
+      `Tool step ${index + 1}`,
+    status: step.status,
+    summary: step.summary,
+    error: step.error,
+    tool: step.tool,
+  }));
+  const fallbackToolSteps =
+    normalizedSteps.length === 0
+      ? tools.slice(0, 4).map((tool, index) => ({
+          stepId: `tool-${index + 1}`,
+          label: `Using ${tool}`,
+          status: 'completed',
+          summary: undefined,
+          error: undefined,
+          tool,
+        }))
+      : [];
+  const toolSteps = normalizedSteps.length > 0 ? normalizedSteps : fallbackToolSteps;
 
   const stream = new ReadableStream<Uint8Array>({
     async start(controller) {
       const send = (payloadLine: Record<string, unknown>) =>
         controller.enqueue(streamLine(payloadLine));
 
-      send({ type: 'typing', requestId });
-
-      await delay(50);
       send({
-        type: 'status',
-        phase: 'planning',
-        label: 'Understanding your request',
+        type: 'router_started',
+        stepId: 'router',
+        label: 'Analyzing request',
         requestId,
       });
 
-      await delay(60);
+      await delay(40);
       send({
-        type: 'status',
-        phase: 'planning',
+        type: 'router_completed',
+        stepId: 'router',
+        label: 'Request analyzed',
+        requestId,
+      });
+
+      await delay(40);
+      send({
+        type: 'planning_started',
+        stepId: 'planning',
         label: 'Building execution plan',
         requestId,
       });
 
+      await delay(40);
+      send({
+        type: 'planning_completed',
+        stepId: 'planning',
+        label: 'Plan ready',
+        requestId,
+      });
+
       if (memoryUsed) {
-        await delay(60);
+        await delay(40);
         send({
-          type: 'status',
-          phase: 'memory',
+          type: 'memory_started',
+          stepId: 'memory',
           label: 'Checking memory',
           requestId,
         });
-      }
 
-      if (steps.length > 0) {
-        for (const step of steps.slice(0, 6)) {
-          await delay(70);
-          send({
-            type: 'status',
-            phase: statusPhaseFromStep(step),
-            label:
-              step.action ||
-              (step.status === 'failed'
-                ? 'A step failed'
-                : 'Running step'),
-            detail: step.summary,
-            requestId,
-          });
-        }
-      } else if (tools.length > 0) {
-        for (const tool of tools.slice(0, 4)) {
-          await delay(70);
-          send({
-            type: 'status',
-            phase: 'tool_running',
-            label: `Using ${tool}`,
-            requestId,
-          });
-        }
-      } else {
-        await delay(70);
+        await delay(40);
         send({
-          type: 'status',
-          phase: 'tool_running',
-          label: 'Running checks and gathering context',
+          type: 'memory_completed',
+          stepId: 'memory',
+          label: 'Memory checked',
           requestId,
         });
       }
 
-      await delay(60);
-      send({
-        type: 'status',
-        phase: 'synthesizing',
-        label: 'Generating final answer',
-        requestId,
-      });
+      for (const step of toolSteps) {
+        await delay(45);
+        send({
+          type: 'tool_started',
+          stepId: step.stepId,
+          label: step.label,
+          summary: step.summary,
+          tool: step.tool,
+          requestId,
+        });
+
+        await delay(45);
+        send({
+          type: 'tool_completed',
+          stepId: step.stepId,
+          label: step.label,
+          summary: step.summary,
+          tool: step.tool,
+          status: step.status,
+          error: step.error,
+          requestId,
+        });
+      }
 
       const firstTokenAt = Date.now();
       let emittedChars = 0;
@@ -373,7 +397,7 @@ export async function POST(request: NextRequest) {
         emittedChars += token.length;
 
         send({
-          type: 'text-delta',
+          type: 'answer_delta',
           delta: token,
           emittedChars,
           requestId,
@@ -381,7 +405,7 @@ export async function POST(request: NextRequest) {
       }
 
       send({
-        type: 'final',
+        type: 'answer_completed',
         content: final,
         route,
         metadata: {
@@ -416,8 +440,6 @@ export async function POST(request: NextRequest) {
         },
         requestId,
       });
-
-      send({ type: 'done', requestId });
       controller.close();
 
       console.info('CHAT_STREAM_DONE', {
