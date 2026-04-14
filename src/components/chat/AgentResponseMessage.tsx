@@ -19,6 +19,7 @@ type SupportedLocale = 'en' | 'fi' | 'sv' | 'es';
 type LocaleCopy = {
   intro: string[];
   fallback: string;
+  brand: string;
 };
 
 const COPY: Record<SupportedLocale, LocaleCopy> = {
@@ -29,14 +30,16 @@ const COPY: Record<SupportedLocale, LocaleCopy> = {
       "Absolutely — I'll handle this step by step.",
     ],
     fallback: 'Done — here is the answer for you.',
+    brand: 'Lite',
   },
   fi: {
     intro: [
-      'Selvä juttu — hoidan tämän nyt.',
-      'Hyvä pyyntö. Käyn tämän läpi nyt.',
+      'Selvä juttu! Käyn tämän läpi nyt.',
+      'Hyvä pyyntö. Hoidan tämän nyt.',
       'Totta kai — etenen tämän kanssa vaiheittain.',
     ],
     fallback: 'Valmis — tässä vastaus sinulle.',
+    brand: 'Lite',
   },
   sv: {
     intro: [
@@ -45,6 +48,7 @@ const COPY: Record<SupportedLocale, LocaleCopy> = {
       'Absolut — jag hanterar detta steg för steg.',
     ],
     fallback: 'Klart — här är svaret till dig.',
+    brand: 'Lite',
   },
   es: {
     intro: [
@@ -53,6 +57,7 @@ const COPY: Record<SupportedLocale, LocaleCopy> = {
       'Claro — voy a resolver esto paso a paso.',
     ],
     fallback: 'Listo — aquí tienes la respuesta.',
+    brand: 'Lite',
   },
 };
 
@@ -264,17 +269,11 @@ function sanitizeVisibleContent(content: string): string {
   return joined;
 }
 
-function shouldShowIntro(
-  visibleContent: string,
-  steps: AgentResponseStep[],
-): boolean {
+function shouldShowIntro(visibleContent: string, steps: AgentResponseStep[]): boolean {
   return Boolean(steps.length || visibleContent);
 }
 
-function shouldShowActions(
-  actions: string[],
-  visibleContent: string,
-): boolean {
+function shouldShowActions(actions: string[], visibleContent: string): boolean {
   return actions.length > 0 && Boolean(visibleContent);
 }
 
@@ -293,10 +292,7 @@ function getSafeContent(
   return COPY[locale].fallback;
 }
 
-export function AgentResponseMessage({
-  message,
-  latestUserContent,
-}: AgentResponseMessageProps) {
+export function AgentResponseMessage({ message, latestUserContent }: AgentResponseMessageProps) {
   const locale = detectLanguage(latestUserContent);
   const copy = COPY[locale];
 
@@ -310,22 +306,30 @@ export function AgentResponseMessage({
 
   return (
     <div className="max-w-full">
+      <div className="mb-4 flex items-center gap-3">
+        <span
+          className="text-[20px] font-normal leading-none tracking-[-0.03em] text-[#202734]"
+          style={{ fontFamily: 'ui-serif, Georgia, Cambria, "Times New Roman", Times, serif' }}
+        >
+          Kivo
+        </span>
+        <span className="rounded-xl border border-[#d7dce4] bg-[#eceff3] px-2.5 py-0.5 text-[12px] font-medium tracking-[-0.01em] text-[#5f6c7b]">
+          {copy.brand}
+        </span>
+      </div>
+
       {showIntro ? (
-        <div className="mb-4">
-          <p className="text-[15px] leading-[1.75] tracking-[-0.018em] text-[#576071]">
-            {copy.intro[introIndex]}
-          </p>
-        </div>
+        <p className="mb-5 text-[18px] leading-[1.5] tracking-[-0.02em] text-[#2f3947]">{copy.intro[introIndex]}</p>
       ) : null}
 
       {steps.length > 0 ? (
-        <div className="mb-5">
+        <div className="mb-6">
           <AgentWorkflowBoxes steps={steps} locale={locale} />
         </div>
       ) : null}
 
       <div className="max-w-none">
-        <div className="whitespace-pre-wrap text-[17px] leading-[1.82] tracking-[-0.02em] text-[#424b59]">
+        <div className="whitespace-pre-wrap text-[17px] leading-[1.72] tracking-[-0.015em] text-[#353f4d]">
           {visibleContent}
         </div>
       </div>

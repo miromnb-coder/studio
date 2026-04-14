@@ -160,7 +160,7 @@ export function MessageThread({ messages, pending }: MessageThreadProps) {
               }`}
             >
               <article
-                className={`w-full ${isUser ? 'max-w-[78%] sm:max-w-[70%]' : 'max-w-[92%] sm:max-w-[84%]'}`}
+                className={`w-full ${isUser ? 'max-w-[78%] sm:max-w-[70%]' : 'max-w-full sm:max-w-[92%]'}`}
               >
                 {isUser ? (
                   <div className="rounded-[28px] border border-[#dde2ea] bg-[linear-gradient(180deg,rgba(247,248,251,0.96),rgba(243,245,248,0.98))] px-4 py-3.5 shadow-[0_8px_24px_rgba(15,23,42,0.04)]">
@@ -185,7 +185,7 @@ export function MessageThread({ messages, pending }: MessageThreadProps) {
                     ) : null}
                   </div>
                 ) : (
-                  <div className="rounded-[30px] border border-[#e7ebf1] bg-[linear-gradient(180deg,rgba(255,255,255,0.9),rgba(249,250,252,0.95))] px-4 py-4 shadow-[0_14px_36px_rgba(15,23,42,0.04)] backdrop-blur-sm">
+                  <div className="px-0.5 py-1">
                     <AgentResponseMessage
                       message={message}
                       latestUserContent={latestUserContent}
