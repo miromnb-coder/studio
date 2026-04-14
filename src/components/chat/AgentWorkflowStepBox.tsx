@@ -1,6 +1,6 @@
 'use client';
 
-import { CheckCircle2, Circle, CircleAlert, Loader2 } from 'lucide-react';
+import { Check, ChevronDown, Circle, Github, Loader2, TerminalSquare } from 'lucide-react';
 
 export type WorkflowStepStatus = 'pending' | 'running' | 'completed' | 'failed';
 
@@ -11,34 +11,97 @@ type AgentWorkflowStepBoxProps = {
 
 function StatusIcon({ status }: { status: WorkflowStepStatus }) {
   if (status === 'completed') {
-    return <CheckCircle2 className="h-4 w-4 text-[#2f7a49]" aria-hidden="true" />;
+    return (
+      <span className="flex h-6 w-6 items-center justify-center rounded-full border border-[#d7ddd7] bg-white text-[#8e9797] shadow-[0_1px_2px_rgba(15,23,42,0.04)]">
+        <Check className="h-[13px] w-[13px]" strokeWidth={2.4} />
+      </span>
+    );
   }
 
   if (status === 'running') {
-    return <Loader2 className="h-4 w-4 animate-spin text-[#3f5ea8]" aria-hidden="true" />;
+    return (
+      <span className="flex h-6 w-6 items-center justify-center rounded-full border border-[#dadfe6] bg-white text-[#7d8796] shadow-[0_1px_2px_rgba(15,23,42,0.04)]">
+        <Loader2 className="h-[13px] w-[13px] animate-spin" strokeWidth={2.2} />
+      </span>
+    );
   }
 
   if (status === 'failed') {
-    return <CircleAlert className="h-4 w-4 text-[#b54d49]" aria-hidden="true" />;
+    return (
+      <span className="flex h-6 w-6 items-center justify-center rounded-full border border-[#e7d4d4] bg-white text-[#b35d5d] shadow-[0_1px_2px_rgba(15,23,42,0.04)]">
+        <span className="text-[13px] font-semibold leading-none">!</span>
+      </span>
+    );
   }
 
-  return <Circle className="h-4 w-4 text-[#8b96a8]" aria-hidden="true" />;
+  return (
+    <span className="flex h-6 w-6 items-center justify-center rounded-full border border-[#dadfe6] bg-white text-[#9aa3b1] shadow-[0_1px_2px_rgba(15,23,42,0.04)]">
+      <Circle className="h-[11px] w-[11px]" strokeWidth={2.1} />
+    </span>
+  );
 }
 
-const toneStyles: Record<WorkflowStepStatus, string> = {
-  completed: 'border-[#d8eadf] bg-[#f4fbf6]',
-  running: 'border-[#d8e3ff] bg-[#f4f7ff]',
-  pending: 'border-[#e5e9f0] bg-[#fafbfd]',
-  failed: 'border-[#f6d8d3] bg-[#fff7f6]',
-};
+function StepTone({ status }: { status: WorkflowStepStatus }) {
+  if (status === 'running') {
+    return 'border-[#dfe4eb] bg-[#fbfcfd] shadow-[0_1px_2px_rgba(15,23,42,0.03)]';
+  }
 
-export function AgentWorkflowStepBox({ label, status }: AgentWorkflowStepBoxProps) {
+  if (status === 'completed') {
+    return 'border-[#e2e7ec] bg-[#fafbfc] shadow-[0_1px_2px_rgba(15,23,42,0.02)]';
+  }
+
+  if (status === 'failed') {
+    return 'border-[#ecdcdc] bg-[#fdf8f8] shadow-[0_1px_2px_rgba(15,23,42,0.02)]';
+  }
+
+  return 'border-[#e7ebf0] bg-[#fcfcfd] shadow-[0_1px_2px_rgba(15,23,42,0.02)]';
+}
+
+function inferMiniIcon(label: string) {
+  const text = label.toLowerCase();
+
+  if (/github|repo|repository/.test(text)) {
+    return <Github className="h-[13px] w-[13px]" strokeWidth={2.1} />;
+  }
+
+  if (/src\/|file|tiedosto|planner|synthesizer|agent/.test(text)) {
+    return <TerminalSquare className="h-[13px] w-[13px]" strokeWidth={2.1} />;
+  }
+
+  return null;
+}
+
+export function AgentWorkflowStepBox({
+  label,
+  status,
+}: AgentWorkflowStepBoxProps) {
+  const miniIcon = inferMiniIcon(label);
+
   return (
     <div
-      className={`flex items-center gap-2.5 rounded-2xl border px-3 py-2.5 text-[13px] leading-5 text-[#2f3746] ${toneStyles[status]}`}
+      className={`flex min-h-[52px] items-center gap-3 rounded-[18px] border px-3.5 py-3 text-[#2f3746] ${StepTone({
+        status,
+      })}`}
     >
       <StatusIcon status={status} />
-      <span className="font-medium">{label}</span>
+
+      <div className="min-w-0 flex-1">
+        <div className="flex items-center gap-2.5">
+          {miniIcon ? (
+            <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-[8px] border border-[#e3e7ec] bg-white text-[#727b88] shadow-[0_1px_2px_rgba(15,23,42,0.03)]">
+              {miniIcon}
+            </span>
+          ) : null}
+
+          <span className="line-clamp-2 text-[15px] font-medium leading-[1.35] tracking-[-0.015em] text-[#3a4250]">
+            {label}
+          </span>
+        </div>
+      </div>
+
+      <span className="shrink-0 text-[#9ba3af]">
+        <ChevronDown className="h-[16px] w-[16px]" strokeWidth={2.2} />
+      </span>
     </div>
   );
 }
