@@ -33,6 +33,7 @@ export type AgentStepStatus =
   | 'skipped';
 
 export type AgentResponseStep = {
+  id?: string;
   action: string;
   status: AgentStepStatus;
   summary?: string;

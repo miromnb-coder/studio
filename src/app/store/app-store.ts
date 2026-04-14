@@ -156,11 +156,13 @@ const DEFAULT_NEW_CHAT_TITLE = 'New chat';
 const DEFAULT_ACTIVE_AGENT: AgentName = 'Supervisor Agent';
 
 type AgentStepLike = {
+  id?: string;
   action?: string;
   label?: string;
   status?: string;
   summary?: string;
   error?: string;
+  tool?: string;
 };
 
 type AgentStructuredDataLike = {
@@ -230,19 +232,29 @@ function upsertLiveStep(
   const label = String(event.label || '').trim();
   if (!label) return steps;
 
+  const stepId = String(event.stepId || '').trim();
   const status = eventStatusToStepStatus(event.type, event.status);
+
   const findIndex = steps.findIndex((step) => {
+    const existingId =
+      typeof (step as AgentStepLike).id === 'string'
+        ? (step as AgentStepLike).id
+        : '';
+    if (stepId && existingId === stepId) return true;
+
     const action = String(step.action || '').trim().toLowerCase();
-    return action === label.toLowerCase();
+    const tool = String(step.tool || '').trim().toLowerCase();
+    return action === label.toLowerCase() && tool === String(event.tool || '').trim().toLowerCase();
   });
 
   const nextStep = {
+    id: stepId || undefined,
     action: label,
     status,
     summary: event.summary,
     tool: event.tool,
     error: event.error,
-  } as const;
+  };
 
   if (findIndex === -1) {
     return [...steps, nextStep];
@@ -261,6 +273,7 @@ function upsertLiveStep(
     return {
       ...step,
       ...nextStep,
+      id: stepId || (step as AgentStepLike).id,
       action: label,
       status: mergedStatus,
       summary: nextStep.summary || step.summary,
@@ -494,7 +507,7 @@ function deriveActiveStepsFromMetadata(
 
   if (rawSteps.length > 0) {
     return rawSteps.map((step, index) => ({
-      id: createId(),
+      id: step.id || `${step.action || step.label || 'step'}-${index}`.toLowerCase().replace(/\s+/g, '-'),
       label: step.action || step.label || `Step ${index + 1}`,
       status: normalizeStepStatus(step.status),
     }));
@@ -695,6 +708,8 @@ async function streamAssistantResponse(
   };
 
   const handleStreamEvent = (event: ChatStreamEvent) => {
+    console.debug('[chat-stream] event', event);
+
     if (STREAM_STEP_EVENT_TYPES.has(event.type)) {
       const label = String(event.label || '').trim();
       if (!label) return;

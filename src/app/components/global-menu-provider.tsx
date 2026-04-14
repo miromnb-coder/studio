@@ -1,9 +1,21 @@
 'use client';
 
-import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
+import {
+  createContext,
+  useCallback,
+  useContext,
+  useEffect,
+  useMemo,
+  useState,
+  type ReactNode,
+} from 'react';
 import { usePathname, useRouter } from 'next/navigation';
-import { MenuSheet, type MenuRow } from '@/components/chat/MenuSheet';
-import { sharedPrimaryMenu, sharedSecondaryMenu } from '@/components/chat/menu-config';
+import { AppMenu } from '@/components/layout/AppMenu';
+import {
+  sharedPrimaryMenu,
+  sharedSecondaryMenu,
+  type SharedMenuRow,
+} from '@/components/chat/menu-config';
 import { useAppStore } from '../store/app-store';
 
 type GlobalMenuContextValue = {
@@ -36,17 +48,17 @@ export function GlobalMenuProvider({ children }: { children: ReactNode }) {
     [router],
   );
 
-  const onPrimaryClick = useCallback(
-    (row: MenuRow) => {
-      if (row.action === 'new-chat') {
-        const id = createConversation();
-        openConversation(id);
+  const onSelect = useCallback(
+    (row: SharedMenuRow) => {
+      if (row.action === 'chat') {
         closeAndNavigate('/chat');
         return;
       }
 
-      if (row.action === 'conversations') {
-        closeAndNavigate('/memory');
+      if (row.action === 'new-chat') {
+        const id = createConversation();
+        openConversation(id);
+        closeAndNavigate('/chat');
         return;
       }
 
@@ -55,13 +67,6 @@ export function GlobalMenuProvider({ children }: { children: ReactNode }) {
       }
     },
     [closeAndNavigate, createConversation, openConversation],
-  );
-
-  const onSecondaryClick = useCallback(
-    (row: MenuRow) => {
-      if (row.href) closeAndNavigate(row.href);
-    },
-    [closeAndNavigate],
   );
 
   const onSignOut = useCallback(() => {
@@ -84,14 +89,18 @@ export function GlobalMenuProvider({ children }: { children: ReactNode }) {
     <GlobalMenuContext.Provider value={value}>
       {children}
       <div className="pointer-events-none fixed inset-0 z-50 mx-auto w-full max-w-md">
-        <div className={`relative h-full w-full ${open ? 'pointer-events-auto' : 'pointer-events-none'}`}>
-          <MenuSheet
+        <div
+          className={`relative h-full w-full ${
+            open ? 'pointer-events-auto' : 'pointer-events-none'
+          }`}
+        >
+          <AppMenu
             open={open}
+            pathname={pathname}
             primaryRows={sharedPrimaryMenu}
             secondaryRows={sharedSecondaryMenu}
             onClose={() => setOpen(false)}
-            onPrimaryClick={onPrimaryClick}
-            onSecondaryClick={onSecondaryClick}
+            onSelect={onSelect}
             onSignOut={onSignOut}
           />
         </div>

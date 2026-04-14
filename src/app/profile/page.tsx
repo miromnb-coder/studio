@@ -8,7 +8,7 @@ import { toFriendlyAuthMessage } from '@/lib/auth/messages';
 import { useAppStore } from '../store/app-store';
 import { useUserEntitlements } from '../hooks/use-user-entitlements';
 import { GmailIntegrationCard } from '../components/profile/GmailIntegrationCard';
-import { AppShell, PremiumCard, SectionHeader, SmartButton } from '../components/premium-ui';
+import { AppShell, PremiumCard, ProductPageHeader, SectionHeader, SmartButton } from '../components/premium-ui';
 
 function ProfilePageContent() {
   const router = useRouter();
@@ -165,9 +165,8 @@ function ProfilePageContent() {
 
   return (
     <AppShell>
+      <ProductPageHeader pageTitle="Profile" pageSubtitle="Manage your identity, integrations, and operator preferences" />
       <PremiumCard className="space-y-4 p-5">
-        <SectionHeader title="Profile" subtitle="Manage your identity, integrations, and operator preferences." />
-
         <PremiumCard className="bg-[#f7f8fa] p-4">
           <p className="text-xs uppercase tracking-wide text-[#7a838f]">Identity</p>
           <div className="mt-2 flex items-center gap-3">

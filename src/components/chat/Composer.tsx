@@ -70,7 +70,7 @@ export function Composer({
 
         <div className="flex items-center justify-between gap-3">
           <div className="flex items-center gap-2.5">
-            <ComposerButton label="Quick create" onClick={onOpenCreate} active={createOpen} variant="quick-create">
+            <ComposerButton label="Add" onClick={onOpenCreate} active={createOpen} variant="quick-create">
               <Plus className="h-[18px] w-[18px]" strokeWidth={1.75} />
             </ComposerButton>
 

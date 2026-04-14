@@ -2,31 +2,32 @@ import {
   Aperture,
   CircleUserRound,
   Crosshair,
-  Crown,
   MessageSquare,
-  SlidersHorizontal,
+  MessageSquarePlus,
+  Settings,
   Sparkles,
   type LucideIcon,
 } from 'lucide-react';
 
 export type SharedMenuRow = {
+  id: string;
   label: string;
   icon: LucideIcon;
   href?: string;
-  action?: 'new-chat' | 'conversations';
+  action?: 'chat' | 'new-chat';
   badge?: string;
 };
 
 export const sharedPrimaryMenu: SharedMenuRow[] = [
-  { label: 'New Chat', icon: MessageSquare, action: 'new-chat' },
-  { label: 'Conversations', icon: MessageSquare, action: 'conversations' },
-  { label: 'Focus', icon: Crosshair, href: '/focus' },
-  { label: 'Actions', icon: Sparkles, href: '/actions' },
-  { label: 'Memory', icon: Aperture, href: '/memory' },
+  { id: 'chat', label: 'Chat', icon: MessageSquare, action: 'chat', href: '/chat' },
+  { id: 'new-chat', label: 'New Chat', icon: MessageSquarePlus, action: 'new-chat', href: '/chat' },
+  { id: 'conversations', label: 'Conversations', icon: MessageSquare, href: '/history' },
+  { id: 'focus', label: 'Focus', icon: Crosshair, href: '/focus' },
+  { id: 'actions', label: 'Actions', icon: Sparkles, href: '/actions' },
+  { id: 'memory', label: 'Memory', icon: Aperture, href: '/memory' },
 ];
 
 export const sharedSecondaryMenu: SharedMenuRow[] = [
-  { label: 'Profile', icon: CircleUserRound, href: '/profile' },
-  { label: 'Control', icon: SlidersHorizontal, href: '/control', badge: 'New' },
-  { label: 'Upgrade', icon: Crown, href: '/upgrade' },
+  { id: 'profile', label: 'Profile', icon: CircleUserRound, href: '/profile' },
+  { id: 'settings', label: 'Settings', icon: Settings, href: '/settings' },
 ];

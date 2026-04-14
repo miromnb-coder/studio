@@ -3,11 +3,11 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { usePathname, useRouter } from 'next/navigation';
 import {
-  AlarmClockPlus,
-  ClipboardImage,
-  ClipboardPlus,
-  FilePlus2,
+  ImagePlus,
   MessageSquarePlus,
+  Mic,
+  ReceiptText,
+  Sparkles,
   Upload,
 } from 'lucide-react';
 import { AnimatePresence, motion } from 'framer-motion';
@@ -17,7 +17,7 @@ import { AppShell } from '@/components/chat/AppShell';
 import { ChatHeader } from '@/components/chat/ChatHeader';
 import { Composer } from '@/components/chat/Composer';
 import { MessageThread } from '@/components/chat/MessageThread';
-import { QuickCreateMenu } from '@/components/chat/QuickCreateMenu';
+import { BottomActionSheet } from '@/components/chat/BottomActionSheet';
 import { WorkspaceSheet } from '@/components/chat/WorkspaceSheet';
 import { ConversationDrawer } from '@/components/chat/ConversationDrawer';
 import type { ConversationFilter } from '@/components/chat/ConversationFilters';
@@ -50,16 +50,22 @@ declare global {
   }
 }
 
-const CREATE_ACTIONS = [
+const PLUS_ACTIONS = [
   { id: 'new-chat', label: 'New Chat', icon: MessageSquarePlus },
-  { id: 'new-task', label: 'New Task', icon: ClipboardPlus },
-  { id: 'new-note', label: 'New Note', icon: FilePlus2 },
+  { id: 'upload-image', label: 'Upload Image', icon: ImagePlus },
   { id: 'upload-file', label: 'Upload File', icon: Upload },
-  { id: 'paste-screenshot', label: 'Paste Screenshot', icon: ClipboardImage },
-  { id: 'reminder', label: 'Reminder', icon: AlarmClockPlus },
+  { id: 'voice-input', label: 'Voice Input', icon: Mic },
+  { id: 'quick-action', label: 'Quick Action', icon: Sparkles },
+  {
+    id: 'scan-receipt',
+    label: 'Scan Receipt',
+    icon: ReceiptText,
+    subtitle: 'Coming Soon',
+    disabled: true,
+  },
 ] as const;
 
-type CreateActionId = (typeof CREATE_ACTIONS)[number]['id'];
+type CreateActionId = (typeof PLUS_ACTIONS)[number]['id'];
 
 export default function ChatPage() {
   const router = useRouter();
@@ -421,80 +427,27 @@ export default function ChatPage() {
   const agentRows = filteredRows.filter((row) => row.hasAgent);
   const savedRows = filteredRows.filter((row) => row.isSaved);
 
-  const tryPasteScreenshot = async () => {
-    const hasClipboardRead =
-      typeof navigator !== 'undefined' &&
-      'clipboard' in navigator &&
-      'read' in navigator.clipboard;
-
-    if (!hasClipboardRead) {
-      openFilePicker('image/*');
-      showNotice(
-        'Paste not supported',
-        'Clipboard image access is unavailable in this browser. Opened file picker instead.',
-      );
-      return;
-    }
-
-    try {
-      const clipboardItems = await navigator.clipboard.read();
-      const imageItem = clipboardItems.find((item) =>
-        item.types.some((type) => type.startsWith('image/')),
-      );
-
-      if (!imageItem) {
-        openFilePicker('image/*');
-        showNotice(
-          'No screenshot found',
-          'Clipboard did not include an image. Opened file picker instead.',
-        );
-        return;
-      }
-
-      const imageType =
-        imageItem.types.find((type) => type.startsWith('image/')) ??
-        'image/png';
-
-      const blob = await imageItem.getType(imageType);
-      const extension = imageType.split('/')[1] || 'png';
-
-      const file = new File(
-        [blob],
-        `screenshot-${new Date().toISOString().replace(/[:.]/g, '-')}.${extension}`,
-        { type: imageType },
-      );
-
-      addAttachments([file]);
-    } catch {
-      openFilePicker('image/*');
-      showNotice(
-        'Clipboard blocked',
-        'Could not read clipboard image. Opened file picker instead.',
-      );
-    }
-  };
-
-  const handleCreateAction = async (id: CreateActionId) => {
+  const handleCreateAction = (id: CreateActionId) => {
     setCreateOpen(false);
 
     switch (id) {
       case 'new-chat':
         createNewChat();
         return;
-      case 'new-task':
-        router.push('/tasks');
-        return;
-      case 'new-note':
-        router.push('/notes');
+      case 'upload-image':
+        openFilePicker('image/*');
         return;
       case 'upload-file':
         openFilePicker();
         return;
-      case 'paste-screenshot':
-        await tryPasteScreenshot();
+      case 'voice-input':
+        toggleMic();
         return;
-      case 'reminder':
-        router.push('/alerts');
+      case 'quick-action':
+        setConnectorsOpen(true);
+        return;
+      case 'scan-receipt':
+        showNotice('Coming soon', 'Receipt scanning is not available yet.');
         return;
       default:
         return;
@@ -628,11 +581,12 @@ export default function ChatPage() {
             inputRef={inputRef}
           />
 
-          <QuickCreateMenu
+          <BottomActionSheet
             open={createOpen}
-            items={CREATE_ACTIONS}
+            title="Add to chat"
+            items={PLUS_ACTIONS}
             onClose={() => setCreateOpen(false)}
-            onSelect={(id) => void handleCreateAction(id)}
+            onSelect={(id) => handleCreateAction(id as CreateActionId)}
           />
 
           <input
