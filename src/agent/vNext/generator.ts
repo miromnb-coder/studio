@@ -146,20 +146,94 @@ function estimateConfidence(
 }
 
 function buildLanguageInstruction(language: string): string {
+  const normalizedLanguage = language || 'en';
+  return [
+    `Respond ONLY in ${normalizedLanguage}.`,
+    'Use that language for the entire answer.',
+    'Do not mix languages.',
+    'Do not switch to English automatically.',
+    "If uncertain, prefer the user's detected language.",
+  ].join(' ');
+}
+
+function buildLocalizedFallback(
+  language: string,
+  params: {
+    requestText: string;
+    memorySummary: string;
+    successful: string[];
+    failed: string[];
+  },
+): { text: string; followUps: string[] } {
+  const { requestText, memorySummary, successful, failed } = params;
+
   if (language.startsWith('fi')) {
-    return 'Respond entirely in Finnish. Do not mix languages.';
-  }
-  if (language.startsWith('sv')) {
-    return 'Respond entirely in Swedish. Do not mix languages.';
-  }
-  if (language.startsWith('es')) {
-    return 'Respond entirely in Spanish. Do not mix languages.';
-  }
-  if (language.startsWith('de')) {
-    return 'Respond entirely in German. Do not mix languages.';
+    return {
+      text: [
+        `Yhteenveto pyyntöäsi varten: ${requestText || 'Kerro tarkemmin, niin autan mielelläni.'}`,
+        memorySummary ? `Aiempi konteksti huomioituna: ${memorySummary}` : '',
+        successful.length ? `Tärkeimmät löydökset: ${successful.join(', ')}.` : '',
+        failed.length
+          ? `Osa tiedoista jäi epävarmaksi, joten täydennä tarvittaessa: ${failed.join(', ')}.`
+          : '',
+      ]
+        .filter(Boolean)
+        .join(' '),
+      followUps: [
+        'Haluatko tiiviimmän version?',
+        'Haluatko, että teen tästä toimintalistan?',
+      ],
+    };
   }
 
-  return 'Respond entirely in English. Do not mix languages.';
+  if (language.startsWith('sv')) {
+    return {
+      text: [
+        `Här är en tydlig sammanfattning av din begäran: ${requestText || 'Berätta lite mer så hjälper jag gärna.'}`,
+        memorySummary ? `Med tidigare kontext i åtanke: ${memorySummary}` : '',
+        successful.length ? `Viktigaste resultat: ${successful.join(', ')}.` : '',
+        failed.length
+          ? `Vissa detaljer kan vara ofullständiga: ${failed.join(', ')}.`
+          : '',
+      ]
+        .filter(Boolean)
+        .join(' '),
+      followUps: ['Vill du ha en kortare version?', 'Vill du att jag gör en checklista?'],
+    };
+  }
+
+  if (language.startsWith('es')) {
+    return {
+      text: [
+        `Aquí tienes una respuesta clara para tu solicitud: ${requestText || 'Comparte un poco más de detalle y la ajusto.'}`,
+        memorySummary ? `Teniendo en cuenta el contexto previo: ${memorySummary}` : '',
+        successful.length ? `Hallazgos clave: ${successful.join(', ')}.` : '',
+        failed.length
+          ? `Algunos detalles pueden estar incompletos: ${failed.join(', ')}.`
+          : '',
+      ]
+        .filter(Boolean)
+        .join(' '),
+      followUps: ['¿Quieres una versión más breve?', '¿Quieres que lo convierta en una lista de acciones?'],
+    };
+  }
+
+  return {
+    text: [
+      `Here is a clear answer for your request: ${requestText || 'Share a bit more detail and I can refine this for you.'}`,
+      memorySummary ? `Considering earlier context: ${memorySummary}` : '',
+      successful.length ? `Key findings: ${successful.join(', ')}.` : '',
+      failed.length
+        ? `A few details may be incomplete: ${failed.join(', ')}.`
+        : '',
+    ]
+      .filter(Boolean)
+      .join(' '),
+    followUps: [
+      'Would you like a shorter version?',
+      'Want me to turn this into an action checklist?',
+    ],
+  };
 }
 
 function buildFallbackAnswer(
@@ -168,37 +242,17 @@ function buildFallbackAnswer(
 ): AgentFinalAnswer {
   const requestText = getRequestText(input.request);
   const { successful, failed } = summarizeToolResults(input.toolResults);
-
-  const directAnswer = language.startsWith('fi')
-    ? [
-        `Yhteenveto pyyntöäsi varten: ${requestText || 'Kerro tarkemmin, niin autan mielelläni.'}`,
-        input.memorySummary ? `Aiempi konteksti huomioituna: ${input.memorySummary}` : '',
-        successful.length ? `Tärkeimmät löydökset: ${successful.join(', ')}.` : '',
-        failed.length
-          ? `Osa tiedoista jäi epävarmaksi, joten täydennä tarvittaessa: ${failed.join(', ')}.`
-          : '',
-      ]
-        .filter(Boolean)
-        .join(' ')
-    : [
-        `Here is a clear answer for your request: ${requestText || 'Share a bit more detail and I can refine this for you.'}`,
-        input.memorySummary ? `Considering earlier context: ${input.memorySummary}` : '',
-        successful.length ? `Key findings: ${successful.join(', ')}.` : '',
-        failed.length
-          ? `A few details may be incomplete: ${failed.join(', ')}.`
-          : '',
-      ]
-        .filter(Boolean)
-        .join(' ');
-
-  const followUps = language.startsWith('fi')
-    ? ['Haluatko tiiviimmän version?', 'Haluatko, että teen tästä toimintalistan?']
-    : ['Would you like a shorter version?', 'Want me to turn this into an action checklist?'];
+  const localized = buildLocalizedFallback(language, {
+    requestText,
+    memorySummary: input.memorySummary,
+    successful,
+    failed,
+  });
 
   return {
-    text: directAnswer,
-    confidence: estimateConfidence(input.route, input.toolResults, directAnswer),
-    followUps,
+    text: localized.text,
+    confidence: estimateConfidence(input.route, input.toolResults, localized.text),
+    followUps: localized.followUps,
     metadata: {
       intent: input.route.intent,
       inputLanguage: input.route.inputLanguage,
