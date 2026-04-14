@@ -301,7 +301,7 @@ export function AgentResponseMessage({
   const copy = COPY[locale];
 
   const metadata = message.agentMetadata;
-  const steps = dedupeSteps(metadata?.steps).slice(0, 4);
+  const steps = dedupeSteps(metadata?.steps).slice(0, 5);
   const actions = mapActions(metadata?.suggestedActions);
   const visibleContent = getSafeContent(message.content, metadata, locale);
   const introIndex = hashIndex(message.id, copy.intro.length);
@@ -311,9 +311,11 @@ export function AgentResponseMessage({
   return (
     <div className="max-w-full">
       {showIntro ? (
-        <p className="mb-4 text-[16px] leading-[1.72] tracking-[-0.018em] text-[#4e5664]">
-          {copy.intro[introIndex]}
-        </p>
+        <div className="mb-4">
+          <p className="text-[15px] leading-[1.75] tracking-[-0.018em] text-[#576071]">
+            {copy.intro[introIndex]}
+          </p>
+        </div>
       ) : null}
 
       {steps.length > 0 ? (
@@ -322,8 +324,10 @@ export function AgentResponseMessage({
         </div>
       ) : null}
 
-      <div className="whitespace-pre-wrap text-[18px] leading-[1.8] tracking-[-0.02em] text-[#434b58]">
-        {visibleContent}
+      <div className="max-w-none">
+        <div className="whitespace-pre-wrap text-[17px] leading-[1.82] tracking-[-0.02em] text-[#424b59]">
+          {visibleContent}
+        </div>
       </div>
 
       {showActions ? (
