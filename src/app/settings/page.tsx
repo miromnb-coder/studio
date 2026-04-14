@@ -1,5 +1,7 @@
-import { redirect } from 'next/navigation';
+'use client';
 
-export default function SettingsPage(): never {
-  redirect('/control');
+import { KivoSettingsScreen } from '@/components/chat/kivo/KivoSettingsScreen';
+
+export default function SettingsPage() {
+  return <KivoSettingsScreen />;
 }
