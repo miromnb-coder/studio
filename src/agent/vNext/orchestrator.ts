@@ -5,7 +5,7 @@ import { generateFinalAnswer, generateFinalAnswerStream } from './generator';
 import { agentLogger } from './logger';
 import { buildMemoryContext, fetchMemory, rankMemory } from './memory';
 import { createPlan } from './planner';
-import { detectLanguage, routeIntent } from './router';
+import { routeIntent } from './router';
 import { executeTool } from './tools';
 import { streamEvents } from './streaming';
 import type {
@@ -52,45 +52,6 @@ function getRequestText(request: AgentRequest): string {
   }
 
   return '';
-}
-
-function extractEntities(text: string): string[] {
-  const quoted = [...text.matchAll(/"([^"]+)"|'([^']+)'/g)]
-    .map((match) => (match[1] || match[2] || '').trim())
-    .filter(Boolean);
-
-  const comparePatterns = [
-    /(.+?)\s+(?:vs|versus|contra|gegen)\s+(.+?)(?:[.?!]|$)/i,
-    /(?:compare|vertaa|compara|jämför)\s+(.+?)\s+(?:and|ja|y|och|und)\s+(.+?)(?:[.?!]|$)/i,
-  ];
-
-  const fromComparison = comparePatterns.flatMap((pattern) => {
-    const match = text.match(pattern);
-    if (!match) return [];
-    return [match[1], match[2]].map((part) => part?.trim()).filter(Boolean) as string[];
-  });
-
-  return [...new Set([...quoted, ...fromComparison])]
-    .map((item) => item.replace(/^[,.\s]+|[,.\s]+$/g, ''))
-    .filter((item) => item.length > 1);
-}
-
-function normalizeMultilingualRequest(request: AgentRequest): AgentRequest {
-  const message = getRequestText(request);
-  const language = detectLanguage(message, request);
-
-  return {
-    ...request,
-    message,
-    inputLanguage: language.inputLanguage,
-    responseLanguage: language.responseLanguage,
-    languageConfidence: language.confidence,
-    metadata: {
-      ...(request.metadata ?? {}),
-      multilingual: language.multilingual,
-      entities: extractEntities(message),
-    },
-  };
 }
 
 function getConversationMessages(request: AgentRequest): ConversationMessage[] {
@@ -165,16 +126,10 @@ function inferToolAction(
 
   switch (tool) {
     case 'gmail':
-      if (
-        text.includes('receipt') ||
-        text.includes('invoice')
-      ) {
+      if (text.includes('receipt') || text.includes('invoice')) {
         return 'scan_receipts';
       }
-      if (
-        text.includes('subscription') ||
-        text.includes('unsubscribe')
-      ) {
+      if (text.includes('subscription') || text.includes('unsubscribe')) {
         return 'scan_subscriptions';
       }
       if (text.includes('reply') || text.includes('draft') || text.includes('email')) {
@@ -226,6 +181,38 @@ function inferToolAction(
   }
 }
 
+function extractEntities(text: string): string[] {
+  const quoted = [...text.matchAll(/"([^"]+)"|'([^']+)'/g)]
+    .map((match) => (match[1] || match[2] || '').trim())
+    .filter(Boolean);
+
+  const comparePatterns = [
+    /(.+?)\s+(?:vs|versus|contra|gegen)\s+(.+?)(?:[.?!]|$)/i,
+    /(?:compare|vertaa|compara|jämför)\s+(.+?)\s+(?:and|ja|y|och|und)\s+(.+?)(?:[.?!]|$)/i,
+  ];
+
+  const fromComparison = comparePatterns.flatMap((pattern) => {
+    const match = text.match(pattern);
+    if (!match) return [];
+    return [match[1], match[2]].map((part) => part?.trim()).filter(Boolean) as string[];
+  });
+
+  return [...new Set([...quoted, ...fromComparison])]
+    .map((item) => item.replace(/^[,.\s]+|[,.\s]+$/g, ''))
+    .filter((item) => item.length > 1)
+    .slice(0, 8);
+}
+
+function normalizeCompareLabel(value: string): string {
+  return value
+    .replace(
+      /\b(which is better|kumpi kannattaa|for budget users|budjetilla|minulle|for me)\b/gi,
+      '',
+    )
+    .replace(/[?!.]+$/g, '')
+    .trim();
+}
+
 function extractCompareItems(text: string): string[] {
   const normalized = normalizeText(text);
 
@@ -248,16 +235,6 @@ function extractCompareItems(text: string): string[] {
   return [];
 }
 
-function normalizeCompareLabel(value: string): string {
-  return value
-    .replace(
-      /\b(which is better|kumpi kannattaa|for budget users|budjetilla|minulle|for me)\b/gi,
-      '',
-    )
-    .replace(/[?!.]+$/g, '')
-    .trim();
-}
-
 function buildWebQuery(
   request: AgentRequest,
   routeIntent?: string,
@@ -276,8 +253,31 @@ function buildWebQuery(
   return text;
 }
 
+function normalizeMultilingualRequest(request: AgentRequest): AgentRequest {
+  const message = getRequestText(request);
+  const requestedResponseLanguage = normalizeText(
+    (request as AgentRequest & { responseLanguage?: string }).responseLanguage,
+  );
+  const requestedInputLanguage = normalizeText(
+    (request as AgentRequest & { inputLanguage?: string }).inputLanguage,
+  );
+
+  const entities = extractEntities(message);
+
+  return {
+    ...request,
+    message,
+    inputLanguage: requestedInputLanguage || undefined,
+    responseLanguage: requestedResponseLanguage || undefined,
+    metadata: {
+      ...(request.metadata ?? {}),
+      entities,
+      recentConversationSummary: getRecentConversationSummary(request),
+    },
+  };
+}
+
 function buildToolInput(
-  stepId: string,
   tool: NonNullable<AgentPlan['steps'][number]['requiredTool']>,
   context: AgentContext,
   plan: AgentPlan,
@@ -326,18 +326,9 @@ function buildToolInput(
       };
 
     case 'gmail':
-      return {
-        ...base,
-        query: requestText,
-      };
-
     case 'calendar':
-      return {
-        ...base,
-        query: requestText,
-      };
-
     case 'finance':
+    case 'file':
       return {
         ...base,
         query: requestText,
@@ -347,12 +338,6 @@ function buildToolInput(
       return {
         ...base,
         note: requestText,
-      };
-
-    case 'file':
-      return {
-        ...base,
-        query: requestText,
       };
 
     default:
@@ -370,7 +355,7 @@ function createToolCall(
     callId: `call-${context.request.requestId}-${stepId}`,
     stepId,
     tool,
-    input: buildToolInput(stepId, tool, context, plan),
+    input: buildToolInput(tool, context, plan),
   };
 }
 
@@ -458,13 +443,16 @@ export async function runAgentVNext(
     const normalizedRequest = normalizeMultilingualRequest(request);
     const runtime = mergeRuntimeOptions(normalizedRequest);
     const context = buildBaseContext(normalizedRequest, runtime);
-    context.inputLanguage = normalizedRequest.inputLanguage;
-    context.responseLanguage = normalizedRequest.responseLanguage;
-    context.languageConfidence = normalizedRequest.languageConfidence;
 
     const routingStarted = Date.now();
-    const route = routeIntent(normalizedRequest);
+    const route = await routeIntent(normalizedRequest);
     const routingMs = Date.now() - routingStarted;
+
+    context.inputLanguage = route.inputLanguage ?? normalizedRequest.inputLanguage;
+    context.responseLanguage =
+      route.responseLanguage ?? normalizedRequest.responseLanguage;
+    context.languageConfidence =
+      route.languageConfidence ?? normalizedRequest.languageConfidence;
 
     const planningStarted = Date.now();
     const plan = createPlan(route, context);
@@ -567,14 +555,17 @@ export async function* runAgentVNextStream(
   const normalizedRequest = normalizeMultilingualRequest(request);
   const runtime = mergeRuntimeOptions(normalizedRequest);
   const context = buildBaseContext(normalizedRequest, runtime);
-  context.inputLanguage = normalizedRequest.inputLanguage;
-  context.responseLanguage = normalizedRequest.responseLanguage;
-  context.languageConfidence = normalizedRequest.languageConfidence;
 
   try {
     yield streamEvents.routerStarted(normalizedRequest);
 
-    const route = routeIntent(normalizedRequest);
+    const route = await routeIntent(normalizedRequest);
+
+    context.inputLanguage = route.inputLanguage ?? normalizedRequest.inputLanguage;
+    context.responseLanguage =
+      route.responseLanguage ?? normalizedRequest.responseLanguage;
+    context.languageConfidence =
+      route.languageConfidence ?? normalizedRequest.languageConfidence;
 
     yield streamEvents.routerCompleted(normalizedRequest, {
       intent: route.intent,
