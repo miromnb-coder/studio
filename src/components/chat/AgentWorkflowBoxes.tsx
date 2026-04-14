@@ -35,109 +35,118 @@ type StepUiModel = {
   priority: number;
 };
 
-const COPY: Record<SupportedLocale, { labels: Record<StepKey, string>; helpers: Record<StepKey, string> }> = {
+const COPY: Record<
+  SupportedLocale,
+  {
+    labels: Record<StepKey, string>;
+    helpers: Record<StepKey, string>;
+  }
+> = {
   en: {
     labels: {
       understanding: 'Understanding request',
       memory: 'Retrieving memory',
-      gmail: 'Checking Gmail context',
-      research: 'Researching references',
+      gmail: 'Checking Gmail',
+      research: 'Researching sources',
       compare: 'Comparing options',
-      finance: 'Reviewing finance context',
+      finance: 'Reviewing finances',
       file: 'Reviewing files',
       build: 'Building response',
       quality: 'Checking quality',
       process: 'Processing request',
     },
     helpers: {
-      understanding: 'Interpreting the request and setting direction.',
-      memory: 'Looking up relevant context from memory.',
-      gmail: 'Gathering email-related details relevant to the answer.',
-      research: 'Collecting and validating relevant external context.',
-      compare: 'Evaluating alternatives and tradeoffs.',
-      finance: 'Checking financial context and calculations.',
-      file: 'Reading and extracting key points from files.',
-      build: 'Structuring the best possible response.',
-      quality: 'Final pass for clarity and correctness.',
-      process: 'Executing the request workflow.',
+      understanding: 'Understanding the request.',
+      memory: 'Searching relevant memory.',
+      gmail: 'Collecting email context.',
+      research: 'Reviewing relevant sources.',
+      compare: 'Evaluating best options.',
+      finance: 'Checking costs and money context.',
+      file: 'Extracting key points from files.',
+      build: 'Composing the best answer.',
+      quality: 'Final clarity and quality pass.',
+      process: 'Running request workflow.',
     },
   },
+
   fi: {
     labels: {
       understanding: 'Ymmärretään pyyntö',
       memory: 'Haetaan muistia',
-      gmail: 'Tarkistetaan Gmail-konteksti',
+      gmail: 'Tarkistetaan Gmail',
       research: 'Tutkitaan lähteitä',
       compare: 'Verrataan vaihtoehdot',
-      finance: 'Tarkistetaan talouskonteksti',
+      finance: 'Tarkistetaan talous',
       file: 'Käydään tiedostot läpi',
       build: 'Rakennetaan vastaus',
       quality: 'Tarkistetaan laatu',
       process: 'Käsitellään pyyntöä',
     },
     helpers: {
-      understanding: 'Tulkitaan pyyntö ja asetetaan oikea suunta.',
-      memory: 'Haetaan muistista olennaista taustaa.',
-      gmail: 'Haetaan vastaukseen liittyvää sähköpostikontekstia.',
-      research: 'Kerätään ja varmistetaan olennaiset lähteet.',
-      compare: 'Arvioidaan vaihtoehtoja ja eroja.',
-      finance: 'Tarkistetaan taloustiedot ja laskelmat.',
-      file: 'Luetaan tiedostoista tärkeimmät asiat.',
-      build: 'Muotoillaan paras mahdollinen vastaus.',
-      quality: 'Viimeinen tarkistus selkeydelle ja laadulle.',
-      process: 'Suoritetaan pyynnön työnkulku.',
+      understanding: 'Tulkitaan pyyntö oikein.',
+      memory: 'Haetaan olennaista taustaa.',
+      gmail: 'Kerätään sähköpostikontekstia.',
+      research: 'Tarkistetaan olennaiset lähteet.',
+      compare: 'Arvioidaan vaihtoehtoja.',
+      finance: 'Katsotaan kulut ja raha-asiat.',
+      file: 'Luetaan tärkeät kohdat tiedostoista.',
+      build: 'Muotoillaan paras vastaus.',
+      quality: 'Viimeinen laadun tarkistus.',
+      process: 'Suoritetaan työnkulku.',
     },
   },
+
   sv: {
     labels: {
       understanding: 'Förstår begäran',
       memory: 'Hämtar minne',
-      gmail: 'Kontrollerar Gmail-kontext',
+      gmail: 'Kontrollerar Gmail',
       research: 'Undersöker källor',
       compare: 'Jämför alternativ',
-      finance: 'Kontrollerar finanskontext',
+      finance: 'Kontrollerar ekonomi',
       file: 'Går igenom filer',
       build: 'Bygger svar',
       quality: 'Kontrollerar kvalitet',
       process: 'Bearbetar begäran',
     },
     helpers: {
-      understanding: 'Tolkar begäran och sätter rätt riktning.',
-      memory: 'Hämtar relevant bakgrund från minnet.',
-      gmail: 'Samlar e-postkontext som behövs i svaret.',
-      research: 'Samlar in och validerar relevanta källor.',
-      compare: 'Väger alternativ och skillnader.',
-      finance: 'Kontrollerar finansiella uppgifter och beräkningar.',
-      file: 'Läser ut de viktigaste punkterna från filer.',
-      build: 'Formar det bästa möjliga svaret.',
-      quality: 'Sista kontroll för tydlighet och kvalitet.',
-      process: 'Kör arbetsflödet för begäran.',
+      understanding: 'Tolkar begäran.',
+      memory: 'Hämtar relevant minne.',
+      gmail: 'Samlar e-postkontext.',
+      research: 'Granskar relevanta källor.',
+      compare: 'Väger alternativen.',
+      finance: 'Ser över ekonomi.',
+      file: 'Läser viktiga delar från filer.',
+      build: 'Formar bästa svaret.',
+      quality: 'Sista kvalitetskontroll.',
+      process: 'Kör arbetsflödet.',
     },
   },
+
   es: {
     labels: {
       understanding: 'Entendiendo solicitud',
       memory: 'Recuperando memoria',
-      gmail: 'Revisando contexto de Gmail',
-      research: 'Investigando referencias',
+      gmail: 'Revisando Gmail',
+      research: 'Investigando fuentes',
       compare: 'Comparando opciones',
-      finance: 'Revisando contexto financiero',
+      finance: 'Revisando finanzas',
       file: 'Revisando archivos',
       build: 'Construyendo respuesta',
       quality: 'Verificando calidad',
       process: 'Procesando solicitud',
     },
     helpers: {
-      understanding: 'Interpretando la solicitud y fijando dirección.',
-      memory: 'Buscando contexto útil desde la memoria.',
-      gmail: 'Recopilando contexto de correo relevante.',
-      research: 'Recolectando y validando fuentes relevantes.',
-      compare: 'Evaluando alternativas y diferencias.',
-      finance: 'Verificando contexto financiero y cálculos.',
-      file: 'Extrayendo puntos clave de archivos.',
-      build: 'Estructurando la mejor respuesta posible.',
-      quality: 'Última revisión de claridad y calidad.',
-      process: 'Ejecutando el flujo de la solicitud.',
+      understanding: 'Interpretando la solicitud.',
+      memory: 'Buscando contexto útil.',
+      gmail: 'Reuniendo contexto de correo.',
+      research: 'Revisando fuentes relevantes.',
+      compare: 'Evaluando alternativas.',
+      finance: 'Revisando dinero y costes.',
+      file: 'Leyendo puntos clave.',
+      build: 'Creando la mejor respuesta.',
+      quality: 'Revisión final.',
+      process: 'Ejecutando flujo.',
     },
   },
 };
@@ -155,7 +164,12 @@ function normalizeStatus(status?: string): WorkflowStepStatus {
 }
 
 function stepText(step: AgentResponseStep): string {
-  return [normalizeText(step.id), normalizeText(step.action), normalizeText(step.summary), normalizeText(step.tool)]
+  return [
+    normalizeText(step.id),
+    normalizeText(step.action),
+    normalizeText(step.summary),
+    normalizeText(step.tool),
+  ]
     .filter(Boolean)
     .join(' ')
     .toLowerCase();
@@ -165,20 +179,56 @@ function resolveStepKey(step: AgentResponseStep, index: number): StepKey {
   const tool = normalizeText(step.tool).toLowerCase();
   const text = stepText(step);
 
-  if (tool === 'memory' || /memory|context|history|muisti|minne|memoria/.test(text)) return 'memory';
-  if (tool === 'gmail' || /gmail|email|mail|sähköposti|correo/.test(text)) return 'gmail';
-  if (tool === 'web' || tool === 'research' || /research|search|web|browse|source|lähde|källa|fuente/.test(text)) return 'research';
-  if (tool === 'compare' || /compare|rank|criteria|option|vertaa|jämför|compara/.test(text)) return 'compare';
-  if (tool === 'finance' || /finance|budget|cost|price|money|talous|finans|dinero/.test(text)) return 'finance';
-  if (tool === 'file' || tool === 'notes' || /file|document|pdf|docs|tiedosto|fil|archivo/.test(text)) return 'file';
-  if (/quality|verify|review|check|laatu|kvalitet|calidad/.test(text)) return 'quality';
-  if (/build|generate|answer|response|write|compose|vastaus|svar|respuesta/.test(text)) return 'build';
-  if (/understand|interpret|intent|request|pyyntö|begäran|solicitud/.test(text)) return 'understanding';
+  if (
+    tool === 'memory' ||
+    /memory|history|context|muisti|minne|memoria/.test(text)
+  )
+    return 'memory';
+
+  if (
+    tool === 'gmail' ||
+    /gmail|mail|email|sähköposti|correo/.test(text)
+  )
+    return 'gmail';
+
+  if (
+    tool === 'web' ||
+    /research|search|browse|source|web|lähde|fuente/.test(text)
+  )
+    return 'research';
+
+  if (
+    tool === 'compare' ||
+    /compare|rank|criteria|option|vertaa|jämför/.test(text)
+  )
+    return 'compare';
+
+  if (
+    tool === 'finance' ||
+    /finance|budget|price|cost|money|talous/.test(text)
+  )
+    return 'finance';
+
+  if (
+    tool === 'file' ||
+    tool === 'notes' ||
+    /file|document|pdf|docs|tiedosto/.test(text)
+  )
+    return 'file';
+
+  if (/quality|verify|review|check|laatu/.test(text)) return 'quality';
+
+  if (/build|generate|answer|response|compose|write|vastaus/.test(text))
+    return 'build';
+
+  if (/understand|intent|request|pyyntö/.test(text))
+    return 'understanding';
 
   if (index === 0) return 'understanding';
   if (index === 1) return 'memory';
   if (index === 2) return 'research';
   if (index === 3) return 'build';
+
   return 'quality';
 }
 
@@ -195,11 +245,21 @@ function priority(key: StepKey): number {
     'quality',
     'process',
   ];
+
   return order.indexOf(key) + 1;
 }
 
-function mergeStatus(current: WorkflowStepStatus, next: WorkflowStepStatus): WorkflowStepStatus {
-  const rank: Record<WorkflowStepStatus, number> = { failed: 4, running: 3, completed: 2, pending: 1 };
+function mergeStatus(
+  current: WorkflowStepStatus,
+  next: WorkflowStepStatus,
+): WorkflowStepStatus {
+  const rank: Record<WorkflowStepStatus, number> = {
+    failed: 4,
+    running: 3,
+    completed: 2,
+    pending: 1,
+  };
+
   return rank[next] > rank[current] ? next : current;
 }
 
@@ -215,7 +275,10 @@ function getIcon(key: StepKey): WorkflowStepIcon {
   return 'process';
 }
 
-function buildUiSteps(steps: AgentResponseStep[], locale: SupportedLocale): StepUiModel[] {
+function buildUiSteps(
+  steps: AgentResponseStep[],
+  locale: SupportedLocale,
+): StepUiModel[] {
   const grouped = new Map<StepKey, StepUiModel>();
   const copy = COPY[locale];
 
@@ -229,8 +292,10 @@ function buildUiSteps(steps: AgentResponseStep[], locale: SupportedLocale): Step
         id: normalizeText(step.id) || `${key}-${index}`,
         key,
         label: copy.labels[key],
+        helper:
+          normalizeText(step.summary) ||
+          (status === 'running' ? copy.helpers[key] : ''),
         status,
-        helper: normalizeText(step.summary) || (status === 'running' ? copy.helpers[key] : ''),
         priority: priority(key),
       });
       return;
@@ -248,23 +313,35 @@ function buildUiSteps(steps: AgentResponseStep[], locale: SupportedLocale): Step
     .slice(0, 5);
 }
 
-function showHelper(step: StepUiModel): boolean {
-  return Boolean(step.helper) && (step.status === 'running' || step.status === 'failed');
+function showHelper(step: StepUiModel) {
+  return Boolean(step.helper) &&
+    (step.status === 'running' || step.status === 'failed');
 }
 
-export function AgentWorkflowBoxes({ steps, locale }: AgentWorkflowBoxesProps) {
-  if (!steps.length) return null;
+export function AgentWorkflowBoxes({
+  steps,
+  locale,
+}: AgentWorkflowBoxesProps) {
+  if (!steps?.length) return null;
 
   const uiSteps = buildUiSteps(steps, locale);
+
   if (!uiSteps.length) return null;
 
   return (
     <section className="space-y-2.5">
-      {uiSteps.map((step) => (
-        <div key={step.id}>
-          <AgentWorkflowStepBox label={step.label} status={step.status} icon={getIcon(step.key)} />
+      {uiSteps.map((step, index) => (
+        <div key={step.id} className="animate-[fadeInUp_0.35s_ease_forwards] opacity-0"
+          style={{ animationDelay: `${index * 70}ms` }}
+        >
+          <AgentWorkflowStepBox
+            label={step.label}
+            status={step.status}
+            icon={getIcon(step.key)}
+          />
+
           {showHelper(step) ? (
-            <p className="ml-6 mt-1.5 text-[13px] leading-[1.45] tracking-[-0.008em] text-[#6f7d8d]">
+            <p className="ml-7 mt-1.5 max-w-[92%] text-[13px] leading-[1.45] tracking-[-0.01em] text-[#72808f]">
               {step.helper}
             </p>
           ) : null}
