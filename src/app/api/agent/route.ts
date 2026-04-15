@@ -8,7 +8,10 @@ import {
 } from '@/lib/finance/normalize';
 import type { FinanceActionType } from '@/lib/finance/types';
 import { createClient as createSupabaseServerClient } from '@/lib/supabase/server';
-import { getUserProfileIntelligence, updateUserProfileIntelligence } from '@/lib/operator/personalization';
+import {
+  getUserProfileIntelligence,
+  updateUserProfileIntelligence,
+} from '@/lib/operator/personalization';
 import type { OperatorAlertType } from '@/lib/operator/alerts';
 import { fetchRelevantUserMemory } from '@/agent/memory-store';
 import { fetchRecentRecommendationOutcomes } from '@/lib/operator/outcomes';
@@ -39,6 +42,22 @@ const SAFE_AGENT_FALLBACK: AgentResponse = {
   },
 };
 
+type IncomingAttachment = {
+  id?: string;
+  name?: string;
+  kind?: 'image' | 'file';
+  mimeType?: string;
+  size?: number;
+};
+
+type NormalizedAttachment = {
+  id: string;
+  name: string;
+  kind: 'image' | 'file';
+  mimeType?: string;
+  size?: number;
+};
+
 type AgentRouteInput = {
   input: string;
   userId: string;
@@ -48,6 +67,7 @@ type AgentRouteInput = {
   outcomes?: unknown[];
   userProfileIntelligence?: Record<string, unknown> | null;
   productState?: Record<string, unknown>;
+  attachments?: NormalizedAttachment[];
 };
 
 type CompatibleAgentResponse = {
@@ -70,6 +90,37 @@ function parseActionType(raw: unknown): FinanceActionType | null {
   return null;
 }
 
+function normalizeAttachments(raw: unknown): NormalizedAttachment[] {
+  if (!Array.isArray(raw)) return [];
+
+  return raw
+    .filter((item): item is IncomingAttachment => {
+      return Boolean(item && typeof item === 'object');
+    })
+    .map((item, index) => {
+      const kind = item.kind === 'image' ? 'image' : 'file';
+
+      return {
+        id:
+          typeof item.id === 'string' && item.id.trim().length > 0
+            ? item.id
+            : `attachment-${index + 1}`,
+        name:
+          typeof item.name === 'string' && item.name.trim().length > 0
+            ? item.name
+            : kind === 'image'
+              ? `image-${index + 1}`
+              : `file-${index + 1}`,
+        kind,
+        mimeType:
+          typeof item.mimeType === 'string' ? item.mimeType : undefined,
+        size:
+          typeof item.size === 'number' && Number.isFinite(item.size)
+            ? item.size
+            : undefined,
+      };
+    });
+}
 
 function shouldUseOperatorAlertsContext(input: string): boolean {
   const normalized = input.toLowerCase();
@@ -99,8 +150,12 @@ function shouldUseOperatorAlertsContext(input: string): boolean {
     'what should i prioritize',
     'do i have any risks',
   ];
-  const semanticSignals = /\b(subscription|billing|spend|finance|save|cancel|risk|priority|attention|raha|sääst|saast|tilaus|lasku|kulu|talous|priorisoi|riski)\b/i;
-  return explicitPhrases.some((phrase) => normalized.includes(phrase)) || semanticSignals.test(normalized);
+  const semanticSignals =
+    /\b(subscription|billing|spend|finance|save|cancel|risk|priority|attention|raha|sääst|saast|tilaus|lasku|kulu|talous|priorisoi|riski)\b/i;
+  return (
+    explicitPhrases.some((phrase) => normalized.includes(phrase)) ||
+    semanticSignals.test(normalized)
+  );
 }
 
 type OperatorAlertContextRow = {
@@ -119,7 +174,6 @@ type OperatorAlertContextRow = {
   updated_at: string;
 };
 
-
 function resolveGmailConnected(params: {
   userProfile?: Record<string, unknown> | null;
 }): boolean {
@@ -127,30 +181,40 @@ function resolveGmailConnected(params: {
 }
 
 function asObject(value: unknown): Record<string, unknown> {
-  return value && typeof value === 'object' ? (value as Record<string, unknown>) : {};
+  return value && typeof value === 'object'
+    ? (value as Record<string, unknown>)
+    : {};
 }
 
 function asArrayOfObjects(value: unknown): Array<Record<string, unknown>> {
   return Array.isArray(value)
-    ? value.filter((item): item is Record<string, unknown> => !!item && typeof item === 'object')
+    ? value.filter(
+        (item): item is Record<string, unknown> =>
+          !!item && typeof item === 'object',
+      )
     : [];
 }
 
-async function runNewAgent(input: AgentRouteInput): Promise<CompatibleAgentResponse | null> {
+async function runNewAgent(
+  input: AgentRouteInput,
+): Promise<CompatibleAgentResponse | null> {
   const result = await runAgentVNext({
     requestId: crypto.randomUUID(),
     userId: input.userId,
     message: input.input,
     conversation: (input.history || [])
-      .filter((message): message is { role: 'system' | 'user' | 'assistant'; content: string } => (
-        !!message &&
-        typeof message === 'object' &&
-        (message as { role?: unknown }).role !== undefined &&
-        ((message as { role?: unknown }).role === 'system' ||
-          (message as { role?: unknown }).role === 'user' ||
-          (message as { role?: unknown }).role === 'assistant') &&
-        typeof (message as { content?: unknown }).content === 'string'
-      ))
+      .filter(
+        (
+          message,
+        ): message is { role: 'system' | 'user' | 'assistant'; content: string } =>
+          !!message &&
+          typeof message === 'object' &&
+          (message as { role?: unknown }).role !== undefined &&
+          ((message as { role?: unknown }).role === 'system' ||
+            (message as { role?: unknown }).role === 'user' ||
+            (message as { role?: unknown }).role === 'assistant') &&
+          typeof (message as { content?: unknown }).content === 'string',
+      )
       .map((message, index) => ({
         id: `history-${index}`,
         role: message.role,
@@ -162,6 +226,8 @@ async function runNewAgent(input: AgentRouteInput): Promise<CompatibleAgentRespo
       operatorAlerts: input.operatorAlerts || [],
       outcomes: input.outcomes || [],
       userProfileIntelligence: input.userProfileIntelligence || null,
+      attachments: input.attachments || [],
+      attachmentCount: input.attachments?.length || 0,
     },
   });
 
@@ -179,7 +245,8 @@ async function runNewAgent(input: AgentRouteInput): Promise<CompatibleAgentRespo
       goal: {
         explicitRequest: input.input,
         hiddenRequest: '',
-        inferredGoal: result.response.route.reason || 'Provide a helpful response.',
+        inferredGoal:
+          result.response.route.reason || 'Provide a helpful response.',
         interpretationConfidence: 'medium',
         urgency: 'medium',
         complexityLevel: 'medium',
@@ -206,7 +273,12 @@ async function runNewAgent(input: AgentRouteInput): Promise<CompatibleAgentRespo
         stepId: step.id,
         title: step.title,
         tool: 'retrieve_semantic_memory',
-        status: step.status === 'failed' ? 'failed' : step.status === 'skipped' ? 'skipped' : 'completed',
+        status:
+          step.status === 'failed'
+            ? 'failed'
+            : step.status === 'skipped'
+              ? 'skipped'
+              : 'completed',
         summary: step.description,
         input: step.input || {},
         output: {},
@@ -215,6 +287,7 @@ async function runNewAgent(input: AgentRouteInput): Promise<CompatibleAgentRespo
         route: result.response.route,
         toolResults: result.response.toolResults,
         evaluation: result.response.evaluation || null,
+        attachments: input.attachments || [],
       },
       suggestedActions: [],
       memoryUsed: result.response.memory.items.length > 0,
@@ -231,13 +304,16 @@ async function runNewAgent(input: AgentRouteInput): Promise<CompatibleAgentRespo
 }
 
 function inferMemorySummaryType(input: string): 'finance' | 'general' {
-  return /\b(save|saving|budget|subscription|bill|expense|debt|money|finance|monthly|cost|raha|sääst|saast|budjet|tilaus|lasku|kulu|talous|ahorro|dinero|gasto|suscrip|factura|sijoit|krypt|osake)\b/i.test(input)
+  return /\b(save|saving|budget|subscription|bill|expense|debt|money|finance|monthly|cost|raha|sääst|saast|budjet|tilaus|lasku|kulu|talous|ahorro|dinero|gasto|suscrip|factura|sijoit|krypt|osake)\b/i.test(
+    input,
+  )
     ? 'finance'
     : 'general';
 }
 
 export async function POST(req: Request) {
-  const requestId = req.headers.get('x-kivo-request-id') || crypto.randomUUID();
+  const requestId =
+    req.headers.get('x-kivo-request-id') || crypto.randomUUID();
   const startedAt = Date.now();
 
   try {
@@ -245,11 +321,20 @@ export async function POST(req: Request) {
     const body = await req.json().catch(() => ({}));
     console.info('AGENT_ROUTE_PARSE_DONE', { requestId });
 
-    const { input, history, imageUri, userId: requestedUserId } = body ?? {};
+    const {
+      input,
+      history,
+      imageUri,
+      userId: requestedUserId,
+    } = body ?? {};
+    const attachments = normalizeAttachments(body?.attachments);
     const actionType = parseActionType(body?.actionType);
 
     const safeHistory = (history || [])
-      .filter((m: any) => m && typeof m.content === 'string' && m.content.trim().length > 0)
+      .filter(
+        (m: any) =>
+          m && typeof m.content === 'string' && m.content.trim().length > 0,
+      )
       .map((m: any) => ({
         role: m.role || 'user',
         content: m.content.trim(),
@@ -260,9 +345,11 @@ export async function POST(req: Request) {
         ? input.trim()
         : imageUri
           ? '[Analyze visual data]'
-          : null;
+          : attachments.length > 0
+            ? '[Analyze attachments]'
+            : null;
 
-    if (!safeInput && safeHistory.length === 0) {
+    if (!safeInput && safeHistory.length === 0 && attachments.length === 0) {
       return safeJsonResponse({ error: 'No valid content provided.' }, 400);
     }
 
@@ -282,21 +369,37 @@ export async function POST(req: Request) {
     } = await supabase.auth.getUser();
 
     if (authError) {
-      console.error('AGENT_ROUTE_AUTH_ERROR', { requestId, error: authError });
-      return safeJsonResponse({ error: 'AUTH_REQUIRED', message: 'Please sign in to use chat.' }, 401);
+      console.error('AGENT_ROUTE_AUTH_ERROR', {
+        requestId,
+        error: authError,
+      });
+      return safeJsonResponse(
+        {
+          error: 'AUTH_REQUIRED',
+          message: 'Please sign in to use chat.',
+        },
+        401,
+      );
     }
 
     const userId = authUser?.id;
     if (!userId || userId === 'system_anonymous') {
-      return safeJsonResponse({ error: 'AUTH_REQUIRED', message: 'Please sign in to use chat.' }, 401);
+      return safeJsonResponse(
+        {
+          error: 'AUTH_REQUIRED',
+          message: 'Please sign in to use chat.',
+        },
+        401,
+      );
     }
-
 
     let operatorAlertsContext: OperatorAlertContextRow[] = [];
     if (shouldUseOperatorAlertsContext(String(safeInput || ''))) {
       const operatorAlertRes = await supabase
         .from('operator_alerts')
-        .select('id,user_id,type,severity,status,title,summary,suggested_action,source,dedupe_key,metadata,created_at,updated_at')
+        .select(
+          'id,user_id,type,severity,status,title,summary,suggested_action,source,dedupe_key,metadata,created_at,updated_at',
+        )
         .eq('user_id', userId)
         .eq('status', 'active')
         .order('updated_at', { ascending: false })
@@ -309,7 +412,8 @@ export async function POST(req: Request) {
           error: operatorAlertRes.error.message,
         });
       } else {
-        operatorAlertsContext = (operatorAlertRes.data || []) as OperatorAlertContextRow[];
+        operatorAlertsContext =
+          (operatorAlertRes.data || []) as OperatorAlertContextRow[];
       }
     }
 
@@ -321,18 +425,26 @@ export async function POST(req: Request) {
       });
     }
 
-    const { plan, usage, email } = await getUserPlanAndUsage(supabase, userId);
+    const { plan, usage, email } = await getUserPlanAndUsage(
+      supabase,
+      userId,
+    );
     const { data: userProfile } = await supabase
       .from('profiles')
       .select('gmail_connected')
       .eq('id', userId)
       .maybeSingle();
-    const unlimitedReason = isDevUnlimitedMode() ? 'dev' : isAdminBypass(email) ? 'admin' : null;
+
+    const unlimitedReason = isDevUnlimitedMode()
+      ? 'dev'
+      : isAdminBypass(email)
+        ? 'admin'
+        : null;
 
     if (actionType && plan !== 'PREMIUM') {
       return safeJsonResponse(
         {
-          error: 'PREMIUM_REQUIRED',
+          error: 'premium_required',
           message: 'Finance actions require Premium plan.',
           plan,
         },
@@ -346,8 +458,11 @@ export async function POST(req: Request) {
     if (!usageBeforeRun.unlimited && usageBeforeRun.current >= limit) {
       return safeJsonResponse(
         {
-          error: 'LIMIT_REACHED',
-          message: 'Daily limit reached',
+          error: 'limit_reached',
+          message: 'Daily agent limit reached',
+          limitKey: 'daily_agent_runs',
+          limitValue: usageBeforeRun.limit,
+          currentValue: usageBeforeRun.current,
           usage: {
             current: usageBeforeRun.current,
             limit: usageBeforeRun.limit,
@@ -357,18 +472,25 @@ export async function POST(req: Request) {
           },
           plan,
         },
-        403,
+        402,
       );
     }
 
-    const userProfileIntelligence = await getUserProfileIntelligence(supabase, userId).catch((error) => {
+    const userProfileIntelligence = await getUserProfileIntelligence(
+      supabase,
+      userId,
+    ).catch((error) => {
       console.error('USER_PROFILE_INTELLIGENCE_FETCH_ERROR:', error);
       return null;
     });
-    const recommendationOutcomes = await fetchRecentRecommendationOutcomes(supabase, userId).catch((error) => {
-      console.error('RECOMMENDATION_OUTCOMES_FETCH_ERROR:', error);
-      return [];
-    });
+
+    const recommendationOutcomes =
+      await fetchRecentRecommendationOutcomes(supabase, userId).catch(
+        (error) => {
+          console.error('RECOMMENDATION_OUTCOMES_FETCH_ERROR:', error);
+          return [];
+        },
+      );
 
     const summaryType = inferMemorySummaryType(safeInput || 'Continue');
     const relevantMemories = await fetchRelevantUserMemory({
@@ -384,13 +506,17 @@ export async function POST(req: Request) {
 
     const { data: financeProfileData } = await supabase
       .from('finance_profiles')
-      .select('active_subscriptions,total_monthly_cost,estimated_savings,currency,memory_summary,last_analysis')
+      .select(
+        'active_subscriptions,total_monthly_cost,estimated_savings,currency,memory_summary,last_analysis',
+      )
       .eq('user_id', userId)
       .maybeSingle();
 
     const financeProfile = financeProfileData
       ? {
-          active_subscriptions: asArrayOfObjects(financeProfileData.active_subscriptions),
+          active_subscriptions: asArrayOfObjects(
+            financeProfileData.active_subscriptions,
+          ),
           total_monthly_cost: financeProfileData.total_monthly_cost ?? 0,
           estimated_savings: financeProfileData.estimated_savings ?? 0,
           currency: financeProfileData.currency || 'USD',
@@ -401,8 +527,12 @@ export async function POST(req: Request) {
 
     const memorySummary =
       relevantMemories.length > 0
-        ? relevantMemories.slice(0, 3).map((item) => item.content).join(' ')
-        : typeof financeProfile?.memory_summary === 'string' && financeProfile.memory_summary.trim().length > 0
+        ? relevantMemories
+            .slice(0, 3)
+            .map((item) => item.content)
+            .join(' ')
+        : typeof financeProfile?.memory_summary === 'string' &&
+            financeProfile.memory_summary.trim().length > 0
           ? financeProfile.memory_summary.trim()
           : 'No prior context available.';
 
@@ -424,6 +554,7 @@ export async function POST(req: Request) {
       requestId,
       userId,
       hasImage: Boolean(imageUri),
+      attachmentCount: attachments.length,
       historyCount: safeHistory.length,
     });
 
@@ -435,6 +566,7 @@ export async function POST(req: Request) {
       operatorAlerts: operatorAlertsContext,
       outcomes: recommendationOutcomes,
       userProfileIntelligence,
+      attachments,
       productState: {
         plan,
         usage: {
@@ -445,6 +577,7 @@ export async function POST(req: Request) {
         gmailConnected: resolveGmailConnected({
           userProfile: (userProfile as Record<string, unknown> | null) || null,
         }),
+        attachmentCount: attachments.length,
       },
     };
 
@@ -466,7 +599,9 @@ export async function POST(req: Request) {
       stepCount: agentResult.metadata?.steps?.length || 0,
     });
 
-    const normalizedFinance = normalizeFinanceAnalysis(agentResult.metadata?.structuredData || {});
+    const normalizedFinance = normalizeFinanceAnalysis(
+      agentResult.metadata?.structuredData || {},
+    );
     const shouldAttachFinance =
       agentResult.metadata?.intent === 'finance' ||
       Boolean((agentResult.metadata?.structuredData || {}).detect_leaks) ||
@@ -483,13 +618,23 @@ export async function POST(req: Request) {
 
     if (actionType) {
       const actionResult = runFinanceAction(actionType, normalizedFinance);
-      let updatedUsage = await incrementUsage(supabase, userId, usage, 'agent').catch((error) => {
+      let updatedUsage = await incrementUsage(
+        supabase,
+        userId,
+        usage,
+        'agent',
+      ).catch((error) => {
         console.error('ACTION_AGENT_USAGE_INCREMENT_ERROR:', error);
         return usage;
       });
 
       if (actionResult.type !== 'error') {
-        updatedUsage = await incrementUsage(supabase, userId, updatedUsage, 'premium_action').catch((error) => {
+        updatedUsage = await incrementUsage(
+          supabase,
+          userId,
+          updatedUsage,
+          'premium_action',
+        ).catch((error) => {
           console.error('PREMIUM_ACTION_USAGE_INCREMENT_ERROR:', error);
           return updatedUsage;
         });
@@ -518,15 +663,19 @@ export async function POST(req: Request) {
           steps: [
             {
               action: actionType,
-              status: actionResult.type === 'error' ? 'failed' : 'completed',
+              status:
+                actionResult.type === 'error' ? 'failed' : 'completed',
               summary: actionResult.summary,
             },
           ],
           structuredData: {
             finance: normalizedFinance,
             actionResult:
-              actionResult.type === 'error' ? safeFinanceActionFallback() : actionResult,
+              actionResult.type === 'error'
+                ? safeFinanceActionFallback()
+                : actionResult,
             operator_alerts: operatorAlertsStructured,
+            attachments,
           },
           memoryUsed: relevantMemories.length > 0,
           iterationCount: 1,
@@ -549,7 +698,12 @@ export async function POST(req: Request) {
       hasReply: reply.trim().length > 0,
     });
 
-    const updatedUsage = await incrementUsage(supabase, userId, usage, 'agent').catch((error) => {
+    const updatedUsage = await incrementUsage(
+      supabase,
+      userId,
+      usage,
+      'agent',
+    ).catch((error) => {
       console.error('USAGE_INCREMENT_ERROR:', error);
       return usage;
     });
@@ -570,7 +724,13 @@ export async function POST(req: Request) {
     });
 
     const payload: AgentResponse & {
-      usage: { current: number; limit: number; remaining: number; unlimited: boolean; unlimitedReason: 'dev' | 'admin' | null };
+      usage: {
+        current: number;
+        limit: number;
+        remaining: number;
+        unlimited: boolean;
+        unlimitedReason: 'dev' | 'admin' | null;
+      };
       plan: string;
     } = {
       reply: reply || SAFE_AGENT_FALLBACK.reply,
@@ -581,22 +741,38 @@ export async function POST(req: Request) {
         steps: Array.isArray(agentResult.metadata?.steps)
           ? agentResult.metadata.steps.map((step) => ({
               action: step.title,
-              status: step.status === 'failed' ? 'failed' : 'completed',
-              summary: step.summary || (step.status === 'failed' ? step.error || 'Step failed.' : 'Step completed.'),
+              status:
+                step.status === 'failed' ? 'failed' : 'completed',
+              summary:
+                step.summary ||
+                (step.status === 'failed'
+                  ? step.error || 'Step failed.'
+                  : 'Step completed.'),
               error: step.error,
             }))
           : [],
         structuredData: {
           ...(agentResult.metadata?.structuredData || {}),
-          ...(agentResult.metadata?.goal ? { goal_understanding: agentResult.metadata.goal } : {}),
-          ...(agentResult.metadata?.responseMode ? { response_mode: agentResult.metadata.responseMode } : {}),
-          ...(shouldAttachFinance ? { finance: normalizedFinance } : {}),
-          ...(operatorAlertsStructured.length ? { operator_alerts: operatorAlertsStructured } : {}),
+          ...(agentResult.metadata?.goal
+            ? { goal_understanding: agentResult.metadata.goal }
+            : {}),
+          ...(agentResult.metadata?.responseMode
+            ? { response_mode: agentResult.metadata.responseMode }
+            : {}),
+          ...(shouldAttachFinance
+            ? { finance: normalizedFinance }
+            : {}),
+          ...(operatorAlertsStructured.length
+            ? { operator_alerts: operatorAlertsStructured }
+            : {}),
+          attachments,
         },
         suggestedActions: agentResult.metadata?.suggestedActions || [],
         memoryUsed: !!agentResult.metadata?.memoryUsed,
         verificationPassed: !!agentResult.metadata?.verificationPassed,
-        iterationCount: Array.isArray(agentResult.metadata?.steps) ? agentResult.metadata.steps.length : 0,
+        iterationCount: Array.isArray(agentResult.metadata?.steps)
+          ? agentResult.metadata.steps.length
+          : 0,
       },
       usage: {
         current: usageAfterRun.current,
@@ -608,11 +784,20 @@ export async function POST(req: Request) {
       plan,
     };
 
-    console.info('AGENT_ROUTE_SUCCESS', { requestId, durationMs: Date.now() - startedAt, intent: payload.metadata.intent });
+    console.info('AGENT_ROUTE_SUCCESS', {
+      requestId,
+      durationMs: Date.now() - startedAt,
+      intent: payload.metadata.intent,
+      attachmentCount: attachments.length,
+    });
 
     return safeJsonResponse(payload);
   } catch (error) {
-    console.error('AGENT_ROUTE_ERROR', { requestId, durationMs: Date.now() - startedAt, error });
+    console.error('AGENT_ROUTE_ERROR', {
+      requestId,
+      durationMs: Date.now() - startedAt,
+      error,
+    });
     return safeJsonResponse(SAFE_AGENT_FALLBACK);
   }
 }
