@@ -361,48 +361,49 @@ export function KivoChatScreen() {
   return (
     <div className="relative min-h-screen overflow-hidden bg-[#f6f6f8] text-[#2f3640]">
       <div className="pointer-events-none absolute inset-0 overflow-hidden">
-        <div className="absolute inset-0 bg-[linear-gradient(180deg,#f8f8fa_0%,#f4f4f7_38%,#eef1f6_100%)]" />
+        <div className="absolute inset-0 bg-[linear-gradient(180deg,#f8f8fa_0%,#f5f5f8_28%,#f1f3f8_62%,#edf1f7_100%)]" />
+
+        <div className="absolute inset-x-0 top-0 h-[220px] bg-[radial-gradient(ellipse_at_top,rgba(255,255,255,0.92)_0%,rgba(255,255,255,0.45)_42%,rgba(255,255,255,0)_78%)]" />
 
         <motion.div
-          className="absolute left-[-12%] top-[48%] h-[280px] w-[124%] rounded-[50%] bg-[radial-gradient(ellipse_at_center,rgba(255,255,255,0.95)_0%,rgba(245,246,250,0.88)_35%,rgba(233,237,245,0.28)_68%,rgba(233,237,245,0)_100%)] blur-[12px]"
-          animate={{
-            x: [0, 10, 0],
-            y: [0, -4, 0],
-          }}
-          transition={{
-            duration: 12,
-            repeat: Infinity,
-            ease: 'easeInOut',
-          }}
+          className="absolute left-1/2 top-[48%] h-[520px] w-[520px] -translate-x-1/2 -translate-y-1/2 rounded-full bg-[radial-gradient(circle,rgba(255,255,255,0.98)_0%,rgba(255,255,255,0.82)_24%,rgba(247,248,252,0.58)_46%,rgba(240,243,249,0.24)_66%,rgba(240,243,249,0)_100%)] blur-[42px]"
+          animate={{ x: [0, 6, 0], y: [0, -4, 0] }}
+          transition={{ duration: 16, repeat: Infinity, ease: 'easeInOut' }}
         />
 
         <motion.div
-          className="absolute left-[-18%] top-[61%] h-[330px] w-[136%] rounded-[50%] bg-[radial-gradient(ellipse_at_center,rgba(233,238,247,0.86)_0%,rgba(228,233,244,0.66)_32%,rgba(219,225,238,0.22)_70%,rgba(219,225,238,0)_100%)] blur-[24px]"
-          animate={{
-            x: [0, -14, 0],
-            y: [0, 6, 0],
-          }}
-          transition={{
-            duration: 16,
-            repeat: Infinity,
-            ease: 'easeInOut',
-          }}
+          className="absolute left-[-22%] bottom-[190px] h-[220px] w-[145%] rounded-[50%] bg-[radial-gradient(ellipse_at_center,rgba(255,255,255,0.95)_0%,rgba(248,249,252,0.88)_28%,rgba(238,242,248,0.54)_56%,rgba(232,237,245,0.14)_78%,rgba(232,237,245,0)_100%)] blur-[12px] rotate-[1deg]"
+          animate={{ x: [0, 10, 0], y: [0, -3, 0] }}
+          transition={{ duration: 18, repeat: Infinity, ease: 'easeInOut' }}
         />
 
         <motion.div
-          className="absolute left-[-8%] top-[74%] h-[260px] w-[118%] rounded-[50%] bg-[radial-gradient(ellipse_at_center,rgba(221,227,240,0.78)_0%,rgba(223,229,241,0.46)_34%,rgba(229,234,244,0.12)_72%,rgba(229,234,244,0)_100%)] blur-[30px]"
-          animate={{
-            x: [0, 8, 0],
-            y: [0, -5, 0],
-          }}
-          transition={{
-            duration: 18,
-            repeat: Infinity,
-            ease: 'easeInOut',
-          }}
+          className="absolute left-[-18%] bottom-[128px] h-[250px] w-[138%] rounded-[50%] bg-[radial-gradient(ellipse_at_center,rgba(246,248,252,0.92)_0%,rgba(239,243,249,0.76)_34%,rgba(230,236,245,0.42)_60%,rgba(224,231,242,0.12)_80%,rgba(224,231,242,0)_100%)] blur-[16px] -rotate-[2deg]"
+          animate={{ x: [0, -12, 0], y: [0, 4, 0] }}
+          transition={{ duration: 22, repeat: Infinity, ease: 'easeInOut' }}
         />
 
-        <div className="absolute inset-x-0 bottom-[112px] h-[220px] bg-[linear-gradient(180deg,rgba(246,246,248,0)_0%,rgba(246,246,248,0.62)_28%,rgba(246,246,248,0.96)_76%,rgba(246,246,248,1)_100%)]" />
+        <motion.div
+          className="absolute left-[-14%] bottom-[58px] h-[290px] w-[130%] rounded-[50%] bg-[radial-gradient(ellipse_at_center,rgba(234,239,248,0.90)_0%,rgba(228,234,244,0.72)_34%,rgba(220,227,239,0.46)_58%,rgba(215,223,237,0.16)_78%,rgba(215,223,237,0)_100%)] blur-[22px] rotate-[1deg]"
+          animate={{ x: [0, 8, 0], y: [0, -5, 0] }}
+          transition={{ duration: 24, repeat: Infinity, ease: 'easeInOut' }}
+        />
+
+        <motion.div
+          className="absolute left-[-10%] bottom-[-8px] h-[250px] w-[124%] rounded-[50%] bg-[radial-gradient(ellipse_at_center,rgba(226,232,243,0.82)_0%,rgba(220,227,239,0.56)_38%,rgba(214,222,236,0.24)_66%,rgba(214,222,236,0)_100%)] blur-[26px] -rotate-[1deg]"
+          animate={{ x: [0, -6, 0], y: [0, 4, 0] }}
+          transition={{ duration: 26, repeat: Infinity, ease: 'easeInOut' }}
+        />
+
+        <motion.div
+          className="absolute left-[-8%] bottom-[-72px] h-[220px] w-[118%] rounded-[50%] bg-[radial-gradient(ellipse_at_center,rgba(217,224,238,0.72)_0%,rgba(217,224,238,0.36)_42%,rgba(217,224,238,0.10)_72%,rgba(217,224,238,0)_100%)] blur-[30px]"
+          animate={{ x: [0, 7, 0], y: [0, -3, 0] }}
+          transition={{ duration: 28, repeat: Infinity, ease: 'easeInOut' }}
+        />
+
+        <div className="absolute left-[12%] bottom-[132px] h-[90px] w-[76%] rounded-full bg-[radial-gradient(ellipse_at_center,rgba(255,255,255,0.62)_0%,rgba(255,255,255,0.18)_52%,rgba(255,255,255,0)_100%)] blur-[18px]" />
+
+        <div className="absolute inset-x-0 bottom-[108px] h-[300px] bg-[linear-gradient(180deg,rgba(245,246,248,0)_0%,rgba(245,246,248,0.22)_22%,rgba(245,246,248,0.62)_54%,rgba(245,246,248,0.94)_82%,rgba(245,246,248,1)_100%)]" />
       </div>
 
       <div className="relative mx-auto flex min-h-screen w-full max-w-[560px] flex-col">
