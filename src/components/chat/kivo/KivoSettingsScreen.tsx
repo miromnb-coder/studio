@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import {
   Bell,
@@ -12,11 +12,13 @@ import {
   Mail,
   Plug,
   Puzzle,
+  Share2,
   Sparkles,
   User,
   Wrench,
 } from 'lucide-react';
 import { useAppStore } from '@/app/store/app-store';
+import { KivoReferralSheet } from './KivoReferralSheet';
 
 type SettingsRow = {
   id: string;
@@ -37,6 +39,8 @@ export function KivoSettingsScreen() {
 
   const user = useAppStore((s) => s.user);
   const usage = useAppStore((s: any) => s.usage);
+
+  const [referralOpen, setReferralOpen] = useState(false);
 
   const profileInitial = useMemo(() => {
     const source =
@@ -69,6 +73,7 @@ export function KivoSettingsScreen() {
         { id: 'profile', label: 'Profile', icon: User, href: '/profile' },
         { id: 'language', label: 'Language', value: 'English', icon: Globe, href: '/settings/language' },
         { id: 'appearance', label: 'Appearance', value: 'Light', icon: Sparkles, href: '/settings/appearance' },
+        { id: 'share', label: 'Share with a friend', icon: Share2 },
       ],
     },
     {
@@ -182,10 +187,19 @@ export function KivoSettingsScreen() {
                       key={row.id}
                       type="button"
                       onClick={() => {
-                        if (row.href) router.push(row.href);
+                        if (row.id === 'share') {
+                          setReferralOpen(true);
+                          return;
+                        }
+
+                        if (row.href) {
+                          router.push(row.href);
+                        }
                       }}
                       className={`flex w-full items-center gap-4 px-4 py-3.5 text-left transition-all duration-200 ease-out hover:bg-white/70 active:scale-[0.995] ${
-                        index !== section.rows.length - 1 ? 'border-b border-black/[0.05]' : ''
+                        index !== section.rows.length - 1
+                          ? 'border-b border-black/[0.05]'
+                          : ''
                       }`}
                     >
                       <span className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-[#f1f3f6] text-[#353b45]">
@@ -217,6 +231,14 @@ export function KivoSettingsScreen() {
             <p className="text-[13px] text-[#9aa1ad]">Kivo v1.0.0</p>
           </div>
         </main>
+
+        <KivoReferralSheet
+          open={referralOpen}
+          onClose={() => setReferralOpen(false)}
+          onSendEmailInvite={async (inviteEmail) => {
+            console.log('Send referral invite to:', inviteEmail);
+          }}
+        />
       </div>
     </div>
   );
