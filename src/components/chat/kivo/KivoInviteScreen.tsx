@@ -1,7 +1,7 @@
 'use client';
 
 import { useRouter } from 'next/navigation';
-import { Gift, ChevronRight } from 'lucide-react';
+import { ChevronRight, Gift } from 'lucide-react';
 
 export function KivoInviteScreen({ code }: { code: string }) {
   const router = useRouter();
