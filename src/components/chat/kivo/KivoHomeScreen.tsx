@@ -11,6 +11,7 @@ import {
   User,
 } from 'lucide-react';
 import { useAppStore } from '@/app/store/app-store';
+import { KivoReferralSuccessToast } from './KivoReferralSuccessToast';
 
 type HomeTab = 'all' | 'agents' | 'unfinished';
 
@@ -46,9 +47,54 @@ export function KivoHomeScreen() {
   const [search, setSearch] = useState('');
   const [tab, setTab] = useState<HomeTab>('all');
 
+  const [referralToastOpen, setReferralToastOpen] = useState(false);
+  const [referralToastTitle, setReferralToastTitle] = useState('');
+  const [referralToastDetail, setReferralToastDetail] = useState('');
+
   useEffect(() => {
     if (!hydrated) hydrate();
   }, [hydrate, hydrated]);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+
+    const url = new URL(window.location.href);
+    const referral = url.searchParams.get('referral');
+    const rewardType = url.searchParams.get('referralRewardType');
+    const rewardAmount = url.searchParams.get('referralRewardAmount');
+    const rewardLabel = url.searchParams.get('referralRewardLabel');
+
+    if (referral !== 'success') return;
+
+    let detail = 'Your referral reward was added successfully.';
+
+    if (rewardLabel?.trim()) {
+      detail = rewardLabel;
+    } else if (rewardType === 'bonus_runs' && rewardAmount) {
+      detail = `+${rewardAmount} bonus runs added`;
+    } else if (rewardType === 'plus_days' && rewardAmount) {
+      detail = `${rewardAmount} days of Plus were added`;
+    }
+
+    setReferralToastTitle('Invite successful');
+    setReferralToastDetail(detail);
+    setReferralToastOpen(true);
+
+    const timeout = window.setTimeout(() => {
+      setReferralToastOpen(false);
+    }, 3200);
+
+    url.searchParams.delete('referral');
+    url.searchParams.delete('referralRewardType');
+    url.searchParams.delete('referralRewardAmount');
+    url.searchParams.delete('referralRewardLabel');
+
+    router.replace(`${url.pathname}${url.search}${url.hash}`, { scroll: false });
+
+    return () => {
+      window.clearTimeout(timeout);
+    };
+  }, [router]);
 
   const formatRelativeTime = (iso: string) => {
     const delta = Date.now() - new Date(iso).getTime();
@@ -166,7 +212,10 @@ export function KivoHomeScreen() {
           </div>
 
           <div className="relative mb-4">
-            <Search className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-[#98a0ad]" strokeWidth={1.8} />
+            <Search
+              className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-[#98a0ad]"
+              strokeWidth={1.8}
+            />
             <input
               value={search}
               onChange={(event) => setSearch(event.target.value)}
@@ -268,7 +317,10 @@ export function KivoHomeScreen() {
                           <span className="text-[12px] font-medium tracking-[-0.01em] text-[#9aa1ad]">
                             {row.timestamp}
                           </span>
-                          <ChevronRight className="h-5 w-5 text-[#a2a8b3]" strokeWidth={1.8} />
+                          <ChevronRight
+                            className="h-5 w-5 text-[#a2a8b3]"
+                            strokeWidth={1.8}
+                          />
                         </div>
                       </div>
                     </div>
@@ -287,6 +339,13 @@ export function KivoHomeScreen() {
         >
           <Plus className="h-6 w-6" strokeWidth={2.2} />
         </button>
+
+        <KivoReferralSuccessToast
+          open={referralToastOpen}
+          title={referralToastTitle}
+          detail={referralToastDetail}
+          onClose={() => setReferralToastOpen(false)}
+        />
       </div>
     </div>
   );
