@@ -41,6 +41,8 @@ export function KivoSettingsScreen() {
   const usage = useAppStore((s: any) => s.usage);
 
   const [referralOpen, setReferralOpen] = useState(false);
+  const [inviteLink, setInviteLink] = useState('');
+  const [referralLoading, setReferralLoading] = useState(false);
 
   const profileInitial = useMemo(() => {
     const source =
@@ -64,6 +66,32 @@ export function KivoSettingsScreen() {
     if (typeof maybeCredits === 'number') return String(maybeCredits);
     return '300';
   })();
+
+  const openReferralSheet = async () => {
+    setReferralOpen(true);
+
+    if (inviteLink) return;
+
+    setReferralLoading(true);
+    try {
+      const response = await fetch('/api/referrals/link', {
+        method: 'GET',
+        cache: 'no-store',
+      });
+
+      const data = await response.json();
+
+      if (response.ok && data?.inviteLink) {
+        setInviteLink(data.inviteLink);
+      } else {
+        console.error('Referral link load failed:', data);
+      }
+    } catch (error) {
+      console.error('Failed to load referral link', error);
+    } finally {
+      setReferralLoading(false);
+    }
+  };
 
   const sections: SettingsSection[] = [
     {
@@ -188,7 +216,7 @@ export function KivoSettingsScreen() {
                       type="button"
                       onClick={() => {
                         if (row.id === 'share') {
-                          setReferralOpen(true);
+                          void openReferralSheet();
                           return;
                         }
 
@@ -235,6 +263,8 @@ export function KivoSettingsScreen() {
         <KivoReferralSheet
           open={referralOpen}
           onClose={() => setReferralOpen(false)}
+          inviteLink={inviteLink}
+          loadingLink={referralLoading}
           onSendEmailInvite={async (inviteEmail) => {
             console.log('Send referral invite to:', inviteEmail);
           }}
