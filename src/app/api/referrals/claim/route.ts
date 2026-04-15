@@ -3,6 +3,12 @@ import { createClient as createSupabaseServerClient } from '@/lib/supabase/serve
 
 export const dynamic = 'force-dynamic';
 
+const REFERRAL_REWARD = {
+  type: 'bonus_runs',
+  amount: 25,
+  label: '+25 bonus runs added',
+} as const;
+
 export async function POST(req: Request) {
   try {
     const body = await req.json().catch(() => ({}));
@@ -67,8 +73,6 @@ export async function POST(req: Request) {
       });
     }
 
-    const rewardCredits = 100;
-
     const { error: insertError } = await supabase
       .from('referral_events')
       .insert({
@@ -76,7 +80,8 @@ export async function POST(req: Request) {
         referred_user_id: referredUserId,
         referral_code: referralCode,
         status: 'completed',
-        reward_credits: rewardCredits,
+        reward_type: REFERRAL_REWARD.type,
+        reward_amount: REFERRAL_REWARD.amount,
       });
 
     if (insertError) {
@@ -87,27 +92,36 @@ export async function POST(req: Request) {
       );
     }
 
-    const { data: billingProfile } = await supabase
-      .from('user_billing_profiles')
-      .select('credits')
+    const { data: bonusRow, error: bonusFetchError } = await supabase
+      .from('user_bonus_usage')
+      .select('bonus_agent_runs')
       .eq('user_id', refProfile.user_id)
       .maybeSingle();
 
-    const nextCredits = Number(billingProfile?.credits ?? 0) + rewardCredits;
+    if (bonusFetchError) {
+      console.error('REFERRAL_BONUS_FETCH_ERROR', bonusFetchError);
+      return NextResponse.json(
+        { error: 'REFERRAL_REWARD_FAILED' },
+        { status: 500 },
+      );
+    }
 
-    const { error: billingError } = await supabase
-      .from('user_billing_profiles')
+    const nextBonusRuns =
+      Number(bonusRow?.bonus_agent_runs ?? 0) + REFERRAL_REWARD.amount;
+
+    const { error: bonusUpsertError } = await supabase
+      .from('user_bonus_usage')
       .upsert(
         {
           user_id: refProfile.user_id,
-          credits: nextCredits,
+          bonus_agent_runs: nextBonusRuns,
           updated_at: new Date().toISOString(),
         },
         { onConflict: 'user_id' },
       );
 
-    if (billingError) {
-      console.error('REFERRAL_BILLING_UPDATE_ERROR', billingError);
+    if (bonusUpsertError) {
+      console.error('REFERRAL_BONUS_UPSERT_ERROR', bonusUpsertError);
       return NextResponse.json(
         { error: 'REFERRAL_REWARD_FAILED' },
         { status: 500 },
@@ -116,7 +130,7 @@ export async function POST(req: Request) {
 
     return NextResponse.json({
       ok: true,
-      rewardCredits,
+      reward: REFERRAL_REWARD,
     });
   } catch (error) {
     console.error('REFERRAL_CLAIM_ROUTE_ERROR', error);
