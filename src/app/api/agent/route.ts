@@ -22,6 +22,8 @@ import {
   isDevUnlimitedMode,
   PLAN_LIMITS,
   toUsageEnvelope,
+  getUserBonusAgentRuns,
+  consumeOneBonusAgentRun,
 } from '@/lib/usage/usage';
 
 export const dynamic = 'force-dynamic';
@@ -429,6 +431,8 @@ export async function POST(req: Request) {
       supabase,
       userId,
     );
+    const bonusAgentRuns = await getUserBonusAgentRuns(supabase, userId);
+
     const { data: userProfile } = await supabase
       .from('profiles')
       .select('gmail_connected')
@@ -454,8 +458,10 @@ export async function POST(req: Request) {
 
     const usageBeforeRun = toUsageEnvelope({ plan, usage, unlimitedReason });
     const limit = PLAN_LIMITS[plan].dailyAgentRuns;
+    const hasBonusRun = bonusAgentRuns > 0;
+    const overBaseLimit = usageBeforeRun.current >= limit;
 
-    if (!usageBeforeRun.unlimited && usageBeforeRun.current >= limit) {
+    if (!usageBeforeRun.unlimited && overBaseLimit && !hasBonusRun) {
       return safeJsonResponse(
         {
           error: 'limit_reached',
@@ -470,6 +476,7 @@ export async function POST(req: Request) {
             unlimited: usageBeforeRun.unlimited,
             unlimitedReason: usageBeforeRun.unlimitedReason,
           },
+          bonusAgentRuns,
           plan,
         },
         402,
@@ -556,6 +563,7 @@ export async function POST(req: Request) {
       hasImage: Boolean(imageUri),
       attachmentCount: attachments.length,
       historyCount: safeHistory.length,
+      bonusAgentRuns,
     });
 
     const agentInput = {
@@ -573,6 +581,7 @@ export async function POST(req: Request) {
           current: usageBeforeRun.current,
           limit: usageBeforeRun.limit,
           remaining: usageBeforeRun.remaining,
+          bonusAgentRuns,
         },
         gmailConnected: resolveGmailConnected({
           userProfile: (userProfile as Record<string, unknown> | null) || null,
@@ -618,15 +627,21 @@ export async function POST(req: Request) {
 
     if (actionType) {
       const actionResult = runFinanceAction(actionType, normalizedFinance);
-      let updatedUsage = await incrementUsage(
-        supabase,
-        userId,
-        usage,
-        'agent',
-      ).catch((error) => {
-        console.error('ACTION_AGENT_USAGE_INCREMENT_ERROR:', error);
-        return usage;
-      });
+      let updatedUsage = usage;
+
+      if (!usageBeforeRun.unlimited && overBaseLimit && hasBonusRun) {
+        await consumeOneBonusAgentRun(supabase, userId);
+      } else {
+        updatedUsage = await incrementUsage(
+          supabase,
+          userId,
+          usage,
+          'agent',
+        ).catch((error) => {
+          console.error('ACTION_AGENT_USAGE_INCREMENT_ERROR:', error);
+          return usage;
+        });
+      }
 
       if (actionResult.type !== 'error') {
         updatedUsage = await incrementUsage(
@@ -654,6 +669,8 @@ export async function POST(req: Request) {
         usage: updatedUsage,
         unlimitedReason,
       });
+
+      const remainingBonusAgentRuns = await getUserBonusAgentRuns(supabase, userId);
 
       return safeJsonResponse({
         reply: actionResult.summary,
@@ -686,6 +703,7 @@ export async function POST(req: Request) {
           remaining: usageAfterRun.remaining,
           unlimited: usageAfterRun.unlimited,
           unlimitedReason: usageAfterRun.unlimitedReason,
+          bonusAgentRuns: remainingBonusAgentRuns,
         },
         plan,
       });
@@ -698,15 +716,21 @@ export async function POST(req: Request) {
       hasReply: reply.trim().length > 0,
     });
 
-    const updatedUsage = await incrementUsage(
-      supabase,
-      userId,
-      usage,
-      'agent',
-    ).catch((error) => {
-      console.error('USAGE_INCREMENT_ERROR:', error);
-      return usage;
-    });
+    let updatedUsage = usage;
+
+    if (!usageBeforeRun.unlimited && overBaseLimit && hasBonusRun) {
+      await consumeOneBonusAgentRun(supabase, userId);
+    } else {
+      updatedUsage = await incrementUsage(
+        supabase,
+        userId,
+        usage,
+        'agent',
+      ).catch((error) => {
+        console.error('USAGE_INCREMENT_ERROR:', error);
+        return usage;
+      });
+    }
 
     await updateUserProfileIntelligence({
       supabase,
@@ -723,6 +747,8 @@ export async function POST(req: Request) {
       unlimitedReason,
     });
 
+    const remainingBonusAgentRuns = await getUserBonusAgentRuns(supabase, userId);
+
     const payload: AgentResponse & {
       usage: {
         current: number;
@@ -730,6 +756,7 @@ export async function POST(req: Request) {
         remaining: number;
         unlimited: boolean;
         unlimitedReason: 'dev' | 'admin' | null;
+        bonusAgentRuns: number;
       };
       plan: string;
     } = {
@@ -780,6 +807,7 @@ export async function POST(req: Request) {
         remaining: usageAfterRun.remaining,
         unlimited: usageAfterRun.unlimited,
         unlimitedReason: usageAfterRun.unlimitedReason,
+        bonusAgentRuns: remainingBonusAgentRuns,
       },
       plan,
     };
@@ -789,6 +817,7 @@ export async function POST(req: Request) {
       durationMs: Date.now() - startedAt,
       intent: payload.metadata.intent,
       attachmentCount: attachments.length,
+      bonusAgentRuns: remainingBonusAgentRuns,
     });
 
     return safeJsonResponse(payload);
