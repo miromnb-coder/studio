@@ -34,6 +34,12 @@ type SettingsSection = {
   rows: SettingsRow[];
 };
 
+type ReferralStats = {
+  creditsEarned: number;
+  successfulReferrals: number;
+  pendingInvites: number;
+};
+
 export function KivoSettingsScreen() {
   const router = useRouter();
 
@@ -43,6 +49,11 @@ export function KivoSettingsScreen() {
   const [referralOpen, setReferralOpen] = useState(false);
   const [inviteLink, setInviteLink] = useState('');
   const [referralLoading, setReferralLoading] = useState(false);
+  const [referralStats, setReferralStats] = useState<ReferralStats>({
+    creditsEarned: 0,
+    successfulReferrals: 0,
+    pendingInvites: 0,
+  });
 
   const profileInitial = useMemo(() => {
     const source =
@@ -69,25 +80,36 @@ export function KivoSettingsScreen() {
 
   const openReferralSheet = async () => {
     setReferralOpen(true);
-
-    if (inviteLink) return;
-
     setReferralLoading(true);
+
     try {
-      const response = await fetch('/api/referrals/link', {
-        method: 'GET',
-        cache: 'no-store',
-      });
+      const [linkResponse, statsResponse] = await Promise.all([
+        fetch('/api/referrals/link', {
+          method: 'GET',
+          cache: 'no-store',
+        }),
+        fetch('/api/referrals/stats', {
+          method: 'GET',
+          cache: 'no-store',
+        }),
+      ]);
 
-      const data = await response.json();
+      const linkData = await linkResponse.json().catch(() => null);
+      const statsData = await statsResponse.json().catch(() => null);
 
-      if (response.ok && data?.inviteLink) {
-        setInviteLink(data.inviteLink);
-      } else {
-        console.error('Referral link load failed:', data);
+      if (linkResponse.ok && linkData?.inviteLink) {
+        setInviteLink(linkData.inviteLink);
+      }
+
+      if (statsResponse.ok && statsData) {
+        setReferralStats({
+          creditsEarned: Number(statsData.creditsEarned ?? 0),
+          successfulReferrals: Number(statsData.successfulReferrals ?? 0),
+          pendingInvites: Number(statsData.pendingInvites ?? 0),
+        });
       }
     } catch (error) {
-      console.error('Failed to load referral link', error);
+      console.error('Failed to load referral data', error);
     } finally {
       setReferralLoading(false);
     }
@@ -265,6 +287,10 @@ export function KivoSettingsScreen() {
           onClose={() => setReferralOpen(false)}
           inviteLink={inviteLink}
           loadingLink={referralLoading}
+          creditsEarned={referralStats.creditsEarned}
+          successfulReferrals={referralStats.successfulReferrals}
+          pendingInvites={referralStats.pendingInvites}
+          rewardLabel="Earn 100 credits for every successful referral"
           onSendEmailInvite={async (inviteEmail) => {
             console.log('Send referral invite to:', inviteEmail);
           }}
