@@ -10,6 +10,7 @@ import { MessageThread } from '@/components/chat/MessageThread';
 import { WorkspaceSheet } from '@/components/chat/WorkspaceSheet';
 import { KivoChatHeader } from './KivoChatHeader';
 import { KivoComposerDock } from './KivoComposerDock';
+import { KivoReferralSuccessToast } from './KivoReferralSuccessToast';
 
 type SpeechRecognitionEventLike = Event & {
   results: ArrayLike<ArrayLike<{ transcript: string }>>;
@@ -68,6 +69,10 @@ export function KivoChatScreen() {
   const [workspaceOpen, setWorkspaceOpen] = useState(false);
   const [notice, setNotice] = useState<Notice | null>(null);
 
+  const [referralToastOpen, setReferralToastOpen] = useState(false);
+  const [referralToastTitle, setReferralToastTitle] = useState('');
+  const [referralToastDetail, setReferralToastDetail] = useState('');
+
   const recognitionRef = useRef<SpeechRecognitionLike | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const noticeTimeoutRef = useRef<number | null>(null);
@@ -107,6 +112,47 @@ export function KivoChatScreen() {
   useEffect(() => {
     setWorkspaceOpen(false);
   }, [pathname]);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+
+    const url = new URL(window.location.href);
+    const referral = url.searchParams.get('referral');
+    const rewardType = url.searchParams.get('referralRewardType');
+    const rewardAmount = url.searchParams.get('referralRewardAmount');
+    const rewardLabel = url.searchParams.get('referralRewardLabel');
+
+    if (referral !== 'success') return;
+
+    let detail = 'Your referral reward was added successfully.';
+
+    if (rewardLabel?.trim()) {
+      detail = rewardLabel;
+    } else if (rewardType === 'bonus_runs' && rewardAmount) {
+      detail = `+${rewardAmount} bonus runs added`;
+    } else if (rewardType === 'plus_days' && rewardAmount) {
+      detail = `${rewardAmount} days of Plus were added`;
+    }
+
+    setReferralToastTitle('Invite successful');
+    setReferralToastDetail(detail);
+    setReferralToastOpen(true);
+
+    const timeout = window.setTimeout(() => {
+      setReferralToastOpen(false);
+    }, 3200);
+
+    url.searchParams.delete('referral');
+    url.searchParams.delete('referralRewardType');
+    url.searchParams.delete('referralRewardAmount');
+    url.searchParams.delete('referralRewardLabel');
+
+    router.replace(`${url.pathname}${url.search}${url.hash}`, { scroll: false });
+
+    return () => {
+      window.clearTimeout(timeout);
+    };
+  }, [router]);
 
   useEffect(() => {
     if (noticeTimeoutRef.current) {
@@ -440,6 +486,13 @@ export function KivoChatScreen() {
           isListening={isListening}
           isSending={isBusy}
           placeholder={placeholder}
+        />
+
+        <KivoReferralSuccessToast
+          open={referralToastOpen}
+          title={referralToastTitle}
+          detail={referralToastDetail}
+          onClose={() => setReferralToastOpen(false)}
         />
 
         <WorkspaceSheet
