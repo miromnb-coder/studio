@@ -11,6 +11,7 @@ import {
   sanitizeNextPath,
 } from '@/lib/auth/redirects';
 import { upsertUserProfile } from '@/lib/auth/profile';
+import { saveReferralCode } from '@/lib/auth/referral';
 import { PRODUCT_NAME } from '@/app/config/product';
 
 type AuthMode = 'login' | 'signup';
@@ -30,23 +31,34 @@ export function AuthScreen({ mode }: { mode: AuthMode }) {
 
   const nextPath = sanitizeNextPath(searchParams.get('next'));
   const callbackError = searchParams.get('error');
+  const referralCode = searchParams.get('ref');
 
   useEffect(() => {
     if (!callbackError) return;
     setError('Google sign-in did not complete. Please try again.');
   }, [callbackError]);
 
+  useEffect(() => {
+    if (referralCode?.trim()) {
+      saveReferralCode(referralCode);
+    }
+  }, [referralCode]);
+
   const continueWithGoogle = async () => {
     setError(null);
     setNotice(null);
     setIsGoogleLoading(true);
 
+    const callbackQuery = new URLSearchParams();
+    callbackQuery.set('next', nextPath);
+    if (referralCode?.trim()) {
+      callbackQuery.set('ref', referralCode);
+    }
+
     const { error: oauthError } = await supabase.auth.signInWithOAuth({
       provider: 'google',
       options: {
-        redirectTo: buildAuthCallbackUrl(
-          `/auth/callback?next=${encodeURIComponent(nextPath)}`,
-        ),
+        redirectTo: buildAuthCallbackUrl(`/auth/callback?${callbackQuery.toString()}`),
         queryParams: {
           access_type: 'offline',
           prompt: 'select_account',
@@ -64,7 +76,7 @@ export function AuthScreen({ mode }: { mode: AuthMode }) {
 
   const safeUpsertProfile = async (user: { id: string; email?: string | null }) => {
     try {
-      await upsertUserProfile(supabase, user);
+      await upsertUserProfile(supabase, user as any);
     } catch (profileError) {
       console.error('UPSERT_PROFILE_ERROR', profileError);
     }
@@ -81,13 +93,17 @@ export function AuthScreen({ mode }: { mode: AuthMode }) {
     if (mode === 'signup') {
       const cleanName = fullName.trim() || cleanEmail.split('@')[0] || 'User';
 
+      const callbackQuery = new URLSearchParams();
+      callbackQuery.set('next', nextPath);
+      if (referralCode?.trim()) {
+        callbackQuery.set('ref', referralCode);
+      }
+
       const { data, error: signUpError } = await supabase.auth.signUp({
         email: cleanEmail,
         password,
         options: {
-          emailRedirectTo: buildAuthCallbackUrl(
-            `/auth/callback?next=${encodeURIComponent(nextPath)}`,
-          ),
+          emailRedirectTo: buildAuthCallbackUrl(`/auth/callback?${callbackQuery.toString()}`),
           data: {
             full_name: cleanName,
             display_name: cleanName,
