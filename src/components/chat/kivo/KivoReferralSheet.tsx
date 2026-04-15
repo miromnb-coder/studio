@@ -82,9 +82,7 @@ export function KivoReferralSheet({
       await navigator.clipboard.writeText(inviteLink);
       setCopied(true);
       window.setTimeout(() => setCopied(false), 1800);
-    } catch {
-      // ignore
-    }
+    } catch {}
   };
 
   const handleNativeShare = async () => {
@@ -101,9 +99,7 @@ export function KivoReferralSheet({
       }
 
       await handleCopy();
-    } catch {
-      // ignore cancel
-    }
+    } catch {}
   };
 
   const handleSendEmail = async () => {
@@ -135,144 +131,151 @@ export function KivoReferralSheet({
           />
 
           <motion.aside
-            className="fixed inset-x-0 bottom-0 z-50 mx-auto w-full max-w-[560px] rounded-t-[34px] border border-black/[0.05] bg-[rgba(245,245,247,0.96)] px-4 pb-[calc(18px+env(safe-area-inset-bottom))] pt-4 shadow-[0_-20px_50px_rgba(15,23,42,0.12)] backdrop-blur-2xl"
+            className="fixed inset-x-0 bottom-0 z-50 mx-auto flex w-full max-w-[560px] flex-col rounded-t-[34px] border border-black/[0.05] bg-[rgba(245,245,247,0.98)] shadow-[0_-20px_50px_rgba(15,23,42,0.12)] backdrop-blur-2xl"
+            style={{
+              maxHeight: 'min(88vh, 820px)',
+            }}
             initial={{ y: 36, opacity: 0 }}
             animate={{ y: 0, opacity: 1 }}
             exit={{ y: 30, opacity: 0 }}
             transition={{ type: 'spring', stiffness: 320, damping: 30 }}
           >
-            <div className="mx-auto mb-4 h-[5px] w-14 rounded-full bg-black/[0.10]" />
+            <div className="shrink-0 px-4 pt-4">
+              <div className="mx-auto mb-4 h-[5px] w-14 rounded-full bg-black/[0.10]" />
 
-            <div className="mb-5 flex items-center justify-between">
-              <h2 className="text-[22px] font-medium tracking-[-0.04em] text-[#2f3640]">
-                Invite friends
-              </h2>
+              <div className="mb-4 flex items-center justify-between">
+                <h2 className="text-[22px] font-medium tracking-[-0.04em] text-[#2f3640]">
+                  Invite friends
+                </h2>
 
-              <button
-                type="button"
-                onClick={onClose}
-                aria-label="Close"
-                className="inline-flex h-10 w-10 items-center justify-center rounded-full border border-black/[0.05] bg-white/70 text-[#6f7785]"
-              >
-                <X className="h-5 w-5" strokeWidth={2} />
-              </button>
+                <button
+                  type="button"
+                  onClick={onClose}
+                  aria-label="Close"
+                  className="inline-flex h-10 w-10 items-center justify-center rounded-full border border-black/[0.05] bg-white/70 text-[#6f7785]"
+                >
+                  <X className="h-5 w-5" strokeWidth={2} />
+                </button>
+              </div>
             </div>
 
-            <section className="rounded-[26px] border border-black/[0.05] bg-white/82 p-5 shadow-[0_10px_24px_rgba(15,23,42,0.05)]">
-              <div className="inline-flex h-14 w-14 items-center justify-center rounded-full bg-[#f4f6fa] text-[#4b5563]">
-                <Users className="h-7 w-7" strokeWidth={1.9} />
-              </div>
-
-              <h3 className="mt-4 text-[26px] font-semibold tracking-[-0.05em] text-[#2f3640]">
-                Share Kivo, earn rewards
-              </h3>
-
-              <p className="mt-2 text-[14px] leading-6 text-[#7a8190]">
-                Invite friends with your personal link. Rewards are added after a successful signup.
-              </p>
-
-              <div className="mt-4 rounded-[20px] border border-black/[0.05] bg-[#f8f9fb] px-4 py-3">
-                <p className="text-[13px] font-medium text-[#8a919e]">Your reward</p>
-                <p className="mt-1 text-[16px] font-medium tracking-[-0.02em] text-[#2f3640]">
-                  {rewardLabel}
-                </p>
-              </div>
-            </section>
-
-            <section className="mt-4 rounded-[26px] border border-black/[0.05] bg-white/82 p-4 shadow-[0_10px_24px_rgba(15,23,42,0.05)]">
-              <p className="text-[13px] font-medium text-[#8a919e]">Invite link</p>
-
-              <div className="mt-2 rounded-[18px] border border-black/[0.05] bg-[#f8f9fb] px-4 py-3 text-[14px] text-[#4b5563]">
-                <span className="block truncate">{resolvedInviteLink}</span>
-              </div>
-
-              <div className="mt-3 flex gap-2">
-                <button
-                  type="button"
-                  onClick={handleCopy}
-                  disabled={loadingLink || !inviteLink}
-                  className={`inline-flex h-11 flex-1 items-center justify-center gap-2 rounded-full text-sm font-medium ${
-                    loadingLink || !inviteLink
-                      ? 'bg-[#d7dbe2] text-white'
-                      : 'bg-[#111111] text-white'
-                  }`}
-                >
-                  {copied ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
-                  {copied ? 'Copied' : 'Copy link'}
-                </button>
-
-                <button
-                  type="button"
-                  onClick={handleNativeShare}
-                  disabled={loadingLink || !inviteLink}
-                  className={`inline-flex h-11 flex-1 items-center justify-center gap-2 rounded-full border text-sm font-medium ${
-                    loadingLink || !inviteLink
-                      ? 'border-black/[0.04] bg-[#f0f2f5] text-[#a1a8b3]'
-                      : 'border-black/[0.06] bg-white text-[#374151]'
-                  }`}
-                >
-                  <Share2 className="h-4 w-4" />
-                  Share
-                </button>
-              </div>
-            </section>
-
-            <section className="mt-4 rounded-[26px] border border-black/[0.05] bg-white/82 p-4 shadow-[0_10px_24px_rgba(15,23,42,0.05)]">
-              <p className="text-[15px] font-medium tracking-[-0.02em] text-[#2f3640]">
-                Send invite by email
-              </p>
-
-              <div className="mt-3 flex gap-2">
-                <div className="relative flex-1">
-                  <Mail className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-[#98a0ad]" />
-                  <input
-                    type="email"
-                    value={email}
-                    onChange={(event) => setEmail(event.target.value)}
-                    placeholder="Enter email address"
-                    className="h-12 w-full rounded-full border border-black/[0.05] bg-[#f8f9fb] pl-11 pr-4 text-[15px] text-[#38404a] outline-none placeholder:text-[#98a0ad]"
-                  />
+            <div className="min-h-0 flex-1 overflow-y-auto px-4 pb-[calc(18px+env(safe-area-inset-bottom))]">
+              <section className="rounded-[26px] border border-black/[0.05] bg-white/82 p-5 shadow-[0_10px_24px_rgba(15,23,42,0.05)]">
+                <div className="inline-flex h-14 w-14 items-center justify-center rounded-full bg-[#f4f6fa] text-[#4b5563]">
+                  <Users className="h-7 w-7" strokeWidth={1.9} />
                 </div>
 
-                <button
-                  type="button"
-                  onClick={handleSendEmail}
-                  disabled={!canSendEmail || sending}
-                  className={`inline-flex h-12 items-center justify-center gap-2 rounded-full px-4 text-sm font-medium ${
-                    canSendEmail && !sending
-                      ? 'bg-[#111111] text-white'
-                      : 'bg-[#d7dbe2] text-white'
-                  }`}
-                >
-                  <Send className="h-4 w-4" />
-                  {sending ? 'Sending' : sent ? 'Sent' : 'Send'}
-                </button>
-              </div>
-            </section>
+                <h3 className="mt-4 text-[26px] font-semibold tracking-[-0.05em] text-[#2f3640]">
+                  Share Kivo, earn rewards
+                </h3>
 
-            <section className="mt-4 rounded-[26px] border border-black/[0.05] bg-white/82 p-4 shadow-[0_10px_24px_rgba(15,23,42,0.05)]">
-              <h3 className="text-[15px] font-medium tracking-[-0.02em] text-[#2f3640]">
-                Referral stats
-              </h3>
+                <p className="mt-2 text-[14px] leading-6 text-[#7a8190]">
+                  Invite friends with your personal link. Rewards are added after a successful signup.
+                </p>
 
-              <div className="mt-4 grid grid-cols-3 gap-3">
-                <StatCard label="Credits earned" value={String(creditsEarned)} />
-                <StatCard label="Successful" value={String(successfulReferrals)} />
-                <StatCard label="Pending" value={String(pendingInvites)} />
-              </div>
-            </section>
+                <div className="mt-4 rounded-[20px] border border-black/[0.05] bg-[#f8f9fb] px-4 py-3">
+                  <p className="text-[13px] font-medium text-[#8a919e]">Your reward</p>
+                  <p className="mt-1 text-[16px] font-medium tracking-[-0.02em] text-[#2f3640]">
+                    {rewardLabel}
+                  </p>
+                </div>
+              </section>
 
-            <section className="mt-4 rounded-[26px] border border-black/[0.05] bg-white/82 p-4 shadow-[0_10px_24px_rgba(15,23,42,0.05)]">
-              <h3 className="text-[15px] font-medium tracking-[-0.02em] text-[#2f3640]">
-                How it works
-              </h3>
+              <section className="mt-4 rounded-[26px] border border-black/[0.05] bg-white/82 p-4 shadow-[0_10px_24px_rgba(15,23,42,0.05)]">
+                <p className="text-[13px] font-medium text-[#8a919e]">Invite link</p>
 
-              <div className="mt-3 space-y-2 text-[14px] leading-6 text-[#7a8190]">
-                <p>1. Share your invite link.</p>
-                <p>2. Your friend signs up with your link.</p>
-                <p>3. Rewards are added after a successful signup.</p>
-              </div>
-            </section>
+                <div className="mt-2 rounded-[18px] border border-black/[0.05] bg-[#f8f9fb] px-4 py-3 text-[14px] text-[#4b5563]">
+                  <span className="block truncate">{resolvedInviteLink}</span>
+                </div>
+
+                <div className="mt-3 flex gap-2">
+                  <button
+                    type="button"
+                    onClick={handleCopy}
+                    disabled={loadingLink || !inviteLink}
+                    className={`inline-flex h-11 flex-1 items-center justify-center gap-2 rounded-full text-sm font-medium ${
+                      loadingLink || !inviteLink
+                        ? 'bg-[#d7dbe2] text-white'
+                        : 'bg-[#111111] text-white'
+                    }`}
+                  >
+                    {copied ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
+                    {copied ? 'Copied' : 'Copy link'}
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={handleNativeShare}
+                    disabled={loadingLink || !inviteLink}
+                    className={`inline-flex h-11 flex-1 items-center justify-center gap-2 rounded-full border text-sm font-medium ${
+                      loadingLink || !inviteLink
+                        ? 'border-black/[0.04] bg-[#f0f2f5] text-[#a1a8b3]'
+                        : 'border-black/[0.06] bg-white text-[#374151]'
+                    }`}
+                  >
+                    <Share2 className="h-4 w-4" />
+                    Share
+                  </button>
+                </div>
+              </section>
+
+              <section className="mt-4 rounded-[26px] border border-black/[0.05] bg-white/82 p-4 shadow-[0_10px_24px_rgba(15,23,42,0.05)]">
+                <p className="text-[15px] font-medium tracking-[-0.02em] text-[#2f3640]">
+                  Send invite by email
+                </p>
+
+                <div className="mt-3 flex gap-2">
+                  <div className="relative flex-1">
+                    <Mail className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-[#98a0ad]" />
+                    <input
+                      type="email"
+                      value={email}
+                      onChange={(event) => setEmail(event.target.value)}
+                      placeholder="Enter email address"
+                      className="h-12 w-full rounded-full border border-black/[0.05] bg-[#f8f9fb] pl-11 pr-4 text-[15px] text-[#38404a] outline-none placeholder:text-[#98a0ad]"
+                    />
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={handleSendEmail}
+                    disabled={!canSendEmail || sending}
+                    className={`inline-flex h-12 items-center justify-center gap-2 rounded-full px-4 text-sm font-medium ${
+                      canSendEmail && !sending
+                        ? 'bg-[#111111] text-white'
+                        : 'bg-[#d7dbe2] text-white'
+                    }`}
+                  >
+                    <Send className="h-4 w-4" />
+                    {sending ? 'Sending' : sent ? 'Sent' : 'Send'}
+                  </button>
+                </div>
+              </section>
+
+              <section className="mt-4 rounded-[26px] border border-black/[0.05] bg-white/82 p-4 shadow-[0_10px_24px_rgba(15,23,42,0.05)]">
+                <h3 className="text-[15px] font-medium tracking-[-0.02em] text-[#2f3640]">
+                  Referral stats
+                </h3>
+
+                <div className="mt-4 grid grid-cols-3 gap-3">
+                  <StatCard label="Credits earned" value={String(creditsEarned)} />
+                  <StatCard label="Successful" value={String(successfulReferrals)} />
+                  <StatCard label="Pending" value={String(pendingInvites)} />
+                </div>
+              </section>
+
+              <section className="mt-4 rounded-[26px] border border-black/[0.05] bg-white/82 p-4 shadow-[0_10px_24px_rgba(15,23,42,0.05)]">
+                <h3 className="text-[15px] font-medium tracking-[-0.02em] text-[#2f3640]">
+                  How it works
+                </h3>
+
+                <div className="mt-3 space-y-2 text-[14px] leading-6 text-[#7a8190]">
+                  <p>1. Share your invite link.</p>
+                  <p>2. Your friend signs up with your link.</p>
+                  <p>3. Rewards are added after a successful signup.</p>
+                </div>
+              </section>
+            </div>
           </motion.aside>
         </>
       ) : null}
