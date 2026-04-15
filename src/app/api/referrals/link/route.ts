@@ -4,12 +4,15 @@ import { createClient as createSupabaseServerClient } from '@/lib/supabase/serve
 export const dynamic = 'force-dynamic';
 
 function generateReferralCode(seed?: string) {
-  const base = (seed || 'kivo').toLowerCase().replace(/[^a-z0-9]/g, '').slice(0, 8);
+  const base = (seed || 'kivo')
+    .toLowerCase()
+    .replace(/[^a-z0-9]/g, '')
+    .slice(0, 8);
   const random = Math.random().toString(36).slice(2, 8);
   return `${base}${random}`;
 }
 
-export async function GET() {
+export async function GET(request: Request) {
   try {
     const supabase = await createSupabaseServerClient();
 
@@ -85,7 +88,7 @@ export async function GET() {
     const appUrl =
       process.env.NEXT_PUBLIC_APP_URL ||
       process.env.NEXT_PUBLIC_SITE_URL ||
-      'https://kivo.app';
+      new URL(request.url).origin;
 
     const inviteLink = `${appUrl.replace(/\/$/, '')}/invite/${referralCode}`;
 
