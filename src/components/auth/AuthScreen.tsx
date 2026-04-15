@@ -6,7 +6,10 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import { Chrome } from 'lucide-react';
 import { createClient } from '@/lib/supabase/client';
 import { toFriendlyAuthMessage } from '@/lib/auth/messages';
-import { buildAuthCallbackUrl, sanitizeNextPath } from '@/lib/auth/redirects';
+import {
+  buildAuthCallbackUrl,
+  sanitizeNextPath,
+} from '@/lib/auth/redirects';
 import { upsertUserProfile } from '@/lib/auth/profile';
 import { PRODUCT_NAME } from '@/app/config/product';
 
@@ -61,9 +64,9 @@ export function AuthScreen({ mode }: { mode: AuthMode }) {
 
   const safeUpsertProfile = async (user: { id: string; email?: string | null }) => {
     try {
-      await upsertUserProfile(supabase, user as any);
+      await upsertUserProfile(supabase, user);
     } catch (profileError) {
-      console.error('UPSERT_USER_PROFILE_ERROR', profileError);
+      console.error('UPSERT_PROFILE_ERROR', profileError);
     }
   };
 
@@ -73,67 +76,34 @@ export function AuthScreen({ mode }: { mode: AuthMode }) {
     setNotice(null);
     setIsSubmitting(true);
 
-    try {
-      const cleanEmail = email.trim().toLowerCase();
+    const cleanEmail = email.trim().toLowerCase();
 
-      if (mode === 'signup') {
-        const cleanName =
-          fullName.trim() || cleanEmail.split('@')[0] || 'User';
+    if (mode === 'signup') {
+      const cleanName = fullName.trim() || cleanEmail.split('@')[0] || 'User';
 
-        const { data, error: signUpError } = await supabase.auth.signUp({
-          email: cleanEmail,
-          password,
-          options: {
-            emailRedirectTo: buildAuthCallbackUrl(
-              `/auth/callback?next=${encodeURIComponent(nextPath)}`,
-            ),
-            data: {
-              full_name: cleanName,
-              display_name: cleanName,
-            },
-          },
-        });
-
-        if (signUpError) {
-          console.error('SIGN_UP_ERROR', signUpError);
-          setError(
-            toFriendlyAuthMessage(
-              signUpError,
-              'Unable to create account right now.',
-            ),
-          );
-          return;
-        }
-
-        if (data.user) {
-          await safeUpsertProfile(data.user);
-        }
-
-        if (!data.session) {
-          setNotice(
-            'Account created. Please check your email to confirm your account, then continue.',
-          );
-          return;
-        }
-
-        router.replace(nextPath);
-        router.refresh();
-        return;
-      }
-
-      const { data, error: signInError } = await supabase.auth.signInWithPassword({
+      const { data, error: signUpError } = await supabase.auth.signUp({
         email: cleanEmail,
         password,
+        options: {
+          emailRedirectTo: buildAuthCallbackUrl(
+            `/auth/callback?next=${encodeURIComponent(nextPath)}`,
+          ),
+          data: {
+            full_name: cleanName,
+            display_name: cleanName,
+          },
+        },
       });
 
-      if (signInError) {
-        console.error('SIGN_IN_ERROR', signInError);
+      if (signUpError) {
+        console.error('SIGN_UP_ERROR', signUpError);
         setError(
           toFriendlyAuthMessage(
-            signInError,
-            'Unable to sign in right now.',
+            signUpError,
+            'Unable to create account right now.',
           ),
         );
+        setIsSubmitting(false);
         return;
       }
 
@@ -141,14 +111,43 @@ export function AuthScreen({ mode }: { mode: AuthMode }) {
         await safeUpsertProfile(data.user);
       }
 
+      if (!data.session) {
+        setNotice(
+          'Account created. Please check your email and confirm your account before continuing.',
+        );
+        setIsSubmitting(false);
+        return;
+      }
+
       router.replace(nextPath);
       router.refresh();
-    } catch (unexpectedError) {
-      console.error('AUTH_SUBMIT_UNEXPECTED_ERROR', unexpectedError);
-      setError('Something went wrong. Please try again.');
-    } finally {
-      setIsSubmitting(false);
+      return;
     }
+
+    const { data, error: signInError } =
+      await supabase.auth.signInWithPassword({
+        email: cleanEmail,
+        password,
+      });
+
+    if (signInError) {
+      console.error('SIGN_IN_ERROR', signInError);
+      setError(
+        toFriendlyAuthMessage(
+          signInError,
+          'Unable to sign in right now.',
+        ),
+      );
+      setIsSubmitting(false);
+      return;
+    }
+
+    if (data.user) {
+      await safeUpsertProfile(data.user);
+    }
+
+    router.replace(nextPath);
+    router.refresh();
   };
 
   return (
