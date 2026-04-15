@@ -34,6 +34,7 @@ export function isDevUnlimitedMode(): boolean {
 
 export function isAdminBypass(email: string | null | undefined): boolean {
   if (!email) return false;
+
   const configured = String(process.env.ADMIN_BYPASS_EMAILS || '')
     .split(',')
     .map((entry) => entry.trim().toLowerCase())
@@ -48,7 +49,8 @@ export function toUsageEnvelope(args: {
   usage: UsageSnapshot;
   unlimitedReason: 'dev' | 'admin' | null;
 }): UsageEnvelope {
-  const baseLimit = PLAN_LIMITS[args.plan]?.dailyAgentRuns ?? PLAN_LIMITS.FREE.dailyAgentRuns;
+  const baseLimit =
+    PLAN_LIMITS[args.plan]?.dailyAgentRuns ?? PLAN_LIMITS.FREE.dailyAgentRuns;
 
   if (args.unlimitedReason) {
     return {
@@ -69,7 +71,10 @@ export function toUsageEnvelope(args: {
   };
 }
 
-export async function getUserPlanAndUsage(supabase: any, userId: string): Promise<{
+export async function getUserPlanAndUsage(
+  supabase: any,
+  userId: string,
+): Promise<{
   plan: UserPlan;
   usage: UsageSnapshot;
   email: string | null;
@@ -97,11 +102,19 @@ export async function getUserPlanAndUsage(supabase: any, userId: string): Promis
 
   return {
     plan: normalizePlan(profileResult.data?.plan),
-    email: typeof authResult.data?.user?.email === 'string' ? authResult.data.user.email : null,
+    email:
+      typeof authResult.data?.user?.email === 'string'
+        ? authResult.data.user.email
+        : null,
     usage: {
-      agentRuns: typeof usageResult.data?.agent_runs === 'number' ? usageResult.data.agent_runs : 0,
+      agentRuns:
+        typeof usageResult.data?.agent_runs === 'number'
+          ? usageResult.data.agent_runs
+          : 0,
       premiumActionRuns:
-        typeof usageResult.data?.premium_action_runs === 'number' ? usageResult.data.premium_action_runs : 0,
+        typeof usageResult.data?.premium_action_runs === 'number'
+          ? usageResult.data.premium_action_runs
+          : 0,
       usageDate,
     },
   };
@@ -162,10 +175,55 @@ export async function incrementUsage(
 
   return {
     usageDate: nextUsage.usageDate,
-    agentRuns: typeof usageResult.data?.agent_runs === 'number' ? usageResult.data.agent_runs : nextUsage.agentRuns,
+    agentRuns:
+      typeof usageResult.data?.agent_runs === 'number'
+        ? usageResult.data.agent_runs
+        : nextUsage.agentRuns,
     premiumActionRuns:
       typeof usageResult.data?.premium_action_runs === 'number'
         ? usageResult.data.premium_action_runs
         : nextUsage.premiumActionRuns,
   };
+}
+
+export async function getUserBonusAgentRuns(
+  supabase: any,
+  userId: string,
+): Promise<number> {
+  const { data, error } = await supabase
+    .from('user_bonus_usage')
+    .select('bonus_agent_runs')
+    .eq('user_id', userId)
+    .maybeSingle();
+
+  if (error) {
+    console.error('BONUS_AGENT_RUNS_FETCH_ERROR:', error);
+    return 0;
+  }
+
+  return typeof data?.bonus_agent_runs === 'number'
+    ? data.bonus_agent_runs
+    : 0;
+}
+
+export async function consumeOneBonusAgentRun(
+  supabase: any,
+  userId: string,
+): Promise<void> {
+  const current = await getUserBonusAgentRuns(supabase, userId);
+
+  if (current <= 0) return;
+
+  const { error } = await supabase.from('user_bonus_usage').upsert(
+    {
+      user_id: userId,
+      bonus_agent_runs: Math.max(0, current - 1),
+      updated_at: new Date().toISOString(),
+    },
+    { onConflict: 'user_id' },
+  );
+
+  if (error) {
+    console.error('BONUS_AGENT_RUN_CONSUME_ERROR:', error);
+  }
 }
