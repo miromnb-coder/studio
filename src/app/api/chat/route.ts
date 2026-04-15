@@ -11,10 +11,28 @@ type LegacyMessage = {
   content: string;
 };
 
+type IncomingAttachment = {
+  id?: string;
+  name?: string;
+  kind?: 'image' | 'file';
+  mimeType?: string;
+  size?: number;
+  previewUrl?: string;
+};
+
+type NormalizedAttachment = {
+  id: string;
+  name: string;
+  kind: 'image' | 'file';
+  mimeType?: string;
+  size?: number;
+};
+
 type NormalizedPayload = {
   input: string;
   history: LegacyMessage[];
   userId?: string;
+  attachments: NormalizedAttachment[];
 };
 
 type AgentStep = {
@@ -29,6 +47,39 @@ function streamLine(payload: Record<string, unknown>) {
   return encoder.encode(`${JSON.stringify(payload)}\n`);
 }
 
+function normalizeAttachments(raw: unknown): NormalizedAttachment[] {
+  if (!Array.isArray(raw)) return [];
+
+  return raw
+    .filter((item): item is IncomingAttachment => {
+      if (!item || typeof item !== 'object') return false;
+      return true;
+    })
+    .map((item, index) => {
+      const kind = item.kind === 'image' ? 'image' : 'file';
+
+      return {
+        id:
+          typeof item.id === 'string' && item.id.trim().length > 0
+            ? item.id
+            : `attachment-${index + 1}`,
+        name:
+          typeof item.name === 'string' && item.name.trim().length > 0
+            ? item.name
+            : kind === 'image'
+              ? `image-${index + 1}`
+              : `file-${index + 1}`,
+        kind,
+        mimeType:
+          typeof item.mimeType === 'string' ? item.mimeType : undefined,
+        size:
+          typeof item.size === 'number' && Number.isFinite(item.size)
+            ? item.size
+            : undefined,
+      };
+    });
+}
+
 function normalizeIncomingPayload(body: unknown): NormalizedPayload {
   const raw =
     body && typeof body === 'object'
@@ -37,6 +88,8 @@ function normalizeIncomingPayload(body: unknown): NormalizedPayload {
 
   const legacyMessage =
     typeof raw.message === 'string' ? raw.message.trim() : '';
+
+  const attachments = normalizeAttachments(raw.attachments);
 
   const messages = Array.isArray(raw.messages)
     ? raw.messages
@@ -69,6 +122,7 @@ function normalizeIncomingPayload(body: unknown): NormalizedPayload {
       history: messages.slice(-12),
       userId:
         typeof raw.userId === 'string' ? raw.userId : undefined,
+      attachments,
     };
   }
 
@@ -79,6 +133,7 @@ function normalizeIncomingPayload(body: unknown): NormalizedPayload {
       : [],
     userId:
       typeof raw.userId === 'string' ? raw.userId : undefined,
+    attachments,
   };
 }
 
@@ -221,6 +276,8 @@ export async function POST(request: NextRequest) {
   console.info('CHAT_STREAM_START', {
     requestId,
     historyCount: payload.history.length,
+    attachmentCount: payload.attachments.length,
+    hasUserId: Boolean(payload.userId),
   });
 
   const upstream = await fetch(agentUrl, {
@@ -234,6 +291,7 @@ export async function POST(request: NextRequest) {
       input: payload.input,
       history: payload.history,
       userId: payload.userId,
+      attachments: payload.attachments,
     }),
     cache: 'no-store',
   }).catch(() => null);
@@ -252,24 +310,42 @@ export async function POST(request: NextRequest) {
 
   const result = (await upstream.json().catch(
     () => null,
-  )) as AgentResponse | null;
+  )) as AgentResponse | (Record<string, unknown> & { message?: string }) | null;
 
   if (!upstream.ok) {
-    const message = (result as Record<string, unknown> | null)?.message;
+    const message =
+      result && typeof result === 'object' && typeof result.message === 'string'
+        ? result.message
+        : 'Something went wrong. Please try again.';
 
     console.error('CHAT_STREAM_UPSTREAM_FAILED', {
       requestId,
       status: upstream.status,
       durationMs: Date.now() - start,
       message,
+      errorType:
+        result && typeof result === 'object' ? result.error : undefined,
     });
+
+    if (
+      upstream.status === 402 &&
+      result &&
+      typeof result === 'object' &&
+      result.error === 'limit_reached'
+    ) {
+      return new Response(JSON.stringify(result), {
+        status: 402,
+        headers: { 'Content-Type': 'application/json' },
+      });
+    }
 
     return new Response(
       JSON.stringify({
         error:
-          typeof message === 'string'
-            ? message
-            : 'Something went wrong. Please try again.',
+          result && typeof result === 'object' && typeof result.error === 'string'
+            ? result.error
+            : 'upstream_error',
+        message,
       }),
       {
         status: upstream.status,
@@ -278,14 +354,16 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  const final = getSafeReply(result);
-  const steps = getSteps(result);
-  const structuredData = getStructuredData(result);
-  const confidence = getConfidence(result, structuredData);
-  const tools = getToolNames(result, structuredData);
-  const memoryUsed = getMemoryUsed(result, structuredData);
-  const suggestedActions = getSuggestedActions(result);
-  const route = result?.metadata?.intent || 'general';
+  const agentResult = result as AgentResponse | null;
+
+  const final = getSafeReply(agentResult);
+  const steps = getSteps(agentResult);
+  const structuredData = getStructuredData(agentResult);
+  const confidence = getConfidence(agentResult, structuredData);
+  const tools = getToolNames(agentResult, structuredData);
+  const memoryUsed = getMemoryUsed(agentResult, structuredData);
+  const suggestedActions = getSuggestedActions(agentResult);
+  const route = agentResult?.metadata?.intent || 'general';
   const tokens = tokenChunks(final);
   const normalizedSteps = steps.slice(0, 8).map((step, index) => ({
     stepId: `tool-${index + 1}`,
@@ -413,7 +491,7 @@ export async function POST(request: NextRequest) {
         content: final,
         route,
         metadata: {
-          ...(result?.metadata || {}),
+          ...(agentResult?.metadata || {}),
           structuredData: {
             ...structuredData,
             route: {
