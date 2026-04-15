@@ -38,8 +38,8 @@ type Notice = {
   detail: string;
 };
 
-const COMPOSER_DOCK_HEIGHT = 132;
-const ATTACHMENT_TRAY_HEIGHT = 58;
+const COMPOSER_DOCK_HEIGHT = 170;
+const ATTACHMENT_TRAY_HEIGHT = 64;
 const SAFE_BOTTOM_SPACE = 28;
 const BASE_SCROLL_BOTTOM_PADDING = COMPOSER_DOCK_HEIGHT + SAFE_BOTTOM_SPACE;
 const SCROLL_BOTTOM_PADDING_WITH_ATTACHMENTS =
@@ -382,16 +382,16 @@ export function KivoChatScreen() {
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: 8 }}
               transition={{ duration: 0.18, ease: 'easeOut' }}
-              className="pointer-events-none fixed inset-x-0 bottom-[124px] z-20 mx-auto w-full max-w-[560px] px-6"
+              className="pointer-events-none fixed inset-x-0 bottom-[138px] z-20 mx-auto w-full max-w-[560px] px-5"
             >
-              <div className="pointer-events-auto mx-auto flex max-w-[470px] flex-wrap gap-2">
+              <div className="pointer-events-auto mx-auto flex max-w-[500px] flex-wrap gap-2">
                 {attachments.map((attachment) => (
                   <div
                     key={attachment.id}
                     className="inline-flex items-center gap-2 rounded-full border border-black/[0.05] bg-white/96 px-3 py-2 text-[12px] text-[#5e6573] shadow-[0_8px_22px_rgba(17,24,39,0.06)] backdrop-blur"
                   >
                     <Paperclip className="h-3.5 w-3.5" />
-                    <span className="max-w-[140px] truncate">{attachment.name}</span>
+                    <span className="max-w-[150px] truncate">{attachment.name}</span>
                     <button
                       type="button"
                       onClick={() => removeAttachment(attachment.id)}
