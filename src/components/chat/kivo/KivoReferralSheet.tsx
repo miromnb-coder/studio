@@ -16,6 +16,7 @@ type KivoReferralSheetProps = {
   open: boolean;
   onClose: () => void;
   inviteLink?: string;
+  loadingLink?: boolean;
   rewardLabel?: string;
   creditsEarned?: number;
   successfulReferrals?: number;
@@ -26,11 +27,12 @@ type KivoReferralSheetProps = {
 export function KivoReferralSheet({
   open,
   onClose,
-  inviteLink = 'https://kivo.app/invite/miro123',
+  inviteLink = '',
+  loadingLink = false,
   rewardLabel = 'Earn rewards for every successful referral',
-  creditsEarned = 500,
-  successfulReferrals = 1,
-  pendingInvites = 2,
+  creditsEarned = 0,
+  successfulReferrals = 0,
+  pendingInvites = 0,
   onSendEmailInvite,
 }: KivoReferralSheetProps) {
   const [email, setEmail] = useState('');
@@ -69,7 +71,13 @@ export function KivoReferralSheet({
     return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim());
   }, [email]);
 
+  const resolvedInviteLink = loadingLink
+    ? 'Loading invite link...'
+    : inviteLink || 'Invite link unavailable';
+
   const handleCopy = async () => {
+    if (loadingLink || !inviteLink) return;
+
     try {
       await navigator.clipboard.writeText(inviteLink);
       setCopied(true);
@@ -80,6 +88,8 @@ export function KivoReferralSheet({
   };
 
   const handleNativeShare = async () => {
+    if (loadingLink || !inviteLink) return;
+
     try {
       if (navigator.share) {
         await navigator.share({
@@ -173,14 +183,19 @@ export function KivoReferralSheet({
               <p className="text-[13px] font-medium text-[#8a919e]">Invite link</p>
 
               <div className="mt-2 rounded-[18px] border border-black/[0.05] bg-[#f8f9fb] px-4 py-3 text-[14px] text-[#4b5563]">
-                <span className="block truncate">{inviteLink}</span>
+                <span className="block truncate">{resolvedInviteLink}</span>
               </div>
 
               <div className="mt-3 flex gap-2">
                 <button
                   type="button"
                   onClick={handleCopy}
-                  className="inline-flex h-11 flex-1 items-center justify-center gap-2 rounded-full bg-[#111111] text-sm font-medium text-white"
+                  disabled={loadingLink || !inviteLink}
+                  className={`inline-flex h-11 flex-1 items-center justify-center gap-2 rounded-full text-sm font-medium ${
+                    loadingLink || !inviteLink
+                      ? 'bg-[#d7dbe2] text-white'
+                      : 'bg-[#111111] text-white'
+                  }`}
                 >
                   {copied ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
                   {copied ? 'Copied' : 'Copy link'}
@@ -189,7 +204,12 @@ export function KivoReferralSheet({
                 <button
                   type="button"
                   onClick={handleNativeShare}
-                  className="inline-flex h-11 flex-1 items-center justify-center gap-2 rounded-full border border-black/[0.06] bg-white text-sm font-medium text-[#374151]"
+                  disabled={loadingLink || !inviteLink}
+                  className={`inline-flex h-11 flex-1 items-center justify-center gap-2 rounded-full border text-sm font-medium ${
+                    loadingLink || !inviteLink
+                      ? 'border-black/[0.04] bg-[#f0f2f5] text-[#a1a8b3]'
+                      : 'border-black/[0.06] bg-white text-[#374151]'
+                  }`}
                 >
                   <Share2 className="h-4 w-4" />
                   Share
@@ -231,11 +251,9 @@ export function KivoReferralSheet({
             </section>
 
             <section className="mt-4 rounded-[26px] border border-black/[0.05] bg-white/82 p-4 shadow-[0_10px_24px_rgba(15,23,42,0.05)]">
-              <div className="flex items-center justify-between">
-                <h3 className="text-[15px] font-medium tracking-[-0.02em] text-[#2f3640]">
-                  Referral stats
-                </h3>
-              </div>
+              <h3 className="text-[15px] font-medium tracking-[-0.02em] text-[#2f3640]">
+                Referral stats
+              </h3>
 
               <div className="mt-4 grid grid-cols-3 gap-3">
                 <StatCard label="Credits earned" value={String(creditsEarned)} />
