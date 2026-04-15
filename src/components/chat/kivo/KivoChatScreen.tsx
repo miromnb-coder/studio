@@ -364,27 +364,27 @@ export function KivoChatScreen() {
         <div className="absolute inset-0 bg-[linear-gradient(180deg,#f8f8f9_0%,#f4f5f7_36%,#eef2f6_100%)]" />
 
         <div
-          className="absolute inset-0 opacity-[0.34]"
+          className="absolute inset-0 opacity-[0.5]"
           style={{
             backgroundImage:
-              'radial-gradient(rgba(115,125,145,0.18) 0.7px, transparent 0.7px)',
+              'radial-gradient(rgba(98,108,128,0.22) 0.85px, transparent 0.85px)',
             backgroundSize: '14px 14px',
             backgroundPosition: 'center top',
           }}
         />
 
-        <div className="absolute inset-x-0 top-0 h-[220px] bg-[radial-gradient(ellipse_at_top,rgba(255,255,255,0.9)_0%,rgba(255,255,255,0.42)_46%,rgba(255,255,255,0)_82%)]" />
+        <div className="absolute inset-x-0 top-0 h-[220px] bg-[radial-gradient(ellipse_at_top,rgba(255,255,255,0.92)_0%,rgba(255,255,255,0.42)_46%,rgba(255,255,255,0)_82%)]" />
 
         <motion.div
-          className="absolute left-1/2 top-[46%] h-[420px] w-[420px] -translate-x-1/2 -translate-y-1/2 rounded-full bg-[radial-gradient(circle,rgba(255,255,255,0.92)_0%,rgba(248,250,253,0.58)_38%,rgba(241,244,249,0.16)_70%,rgba(241,244,249,0)_100%)] blur-[44px]"
-          animate={{ opacity: [0.88, 1, 0.88] }}
-          transition={{ duration: 10, repeat: Infinity, ease: 'easeInOut' }}
+          className="absolute left-1/2 top-[43%] h-[360px] w-[360px] -translate-x-1/2 -translate-y-1/2 rounded-full bg-[radial-gradient(circle,rgba(255,255,255,0.96)_0%,rgba(248,250,253,0.72)_34%,rgba(241,244,249,0.26)_68%,rgba(241,244,249,0)_100%)] blur-[34px]"
+          animate={{ opacity: [0.86, 1, 0.86] }}
+          transition={{ duration: 8, repeat: Infinity, ease: 'easeInOut' }}
         />
 
         <motion.div
-          className="absolute left-1/2 bottom-[102px] h-[190px] w-[78%] -translate-x-1/2 rounded-full bg-[radial-gradient(ellipse_at_center,rgba(255,255,255,0.78)_0%,rgba(246,248,252,0.34)_54%,rgba(246,248,252,0)_100%)] blur-[28px]"
-          animate={{ opacity: [0.72, 0.92, 0.72] }}
-          transition={{ duration: 12, repeat: Infinity, ease: 'easeInOut' }}
+          className="absolute left-1/2 bottom-[110px] h-[210px] w-[82%] -translate-x-1/2 rounded-full bg-[radial-gradient(ellipse_at_center,rgba(255,255,255,0.82)_0%,rgba(246,248,252,0.42)_52%,rgba(246,248,252,0)_100%)] blur-[26px]"
+          animate={{ opacity: [0.74, 0.94, 0.74] }}
+          transition={{ duration: 10, repeat: Infinity, ease: 'easeInOut' }}
         />
 
         <div className="absolute inset-x-0 bottom-0 h-[280px] bg-[linear-gradient(180deg,rgba(244,246,249,0)_0%,rgba(241,244,248,0.34)_36%,rgba(236,240,246,0.88)_76%,rgba(234,239,246,1)_100%)]" />
