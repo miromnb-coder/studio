@@ -39,7 +39,7 @@ type Notice = {
   detail: string;
 };
 
-const COMPOSER_DOCK_HEIGHT = 176;
+const COMPOSER_DOCK_HEIGHT = 170;
 const ATTACHMENT_TRAY_HEIGHT = 64;
 const SAFE_BOTTOM_SPACE = 28;
 const BASE_SCROLL_BOTTOM_PADDING = COMPOSER_DOCK_HEIGHT + SAFE_BOTTOM_SPACE;
@@ -361,43 +361,33 @@ export function KivoChatScreen() {
   return (
     <div className="relative min-h-screen overflow-hidden bg-transparent text-[#2f3640]">
       <div className="pointer-events-none absolute inset-0 overflow-hidden">
-        <div className="absolute inset-0 bg-[linear-gradient(180deg,#f9f9fb_0%,#f4f5f8_34%,#eef2f8_100%)]" />
+        <div className="absolute inset-0 bg-[linear-gradient(180deg,#f8f8f9_0%,#f4f5f7_36%,#eef2f6_100%)]" />
 
-        <div className="absolute inset-x-0 top-0 h-[220px] bg-[radial-gradient(ellipse_at_top,rgba(255,255,255,0.98)_0%,rgba(255,255,255,0.58)_42%,rgba(255,255,255,0)_80%)]" />
+        <div
+          className="absolute inset-0 opacity-[0.34]"
+          style={{
+            backgroundImage:
+              'radial-gradient(rgba(115,125,145,0.18) 0.7px, transparent 0.7px)',
+            backgroundSize: '14px 14px',
+            backgroundPosition: 'center top',
+          }}
+        />
+
+        <div className="absolute inset-x-0 top-0 h-[220px] bg-[radial-gradient(ellipse_at_top,rgba(255,255,255,0.9)_0%,rgba(255,255,255,0.42)_46%,rgba(255,255,255,0)_82%)]" />
 
         <motion.div
-          className="absolute left-1/2 top-[50%] h-[560px] w-[560px] -translate-x-1/2 -translate-y-1/2 rounded-full bg-[radial-gradient(circle,rgba(255,255,255,1)_0%,rgba(255,255,255,0.86)_24%,rgba(245,247,252,0.64)_44%,rgba(236,240,248,0.28)_66%,rgba(236,240,248,0)_100%)] blur-[46px]"
-          animate={{ x: [0, 6, 0], y: [0, -4, 0] }}
-          transition={{ duration: 18, repeat: Infinity, ease: 'easeInOut' }}
+          className="absolute left-1/2 top-[46%] h-[420px] w-[420px] -translate-x-1/2 -translate-y-1/2 rounded-full bg-[radial-gradient(circle,rgba(255,255,255,0.92)_0%,rgba(248,250,253,0.58)_38%,rgba(241,244,249,0.16)_70%,rgba(241,244,249,0)_100%)] blur-[44px]"
+          animate={{ opacity: [0.88, 1, 0.88] }}
+          transition={{ duration: 10, repeat: Infinity, ease: 'easeInOut' }}
         />
 
         <motion.div
-          className="absolute left-[-24%] bottom-[185px] h-[230px] w-[148%] rounded-[50%] bg-[radial-gradient(ellipse_at_center,rgba(255,255,255,1)_0%,rgba(246,248,252,0.92)_26%,rgba(236,241,248,0.58)_54%,rgba(229,235,245,0.18)_78%,rgba(229,235,245,0)_100%)] blur-[10px]"
-          animate={{ x: [0, 10, 0], y: [0, -3, 0] }}
-          transition={{ duration: 20, repeat: Infinity, ease: 'easeInOut' }}
+          className="absolute left-1/2 bottom-[102px] h-[190px] w-[78%] -translate-x-1/2 rounded-full bg-[radial-gradient(ellipse_at_center,rgba(255,255,255,0.78)_0%,rgba(246,248,252,0.34)_54%,rgba(246,248,252,0)_100%)] blur-[28px]"
+          animate={{ opacity: [0.72, 0.92, 0.72] }}
+          transition={{ duration: 12, repeat: Infinity, ease: 'easeInOut' }}
         />
 
-        <motion.div
-          className="absolute left-[-20%] bottom-[120px] h-[255px] w-[142%] rounded-[50%] bg-[radial-gradient(ellipse_at_center,rgba(244,247,252,0.95)_0%,rgba(236,241,248,0.82)_32%,rgba(227,234,244,0.50)_58%,rgba(220,228,240,0.16)_80%,rgba(220,228,240,0)_100%)] blur-[16px]"
-          animate={{ x: [0, -12, 0], y: [0, 4, 0] }}
-          transition={{ duration: 24, repeat: Infinity, ease: 'easeInOut' }}
-        />
-
-        <motion.div
-          className="absolute left-[-16%] bottom-[48px] h-[300px] w-[134%] rounded-[50%] bg-[radial-gradient(ellipse_at_center,rgba(234,240,248,0.94)_0%,rgba(226,233,244,0.76)_34%,rgba(217,225,239,0.50)_60%,rgba(212,220,236,0.18)_80%,rgba(212,220,236,0)_100%)] blur-[24px]"
-          animate={{ x: [0, 8, 0], y: [0, -5, 0] }}
-          transition={{ duration: 26, repeat: Infinity, ease: 'easeInOut' }}
-        />
-
-        <motion.div
-          className="absolute left-[-12%] bottom-[-10px] h-[250px] w-[126%] rounded-[50%] bg-[radial-gradient(ellipse_at_center,rgba(225,232,244,0.88)_0%,rgba(218,226,239,0.60)_38%,rgba(212,221,236,0.28)_66%,rgba(212,221,236,0)_100%)] blur-[28px]"
-          animate={{ x: [0, -6, 0], y: [0, 4, 0] }}
-          transition={{ duration: 28, repeat: Infinity, ease: 'easeInOut' }}
-        />
-
-        <div className="absolute left-[10%] bottom-[132px] h-[96px] w-[80%] rounded-full bg-[radial-gradient(ellipse_at_center,rgba(255,255,255,0.72)_0%,rgba(255,255,255,0.24)_54%,rgba(255,255,255,0)_100%)] blur-[20px]" />
-
-        <div className="absolute inset-x-0 bottom-[108px] h-[300px] bg-[linear-gradient(180deg,rgba(245,246,248,0)_0%,rgba(245,246,248,0.16)_20%,rgba(245,246,248,0.48)_48%,rgba(245,246,248,0.82)_76%,rgba(245,246,248,1)_100%)]" />
+        <div className="absolute inset-x-0 bottom-0 h-[280px] bg-[linear-gradient(180deg,rgba(244,246,249,0)_0%,rgba(241,244,248,0.34)_36%,rgba(236,240,246,0.88)_76%,rgba(234,239,246,1)_100%)]" />
       </div>
 
       <div className="relative mx-auto flex min-h-screen w-full max-w-[560px] flex-col">
@@ -436,7 +426,7 @@ export function KivoChatScreen() {
                 className="flex min-h-0 flex-1 items-start justify-center px-8 pt-[18vh]"
               >
                 <h2
-                  className="max-w-[420px] text-center text-[38px] font-normal leading-[1.05] tracking-[-0.065em] text-[#343945] sm:text-[46px]"
+                  className="max-w-[340px] text-center text-[34px] font-normal leading-[1.08] tracking-[-0.05em] text-[#353b45] sm:text-[40px]"
                   style={{ fontFamily: 'ui-serif, Georgia, Times, serif' }}
                 >
                   What can I do for you?
@@ -474,7 +464,7 @@ export function KivoChatScreen() {
                 {attachments.map((attachment) => (
                   <div
                     key={attachment.id}
-                    className="inline-flex items-center gap-2 rounded-full border border-white/70 bg-white/85 px-3 py-2 text-[12px] text-[#5e6573] shadow-[0_10px_24px_rgba(15,23,42,0.06)] backdrop-blur-2xl"
+                    className="inline-flex items-center gap-2 rounded-full border border-black/[0.05] bg-white/96 px-3 py-2 text-[12px] text-[#5e6573] shadow-[0_8px_22px_rgba(17,24,39,0.06)] backdrop-blur"
                   >
                     <Paperclip className="h-3.5 w-3.5" />
                     <span className="max-w-[150px] truncate">{attachment.name}</span>
@@ -503,7 +493,7 @@ export function KivoChatScreen() {
               transition={{ duration: 0.18, ease: 'easeOut' }}
               className="pointer-events-none fixed inset-x-0 top-[88px] z-40 mx-auto w-full max-w-[560px] px-5"
             >
-              <div className="pointer-events-auto ml-auto w-fit max-w-[320px] rounded-[18px] border border-white/70 bg-white/88 px-4 py-3 shadow-[0_18px_38px_rgba(15,23,42,0.08)] backdrop-blur-2xl">
+              <div className="pointer-events-auto ml-auto w-fit max-w-[320px] rounded-[18px] border border-black/[0.05] bg-white/92 px-4 py-3 shadow-[0_14px_30px_rgba(15,23,42,0.08)] backdrop-blur">
                 <p className="text-[13px] font-semibold tracking-[-0.01em] text-[#364152]">
                   {notice.title}
                 </p>
