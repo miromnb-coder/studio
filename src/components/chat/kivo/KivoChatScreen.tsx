@@ -364,11 +364,11 @@ export function KivoChatScreen() {
         <div className="absolute inset-0 bg-[linear-gradient(180deg,#f8f8f9_0%,#f4f5f7_36%,#eef2f6_100%)]" />
 
         <div
-          className="absolute inset-0 opacity-[0.5]"
+          className="absolute inset-0 opacity-[0.72]"
           style={{
             backgroundImage:
-              'radial-gradient(rgba(98,108,128,0.22) 0.85px, transparent 0.85px)',
-            backgroundSize: '14px 14px',
+              'radial-gradient(rgba(120,126,138,0.34) 1px, transparent 1px)',
+            backgroundSize: '13px 13px',
             backgroundPosition: 'center top',
           }}
         />
@@ -376,7 +376,7 @@ export function KivoChatScreen() {
         <div className="absolute inset-x-0 top-0 h-[220px] bg-[radial-gradient(ellipse_at_top,rgba(255,255,255,0.92)_0%,rgba(255,255,255,0.42)_46%,rgba(255,255,255,0)_82%)]" />
 
         <motion.div
-          className="absolute left-1/2 top-[43%] h-[360px] w-[360px] -translate-x-1/2 -translate-y-1/2 rounded-full bg-[radial-gradient(circle,rgba(255,255,255,0.96)_0%,rgba(248,250,253,0.72)_34%,rgba(241,244,249,0.26)_68%,rgba(241,244,249,0)_100%)] blur-[34px]"
+          className="absolute left-1/2 top-[43%] h-[320px] w-[320px] -translate-x-1/2 -translate-y-1/2 rounded-full bg-[radial-gradient(circle,rgba(255,255,255,0.82)_0%,rgba(248,250,253,0.46)_36%,rgba(241,244,249,0.12)_68%,rgba(241,244,249,0)_100%)] blur-[26px]"
           animate={{ opacity: [0.86, 1, 0.86] }}
           transition={{ duration: 8, repeat: Infinity, ease: 'easeInOut' }}
         />
@@ -449,8 +449,7 @@ export function KivoChatScreen() {
             )}
           </AnimatePresence>
         </main>
-
-        <AnimatePresence initial={false}>
+                <AnimatePresence initial={false}>
           {hasAttachments ? (
             <motion.div
               key="attachment-tray"
