@@ -24,6 +24,7 @@ export type OperatorResponse = {
   actions?: OperatorAction[];
   decisionBrief?: string;
   risk?: string;
+  opportunity?: string;
   savingsOpportunity?: string;
   timeOpportunity?: string;
 };

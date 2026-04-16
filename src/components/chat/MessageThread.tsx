@@ -168,11 +168,6 @@ export function MessageThread({ messages, pending }: MessageThreadProps) {
                       <AgentResponseMessage
                         message={message}
                         latestUserContent={latestUserContent}
-                        liveSteps={
-                          message.isStreaming
-                            ? (message.agentMetadata?.steps ?? [])
-                            : undefined
-                        }
                       />
                     </div>
 

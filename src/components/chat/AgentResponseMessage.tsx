@@ -1,19 +1,13 @@
 'use client';
 
 import type { Message } from '@/app/store/app-store';
-import type {
-  AgentResponseMetadata,
-  AgentResponseStep,
-  AgentSuggestedAction,
-} from '@/types/agent-response';
+import type { AgentResponseMetadata, AgentSuggestedAction } from '@/types/agent-response';
 import { ActionSuggestions } from './ActionSuggestions';
-import { AgentWorkflowBoxes } from './AgentWorkflowBoxes';
-import { OperatorResponseCard } from './OperatorResponseCard';
+import { OperatorActionCard } from './OperatorActionCard';
 
 type AgentResponseMessageProps = {
   message: Message;
   latestUserContent?: string;
-  liveSteps?: AgentResponseStep[];
 };
 
 type SupportedLocale = 'en' | 'fi' | 'sv' | 'es';
@@ -224,58 +218,6 @@ function mapActions(actions?: AgentSuggestedAction[] | string[]): string[] {
     .slice(0, 4);
 }
 
-function dedupeSteps(steps?: AgentResponseStep[]): AgentResponseStep[] {
-  if (!Array.isArray(steps)) return [];
-
-  const seen = new Set<string>();
-  const result: AgentResponseStep[] = [];
-
-  for (const step of steps) {
-    const action = normalizeText(
-      step?.action ||
-        (
-          step as AgentResponseStep & {
-            label?: string;
-            title?: string;
-            id?: string;
-          }
-        ).label ||
-        (
-          step as AgentResponseStep & {
-            label?: string;
-            title?: string;
-            id?: string;
-          }
-        ).title ||
-        (
-          step as AgentResponseStep & {
-            label?: string;
-            title?: string;
-            id?: string;
-          }
-        ).id,
-    );
-
-    if (!action) continue;
-
-    const summary = normalizeText(step?.summary);
-    const tool = normalizeText(step?.tool);
-    const key = `${action.toLowerCase()}|${tool.toLowerCase()}`;
-
-    if (seen.has(key)) continue;
-    seen.add(key);
-
-    result.push({
-      ...step,
-      action,
-      summary,
-      tool,
-    });
-  }
-
-  return result;
-}
-
 function shouldHideLine(line: string): boolean {
   const normalized = line.trim();
   if (!normalized) return true;
@@ -308,11 +250,8 @@ function sanitizeVisibleContent(content: string): string {
   return joined;
 }
 
-function shouldShowIntro(
-  visibleContent: string,
-  steps: AgentResponseStep[],
-): boolean {
-  return Boolean(steps.length || visibleContent);
+function shouldShowIntro(visibleContent: string): boolean {
+  return Boolean(visibleContent);
 }
 
 function shouldShowActions(
@@ -428,23 +367,16 @@ function buildContentBlocks(content: string): ContentBlock[] {
 
 export function AgentResponseMessage({
   message,
-  latestUserContent,
-  liveSteps,
+  latestUserContent
 }: AgentResponseMessageProps) {
   const locale = detectLanguage(latestUserContent);
   const copy = COPY[locale];
 
   const metadata = message.agentMetadata;
-  const steps =
-    message.isStreaming && liveSteps?.length
-      ? liveSteps
-      : message.agentMetadata?.steps ?? [];
-  const resolvedSteps = dedupeSteps(steps).slice(0, 5);
-
   const actions = mapActions(metadata?.suggestedActions);
   const visibleContent = getSafeContent(message.content, metadata, locale);
   const introIndex = hashIndex(message.id, copy.intro.length);
-  const showIntro = shouldShowIntro(visibleContent, resolvedSteps);
+  const showIntro = shouldShowIntro(visibleContent);
   const showActions = shouldShowActions(actions, visibleContent);
   const isStreaming = Boolean(message.isStreaming);
   const contentBlocks = buildContentBlocks(visibleContent);
@@ -480,12 +412,6 @@ export function AgentResponseMessage({
         <p className="mb-6 max-w-[780px] text-[18px] leading-[1.5] tracking-[-0.024em] text-[#2f3947]">
           {copy.intro[introIndex]}
         </p>
-      ) : null}
-
-      {resolvedSteps.length > 0 ? (
-        <div className="mb-7">
-          <AgentWorkflowBoxes steps={resolvedSteps} locale={locale} />
-        </div>
       ) : null}
 
       <div className="max-w-none space-y-4">
@@ -528,7 +454,11 @@ export function AgentResponseMessage({
         )}
       </div>
 
-      <OperatorResponseCard operatorResponse={operatorResponse} />
+      <OperatorActionCard
+        operatorResponse={operatorResponse}
+        userInput={latestUserContent}
+        intent={metadata?.intent}
+      />
 
       {showActions ? (
         <div className="mt-6">

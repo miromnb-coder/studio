@@ -274,34 +274,42 @@ function buildOperatorResponse(params: {
       ? (structuredData.finance as Record<string, unknown>)
       : null;
 
+  const nextStep = pickFirstString(
+    actions[0]?.label,
+    highestPriorityAlert?.suggestedAction,
+    metadata.recommendedNextStep,
+    structuredData.next_step,
+  );
+
+  const decisionBrief = pickFirstString(
+    structuredData.decision_brief,
+    highestPriorityAlert?.title,
+    highestPriorityAlert?.summary,
+  );
+
+  const opportunity = pickFirstString(
+    structuredData.opportunity,
+    financeData?.top_recommendation,
+    financeData?.savings_summary,
+    financeData?.quick_win,
+  );
+
   return {
     answer: params.answer,
-    nextStep:
-      pickFirstString(
-        actions[0]?.label,
-        highestPriorityAlert?.suggestedAction,
-        metadata.plan,
-      ) || 'Choose one concrete next action and execute it now.',
+    nextStep,
     actions: actions.length ? actions.slice(0, 4) : undefined,
-    decisionBrief: pickFirstString(
-      metadata.plan,
-      highestPriorityAlert?.title,
-      highestPriorityAlert?.summary,
-    ),
+    decisionBrief,
     risk: pickFirstString(
       highestPriorityAlert?.summary,
       highestPriorityAlert?.title,
+      structuredData.risk,
     ),
+    opportunity,
     savingsOpportunity: pickFirstString(
       financeData?.top_recommendation,
       financeData?.savings_summary,
     ),
-    timeOpportunity: pickFirstString(
-      financeData?.quick_win,
-      metadata.mode === 'operator'
-        ? 'Use the recommended next step to reduce decision overhead.'
-        : undefined,
-    ),
+    timeOpportunity: pickFirstString(financeData?.quick_win),
   };
 }
 
