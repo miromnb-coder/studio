@@ -14,7 +14,11 @@ export type AnalyticsEventName =
   | 'chat_abandoned_send'
   | 'operator_action_impression'
   | 'operator_action_clicked'
-  | 'operator_action_card_ignored';
+  | 'operator_action_card_ignored'
+  | 'memory_used_in_response'
+  | 'memory_resume_action_clicked'
+  | 'memory_task_resumed_completed'
+  | 'memory_problem_resolution_accelerated';
 
 export type AnalyticsEvent = {
   name: AnalyticsEventName;
