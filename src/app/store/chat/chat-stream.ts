@@ -43,6 +43,34 @@ function buildStreamPayload(messages: Message[], userId?: string) {
   };
 }
 
+function fallbackStepLabel(event: {
+  type: string;
+  label?: string;
+  tool?: string;
+}) {
+  const explicit = String(event.label || '').trim();
+  if (explicit) return explicit;
+
+  if (event.type.startsWith('router')) return 'Understanding request';
+  if (event.type.startsWith('planning')) return 'Planning response';
+  if (event.type.startsWith('memory')) return 'Retrieving memory';
+
+  if (event.type.startsWith('tool')) {
+    const tool = String(event.tool || '').trim().toLowerCase();
+
+    if (tool === 'gmail') return 'Checking Gmail';
+    if (tool === 'memory') return 'Retrieving memory';
+    if (tool === 'web') return 'Researching sources';
+    if (tool === 'compare') return 'Comparing options';
+    if (tool === 'finance') return 'Reviewing finances';
+    if (tool === 'file' || tool === 'notes') return 'Reviewing files';
+
+    return tool ? `Using ${tool}` : 'Using tools';
+  }
+
+  return 'Processing request';
+}
+
 export async function streamAssistantResponse({
   requestId,
   assistantMessageId,
@@ -162,8 +190,25 @@ export async function streamAssistantResponse({
   const handleStepEvent = (
     event: Extract<ChatStreamEvent, { stepId?: string; label?: string }>,
   ) => {
-    const label = String(event.label || '').trim();
+    const label = fallbackStepLabel(event);
+
+    console.log('STREAM STEP EVENT', {
+      requestId,
+      conversationId,
+      assistantMessageId,
+      type: event.type,
+      rawLabel: event.label,
+      fallbackLabel: label,
+      tool: event.tool,
+      stepId: event.stepId,
+    });
+
     if (!label) return;
+
+    const normalizedEvent = {
+      ...event,
+      label,
+    };
 
     trackEvent('chat_phase_transition', {
       conversationId,
@@ -184,7 +229,7 @@ export async function streamAssistantResponse({
       const existingSteps = Array.isArray(existingMetadata?.steps)
         ? existingMetadata.steps
         : [];
-      const nextSteps = upsertLiveStep(existingSteps, event);
+      const nextSteps = upsertLiveStep(existingSteps, normalizedEvent);
 
       return {
         ...prev,
@@ -242,9 +287,11 @@ export async function streamAssistantResponse({
       const content =
         event.content || streamedText || 'I could not generate a response.';
 
-      const inFlightSteps =
-        messages.find((message) => message.id === assistantMessageId)
-          ?.agentMetadata?.steps ?? [];
+      const currentAssistantMessage = messages.find(
+        (message) => message.id === assistantMessageId,
+      );
+
+      const inFlightSteps = currentAssistantMessage?.agentMetadata?.steps ?? [];
 
       const fallbackSteps = inFlightSteps.map((step) => ({
         action: step.action,
@@ -256,6 +303,14 @@ export async function streamAssistantResponse({
         event.metadata as AgentResponseMetadata | undefined,
         fallbackSteps,
       );
+
+      console.log('STREAM ANSWER COMPLETED', {
+        requestId,
+        assistantMessageId,
+        inFlightSteps,
+        fallbackSteps,
+        mergedMetadata,
+      });
 
       return {
         ...prev,
