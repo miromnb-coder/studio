@@ -6,9 +6,10 @@ import {
   Bell,
   ChevronLeft,
   ChevronRight,
+  Clock3,
   Cloud,
-  Cpu,
   Globe,
+  History,
   Mail,
   Plug,
   Puzzle,
@@ -16,6 +17,8 @@ import {
   Sparkles,
   User,
   Wrench,
+  Database,
+  ShieldCheck,
 } from 'lucide-react';
 import { useAppStore } from '@/app/store/app-store';
 import { KivoReferralSheet } from './KivoReferralSheet';
@@ -26,6 +29,7 @@ type SettingsRow = {
   value?: string;
   icon: React.ComponentType<{ className?: string; strokeWidth?: number }>;
   href?: string;
+  action?: 'referral';
 };
 
 type SettingsSection = {
@@ -45,6 +49,7 @@ export function KivoSettingsScreen() {
 
   const user = useAppStore((s) => s.user);
   const usage = useAppStore((s: any) => s.usage);
+  const alerts = useAppStore((s) => s.alerts);
 
   const [referralOpen, setReferralOpen] = useState(false);
   const [inviteLink, setInviteLink] = useState('');
@@ -76,6 +81,23 @@ export function KivoSettingsScreen() {
 
     if (typeof maybeCredits === 'number') return String(maybeCredits);
     return '300';
+  })();
+
+  const unreadAlerts = Array.isArray(alerts)
+    ? alerts.filter((alert) => !alert.resolved).length
+    : 0;
+
+  const planLabel = (() => {
+    const maybePlan =
+      usage?.plan ||
+      usage?.currentPlan ||
+      usage?.subscriptionPlan;
+
+    if (typeof maybePlan === 'string' && maybePlan.trim()) {
+      return maybePlan.toLowerCase() === 'premium' ? 'Premium plan' : 'Free plan';
+    }
+
+    return 'Free plan';
   })();
 
   const openReferralSheet = async () => {
@@ -120,29 +142,111 @@ export function KivoSettingsScreen() {
       id: 'account',
       title: 'Account',
       rows: [
-        { id: 'profile', label: 'Profile', icon: User, href: '/profile' },
-        { id: 'language', label: 'Language', value: 'English', icon: Globe, href: '/settings/language' },
-        { id: 'appearance', label: 'Appearance', value: 'Light', icon: Sparkles, href: '/settings/appearance' },
-        { id: 'share', label: 'Share with a friend', icon: Share2 },
+        {
+          id: 'profile',
+          label: 'Profile',
+          icon: User,
+          href: '/profile',
+        },
+        {
+          id: 'language',
+          label: 'Language',
+          value: 'English',
+          icon: Globe,
+          href: '/settings/language',
+        },
+        {
+          id: 'appearance',
+          label: 'Appearance',
+          value: 'Light',
+          icon: Sparkles,
+          href: '/settings/appearance',
+        },
+        {
+          id: 'alerts',
+          label: 'Notifications & alerts',
+          value: unreadAlerts > 0 ? `${unreadAlerts} active` : 'All clear',
+          icon: Bell,
+          href: '/alerts',
+        },
       ],
     },
     {
-      id: 'kivo',
-      title: 'Kivo',
+      id: 'workspace',
+      title: 'Workspace',
       rows: [
-        { id: 'scheduled', label: 'Scheduled tasks', icon: Sparkles, href: '/tasks' },
-        { id: 'knowledge', label: 'Knowledge', icon: Cpu, href: '/memory' },
-        { id: 'mail', label: 'Mail Kivo', icon: Mail, href: '/control' },
-        { id: 'cloud', label: 'Cloud Browser', icon: Cloud, href: '/tools' },
-        { id: 'skills', label: 'Skills', icon: Puzzle, href: '/tools' },
+        {
+          id: 'history',
+          label: 'History',
+          icon: History,
+          href: '/history',
+        },
+        {
+          id: 'scheduled',
+          label: 'Scheduled tasks',
+          icon: Clock3,
+          href: '/tasks',
+        },
+        {
+          id: 'memory',
+          label: 'Memory',
+          icon: Database,
+          href: '/memory',
+        },
+        {
+          id: 'share',
+          label: 'Share with a friend',
+          icon: Share2,
+          action: 'referral',
+        },
+      ],
+    },
+    {
+      id: 'tools',
+      title: 'Kivo tools',
+      rows: [
+        {
+          id: 'mail',
+          label: 'Mail Kivo',
+          icon: Mail,
+          href: '/control',
+        },
+        {
+          id: 'cloud',
+          label: 'Cloud Browser',
+          icon: Cloud,
+          href: '/tools',
+        },
+        {
+          id: 'skills',
+          label: 'Skills',
+          icon: Puzzle,
+          href: '/tools',
+        },
+        {
+          id: 'privacy',
+          label: 'Privacy & safety',
+          icon: ShieldCheck,
+          href: '/settings/privacy',
+        },
       ],
     },
     {
       id: 'integrations',
       title: 'Integrations',
       rows: [
-        { id: 'connectors', label: 'Connectors', icon: Plug, href: '/control' },
-        { id: 'integrations-row', label: 'Integrations', icon: Wrench, href: '/control' },
+        {
+          id: 'connectors',
+          label: 'Connectors',
+          icon: Plug,
+          href: '/control',
+        },
+        {
+          id: 'manage-integrations',
+          label: 'Manage integrations',
+          icon: Wrench,
+          href: '/settings/integrations',
+        },
       ],
     },
   ];
@@ -172,7 +276,9 @@ export function KivoSettingsScreen() {
               className="relative inline-flex h-11 w-11 items-center justify-center rounded-full border border-black/[0.05] bg-white/60 text-[#3c4450] transition-all duration-200 ease-out hover:bg-white active:scale-[0.985]"
             >
               <Bell className="h-5 w-5" strokeWidth={1.9} />
-              <span className="absolute right-[11px] top-[11px] h-2.5 w-2.5 rounded-full bg-[#ff5b5b]" />
+              {unreadAlerts > 0 ? (
+                <span className="absolute right-[11px] top-[11px] h-2.5 w-2.5 rounded-full bg-[#ff5b5b]" />
+              ) : null}
             </button>
           </div>
         </header>
@@ -197,7 +303,10 @@ export function KivoSettingsScreen() {
                 </p>
               </div>
 
-              <ChevronRight className="h-5 w-5 shrink-0 text-[#98a0ad]" strokeWidth={2} />
+              <ChevronRight
+                className="h-5 w-5 shrink-0 text-[#98a0ad]"
+                strokeWidth={2}
+              />
             </button>
           </section>
 
@@ -205,7 +314,7 @@ export function KivoSettingsScreen() {
             <div className="flex items-center justify-between gap-4">
               <div>
                 <p className="text-[16px] font-medium tracking-[-0.02em] text-[#2f3640]">
-                  Free plan
+                  {planLabel}
                 </p>
                 <p className="mt-1 text-[13px] text-[#8b93a0]">
                   Credits available: {creditsText}
@@ -237,7 +346,7 @@ export function KivoSettingsScreen() {
                       key={row.id}
                       type="button"
                       onClick={() => {
-                        if (row.id === 'share') {
+                        if (row.action === 'referral') {
                           void openReferralSheet();
                           return;
                         }
