@@ -3,10 +3,10 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import {
-  ArrowRight,
+  Activity,
   Bot,
+  CalendarDays,
   ChevronRight,
-  Clock3,
   MessageCircle,
   Plus,
   Search,
@@ -191,6 +191,24 @@ export function KivoHomeScreen() {
     enqueuePromptAndGoToChat(prompt);
   };
 
+  const estimatedMoneySaved = 84;
+  const momentumSubtitle =
+    unfinishedCount > 0
+      ? `${unfinishedCount} unfinished • €${estimatedMoneySaved} saved`
+      : `Everything moving • €${estimatedMoneySaved} saved`;
+
+  const operatorSubtitle = isAgentResponding
+    ? 'Kivo is actively working now'
+    : activeAlertCount > 0
+      ? `${activeAlertCount} active item${activeAlertCount > 1 ? 's' : ''} need review`
+      : 'Fresh suggestions are ready';
+
+  const flowSubtitle = latestConversation
+    ? latestConversation.unfinished
+      ? 'Next best step is ready'
+      : 'Plan your next focused move'
+    : 'Shape your next session';
+
   return (
     <div className="min-h-screen overflow-hidden bg-[#f7f7f5] text-[#2d3440]">
       <div className="pointer-events-none fixed inset-0 overflow-hidden">
@@ -279,57 +297,55 @@ export function KivoHomeScreen() {
 
               <button
                 type="button"
-                onClick={() =>
-                  latestConversation
-                    ? handleOpenConversation(latestConversation.id)
-                    : handleNewChat()
-                }
+                onClick={() => router.push('/momentum')}
                 className="flex min-h-[92px] flex-col items-start justify-between rounded-[28px] border border-white/80 bg-[rgba(255,255,255,0.76)] px-4 py-4 text-left shadow-[0_14px_30px_rgba(15,23,42,0.05)] transition-all duration-200 ease-out hover:bg-white active:scale-[0.99]"
               >
-                <span className="inline-flex h-9 w-9 items-center justify-center rounded-full bg-[#f2f4f8] text-[#5a6473]">
-                  <ArrowRight className="h-4.5 w-4.5" strokeWidth={2} />
+                <span className="inline-flex h-9 w-9 items-center justify-center rounded-full bg-[#eef3fb] text-[#6982a7]">
+                  <Activity className="h-4.5 w-4.5" strokeWidth={2} />
                 </span>
                 <div>
                   <div className="text-[15px] font-semibold tracking-[-0.02em] text-[#2d3440]">
-                    Continue latest
+                    Momentum
                   </div>
                   <div className="mt-1 text-[12px] text-[#7d8594]">
-                    Pick up where you left off
+                    {momentumSubtitle}
                   </div>
                 </div>
               </button>
 
               <button
                 type="button"
-                onClick={() =>
-                  handleQuickPrompt(
-                    'Review my current priorities and tell me what matters most right now.',
-                  )
-                }
-                className="flex min-h-[86px] flex-col items-start justify-between rounded-[26px] border border-white/80 bg-[rgba(255,255,255,0.72)] px-4 py-4 text-left shadow-[0_12px_24px_rgba(15,23,42,0.042)] transition-all duration-200 ease-out hover:bg-white active:scale-[0.99]"
-              >
-                <span className="inline-flex h-8 w-8 items-center justify-center rounded-full bg-[#eef3fb] text-[#6982a7]">
-                  <Clock3 className="h-4 w-4" strokeWidth={2} />
-                </span>
-                <div className="text-[15px] font-medium tracking-[-0.02em] text-[#313843]">
-                  Review priorities
-                </div>
-              </button>
-
-              <button
-                type="button"
-                onClick={() =>
-                  handleQuickPrompt(
-                    'Continue planning and give me the next best step.',
-                  )
-                }
+                onClick={() => router.push('/operator')}
                 className="flex min-h-[86px] flex-col items-start justify-between rounded-[26px] border border-white/80 bg-[rgba(255,255,255,0.72)] px-4 py-4 text-left shadow-[0_12px_24px_rgba(15,23,42,0.042)] transition-all duration-200 ease-out hover:bg-white active:scale-[0.99]"
               >
                 <span className="inline-flex h-8 w-8 items-center justify-center rounded-full bg-[#f3eef8] text-[#8a73a6]">
                   <Bot className="h-4 w-4" strokeWidth={2} />
                 </span>
-                <div className="text-[15px] font-medium tracking-[-0.02em] text-[#313843]">
-                  Continue planning
+                <div>
+                  <div className="text-[15px] font-medium tracking-[-0.02em] text-[#313843]">
+                    Operator
+                  </div>
+                  <div className="mt-1 text-[12px] text-[#7d8594]">
+                    {operatorSubtitle}
+                  </div>
+                </div>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => router.push('/flow')}
+                className="flex min-h-[86px] flex-col items-start justify-between rounded-[26px] border border-white/80 bg-[rgba(255,255,255,0.72)] px-4 py-4 text-left shadow-[0_12px_24px_rgba(15,23,42,0.042)] transition-all duration-200 ease-out hover:bg-white active:scale-[0.99]"
+              >
+                <span className="inline-flex h-8 w-8 items-center justify-center rounded-full bg-[#edf4ef] text-[#7b9783]">
+                  <CalendarDays className="h-4 w-4" strokeWidth={2} />
+                </span>
+                <div>
+                  <div className="text-[15px] font-medium tracking-[-0.02em] text-[#313843]">
+                    Flow
+                  </div>
+                  <div className="mt-1 text-[12px] text-[#7d8594]">
+                    {flowSubtitle}
+                  </div>
                 </div>
               </button>
             </div>
@@ -394,17 +410,23 @@ export function KivoHomeScreen() {
               </div>
 
               <div className="mt-4 space-y-2.5 text-[14px] text-[#606a78]">
-                <div className="flex items-center gap-2">
-                  <span className="h-2 w-2 rounded-full bg-[#9fc7a4]" />
-                  <span>{isAgentResponding ? 'Working' : 'Ready'}</span>
+                <div className="flex items-center justify-between">
+                  <span>State</span>
+                  <span className="font-medium text-[#2d3440]">
+                    {isAgentResponding ? 'Working' : 'Ready'}
+                  </span>
                 </div>
-                <div className="flex items-center gap-2">
-                  <span className="h-2 w-2 rounded-full bg-[#b7cf91]" />
-                  <span>Memory active</span>
+                <div className="flex items-center justify-between">
+                  <span>Agent threads</span>
+                  <span className="font-medium text-[#2d3440]">
+                    {agentConversationCount}
+                  </span>
                 </div>
-                <div className="flex items-center gap-2">
-                  <span className="h-2 w-2 rounded-full bg-[#9fbfcc]" />
-                  <span>{agentConversationCount} agent threads</span>
+                <div className="flex items-center justify-between">
+                  <span>Money saved</span>
+                  <span className="font-medium text-[#7b9783]">
+                    €{estimatedMoneySaved}
+                  </span>
                 </div>
               </div>
             </div>
@@ -423,7 +445,7 @@ export function KivoHomeScreen() {
                     {latestConversation
                       ? latestConversation.unfinished
                         ? `Resume ${latestConversation.title}`
-                        : 'Start a fresh operator session'
+                        : 'Open Operator for the next best move'
                       : 'Start your first Kivo thread'}
                   </p>
 
@@ -431,21 +453,17 @@ export function KivoHomeScreen() {
                     {activeAlertCount > 0
                       ? `${activeAlertCount} active item${activeAlertCount > 1 ? 's' : ''} may need your attention.`
                       : latestConversation
-                        ? 'Get back to your workspace and continue from where you left off.'
+                        ? 'Review what matters, see your momentum, or open your next flow.'
                         : 'Open a new chat and let Kivo help with your next step.'}
                   </p>
                 </div>
 
                 <button
                   type="button"
-                  onClick={() =>
-                    latestConversation
-                      ? handleOpenConversation(latestConversation.id)
-                      : handleNewChat()
-                  }
+                  onClick={() => router.push('/operator')}
                   className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-full border border-white/85 bg-[rgba(255,255,255,0.84)] text-[#576171] shadow-[0_8px_18px_rgba(15,23,42,0.04)] transition-all duration-200 ease-out hover:bg-white active:scale-[0.985]"
                 >
-                  <ArrowRight className="h-5 w-5" strokeWidth={2} />
+                  <ChevronRight className="h-5 w-5" strokeWidth={2} />
                 </button>
               </div>
             </div>
