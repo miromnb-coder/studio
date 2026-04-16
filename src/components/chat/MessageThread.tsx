@@ -125,18 +125,18 @@ export function MessageThread({ messages, pending }: MessageThreadProps) {
     <div
       ref={listRef}
       onScroll={handleScroll}
-      className="min-h-0 flex-1 overflow-y-auto px-4 pb-[196px] pt-5 sm:px-6"
+      className="min-h-0 flex-1 overflow-y-auto px-4 pb-[196px] pt-6 sm:px-6"
     >
-      <div className="mx-auto w-full max-w-[920px] space-y-6">
+      <div className="mx-auto w-full max-w-[920px] space-y-8">
         {rows.map((row) => {
           if (row.type === 'divider') {
             return (
-              <div key={row.id} className="flex items-center gap-3 py-1.5">
-                <div className="h-px flex-1 bg-[#e8ecf2]" />
-                <span className="text-[11px] font-medium uppercase tracking-[0.16em] text-[#9ca4b2]">
+              <div key={row.id} className="flex items-center gap-4 py-1">
+                <div className="h-px flex-1 bg-[rgba(158,168,184,0.18)]" />
+                <span className="text-[10px] font-medium uppercase tracking-[0.18em] text-[#9aa3b0]">
                   {row.label}
                 </span>
-                <div className="h-px flex-1 bg-[#e8ecf2]" />
+                <div className="h-px flex-1 bg-[rgba(158,168,184,0.18)]" />
               </div>
             );
           }
@@ -159,17 +159,19 @@ export function MessageThread({ messages, pending }: MessageThreadProps) {
             >
               <article
                 className={`w-full ${
-                  isUser ? 'max-w-[78%] sm:max-w-[70%]' : 'max-w-full sm:max-w-[92%]'
+                  isUser
+                    ? 'max-w-[82%] sm:max-w-[70%]'
+                    : 'max-w-full sm:max-w-[94%]'
                 }`}
               >
                 {isUser ? (
-                  <div className="rounded-[26px] border border-[#dde2ea] bg-[linear-gradient(180deg,rgba(247,248,251,0.96),rgba(243,245,248,0.98))] px-4 py-3 shadow-[0_8px_24px_rgba(15,23,42,0.04)]">
-                    <p className="whitespace-pre-wrap text-[15px] leading-[1.65] tracking-[-0.016em] text-[#424a59]">
+                  <div className="rounded-[26px] border border-white/70 bg-[linear-gradient(180deg,rgba(255,255,255,0.86),rgba(247,249,252,0.92))] px-4 py-3.5 shadow-[0_12px_28px_rgba(15,23,42,0.05)] backdrop-blur-xl">
+                    <p className="whitespace-pre-wrap text-[15px] leading-[1.68] tracking-[-0.016em] text-[#414958]">
                       {message.content}
                     </p>
 
                     {message.attachments?.length ? (
-                      <div className="mt-3">
+                      <div className="mt-3.5">
                         <AttachmentPreview attachments={message.attachments} />
                       </div>
                     ) : null}
@@ -181,20 +183,31 @@ export function MessageThread({ messages, pending }: MessageThreadProps) {
                     </div>
 
                     {isError ? (
-                      <p className="mt-2 text-xs text-[#9b4d4d]">{message.error}</p>
+                      <p className="mt-2.5 text-xs text-[#9b4d4d]">
+                        {message.error}
+                      </p>
                     ) : null}
                   </div>
                 ) : (
-                  <div className="px-0.5 py-1">
-                    <AgentResponseMessage
-                      message={message}
-                      latestUserContent={latestUserContent}
-                      liveSteps={
-                        message.isStreaming
-                          ? (message.agentMetadata?.steps ?? [])
-                          : undefined
-                      }
-                    />
+                  <div className="px-1 py-1">
+                    <div className="mb-2 flex items-center gap-2">
+                      <div className="h-1.5 w-1.5 rounded-full bg-[rgba(126,136,153,0.72)]" />
+                      <span className="text-[11px] font-medium uppercase tracking-[0.16em] text-[#8f98a8]">
+                        Kivo
+                      </span>
+                    </div>
+
+                    <div className="rounded-[28px] border border-white/28 bg-[rgba(255,255,255,0.18)] px-4 py-3.5 shadow-[0_10px_30px_rgba(15,23,42,0.025)] backdrop-blur-[8px]">
+                      <AgentResponseMessage
+                        message={message}
+                        latestUserContent={latestUserContent}
+                        liveSteps={
+                          message.isStreaming
+                            ? (message.agentMetadata?.steps ?? [])
+                            : undefined
+                        }
+                      />
+                    </div>
 
                     {message.attachments?.length ? (
                       <div className="mt-4">
@@ -202,8 +215,8 @@ export function MessageThread({ messages, pending }: MessageThreadProps) {
                       </div>
                     ) : null}
 
-                    <div className="mt-4 flex items-center justify-between gap-3">
-                      <div className="text-[11px] font-medium uppercase tracking-[0.14em] text-[#a0a8b5]">
+                    <div className="mt-4 flex items-center justify-between gap-3 px-1">
+                      <div className="text-[11px] font-medium tracking-[0.01em] text-[#a0a8b5]">
                         Assistant
                       </div>
                       <span className="text-[11px] font-medium tracking-[0.01em] text-[#98a1af]">
@@ -212,7 +225,9 @@ export function MessageThread({ messages, pending }: MessageThreadProps) {
                     </div>
 
                     {isError ? (
-                      <p className="mt-2 text-xs text-[#9b4d4d]">{message.error}</p>
+                      <p className="mt-2.5 px-1 text-xs text-[#9b4d4d]">
+                        {message.error}
+                      </p>
                     ) : null}
                   </div>
                 )}
@@ -223,10 +238,19 @@ export function MessageThread({ messages, pending }: MessageThreadProps) {
 
         {pending ? (
           <div className="flex justify-start">
-            <div className="rounded-full border border-[#e0e5ec] bg-[linear-gradient(180deg,rgba(255,255,255,0.92),rgba(247,249,252,0.96))] px-3.5 py-1.5 shadow-[0_8px_24px_rgba(15,23,42,0.04)]">
-              <div className="inline-flex items-center gap-2.5 text-[12px] font-medium tracking-[-0.01em] text-[#727c8d]">
-                <CircleDashed className="h-4 w-4 animate-spin" />
-                Assistant is responding…
+            <div className="max-w-[94%] px-1">
+              <div className="mb-2 flex items-center gap-2">
+                <div className="h-1.5 w-1.5 rounded-full bg-[rgba(126,136,153,0.72)]" />
+                <span className="text-[11px] font-medium uppercase tracking-[0.16em] text-[#8f98a8]">
+                  Kivo
+                </span>
+              </div>
+
+              <div className="rounded-[28px] border border-white/28 bg-[rgba(255,255,255,0.16)] px-4 py-3.5 shadow-[0_10px_30px_rgba(15,23,42,0.025)] backdrop-blur-[8px]">
+                <div className="inline-flex items-center gap-2.5 text-[13px] font-medium tracking-[-0.01em] text-[#707a8b]">
+                  <CircleDashed className="h-4 w-4 animate-spin" />
+                  Thinking…
+                </div>
               </div>
             </div>
           </div>
