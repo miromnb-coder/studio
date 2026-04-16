@@ -336,6 +336,95 @@ function getSafeContent(
   return COPY[locale].fallback;
 }
 
+type ContentBlock =
+  | { type: 'paragraph'; content: string }
+  | { type: 'list'; items: string[] };
+
+function isListLine(line: string): boolean {
+  return /^([-•*]|\d+\.)\s+/.test(line.trim());
+}
+
+function cleanListLine(line: string): string {
+  return line.trim().replace(/^([-•*]|\d+\.)\s+/, '');
+}
+
+function splitLongParagraph(text: string): string[] {
+  const normalized = normalizeText(text);
+  if (normalized.length <= 240) return [normalized];
+
+  const sentences = normalized.match(/[^.!?]+[.!?]+|\S.+$/g) ?? [normalized];
+  const chunks: string[] = [];
+  let current = '';
+
+  for (const sentence of sentences.map((item) => item.trim()).filter(Boolean)) {
+    const next = current ? `${current} ${sentence}` : sentence;
+    if (next.length > 220 && current) {
+      chunks.push(current.trim());
+      current = sentence;
+    } else {
+      current = next;
+    }
+  }
+
+  if (current.trim()) chunks.push(current.trim());
+  return chunks;
+}
+
+function buildContentBlocks(content: string): ContentBlock[] {
+  const normalized = sanitizeVisibleContent(content);
+  if (!normalized) return [];
+
+  const rawSections = normalized
+    .split(/\n{2,}/)
+    .map((item) => item.trim())
+    .filter(Boolean);
+
+  const blocks: ContentBlock[] = [];
+
+  for (const section of rawSections) {
+    const lines = section.split('\n').map((line) => line.trim()).filter(Boolean);
+
+    if (lines.length > 1 && lines.every(isListLine)) {
+      blocks.push({
+        type: 'list',
+        items: lines.map(cleanListLine),
+      });
+      continue;
+    }
+
+    if (lines.some(isListLine)) {
+      const paragraphLines: string[] = [];
+      const listItems: string[] = [];
+
+      for (const line of lines) {
+        if (isListLine(line)) {
+          listItems.push(cleanListLine(line));
+        } else {
+          paragraphLines.push(line);
+        }
+      }
+
+      if (paragraphLines.length) {
+        for (const chunk of splitLongParagraph(paragraphLines.join(' '))) {
+          blocks.push({ type: 'paragraph', content: chunk });
+        }
+      }
+
+      if (listItems.length) {
+        blocks.push({ type: 'list', items: listItems });
+      }
+
+      continue;
+    }
+
+    for (const chunk of splitLongParagraph(lines.join(' '))) {
+      blocks.push({ type: 'paragraph', content: chunk });
+    }
+  }
+
+  return blocks;
+}
+
 export function AgentResponseMessage({
   message,
   latestUserContent,
@@ -357,6 +446,7 @@ export function AgentResponseMessage({
   const showIntro = shouldShowIntro(visibleContent, resolvedSteps);
   const showActions = shouldShowActions(actions, visibleContent);
   const isStreaming = Boolean(message.isStreaming);
+  const contentBlocks = buildContentBlocks(visibleContent);
 
   return (
     <div className="max-w-full">
@@ -396,10 +486,44 @@ export function AgentResponseMessage({
         </div>
       ) : null}
 
-      <div className="max-w-none">
-        <div className="whitespace-pre-wrap text-[17px] leading-[1.72] tracking-[-0.018em] text-[#36414f]">
-          {visibleContent}
-        </div>
+      <div className="max-w-none space-y-4">
+        {contentBlocks.length > 0 ? (
+          contentBlocks.map((block, index) => {
+            if (block.type === 'list') {
+              return (
+                <ul
+                  key={`list-${index}`}
+                  className="space-y-2 pl-1 text-[17px] leading-[1.72] tracking-[-0.018em] text-[#36414f]"
+                >
+                  {block.items.map((item, itemIndex) => (
+                    <li key={`item-${index}-${itemIndex}`} className="flex gap-3">
+                      <span className="mt-[10px] inline-block h-1.5 w-1.5 shrink-0 rounded-full bg-[#97a3b2]" />
+                      <span>{item}</span>
+                    </li>
+                  ))}
+                </ul>
+              );
+            }
+
+            const isLead = index === 0 && block.content.length < 140;
+            return (
+              <p
+                key={`paragraph-${index}`}
+                className={
+                  isLead
+                    ? 'max-w-[760px] text-[19px] leading-[1.58] tracking-[-0.024em] text-[#2f3947]'
+                    : 'max-w-[760px] text-[17px] leading-[1.72] tracking-[-0.018em] text-[#36414f]'
+                }
+              >
+                {block.content}
+              </p>
+            );
+          })
+        ) : (
+          <div className="text-[17px] leading-[1.72] tracking-[-0.018em] text-[#36414f]">
+            {visibleContent}
+          </div>
+        )}
       </div>
 
       {showActions ? (
