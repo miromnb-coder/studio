@@ -58,6 +58,7 @@ export function mergeAgentMetadata(
 
   return {
     intent: incoming?.intent ?? 'general',
+    responseMode: incoming?.responseMode,
     plan: incoming?.plan ?? 'No plan provided.',
     steps,
     structuredData,

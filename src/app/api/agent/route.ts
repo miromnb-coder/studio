@@ -19,6 +19,8 @@ import {
 } from '@/lib/operator/personalization';
 import type { OperatorAlertType } from '@/lib/operator/alerts';
 import { fetchRelevantUserMemory } from '@/agent/memory-store';
+import { resolveResponseMode } from '@/agent/mode/resolve-response-mode';
+import type { ResponseMode } from '@/agent/types/response-mode';
 import { fetchRecentRecommendationOutcomes } from '@/lib/operator/outcomes';
 import {
   getUserPlanAndUsage,
@@ -39,6 +41,7 @@ const SAFE_AGENT_FALLBACK: AgentResponse = {
   metadata: {
     intent: 'general',
     mode: 'general',
+    responseMode: 'fallback',
     plan: 'Partial fallback',
     steps: [],
     structuredData: null,
@@ -237,7 +240,14 @@ function buildOperatorResponse(params: {
   answer: string;
   metadata?: Record<string, unknown>;
   structuredData?: Record<string, unknown>;
+  responseMode?: ResponseMode;
 }): OperatorResponse {
+  if (params.responseMode === 'casual' || params.responseMode === 'fast') {
+    return {
+      answer: params.answer,
+    };
+  }
+
   const metadata = params.metadata || {};
   const structuredData = params.structuredData || {};
   const suggestedActions = Array.isArray(metadata.suggestedActions)
@@ -316,6 +326,11 @@ function buildOperatorResponse(params: {
 async function runNewAgent(
   input: AgentRouteInput,
 ): Promise<CompatibleAgentResponse | null> {
+  const responseModeHint =
+    typeof input.productState?.responseModeHint === 'string'
+      ? (input.productState.responseModeHint as ResponseMode)
+      : 'operator';
+
   const result = await runAgentVNext({
     requestId: crypto.randomUUID(),
     userId: input.userId,
@@ -346,6 +361,7 @@ async function runNewAgent(
       userProfileIntelligence: input.userProfileIntelligence || null,
       attachments: input.attachments || [],
       attachmentCount: input.attachments?.length || 0,
+      responseModeHint,
     },
   });
 
@@ -359,7 +375,7 @@ async function runNewAgent(
       intent: 'general',
       subtype: 'none',
       mode: 'general',
-      responseMode: 'operator',
+      responseMode: responseModeHint,
       goal: {
         explicitRequest: input.input,
         hiddenRequest: '',
@@ -687,6 +703,13 @@ export async function POST(req: Request) {
       bonusAgentRuns,
     });
 
+    const responseMode = resolveResponseMode({
+      input: safeInput || 'Continue',
+      history: safeHistory,
+      hasAttachments: attachments.length > 0,
+      requestedActionType: actionType,
+    });
+
     const agentInput = {
       input: safeInput || 'Continue',
       userId,
@@ -708,6 +731,7 @@ export async function POST(req: Request) {
           userProfile: (userProfile as Record<string, unknown> | null) || null,
         }),
         attachmentCount: attachments.length,
+        responseModeHint: responseMode,
       },
     };
 
@@ -797,6 +821,7 @@ export async function POST(req: Request) {
         reply: actionResult.summary,
         metadata: {
           intent: 'finance',
+          responseMode: 'tool',
           plan: 'Finance follow-up action execution',
           steps: [
             {
@@ -825,6 +850,7 @@ export async function POST(req: Request) {
               finance: normalizedFinance as unknown as Record<string, unknown>,
               operator_alerts: operatorAlertsStructured,
             },
+            responseMode: 'tool',
           }),
           memoryUsed: relevantMemories.length > 0,
           iterationCount: 1,
@@ -839,6 +865,7 @@ export async function POST(req: Request) {
             finance: normalizedFinance as unknown as Record<string, unknown>,
             operator_alerts: operatorAlertsStructured,
           },
+          responseMode: 'tool',
         }),
         usage: {
           current: usageAfterRun.current,
@@ -929,6 +956,7 @@ export async function POST(req: Request) {
           ...(agentResult.metadata?.responseMode
             ? { response_mode: agentResult.metadata.responseMode }
             : {}),
+          response_mode: responseMode,
           ...(shouldAttachFinance
             ? { finance: normalizedFinance }
             : {}),
@@ -954,7 +982,9 @@ export async function POST(req: Request) {
               ? { operator_alerts: operatorAlertsStructured }
               : {}),
           },
+          responseMode,
         }),
+        responseMode,
         memoryUsed: !!agentResult.metadata?.memoryUsed,
         verificationPassed: !!agentResult.metadata?.verificationPassed,
         iterationCount: Array.isArray(agentResult.metadata?.steps)
@@ -977,6 +1007,7 @@ export async function POST(req: Request) {
             ? { operator_alerts: operatorAlertsStructured }
             : {}),
         },
+        responseMode,
       }),
       usage: {
         current: usageAfterRun.current,
