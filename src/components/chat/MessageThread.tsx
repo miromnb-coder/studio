@@ -1,6 +1,5 @@
 'use client';
 
-import { useEffect, useMemo, useRef } from 'react';
 import { CircleDashed } from 'lucide-react';
 import type { Message } from '@/app/store/app-store';
 import { AttachmentPreview } from './AttachmentPreview';
@@ -10,8 +9,6 @@ type MessageThreadProps = {
   messages: Message[];
   pending: boolean;
 };
-
-const BOTTOM_THRESHOLD_PX = 120;
 
 function isSameDay(a: string, b: string): boolean {
   const da = new Date(a);
@@ -80,33 +77,7 @@ function buildThreadRows(messages: Message[]) {
 }
 
 export function MessageThread({ messages, pending }: MessageThreadProps) {
-  const listRef = useRef<HTMLDivElement | null>(null);
-  const shouldAutoScrollRef = useRef(true);
-
-  const rows = useMemo(() => buildThreadRows(messages), [messages]);
-
-  useEffect(() => {
-    const node = listRef.current;
-    if (!node) return;
-
-    const distanceFromBottom =
-      node.scrollHeight - node.scrollTop - node.clientHeight;
-    shouldAutoScrollRef.current = distanceFromBottom < BOTTOM_THRESHOLD_PX;
-  }, []);
-
-  useEffect(() => {
-    const node = listRef.current;
-    if (!node || !shouldAutoScrollRef.current) return;
-    node.scrollTo({ top: node.scrollHeight, behavior: 'smooth' });
-  }, [messages, pending]);
-
-  const handleScroll = () => {
-    const node = listRef.current;
-    if (!node) return;
-    const distanceFromBottom =
-      node.scrollHeight - node.scrollTop - node.clientHeight;
-    shouldAutoScrollRef.current = distanceFromBottom < BOTTOM_THRESHOLD_PX;
-  };
+  const rows = buildThreadRows(messages);
 
   if (messages.length === 0) {
     return (
@@ -122,11 +93,7 @@ export function MessageThread({ messages, pending }: MessageThreadProps) {
   }
 
   return (
-    <div
-      ref={listRef}
-      onScroll={handleScroll}
-      className="min-h-0 flex-1 overflow-y-auto px-4 pb-[196px] pt-6 sm:px-6"
-    >
+    <div className="min-h-0 flex-1 px-4 pb-[196px] pt-6 sm:px-6">
       <div className="mx-auto w-full max-w-[920px] space-y-8">
         {rows.map((row) => {
           if (row.type === 'divider') {
@@ -197,7 +164,7 @@ export function MessageThread({ messages, pending }: MessageThreadProps) {
                       </span>
                     </div>
 
-                    <div className="rounded-[28px] border border-white/28 bg-[rgba(255,255,255,0.18)] px-4 py-3.5 shadow-[0_10px_30px_rgba(15,23,42,0.025)] backdrop-blur-[8px]">
+                    <div className="max-w-[760px]">
                       <AgentResponseMessage
                         message={message}
                         latestUserContent={latestUserContent}
@@ -238,7 +205,7 @@ export function MessageThread({ messages, pending }: MessageThreadProps) {
 
         {pending ? (
           <div className="flex justify-start">
-            <div className="max-w-[94%] px-1">
+            <div className="max-w-[760px] px-1">
               <div className="mb-2 flex items-center gap-2">
                 <div className="h-1.5 w-1.5 rounded-full bg-[rgba(126,136,153,0.72)]" />
                 <span className="text-[11px] font-medium uppercase tracking-[0.16em] text-[#8f98a8]">
@@ -246,11 +213,9 @@ export function MessageThread({ messages, pending }: MessageThreadProps) {
                 </span>
               </div>
 
-              <div className="rounded-[28px] border border-white/28 bg-[rgba(255,255,255,0.16)] px-4 py-3.5 shadow-[0_10px_30px_rgba(15,23,42,0.025)] backdrop-blur-[8px]">
-                <div className="inline-flex items-center gap-2.5 text-[13px] font-medium tracking-[-0.01em] text-[#707a8b]">
-                  <CircleDashed className="h-4 w-4 animate-spin" />
-                  Thinking…
-                </div>
+              <div className="inline-flex items-center gap-2.5 text-[13px] font-medium tracking-[-0.01em] text-[#707a8b]">
+                <CircleDashed className="h-4 w-4 animate-spin" />
+                Thinking…
               </div>
             </div>
           </div>
