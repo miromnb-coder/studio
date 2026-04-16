@@ -19,6 +19,11 @@ import {
 } from '@/lib/operator/personalization';
 import type { OperatorAlertType } from '@/lib/operator/alerts';
 import { fetchRelevantUserMemory } from '@/agent/memory-store';
+import {
+  extractMemoryCandidates,
+  inferRelevantCategories,
+  persistPersonalMemoryCandidates,
+} from '@/lib/memory/personal-memory';
 import { resolveResponseMode } from '@/agent/mode/resolve-response-mode';
 import type { ResponseMode } from '@/agent/types/response-mode';
 import { fetchRecentRecommendationOutcomes } from '@/lib/operator/outcomes';
@@ -799,6 +804,7 @@ export async function POST(req: Request) {
       query: safeInput || 'Continue',
       limit: summaryType === 'finance' ? 8 : 6,
       financeOnly: summaryType === 'finance',
+      preferredTypes: inferRelevantCategories(safeInput || 'Continue'),
     }).catch((error) => {
       console.error('MEMORY_RETRIEVAL_ERROR:', error);
       return [];
@@ -1037,9 +1043,14 @@ export async function POST(req: Request) {
 
     console.info('AGENT_ROUTE_RESPONSE_SYNTHESIS_START', { requestId });
     const reply = agentResult.reply || '';
+    const memoryCandidates = extractMemoryCandidates({
+      userInput: safeInput || '',
+      assistantReply: reply || '',
+    });
     console.info('AGENT_ROUTE_RESPONSE_SYNTHESIS_DONE', {
       requestId,
       hasReply: reply.trim().length > 0,
+      memoryCandidates: memoryCandidates.length,
     });
 
     let updatedUsage = usage;
@@ -1065,6 +1076,15 @@ export async function POST(req: Request) {
       existing: userProfileIntelligence,
     }).catch((error) => {
       console.error('USER_PROFILE_INTELLIGENCE_UPDATE_ERROR:', error);
+    });
+
+    const storedMemoryCount = await persistPersonalMemoryCandidates({
+      supabase,
+      userId,
+      candidates: memoryCandidates,
+    }).catch((error) => {
+      console.error('PERSONAL_MEMORY_PERSIST_ERROR', error);
+      return 0;
     });
 
     const usageAfterRun = toUsageEnvelope({
@@ -1120,6 +1140,10 @@ export async function POST(req: Request) {
             ? { operator_alerts: operatorAlertsStructured }
             : {}),
           attachments,
+          memory_diagnostics: {
+            candidatesEvaluated: memoryCandidates.length,
+            storedCount: storedMemoryCount,
+          },
         },
         suggestedActions: agentResult.metadata?.suggestedActions || [],
         operatorResponse: buildOperatorResponse({
@@ -1141,7 +1165,9 @@ export async function POST(req: Request) {
           responseMode,
         }),
         responseMode,
-        memoryUsed: !!agentResult.metadata?.memoryUsed,
+        memoryUsed:
+          Boolean(agentResult.metadata?.memoryUsed) ||
+          relevantMemories.length > 0,
         verificationPassed: !!agentResult.metadata?.verificationPassed,
         iterationCount: Array.isArray(agentResult.metadata?.steps)
           ? agentResult.metadata.steps.length
@@ -1181,6 +1207,7 @@ export async function POST(req: Request) {
       durationMs: Date.now() - startedAt,
       intent: payload.metadata.intent,
       attachmentCount: attachments.length,
+      storedMemoryCount,
       bonusAgentRuns: remainingBonusAgentRuns,
     });
 

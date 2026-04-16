@@ -359,6 +359,18 @@ export async function streamAssistantResponse({
         chars: event.metrics?.charCount ?? streamedText.length,
       },
     });
+
+    if (event.metadata?.memoryUsed) {
+      trackEvent('memory_used_in_response', {
+        conversationId,
+        messageId: assistantMessageId,
+        requestId,
+        properties: {
+          responseMode: event.metadata.responseMode || 'general',
+          intent: event.metadata.intent || 'general',
+        },
+      });
+    }
   };
 
   const handleStreamEvent = (event: ChatStreamEvent) => {

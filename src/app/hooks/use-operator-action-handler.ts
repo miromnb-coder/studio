@@ -60,6 +60,18 @@ export function useOperatorActionHandler({
           intent: intent || 'unknown',
         },
       });
+
+      if (/\b(resume|continue|revisit|finish)\b/i.test(executed.label)) {
+        trackEvent('memory_resume_action_clicked', {
+          conversationId,
+          messageId,
+          properties: {
+            actionId: executed.id,
+            actionLabel: executed.label,
+            intent: intent || 'unknown',
+          },
+        });
+      }
     },
     [
       conversationId,
