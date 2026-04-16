@@ -1,4 +1,5 @@
 import { groq } from '@/ai/groq';
+import type { ResponseMode } from '@/agent/types/response-mode';
 
 import type {
   AgentContext,
@@ -72,6 +73,60 @@ function getLanguage(input: GenerateFinalAnswerInput): string {
     normalizeText(input.request.inputLanguage) ||
     'en'
   ).toLowerCase();
+}
+
+function getResponseMode(input: GenerateFinalAnswerInput): ResponseMode {
+  const metadata = (input.request.metadata ?? {}) as Record<string, unknown>;
+  const mode = metadata.responseModeHint;
+  if (
+    mode === 'casual' ||
+    mode === 'fast' ||
+    mode === 'operator' ||
+    mode === 'tool' ||
+    mode === 'fallback'
+  ) {
+    return mode;
+  }
+
+  return 'operator';
+}
+
+function buildModeInstruction(mode: ResponseMode): string {
+  switch (mode) {
+    case 'casual':
+      return [
+        'Mode: casual.',
+        'Reply directly and naturally as in normal conversation.',
+        'Never add workflow/preamble phrases (e.g. "Great request", "I will handle this now").',
+        'No task framing or process narration.',
+        'Keep it warm, concise, premium.',
+      ].join(' ');
+    case 'fast':
+      return [
+        'Mode: fast.',
+        'Answer quickly and clearly with minimal overhead.',
+        'Avoid planning theater and long setup text.',
+      ].join(' ');
+    case 'tool':
+      return [
+        'Mode: tool.',
+        'Give a direct answer grounded in available tool context.',
+        'Do not pretend tools were used if data is missing.',
+      ].join(' ');
+    case 'fallback':
+      return [
+        'Mode: fallback.',
+        'Be honest about uncertainty in calm user language.',
+        'No technical/internal error jargon.',
+      ].join(' ');
+    case 'operator':
+    default:
+      return [
+        'Mode: operator.',
+        'Use a structured, action-oriented style when it helps execution.',
+        'Stay natural and avoid robotic filler.',
+      ].join(' ');
+  }
 }
 
 function summarizeToolResults(toolResults: AgentToolResult[]): {
@@ -296,6 +351,7 @@ async function generateWithModel(
   const conversation = getConversationMessages(input.request);
   const { compactJson } = summarizeToolResults(input.toolResults);
   const metadata = (input.request.metadata ?? {}) as Record<string, unknown>;
+  const responseMode = getResponseMode(input);
   const generatorModel =
     normalizeText(metadata.generatorModel) || 'openai/gpt-oss-120b';
 
@@ -306,6 +362,7 @@ async function generateWithModel(
     'Do not add sections about memory, planning, or what tools were used.',
     'Use available context silently and focus on practical value.',
     'If data is partial, still provide the most useful answer possible.',
+    buildModeInstruction(responseMode),
     buildLanguageInstruction(language),
     'Return JSON only with this schema:',
     '{ "answer": "string", "followUps": ["string"] }',
@@ -315,6 +372,7 @@ async function generateWithModel(
   const userPrompt = [
     `User request: ${requestText}`,
     `Intent: ${input.route.intent}`,
+    `Response mode: ${responseMode}`,
     `User goal: ${normalizeText(input.route.userGoal) || 'Help with the user request.'}`,
     `Entities: ${Array.isArray(input.route.entities) ? input.route.entities.join(', ') : ''}`,
     `Memory summary: ${normalizeText(input.memorySummary) || 'none'}`,

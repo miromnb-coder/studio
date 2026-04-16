@@ -2,6 +2,7 @@
 
 import type { Message } from '@/app/store/app-store';
 import type { AgentResponseMetadata, AgentSuggestedAction } from '@/types/agent-response';
+import type { ResponseMode } from '@/agent/types/response-mode';
 import { ActionSuggestions } from './ActionSuggestions';
 import { OperatorActionCard } from './OperatorActionCard';
 
@@ -254,6 +255,38 @@ function shouldShowIntro(visibleContent: string): boolean {
   return Boolean(visibleContent);
 }
 
+function resolveMessageResponseMode(
+  metadata?: AgentResponseMetadata,
+): ResponseMode {
+  if (
+    metadata?.responseMode === 'casual' ||
+    metadata?.responseMode === 'fast' ||
+    metadata?.responseMode === 'operator' ||
+    metadata?.responseMode === 'tool' ||
+    metadata?.responseMode === 'fallback'
+  ) {
+    return metadata.responseMode;
+  }
+
+  const structuredMode =
+    metadata?.structuredData &&
+    typeof metadata.structuredData === 'object'
+      ? (metadata.structuredData.response_mode as string | undefined)
+      : undefined;
+
+  if (
+    structuredMode === 'casual' ||
+    structuredMode === 'fast' ||
+    structuredMode === 'operator' ||
+    structuredMode === 'tool' ||
+    structuredMode === 'fallback'
+  ) {
+    return structuredMode;
+  }
+
+  return 'operator';
+}
+
 function shouldShowActions(
   actions: string[],
   visibleContent: string,
@@ -373,10 +406,14 @@ export function AgentResponseMessage({
   const copy = COPY[locale];
 
   const metadata = message.agentMetadata;
+  const responseMode = resolveMessageResponseMode(metadata);
   const actions = mapActions(metadata?.suggestedActions);
   const visibleContent = getSafeContent(message.content, metadata, locale);
   const introIndex = hashIndex(message.id, copy.intro.length);
-  const showIntro = shouldShowIntro(visibleContent);
+  const showIntro =
+    responseMode === 'operator' || responseMode === 'tool'
+      ? shouldShowIntro(visibleContent)
+      : false;
   const showActions = shouldShowActions(actions, visibleContent);
   const isStreaming = Boolean(message.isStreaming);
   const contentBlocks = buildContentBlocks(visibleContent);
@@ -458,6 +495,7 @@ export function AgentResponseMessage({
         operatorResponse={operatorResponse}
         userInput={latestUserContent}
         intent={metadata?.intent}
+        responseMode={responseMode}
       />
 
       {showActions ? (

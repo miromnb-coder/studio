@@ -2,11 +2,13 @@
 
 import { AlertTriangle, ArrowUpRight, CheckCircle2, Sparkles } from 'lucide-react';
 import type { OperatorResponse } from '@/types/operator-response';
+import type { ResponseMode } from '@/agent/types/response-mode';
 
 type OperatorActionCardProps = {
   operatorResponse?: OperatorResponse;
   userInput?: string;
   intent?: string;
+  responseMode?: ResponseMode;
 };
 
 type CardSection = {
@@ -52,8 +54,10 @@ export function OperatorActionCard({
   operatorResponse,
   userInput,
   intent,
+  responseMode,
 }: OperatorActionCardProps) {
   if (!operatorResponse) return null;
+  if (responseMode === 'casual') return null;
 
   const nextStep = clean(operatorResponse.nextStep);
   const decision = clean(operatorResponse.decisionBrief);
@@ -106,6 +110,14 @@ export function OperatorActionCard({
 
   const hasValue = sections.length > 0 || actions.length > 0;
   if (!hasValue) return null;
+
+  if (responseMode === 'fast' && !isLikelyHighValueIntent(intent)) {
+    return null;
+  }
+
+  if (responseMode === 'fallback' && actions.length === 0 && sections.length < 2) {
+    return null;
+  }
 
   if (isLowValuePrompt(userInput) && !isLikelyHighValueIntent(intent)) {
     return null;

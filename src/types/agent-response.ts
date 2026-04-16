@@ -1,5 +1,6 @@
 import type { FinanceActionResult, FinanceAnalysis } from '@/lib/finance/types';
 import type { OperatorResponse } from '@/types/operator-response';
+import type { ResponseMode } from '@/agent/types/response-mode';
 
 export type AgentIntent =
   | 'general'
@@ -113,6 +114,7 @@ export type AgentStructuredData = {
 export type AgentResponseMetadata = {
   intent: AgentIntent;
   mode?: AgentMode;
+  responseMode?: ResponseMode;
   plan: string;
   steps: AgentResponseStep[];
   structuredData?: AgentStructuredData;

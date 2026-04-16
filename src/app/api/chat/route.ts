@@ -1,6 +1,7 @@
 import { NextRequest } from 'next/server';
 import type { AgentResponse } from '@/types/agent-response';
 import type { OperatorResponse } from '@/types/operator-response';
+import type { ResponseMode } from '@/agent/types/response-mode';
 
 const encoder = new TextEncoder();
 
@@ -271,6 +272,37 @@ function getOperatorResponse(
   return undefined;
 }
 
+function getResponseMode(result: AgentResponse | null): ResponseMode {
+  const metadataMode = result?.metadata?.responseMode;
+  if (
+    metadataMode === 'casual' ||
+    metadataMode === 'fast' ||
+    metadataMode === 'operator' ||
+    metadataMode === 'tool' ||
+    metadataMode === 'fallback'
+  ) {
+    return metadataMode;
+  }
+
+  const structuredMode =
+    result?.metadata?.structuredData &&
+    typeof result.metadata.structuredData === 'object'
+      ? (result.metadata.structuredData as Record<string, unknown>).response_mode
+      : undefined;
+
+  if (
+    structuredMode === 'casual' ||
+    structuredMode === 'fast' ||
+    structuredMode === 'operator' ||
+    structuredMode === 'tool' ||
+    structuredMode === 'fallback'
+  ) {
+    return structuredMode;
+  }
+
+  return 'operator';
+}
+
 export async function POST(request: NextRequest) {
   let payload: NormalizedPayload;
 
@@ -382,6 +414,7 @@ export async function POST(request: NextRequest) {
   const memoryUsed = getMemoryUsed(agentResult, structuredData);
   const suggestedActions = getSuggestedActions(agentResult);
   const operatorResponse = getOperatorResponse(agentResult);
+  const responseMode = getResponseMode(agentResult);
   const route = agentResult?.metadata?.intent || 'general';
   const tokens = tokenChunks(final);
   const normalizedSteps = steps.slice(0, 8).map((step, index) => ({
@@ -415,79 +448,89 @@ export async function POST(request: NextRequest) {
         controller.enqueue(streamLine(payloadLine));
       };
 
-      send({
-        type: 'router_started',
-        stepId: 'router',
-        label: 'Analyzing request',
-        requestId,
-      });
+      const shouldEmitWorkflow =
+        responseMode === 'operator' || responseMode === 'tool';
+      const shouldEmitCompactWorkflow = responseMode === 'fast';
 
-      await delay(40);
-      send({
-        type: 'router_completed',
-        stepId: 'router',
-        label: 'Analyzing request',
-        requestId,
-      });
-
-      await delay(40);
-      send({
-        type: 'planning_started',
-        stepId: 'planning',
-        label: 'Building execution plan',
-        requestId,
-      });
-
-      await delay(40);
-      send({
-        type: 'planning_completed',
-        stepId: 'planning',
-        label: 'Building execution plan',
-        requestId,
-      });
-
-      await delay(40);
-      send({
-        type: 'memory_started',
-        stepId: 'memory',
-        label: 'Checking memory',
-        requestId,
-      });
-
-      await delay(40);
-      send({
-        type: 'memory_completed',
-        stepId: 'memory',
-        label: 'Checking memory',
-        status: memoryUsed ? 'completed' : 'skipped',
-        summary: memoryUsed
-          ? 'Relevant memory was incorporated.'
-          : 'No relevant memory found for this request.',
-        requestId,
-      });
-
-      for (const step of toolSteps) {
-        await delay(45);
+      if (shouldEmitWorkflow || shouldEmitCompactWorkflow) {
         send({
-          type: 'tool_started',
-          stepId: step.stepId,
-          label: step.label,
-          summary: step.summary,
-          tool: step.tool,
+          type: 'router_started',
+          stepId: 'router',
+          label: 'Analyzing request',
           requestId,
         });
 
-        await delay(45);
+        await delay(40);
         send({
-          type: 'tool_completed',
-          stepId: step.stepId,
-          label: step.label,
-          summary: step.summary,
-          tool: step.tool,
-          status: step.status,
-          error: step.error,
+          type: 'router_completed',
+          stepId: 'router',
+          label: 'Analyzing request',
           requestId,
         });
+      }
+
+      if (shouldEmitWorkflow) {
+        await delay(40);
+        send({
+          type: 'planning_started',
+          stepId: 'planning',
+          label: 'Building execution plan',
+          requestId,
+        });
+
+        await delay(40);
+        send({
+          type: 'planning_completed',
+          stepId: 'planning',
+          label: 'Building execution plan',
+          requestId,
+        });
+
+        await delay(40);
+        send({
+          type: 'memory_started',
+          stepId: 'memory',
+          label: 'Checking memory',
+          requestId,
+        });
+
+        await delay(40);
+        send({
+          type: 'memory_completed',
+          stepId: 'memory',
+          label: 'Checking memory',
+          status: memoryUsed ? 'completed' : 'skipped',
+          summary: memoryUsed
+            ? 'Relevant memory was incorporated.'
+            : 'No relevant memory found for this request.',
+          requestId,
+        });
+      }
+
+      if (responseMode === 'tool' || (responseMode === 'operator' && toolSteps.length > 0)) {
+        for (const step of toolSteps) {
+          await delay(45);
+          send({
+            type: 'tool_started',
+            stepId: step.stepId,
+            label: step.label,
+            summary: step.summary,
+            tool: step.tool,
+            requestId,
+          });
+
+          await delay(45);
+          send({
+            type: 'tool_completed',
+            stepId: step.stepId,
+            label: step.label,
+            summary: step.summary,
+            tool: step.tool,
+            status: step.status,
+            error: step.error,
+            requestId,
+          });
+        }
       }
 
       const firstTokenAt = Date.now();
@@ -511,6 +554,7 @@ export async function POST(request: NextRequest) {
         route,
         metadata: {
           ...(agentResult?.metadata || {}),
+          responseMode,
           operatorResponse,
           structuredData: {
             ...structuredData,
