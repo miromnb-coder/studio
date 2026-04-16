@@ -9,6 +9,7 @@ type OperatorActionCardProps = {
   userInput?: string;
   intent?: string;
   responseMode?: ResponseMode;
+  onActionClick?: (actionId: string) => void;
 };
 
 type CardSection = {
@@ -55,6 +56,7 @@ export function OperatorActionCard({
   userInput,
   intent,
   responseMode,
+  onActionClick,
 }: OperatorActionCardProps) {
   if (!operatorResponse) return null;
   if (responseMode === 'casual') return null;
@@ -71,8 +73,11 @@ export function OperatorActionCard({
     .join(' · ');
 
   const actions = (operatorResponse.actions ?? [])
-    .map((action) => clean(action?.label))
-    .filter((label): label is string => Boolean(label))
+    .map((action) => ({
+      id: clean(action?.id),
+      label: clean(action?.label),
+    }))
+    .filter((action): action is { id: string; label: string } => Boolean(action.id && action.label))
     .slice(0, 3);
 
   const sections: CardSection[] = [
@@ -143,16 +148,17 @@ export function OperatorActionCard({
         <div className="mt-3.5 border-t border-[rgba(220,228,238,0.9)] pt-3.5">
           <p className="mb-2 text-[11px] font-semibold uppercase tracking-[0.16em] text-[#68798f]">Actions</p>
           <div className="flex flex-wrap gap-2">
-            {actions.map((label, index) => (
+            {actions.map((action, index) => (
               <button
-                key={`${label}-${index}`}
+                key={`${action.id}-${index}`}
                 type="button"
+                onClick={() => onActionClick?.(action.id)}
                 className="inline-flex items-center gap-1.5 rounded-full border border-[rgba(208,218,230,0.9)] bg-white px-3 py-1.5 text-[12px] font-medium text-[#33465f]"
               >
                 {index === 0 ? <ArrowUpRight className="h-3.5 w-3.5" /> : null}
                 {index === 1 ? <CheckCircle2 className="h-3.5 w-3.5" /> : null}
                 {index === 2 ? <Sparkles className="h-3.5 w-3.5" /> : null}
-                {label}
+                {action.label}
               </button>
             ))}
           </div>

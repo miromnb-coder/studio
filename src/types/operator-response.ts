@@ -2,6 +2,10 @@ export type OperatorActionKind =
   | 'task'
   | 'decision'
   | 'finance'
+  | 'planning'
+  | 'prioritization'
+  | 'comparison'
+  | 'execution'
   | 'productivity'
   | 'general'
   | 'premium'
@@ -10,10 +14,18 @@ export type OperatorActionKind =
   | 'research'
   | 'follow_up';
 
+export type OperatorActionBehavior =
+  | 'enqueue_prompt'
+  | 'navigate'
+  | 'open_flow';
+
 export type OperatorAction = {
   id: string;
   label: string;
   kind: OperatorActionKind;
+  prompt?: string;
+  behavior?: OperatorActionBehavior;
+  route?: string;
   detail?: string;
   payload?: Record<string, unknown>;
 };

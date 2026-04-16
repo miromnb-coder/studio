@@ -218,6 +218,10 @@ function toOperatorActionKind(value: unknown): OperatorActionKind {
   if (
     value === 'finance' ||
     value === 'general' ||
+    value === 'planning' ||
+    value === 'prioritization' ||
+    value === 'comparison' ||
+    value === 'execution' ||
     value === 'productivity' ||
     value === 'gmail' ||
     value === 'premium'
@@ -234,6 +238,141 @@ function pickFirstString(...values: unknown[]): string | undefined {
     }
   }
   return undefined;
+}
+
+function buildDefaultActions(params: {
+  intent?: unknown;
+  answer: string;
+  nextStep?: string;
+  opportunity?: string;
+}): OperatorAction[] {
+  const intent = typeof params.intent === 'string' ? params.intent : 'general';
+  const continuation = [params.nextStep, params.opportunity, params.answer]
+    .filter((item): item is string => Boolean(item && item.trim().length > 0))
+    .join(' ')
+    .slice(0, 220);
+  const withContext = (label: string) =>
+    continuation
+      ? `Continue from this context: "${continuation}". ${label}`
+      : label;
+
+  if (intent === 'finance') {
+    return [
+      {
+        id: 'build-savings-plan',
+        label: 'Build savings plan',
+        kind: 'finance',
+        behavior: 'enqueue_prompt',
+        prompt: withContext(
+          'Build a concrete 30-day savings plan with weekly targets and exact amounts.',
+        ),
+      },
+      {
+        id: 'analyze-subscriptions',
+        label: 'Analyze subscriptions',
+        kind: 'comparison',
+        behavior: 'navigate',
+        route: '/money-saver',
+        prompt: withContext(
+          'Analyze subscription leaks and rank what to cancel, downgrade, or keep.',
+        ),
+      },
+      {
+        id: 'compare-alternatives',
+        label: 'Compare alternatives',
+        kind: 'comparison',
+        behavior: 'enqueue_prompt',
+        prompt: withContext(
+          'Compare lower-cost alternatives and recommend the highest-value switch.',
+        ),
+      },
+    ];
+  }
+
+  if (intent === 'planning' || intent === 'productivity') {
+    return [
+      {
+        id: 'build-weekly-plan',
+        label: 'Build weekly plan',
+        kind: 'planning',
+        behavior: 'enqueue_prompt',
+        prompt: withContext(
+          'Turn this into a realistic weekly plan with daily focus blocks.',
+        ),
+      },
+      {
+        id: 'prioritize-tasks',
+        label: 'Prioritize tasks',
+        kind: 'prioritization',
+        behavior: 'enqueue_prompt',
+        prompt: withContext(
+          'Prioritize this into must-do, should-do, and can-wait with reasoning.',
+        ),
+      },
+      {
+        id: 'turn-into-checklist',
+        label: 'Turn into checklist',
+        kind: 'execution',
+        behavior: 'enqueue_prompt',
+        prompt: withContext(
+          'Convert this into an execution checklist with the first task to start now.',
+        ),
+      },
+    ];
+  }
+
+  if (intent === 'compare' || intent === 'decision') {
+    return [
+      {
+        id: 'compare-options',
+        label: 'Compare options',
+        kind: 'comparison',
+        behavior: 'enqueue_prompt',
+        prompt: withContext(
+          'Compare the best options side by side by impact, cost, and effort.',
+        ),
+      },
+      {
+        id: 'list-risks',
+        label: 'List risks',
+        kind: 'decision',
+        behavior: 'enqueue_prompt',
+        prompt: withContext(
+          'List key risks and mitigation steps before making the decision.',
+        ),
+      },
+      {
+        id: 'recommend-best-choice',
+        label: 'Recommend best choice',
+        kind: 'decision',
+        behavior: 'enqueue_prompt',
+        prompt: withContext(
+          'Recommend the best option and explain why it wins right now.',
+        ),
+      },
+    ];
+  }
+
+  return [
+    {
+      id: 'next-best-move',
+      label: 'Next best move',
+      kind: 'execution',
+      behavior: 'enqueue_prompt',
+      prompt: withContext(
+        'Give me the single best next move and how to execute it immediately.',
+      ),
+    },
+    {
+      id: 'make-it-actionable',
+      label: 'Make it actionable',
+      kind: 'execution',
+      behavior: 'enqueue_prompt',
+      prompt: withContext(
+        'Turn this into concise steps I can execute in the next 15 minutes.',
+      ),
+    },
+  ];
 }
 
 function buildOperatorResponse(params: {
@@ -264,6 +403,13 @@ function buildOperatorResponse(params: {
       id: pickFirstString(record.id) || `operator-action-${index + 1}`,
       label,
       kind: toOperatorActionKind(record.kind),
+      behavior: pickFirstString(record.behavior) as
+        | 'enqueue_prompt'
+        | 'navigate'
+        | 'open_flow'
+        | undefined,
+      prompt: pickFirstString(record.prompt),
+      route: pickFirstString(record.route),
       payload:
         record.payload && typeof record.payload === 'object'
           ? (record.payload as Record<string, unknown>)
@@ -303,11 +449,21 @@ function buildOperatorResponse(params: {
     financeData?.savings_summary,
     financeData?.quick_win,
   );
+  const intent = pickFirstString(metadata.intent, structuredData.intent);
+  const resolvedActions =
+    actions.length > 0
+      ? actions.slice(0, 3)
+      : buildDefaultActions({
+          intent,
+          answer: params.answer,
+          nextStep,
+          opportunity,
+        }).slice(0, 3);
 
   return {
     answer: params.answer,
     nextStep,
-    actions: actions.length ? actions.slice(0, 4) : undefined,
+    actions: resolvedActions.length ? resolvedActions : undefined,
     decisionBrief,
     risk: pickFirstString(
       highestPriorityAlert?.summary,
