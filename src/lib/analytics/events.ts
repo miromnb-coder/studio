@@ -11,7 +11,10 @@ export type AnalyticsEventName =
   | 'chat_prompt_template_used'
   | 'chat_conversation_opened'
   | 'chat_conversation_reopened'
-  | 'chat_abandoned_send';
+  | 'chat_abandoned_send'
+  | 'operator_action_impression'
+  | 'operator_action_clicked'
+  | 'operator_action_card_ignored';
 
 export type AnalyticsEvent = {
   name: AnalyticsEventName;

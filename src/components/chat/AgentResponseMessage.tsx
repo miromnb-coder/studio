@@ -1,6 +1,9 @@
 'use client';
 
+import { useEffect, useRef } from 'react';
 import type { Message } from '@/app/store/app-store';
+import { trackEvent } from '@/app/lib/analytics-client';
+import { useOperatorActionHandler } from '@/app/hooks/use-operator-action-handler';
 import type { AgentResponseMetadata, AgentSuggestedAction } from '@/types/agent-response';
 import type { ResponseMode } from '@/agent/types/response-mode';
 import { ActionSuggestions } from './ActionSuggestions';
@@ -425,10 +428,49 @@ export function AgentResponseMessage({
   const showActions = shouldShowActions(actions, visibleContent);
   const contentBlocks = buildContentBlocks(visibleContent);
   const operatorResponse = metadata?.operatorResponse;
+  const operatorActions = operatorResponse?.actions ?? [];
+  const actionClickedRef = useRef(false);
+  const handleOperatorAction = useOperatorActionHandler({
+    messageId: message.id,
+    responseMode,
+    operatorResponse,
+    latestUserContent,
+    intent: metadata?.intent,
+  });
   const shouldShowStreamingLabel =
     isStreaming && (responseMode === 'operator' || responseMode === 'tool');
   const streamingLabel =
     responseMode === 'tool' ? 'Using tools…' : copy.thinking;
+
+  useEffect(() => {
+    if (!operatorActions.length || isStreaming) return;
+
+    trackEvent('operator_action_impression', {
+      messageId: message.id,
+      properties: {
+        actionCount: operatorActions.length,
+        actionKinds: operatorActions.map((action) => action.kind).join(','),
+        responseMode,
+        intent: metadata?.intent || 'unknown',
+      },
+    });
+  }, [isStreaming, message.id, metadata?.intent, operatorActions, responseMode]);
+
+  useEffect(() => {
+    if (!operatorActions.length || isStreaming) return;
+
+    return () => {
+      if (actionClickedRef.current) return;
+      trackEvent('operator_action_card_ignored', {
+        messageId: message.id,
+        properties: {
+          actionCount: operatorActions.length,
+          responseMode,
+          intent: metadata?.intent || 'unknown',
+        },
+      });
+    };
+  }, [isStreaming, message.id, metadata?.intent, operatorActions.length, responseMode]);
 
   return (
     <div className="max-w-full">
@@ -507,11 +549,26 @@ export function AgentResponseMessage({
         userInput={latestUserContent}
         intent={metadata?.intent}
         responseMode={responseMode}
+        onActionClick={(actionId) => {
+          const action = operatorActions.find((item) => item.id === actionId);
+          if (!action) return;
+          actionClickedRef.current = true;
+          void handleOperatorAction(action);
+        }}
       />
 
       {showActions ? (
         <div className="mt-6">
-          <ActionSuggestions actions={actions} locale={locale} />
+          <ActionSuggestions
+            actions={actions}
+            locale={locale}
+            onActionClick={(actionLabel) => {
+              const action = operatorActions.find((item) => item.label === actionLabel);
+              if (!action) return;
+              actionClickedRef.current = true;
+              void handleOperatorAction(action);
+            }}
+          />
         </div>
       ) : null}
     </div>
