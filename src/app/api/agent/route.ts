@@ -1,6 +1,11 @@
 import { NextResponse } from 'next/server';
 import { runAgentVNext } from '@/agent/vNext/orchestrator';
 import type { AgentResponse } from '@/types/agent-response';
+import type {
+  OperatorAction,
+  OperatorActionKind,
+  OperatorResponse,
+} from '@/types/operator-response';
 import {
   normalizeFinanceAnalysis,
   runFinanceAction,
@@ -37,10 +42,18 @@ const SAFE_AGENT_FALLBACK: AgentResponse = {
     plan: 'Partial fallback',
     steps: [],
     structuredData: null,
+    operatorResponse: {
+      answer: 'I ran into an issue, but here’s what I could analyze so far.',
+      nextStep: 'Retry your request in one clear sentence.',
+    },
     suggestedActions: [],
     memoryUsed: false,
     verificationPassed: false,
     iterationCount: 0,
+  },
+  operatorResponse: {
+    answer: 'I ran into an issue, but here’s what I could analyze so far.',
+    nextStep: 'Retry your request in one clear sentence.',
   },
 };
 
@@ -75,6 +88,7 @@ type AgentRouteInput = {
 type CompatibleAgentResponse = {
   reply: string;
   metadata?: Record<string, any>;
+  operatorResponse?: OperatorResponse;
 };
 
 function safeJsonResponse(payload: unknown, status = 200) {
@@ -197,6 +211,100 @@ function asArrayOfObjects(value: unknown): Array<Record<string, unknown>> {
     : [];
 }
 
+function toOperatorActionKind(value: unknown): OperatorActionKind {
+  if (
+    value === 'finance' ||
+    value === 'general' ||
+    value === 'productivity' ||
+    value === 'gmail' ||
+    value === 'premium'
+  ) {
+    return value === 'gmail' ? 'message' : value;
+  }
+  return 'follow_up';
+}
+
+function pickFirstString(...values: unknown[]): string | undefined {
+  for (const value of values) {
+    if (typeof value === 'string' && value.trim().length > 0) {
+      return value.trim();
+    }
+  }
+  return undefined;
+}
+
+function buildOperatorResponse(params: {
+  answer: string;
+  metadata?: Record<string, unknown>;
+  structuredData?: Record<string, unknown>;
+}): OperatorResponse {
+  const metadata = params.metadata || {};
+  const structuredData = params.structuredData || {};
+  const suggestedActions = Array.isArray(metadata.suggestedActions)
+    ? metadata.suggestedActions
+    : [];
+  const actions: OperatorAction[] = [];
+  for (const [index, item] of suggestedActions.entries()) {
+    if (!item || typeof item !== 'object') continue;
+    const record = item as Record<string, unknown>;
+    const label = pickFirstString(record.label, record.title);
+    if (!label) continue;
+
+    actions.push({
+      id: pickFirstString(record.id) || `operator-action-${index + 1}`,
+      label,
+      kind: toOperatorActionKind(record.kind),
+      payload:
+        record.payload && typeof record.payload === 'object'
+          ? (record.payload as Record<string, unknown>)
+          : undefined,
+    });
+  }
+
+  const operatorAlerts = Array.isArray(structuredData.operator_alerts)
+    ? structuredData.operator_alerts.filter(
+        (item): item is Record<string, unknown> =>
+          Boolean(item && typeof item === 'object'),
+      )
+    : [];
+  const highestPriorityAlert = operatorAlerts[0];
+
+  const financeData =
+    structuredData.finance && typeof structuredData.finance === 'object'
+      ? (structuredData.finance as Record<string, unknown>)
+      : null;
+
+  return {
+    answer: params.answer,
+    nextStep:
+      pickFirstString(
+        actions[0]?.label,
+        highestPriorityAlert?.suggestedAction,
+        metadata.plan,
+      ) || 'Choose one concrete next action and execute it now.',
+    actions: actions.length ? actions.slice(0, 4) : undefined,
+    decisionBrief: pickFirstString(
+      metadata.plan,
+      highestPriorityAlert?.title,
+      highestPriorityAlert?.summary,
+    ),
+    risk: pickFirstString(
+      highestPriorityAlert?.summary,
+      highestPriorityAlert?.title,
+    ),
+    savingsOpportunity: pickFirstString(
+      financeData?.top_recommendation,
+      financeData?.savings_summary,
+    ),
+    timeOpportunity: pickFirstString(
+      financeData?.quick_win,
+      metadata.mode === 'operator'
+        ? 'Use the recommended next step to reduce decision overhead.'
+        : undefined,
+    ),
+  };
+}
+
 async function runNewAgent(
   input: AgentRouteInput,
 ): Promise<CompatibleAgentResponse | null> {
@@ -301,6 +409,11 @@ async function runNewAgent(
         qualityNotes: result.response.warnings || [],
       },
       state: 'responding',
+    },
+    operatorResponse: {
+      answer: result.response.answer.text,
+      nextStep: result.response.plan.steps[0]?.title,
+      decisionBrief: result.response.plan.summary,
     },
   };
 }
@@ -694,9 +807,31 @@ export async function POST(req: Request) {
             operator_alerts: operatorAlertsStructured,
             attachments,
           },
+          operatorResponse: buildOperatorResponse({
+            answer: actionResult.summary,
+            metadata: {
+              plan: 'Finance follow-up action execution',
+              suggestedActions: [],
+            },
+            structuredData: {
+              finance: normalizedFinance as unknown as Record<string, unknown>,
+              operator_alerts: operatorAlertsStructured,
+            },
+          }),
           memoryUsed: relevantMemories.length > 0,
           iterationCount: 1,
         },
+        operatorResponse: buildOperatorResponse({
+          answer: actionResult.summary,
+          metadata: {
+            plan: 'Finance follow-up action execution',
+            suggestedActions: [],
+          },
+          structuredData: {
+            finance: normalizedFinance as unknown as Record<string, unknown>,
+            operator_alerts: operatorAlertsStructured,
+          },
+        }),
         usage: {
           current: usageAfterRun.current,
           limit: usageAfterRun.limit,
@@ -795,12 +930,46 @@ export async function POST(req: Request) {
           attachments,
         },
         suggestedActions: agentResult.metadata?.suggestedActions || [],
+        operatorResponse: buildOperatorResponse({
+          answer: reply || SAFE_AGENT_FALLBACK.reply,
+          metadata: {
+            ...agentResult.metadata,
+            plan: agentResult.metadata?.plan || 'Partial fallback',
+            suggestedActions: agentResult.metadata?.suggestedActions || [],
+          },
+          structuredData: {
+            ...(agentResult.metadata?.structuredData || {}),
+            ...(shouldAttachFinance
+              ? { finance: normalizedFinance as unknown as Record<string, unknown> }
+              : {}),
+            ...(operatorAlertsStructured.length
+              ? { operator_alerts: operatorAlertsStructured }
+              : {}),
+          },
+        }),
         memoryUsed: !!agentResult.metadata?.memoryUsed,
         verificationPassed: !!agentResult.metadata?.verificationPassed,
         iterationCount: Array.isArray(agentResult.metadata?.steps)
           ? agentResult.metadata.steps.length
           : 0,
       },
+      operatorResponse: buildOperatorResponse({
+        answer: reply || SAFE_AGENT_FALLBACK.reply,
+        metadata: {
+          ...agentResult.metadata,
+          plan: agentResult.metadata?.plan || 'Partial fallback',
+          suggestedActions: agentResult.metadata?.suggestedActions || [],
+        },
+        structuredData: {
+          ...(agentResult.metadata?.structuredData || {}),
+          ...(shouldAttachFinance
+            ? { finance: normalizedFinance as unknown as Record<string, unknown> }
+            : {}),
+          ...(operatorAlertsStructured.length
+            ? { operator_alerts: operatorAlertsStructured }
+            : {}),
+        },
+      }),
       usage: {
         current: usageAfterRun.current,
         limit: usageAfterRun.limit,

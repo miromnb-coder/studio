@@ -1,5 +1,6 @@
 import { NextRequest } from 'next/server';
 import type { AgentResponse } from '@/types/agent-response';
+import type { OperatorResponse } from '@/types/operator-response';
 
 const encoder = new TextEncoder();
 
@@ -253,6 +254,23 @@ function tokenChunks(text: string): string[] {
   return text.split(/(\s+)/).filter(Boolean);
 }
 
+function getOperatorResponse(
+  result: AgentResponse | null,
+): OperatorResponse | undefined {
+  if (result?.operatorResponse && typeof result.operatorResponse === 'object') {
+    return result.operatorResponse;
+  }
+
+  if (
+    result?.metadata?.operatorResponse &&
+    typeof result.metadata.operatorResponse === 'object'
+  ) {
+    return result.metadata.operatorResponse;
+  }
+
+  return undefined;
+}
+
 export async function POST(request: NextRequest) {
   let payload: NormalizedPayload;
 
@@ -363,6 +381,7 @@ export async function POST(request: NextRequest) {
   const tools = getToolNames(agentResult, structuredData);
   const memoryUsed = getMemoryUsed(agentResult, structuredData);
   const suggestedActions = getSuggestedActions(agentResult);
+  const operatorResponse = getOperatorResponse(agentResult);
   const route = agentResult?.metadata?.intent || 'general';
   const tokens = tokenChunks(final);
   const normalizedSteps = steps.slice(0, 8).map((step, index) => ({
@@ -492,6 +511,7 @@ export async function POST(request: NextRequest) {
         route,
         metadata: {
           ...(agentResult?.metadata || {}),
+          operatorResponse,
           structuredData: {
             ...structuredData,
             route: {
@@ -515,6 +535,7 @@ export async function POST(request: NextRequest) {
           suggestedActions,
           memoryUsed,
         },
+        operatorResponse,
         metrics: {
           ttfbMs: firstTokenAt - start,
           completionMs: Date.now() - start,
