@@ -284,7 +284,7 @@ function resolveMessageResponseMode(
     return structuredMode;
   }
 
-  return 'operator';
+  return 'fallback';
 }
 
 function shouldShowActions(
@@ -298,9 +298,11 @@ function getSafeContent(
   content: string,
   metadata: AgentResponseMetadata | undefined,
   locale: SupportedLocale,
+  isStreaming: boolean,
 ): string {
   const sanitized = sanitizeVisibleContent(content);
   if (sanitized) return sanitized;
+  if (isStreaming) return '';
 
   if (metadata?.intent === 'general') {
     return COPY[locale].fallback;
@@ -407,17 +409,26 @@ export function AgentResponseMessage({
 
   const metadata = message.agentMetadata;
   const responseMode = resolveMessageResponseMode(metadata);
+  const isStreaming = Boolean(message.isStreaming);
   const actions = mapActions(metadata?.suggestedActions);
-  const visibleContent = getSafeContent(message.content, metadata, locale);
+  const visibleContent = getSafeContent(
+    message.content,
+    metadata,
+    locale,
+    isStreaming,
+  );
   const introIndex = hashIndex(message.id, copy.intro.length);
   const showIntro =
     responseMode === 'operator' || responseMode === 'tool'
       ? shouldShowIntro(visibleContent)
       : false;
   const showActions = shouldShowActions(actions, visibleContent);
-  const isStreaming = Boolean(message.isStreaming);
   const contentBlocks = buildContentBlocks(visibleContent);
   const operatorResponse = metadata?.operatorResponse;
+  const shouldShowStreamingLabel =
+    isStreaming && (responseMode === 'operator' || responseMode === 'tool');
+  const streamingLabel =
+    responseMode === 'tool' ? 'Using tools…' : copy.thinking;
 
   return (
     <div className="max-w-full">
@@ -438,9 +449,9 @@ export function AgentResponseMessage({
           </span>
         </div>
 
-        {isStreaming ? (
+        {shouldShowStreamingLabel ? (
           <span className="text-[11px] font-medium tracking-[0.01em] text-[#8f98a7]">
-            {copy.thinking}
+            {streamingLabel}
           </span>
         ) : null}
       </div>

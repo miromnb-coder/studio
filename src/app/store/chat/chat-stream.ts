@@ -308,6 +308,15 @@ export async function streamAssistantResponse({
         },
         fallbackSteps,
       );
+      const responseMode = mergedMetadata.responseMode;
+      const shouldKeepWorkflowSteps =
+        responseMode === 'operator' || responseMode === 'tool';
+      const normalizedMetadata = shouldKeepWorkflowSteps
+        ? mergedMetadata
+        : {
+            ...mergedMetadata,
+            steps: [],
+          };
 
       console.log('STREAM ANSWER COMPLETED', {
         requestId,
@@ -315,13 +324,14 @@ export async function streamAssistantResponse({
         inFlightSteps,
         fallbackSteps,
         mergedMetadata,
+        normalizedMetadata,
       });
 
       return {
         ...prev,
         activeAgent: DEFAULT_ACTIVE_AGENT,
         activeSteps: deriveActiveStepsFromMetadata(
-          mergedMetadata,
+          normalizedMetadata,
           prev.activeSteps,
         ),
         messageState: {
@@ -331,7 +341,7 @@ export async function streamAssistantResponse({
               ? {
                   ...message,
                   content,
-                  agentMetadata: mergedMetadata,
+                  agentMetadata: normalizedMetadata,
                 }
               : message,
           ),
