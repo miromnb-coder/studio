@@ -262,7 +262,7 @@ export function KivoHomeScreen() {
               <button
                 type="button"
                 onClick={handleNewChat}
-                className="flex min-h-[88px] flex-col items-start justify-between rounded-[26px] border border-[#c9daf5] bg-[linear-gradient(180deg,#b8d0f3_0%,#a7c3ec_100%)] px-4 py-4 text-left text-white shadow-[0_18px_34px_rgba(93,134,196,0.24)] transition-all duration-200 ease-out hover:scale-[1.01] active:scale-[0.99]"
+                className="flex min-h-[88px] flex-col items-start justify-between rounded-[26px] border border-[#2b2b2b] bg-[linear-gradient(180deg,#20201d_0%,#111111_100%)] px-4 py-4 text-left text-white shadow-[0_18px_36px_rgba(17,17,17,0.18)]" transition-all duration-200 ease-out hover:scale-[1.01] active:scale-[0.99]"
               >
                 <span className="inline-flex h-9 w-9 items-center justify-center rounded-full bg-white/16">
                   <Sparkles className="h-4.5 w-4.5" strokeWidth={2} />
