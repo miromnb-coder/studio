@@ -300,7 +300,12 @@ export async function streamAssistantResponse({
       }));
 
       const mergedMetadata = mergeAgentMetadata(
-        event.metadata as AgentResponseMetadata | undefined,
+        {
+          ...(event.metadata as AgentResponseMetadata | undefined),
+          ...(event.operatorResponse
+            ? { operatorResponse: event.operatorResponse }
+            : {}),
+        },
         fallbackSteps,
       );
 

@@ -64,6 +64,10 @@ export function mergeAgentMetadata(
     suggestedActions: Array.isArray(incoming?.suggestedActions)
       ? incoming.suggestedActions
       : [],
+    operatorResponse:
+      incoming?.operatorResponse && typeof incoming.operatorResponse === 'object'
+        ? incoming.operatorResponse
+        : undefined,
     operatorModules: Array.isArray(incoming?.operatorModules)
       ? incoming.operatorModules
       : [],

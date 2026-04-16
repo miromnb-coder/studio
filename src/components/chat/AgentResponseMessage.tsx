@@ -8,6 +8,7 @@ import type {
 } from '@/types/agent-response';
 import { ActionSuggestions } from './ActionSuggestions';
 import { AgentWorkflowBoxes } from './AgentWorkflowBoxes';
+import { OperatorResponseCard } from './OperatorResponseCard';
 
 type AgentResponseMessageProps = {
   message: Message;
@@ -447,6 +448,7 @@ export function AgentResponseMessage({
   const showActions = shouldShowActions(actions, visibleContent);
   const isStreaming = Boolean(message.isStreaming);
   const contentBlocks = buildContentBlocks(visibleContent);
+  const operatorResponse = metadata?.operatorResponse;
 
   return (
     <div className="max-w-full">
@@ -525,6 +527,8 @@ export function AgentResponseMessage({
           </div>
         )}
       </div>
+
+      <OperatorResponseCard operatorResponse={operatorResponse} />
 
       {showActions ? (
         <div className="mt-6">

@@ -2,6 +2,7 @@ import type {
   AgentResponse,
   AgentResponseMetadata,
 } from '@/types/agent-response';
+import type { OperatorResponse } from '@/types/operator-response';
 import type { FinanceActionType } from '@/lib/finance/types';
 
 export type AgentName =
@@ -180,6 +181,7 @@ export type ChatStreamEvent =
       type: 'answer_completed';
       content?: string;
       metadata?: AgentResponseMetadata;
+      operatorResponse?: OperatorResponse;
       metrics?: { ttfbMs?: number; completionMs?: number; charCount?: number };
       requestId?: string;
     };
