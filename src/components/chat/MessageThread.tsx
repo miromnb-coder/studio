@@ -2,6 +2,7 @@
 
 import { CircleDashed } from 'lucide-react';
 import type { Message } from '@/app/store/app-store';
+import type { ResponseMode } from '@/agent/types/response-mode';
 import { AttachmentPreview } from './AttachmentPreview';
 import { AgentResponseMessage } from './AgentResponseMessage';
 
@@ -76,8 +77,51 @@ function buildThreadRows(messages: Message[]) {
   return rows;
 }
 
+function resolveResponseMode(messages: Message[]): ResponseMode {
+  const streamingAssistant = [...messages]
+    .reverse()
+    .find((message) => message.role === 'assistant' && message.isStreaming);
+  const metadata = streamingAssistant?.agentMetadata;
+
+  if (
+    metadata?.responseMode === 'casual' ||
+    metadata?.responseMode === 'fast' ||
+    metadata?.responseMode === 'operator' ||
+    metadata?.responseMode === 'tool' ||
+    metadata?.responseMode === 'fallback'
+  ) {
+    return metadata.responseMode;
+  }
+
+  const structuredMode =
+    metadata?.structuredData &&
+    typeof metadata.structuredData === 'object'
+      ? (metadata.structuredData.response_mode as string | undefined)
+      : undefined;
+
+  if (
+    structuredMode === 'casual' ||
+    structuredMode === 'fast' ||
+    structuredMode === 'operator' ||
+    structuredMode === 'tool' ||
+    structuredMode === 'fallback'
+  ) {
+    return structuredMode;
+  }
+
+  return 'fallback';
+}
+
 export function MessageThread({ messages, pending }: MessageThreadProps) {
   const rows = buildThreadRows(messages);
+  const pendingMode = resolveResponseMode(messages);
+  const showPendingText = pendingMode !== 'casual';
+  const pendingLabel =
+    pendingMode === 'operator'
+      ? 'Thinking…'
+      : pendingMode === 'tool'
+        ? 'Using tools…'
+        : 'Working…';
 
   if (messages.length === 0) {
     return (
@@ -210,7 +254,7 @@ export function MessageThread({ messages, pending }: MessageThreadProps) {
 
               <div className="inline-flex items-center gap-2.5 text-[13px] font-medium tracking-[-0.01em] text-[#707a8b]">
                 <CircleDashed className="h-4 w-4 animate-spin" />
-                Thinking…
+                {showPendingText ? pendingLabel : null}
               </div>
             </div>
           </div>
