@@ -21,6 +21,7 @@ type LocaleCopy = {
   intro: string[];
   fallback: string;
   brand: string;
+  thinking: string;
 };
 
 const COPY: Record<SupportedLocale, LocaleCopy> = {
@@ -32,6 +33,7 @@ const COPY: Record<SupportedLocale, LocaleCopy> = {
     ],
     fallback: 'Done — here is the answer for you.',
     brand: 'Lite',
+    thinking: 'Thinking through the best answer.',
   },
   fi: {
     intro: [
@@ -41,6 +43,7 @@ const COPY: Record<SupportedLocale, LocaleCopy> = {
     ],
     fallback: 'Valmis — tässä vastaus sinulle.',
     brand: 'Lite',
+    thinking: 'Mietin tähän parasta vastausta.',
   },
   sv: {
     intro: [
@@ -50,6 +53,7 @@ const COPY: Record<SupportedLocale, LocaleCopy> = {
     ],
     fallback: 'Klart — här är svaret till dig.',
     brand: 'Lite',
+    thinking: 'Jag arbetar fram det bästa svaret.',
   },
   es: {
     intro: [
@@ -59,6 +63,7 @@ const COPY: Record<SupportedLocale, LocaleCopy> = {
     ],
     fallback: 'Listo — aquí tienes la respuesta.',
     brand: 'Lite',
+    thinking: 'Estoy elaborando la mejor respuesta.',
   },
 };
 
@@ -227,9 +232,27 @@ function dedupeSteps(steps?: AgentResponseStep[]): AgentResponseStep[] {
   for (const step of steps) {
     const action = normalizeText(
       step?.action ||
-        (step as AgentResponseStep & { label?: string; title?: string; id?: string }).label ||
-        (step as AgentResponseStep & { label?: string; title?: string; id?: string }).title ||
-        (step as AgentResponseStep & { label?: string; title?: string; id?: string }).id,
+        (
+          step as AgentResponseStep & {
+            label?: string;
+            title?: string;
+            id?: string;
+          }
+        ).label ||
+        (
+          step as AgentResponseStep & {
+            label?: string;
+            title?: string;
+            id?: string;
+          }
+        ).title ||
+        (
+          step as AgentResponseStep & {
+            label?: string;
+            title?: string;
+            id?: string;
+          }
+        ).id,
     );
 
     if (!action) continue;
@@ -333,45 +356,54 @@ export function AgentResponseMessage({
   const introIndex = hashIndex(message.id, copy.intro.length);
   const showIntro = shouldShowIntro(visibleContent, resolvedSteps);
   const showActions = shouldShowActions(actions, visibleContent);
+  const isStreaming = Boolean(message.isStreaming);
 
   return (
     <div className="max-w-full">
       <div className="mb-4 flex items-center gap-3">
-        <span
-          className="text-[21px] font-normal leading-none tracking-[-0.035em] text-[#232c39]"
-          style={{
-            fontFamily:
-              'ui-serif, Georgia, Cambria, "Times New Roman", Times, serif',
-          }}
-        >
-          Kivo
-        </span>
+        <div className="flex items-center gap-2.5">
+          <span
+            className="text-[22px] font-normal leading-none tracking-[-0.04em] text-[#232c39]"
+            style={{
+              fontFamily:
+                'ui-serif, Georgia, Cambria, "Times New Roman", Times, serif',
+            }}
+          >
+            Kivo
+          </span>
 
-        <span className="rounded-[999px] border border-[#d7dce4] bg-[#eceff3] px-2.5 py-0.5 text-[12px] font-medium tracking-[-0.01em] text-[#647181] shadow-[inset_0_1px_0_rgba(255,255,255,0.45)]">
-          {copy.brand}
-        </span>
+          <span className="rounded-full border border-[rgba(208,214,224,0.8)] bg-[rgba(236,240,245,0.86)] px-2.5 py-0.5 text-[11px] font-medium tracking-[-0.01em] text-[#677383] shadow-[inset_0_1px_0_rgba(255,255,255,0.5)]">
+            {copy.brand}
+          </span>
+        </div>
+
+        {isStreaming ? (
+          <span className="text-[11px] font-medium tracking-[0.01em] text-[#8f98a7]">
+            {copy.thinking}
+          </span>
+        ) : null}
       </div>
 
       {showIntro ? (
-        <p className="mb-5 text-[18px] leading-[1.48] tracking-[-0.022em] text-[#2f3947]">
+        <p className="mb-6 max-w-[780px] text-[18px] leading-[1.5] tracking-[-0.024em] text-[#2f3947]">
           {copy.intro[introIndex]}
         </p>
       ) : null}
 
       {resolvedSteps.length > 0 ? (
-        <div className="mb-6">
+        <div className="mb-7">
           <AgentWorkflowBoxes steps={resolvedSteps} locale={locale} />
         </div>
       ) : null}
 
       <div className="max-w-none">
-        <div className="whitespace-pre-wrap text-[17px] leading-[1.68] tracking-[-0.016em] text-[#36414f]">
+        <div className="whitespace-pre-wrap text-[17px] leading-[1.72] tracking-[-0.018em] text-[#36414f]">
           {visibleContent}
         </div>
       </div>
 
       {showActions ? (
-        <div className="mt-5">
+        <div className="mt-6">
           <ActionSuggestions actions={actions} locale={locale} />
         </div>
       ) : null}
