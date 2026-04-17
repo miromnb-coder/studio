@@ -19,22 +19,72 @@ export async function GET() {
     }
 
     const { data: profile } = await supabase
+      .from('profiles')
+      .select(
+        'google_calendar_connected, google_calendar_connected_at, google_calendar_last_sync_at',
+      )
+      .eq('id', userId)
+      .maybeSingle();
+
+    const { data: financeProfile } = await supabase
       .from('finance_profiles')
       .select('last_analysis')
       .eq('user_id', userId)
       .maybeSingle();
 
-    const lastAnalysis = asObject(profile?.last_analysis);
+    const lastAnalysis = asObject(financeProfile?.last_analysis);
     const calendar = asObject(lastAnalysis.google_calendar_integration);
 
-    const connected = String(calendar.status || '').toLowerCase() === 'connected' && Boolean(calendar.access_token_encrypted);
+    const connected =
+      Boolean(profile?.google_calendar_connected) ||
+      String(calendar.status || '').toLowerCase() === 'connected';
+
+    const accountEmail =
+      typeof calendar.account_email === 'string' && calendar.account_email.trim()
+        ? calendar.account_email
+        : auth.user?.email || null;
+
+    const lastSyncAt =
+      profile?.google_calendar_last_sync_at
+        ? String(profile.google_calendar_last_sync_at)
+        : typeof calendar.last_synced_at === 'string'
+          ? calendar.last_synced_at
+          : typeof calendar.connected_at === 'string'
+            ? calendar.connected_at
+            : null;
+
+    const calendarsFound =
+      typeof calendar.calendars_found === 'number' ? calendar.calendars_found : 0;
+
+    const primaryCalendarId =
+      typeof calendar.primary_calendar_id === 'string' ? calendar.primary_calendar_id : null;
+
+    const primaryCalendarSummary =
+      typeof calendar.primary_calendar_summary === 'string'
+        ? calendar.primary_calendar_summary
+        : null;
+
+    const scope = typeof calendar.scope === 'string' ? calendar.scope : '';
 
     return NextResponse.json(
       {
         connected,
-        accountEmail: typeof calendar.verified_email === 'string' ? calendar.verified_email : undefined,
-        lastSyncAt: typeof calendar.last_sync_at === 'string' ? calendar.last_sync_at : null,
-        calendarsFound: typeof calendar.calendars_found === 'number' ? calendar.calendars_found : 0,
+        status: connected ? 'connected' : 'disconnected',
+        accountEmail,
+        lastSyncAt,
+        calendarsFound,
+        primaryCalendarId,
+        primaryCalendarSummary,
+        permissions: scope ? scope.split(' ').filter(Boolean) : [],
+        connectedAt: profile?.google_calendar_connected_at
+          ? String(profile.google_calendar_connected_at)
+          : typeof calendar.connected_at === 'string'
+            ? calendar.connected_at
+            : null,
+        errorMessage:
+          typeof calendar.last_error === 'string' && calendar.last_error.trim()
+            ? calendar.last_error
+            : null,
       },
       {
         headers: {
@@ -46,6 +96,9 @@ export async function GET() {
     );
   } catch (error) {
     console.error('GOOGLE_CALENDAR_STATUS_ERROR', error);
-    return NextResponse.json({ error: 'GOOGLE_CALENDAR_STATUS_FAILED' }, { status: 500 });
+    return NextResponse.json(
+      { error: 'GOOGLE_CALENDAR_STATUS_FAILED' },
+      { status: 500 },
+    );
   }
 }
