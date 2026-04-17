@@ -21,7 +21,7 @@ export type ThinkingPresentation = {
 
 const DEFAULT_THINKING_STATE: ThinkingPresentation = {
   visible: true,
-  status: 'Understanding your request…',
+  status: 'Thinking...',
   visualState: 'thinking',
 };
 
@@ -39,7 +39,7 @@ function getToolStatus(tool: string): ThinkingPresentation {
   if (!normalized) {
     return {
       visible: true,
-      status: 'Analyzing options…',
+      status: 'Building plan...',
       visualState: 'planning',
     };
   }
@@ -55,7 +55,7 @@ function getToolStatus(tool: string): ThinkingPresentation {
   if (normalized.includes('calendar') || normalized.includes('schedule')) {
     return {
       visible: true,
-      status: 'Organizing priorities…',
+      status: 'Reading schedule...',
       visualState: 'calendar',
     };
   }
@@ -63,7 +63,7 @@ function getToolStatus(tool: string): ThinkingPresentation {
   if (normalized.includes('memory')) {
     return {
       visible: true,
-      status: 'Reviewing context…',
+      status: 'Searching memory...',
       visualState: 'memory',
     };
   }
@@ -88,13 +88,13 @@ export function mapAgentEventToThinkingState(
     case 'router_started':
       return {
         visible: true,
-        status: 'Understanding your request…',
+        status: 'Thinking...',
         visualState: 'thinking',
       };
     case 'memory_started':
       return {
         visible: true,
-        status: 'Reviewing context…',
+        status: 'Searching memory...',
         visualState: 'memory',
       };
     case 'tool_started':
@@ -108,13 +108,13 @@ export function mapAgentEventToThinkingState(
     case 'generator_started':
       return {
         visible: true,
-        status: 'Preparing the best answer…',
+        status: 'Writing response...',
         visualState: 'writing',
       };
     case 'final_started':
       return {
         visible: true,
-        status: 'Finalizing response…',
+        status: 'Finalizing...',
         visualState: 'finalizing',
       };
     default:
