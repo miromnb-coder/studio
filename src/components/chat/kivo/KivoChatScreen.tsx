@@ -105,6 +105,21 @@ export function KivoChatScreen() {
     return 'Assign a task or ask anything';
   }, [hasAttachments, draftPrompt]);
 
+  const refinedStreamError = useMemo(() => {
+    const raw = (streamError || '').trim();
+    if (!raw) return '';
+    if (raw.startsWith('AUTH_REQUIRED:')) {
+      return 'Please sign in to continue.';
+    }
+    if (raw.toLowerCase().includes('gmail')) {
+      return 'Could not access Gmail right now.';
+    }
+    if (raw.toLowerCase().includes('calendar')) {
+      return 'Calendar is unavailable right now.';
+    }
+    return 'Something went wrong. Please try again.';
+  }, [streamError]);
+
   useEffect(() => {
     if (!hydrated) hydrate();
   }, [hydrate, hydrated]);
@@ -589,9 +604,9 @@ export function KivoChatScreen() {
                 exit={{ opacity: 0, y: -6 }}
                 className="px-6 pt-4"
               >
-                <div className="flex items-start gap-2 rounded-[18px] border border-[#edd5d5] bg-[#fff6f6] px-4 py-3 text-sm text-[#8b4a4a] shadow-[0_8px_20px_rgba(127,29,29,0.05)]">
-                  <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
-                  <span>{streamError}</span>
+                <div className="flex items-start gap-2 rounded-[18px] border border-black/[0.07] bg-white/88 px-4 py-3 text-sm text-[#5f6877] shadow-[0_12px_28px_rgba(15,23,42,0.06)] backdrop-blur-xl">
+                  <AlertCircle className="mt-0.5 h-4 w-4 shrink-0 text-[#7a8598]" />
+                  <span>{refinedStreamError}</span>
                 </div>
               </motion.div>
             ) : null}
