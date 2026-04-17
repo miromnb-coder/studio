@@ -4,6 +4,30 @@ import type {
   AgentToolName,
   AgentToolResult,
 } from './types';
+import { createClient as createSupabaseClient } from '@supabase/supabase-js';
+import {
+  analyzeFinancialEmailsWithAI,
+  fetchFinancialEmails,
+  fetchInboxMessages,
+  getUsableAccessTokenFromIntegration as getUsableGmailAccessToken,
+  parseIntegrationState,
+} from '@/lib/integrations/gmail';
+import {
+  fetchNext7DaysEvents,
+  fetchTodayEvents,
+  getUsableAccessTokenFromIntegration as getUsableCalendarAccessToken,
+  listCalendars,
+  listEvents,
+  parseCalendarIntegrationState,
+} from '@/lib/integrations/google-calendar';
+import { buildTodayPlanner } from '@/server/calendar-operator/today';
+import { buildFreeTimeIntelligence } from '@/server/calendar-operator/free-time';
+import { buildOverloadSignals } from '@/server/calendar-operator/overload';
+import { buildWeeklyReset } from '@/server/calendar-operator/weekly-reset';
+import { scoreInboxMessage, buildInboxSummary } from '@/server/email-operator/summarize';
+import { detectUrgentEmails } from '@/server/email-operator/urgent';
+import { buildSubscriptionScannerResult } from '@/server/email-operator/subscriptions';
+import { buildWeeklyDigest } from '@/server/email-operator/digest';
 
 export type AgentToolHandler = (
   call: AgentToolCall,
@@ -28,6 +52,26 @@ type CompareScorecard = {
   scores: Record<string, number>;
   total: number;
 };
+
+const DEFAULT_EMAIL_PREFERENCES = {
+  concise: false,
+  prioritizeSavings: true,
+  ignoreNewsletters: false,
+  actionOriented: true,
+};
+
+function createAdminClient() {
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+
+  if (!supabaseUrl || !serviceRoleKey) {
+    throw new Error('Missing NEXT_PUBLIC_SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY');
+  }
+
+  return createSupabaseClient(supabaseUrl, serviceRoleKey, {
+    auth: { autoRefreshToken: false, persistSession: false },
+  });
+}
 
 function normalizeText(value: unknown): string {
   if (typeof value !== 'string') return '';
@@ -357,7 +401,8 @@ async function gmailTool(
   const query = extractRequestedQuery(call, context);
   const scope = inferEmailScope(query);
 
-  if (!connected) {
+  const userId = normalizeText(call.input.userId) || normalizeText(context.request.userId);
+  if (!userId) {
     return buildFailure(call, 'gmail', 'Gmail is not connected.', {
       action,
       scope,
@@ -367,64 +412,188 @@ async function gmailTool(
     });
   }
 
-  switch (action) {
-    case 'status':
+  try {
+    const admin = createAdminClient();
+    const { data: financeProfile } = await admin
+      .from('finance_profiles')
+      .select('last_analysis,active_subscriptions')
+      .eq('user_id', userId)
+      .maybeSingle();
+
+    const integration = parseIntegrationState(
+      asObject(asObject(financeProfile?.last_analysis).gmail_integration),
+    );
+
+    const tokenState = await getUsableGmailAccessToken(integration);
+
+    if (action === 'status') {
       return buildSuccess(
         call,
         'gmail',
         {
           action,
           connected: true,
-          availableOperations: [
-            'status',
-            'search',
-            'scan_subscriptions',
-            'scan_receipts',
-            'summarize_inbox',
-            'draft_reply',
-          ],
+          scope,
+          availableOperations: ['inbox_summary', 'urgent', 'subscriptions', 'digest'],
         },
         {
           requiresAuth: true,
           requiredScopes: ['gmail.readonly'],
-          summary: 'Gmail connection is available.',
+          summary: 'Gmail connection is available and operator actions are executable.',
         },
       );
+    }
 
-    case 'search':
-    case 'scan_subscriptions':
-    case 'scan_receipts':
-    case 'summarize_inbox':
-    case 'draft_reply':
-      return buildPlaceholderProviderResult(
-        call,
-        'gmail',
-        'Gmail is connected. Provider-specific mailbox execution should be wired here.',
-        {
-          action,
-          connected: true,
-          query,
-          scope,
-          recommendedOperation:
-            action === 'search'
-              ? scope === 'receipts'
-                ? 'scan_receipts'
-                : scope === 'subscriptions'
-                  ? 'scan_subscriptions'
-                  : scope === 'reply'
-                    ? 'draft_reply'
-                    : 'summarize_inbox'
-              : action,
+    if (action === 'scan_subscriptions') {
+      const emails = await fetchFinancialEmails(tokenState.accessToken, 100);
+      const analysis = await analyzeFinancialEmailsWithAI(emails);
+      const scanner = buildSubscriptionScannerResult({
+        analysis,
+        emails,
+        existingSubscriptions: Array.isArray(financeProfile?.active_subscriptions) ? financeProfile.active_subscriptions : [],
+        preferences: DEFAULT_EMAIL_PREFERENCES,
+      });
+
+      return buildSuccess(call, 'gmail', {
+        action: 'subscriptions',
+        connected: true,
+        query,
+        summary: scanner.summary,
+        result: scanner,
+      }, {
+        requiresAuth: true,
+        summary: 'Fetched subscription signals directly from Gmail.',
+      });
+    }
+
+    if (action === 'scan_receipts') {
+      const emails = await fetchFinancialEmails(tokenState.accessToken, 50);
+      return buildSuccess(call, 'gmail', {
+        action: 'scan_receipts',
+        connected: true,
+        query,
+        receipts: emails.slice(0, 25),
+      }, {
+        requiresAuth: true,
+        summary: 'Fetched finance-oriented receipt and billing messages from Gmail.',
+      });
+    }
+
+    const inbox = await fetchInboxMessages({
+      accessToken: tokenState.accessToken,
+      maxResults: 60,
+      query:
+        action === 'search'
+          ? query
+          : action === 'draft_reply'
+            ? 'newer_than:7d'
+            : action === 'summarize_inbox'
+              ? 'newer_than:10d'
+              : 'newer_than:14d',
+    });
+
+    const scored = inbox.map((message) => scoreInboxMessage(message));
+
+    if (scope === 'subscriptions') {
+      const emails = await fetchFinancialEmails(tokenState.accessToken, 80);
+      const analysis = await analyzeFinancialEmailsWithAI(emails);
+      const scanner = buildSubscriptionScannerResult({
+        analysis,
+        emails,
+        existingSubscriptions: Array.isArray(financeProfile?.active_subscriptions) ? financeProfile.active_subscriptions : [],
+        preferences: DEFAULT_EMAIL_PREFERENCES,
+      });
+
+      return buildSuccess(call, 'gmail', {
+        action: 'subscriptions',
+        connected: true,
+        query,
+        summary: scanner.summary,
+        result: scanner,
+      }, {
+        requiresAuth: true,
+        summary: 'Routed to Gmail subscriptions operator automatically.',
+      });
+    }
+
+    if (scope === 'receipts') {
+      const emails = await fetchFinancialEmails(tokenState.accessToken, 50);
+      return buildSuccess(call, 'gmail', {
+        action: 'scan_receipts',
+        connected: true,
+        query,
+        receipts: emails.slice(0, 25),
+      }, {
+        requiresAuth: true,
+        summary: 'Routed to Gmail receipt scan automatically.',
+      });
+    }
+
+    if (/urgent|priority|important/i.test(query)) {
+      const urgent = detectUrgentEmails(inbox, DEFAULT_EMAIL_PREFERENCES);
+      return buildSuccess(call, 'gmail', {
+        action: 'urgent',
+        connected: true,
+        query,
+        summary: `Detected ${urgent.totalUrgent} urgent messages.`,
+        result: urgent,
+      }, {
+        requiresAuth: true,
+        summary: 'Detected urgent-email request and executed Gmail urgent analysis.',
+      });
+    }
+
+    if (/what matters most|digest|weekly summary/i.test(query)) {
+      const urgent = detectUrgentEmails(inbox, DEFAULT_EMAIL_PREFERENCES);
+      const inboxSummary = buildInboxSummary(scored, DEFAULT_EMAIL_PREFERENCES);
+      const digest = buildWeeklyDigest({
+        inboxSummary,
+        urgent,
+        subscriptions: {
+          generatedAt: new Date().toISOString(),
+          activeCount: 0,
+          duplicateCount: 0,
+          trialEndingCount: 0,
+          renewalCount: 0,
+          priceIncreaseCount: 0,
+          cancellationOpportunities: [],
+          estimatedMonthlySavings: 0,
+          currency: 'USD',
+          opportunities: [],
+          summary: 'Subscription scan not requested.',
         },
-      );
+      });
 
-    default:
-      return buildFailure(
-        call,
-        'gmail',
-        `Unsupported gmail action: ${action}`,
-        { action, query },
-      );
+      return buildSuccess(call, 'gmail', {
+        action: 'digest',
+        connected: true,
+        query,
+        summary: digest.conciseSummary,
+        result: digest,
+      }, {
+        requiresAuth: true,
+        summary: 'Generated Gmail digest for priority overview.',
+      });
+    }
+
+    const summary = buildInboxSummary(scored, DEFAULT_EMAIL_PREFERENCES);
+    return buildSuccess(call, 'gmail', {
+      action: 'inbox_summary',
+      connected: true,
+      query,
+      summary: summary.headline,
+      result: summary,
+    }, {
+      requiresAuth: true,
+      summary: summary.headline,
+    });
+  } catch (error) {
+    return buildFailure(
+      call,
+      'gmail',
+      `Gmail execution failed: ${toErrorMessage(error)}`,
+      { action, query },
+    );
   }
 }
 
@@ -506,7 +675,8 @@ async function calendarTool(
     hasConnectedProvider(context, 'calendar') ||
     hasConnectedProvider(context, 'google-calendar');
 
-  if (!connected) {
+  const userId = normalizeText(call.input.userId) || normalizeText(context.request.userId);
+  if (!userId) {
     return buildFailure(call, 'calendar', 'Calendar is not connected.', {
       action,
       canConnect: true,
@@ -515,12 +685,103 @@ async function calendarTool(
     });
   }
 
-  return buildPlaceholderProviderResult(
-    call,
-    'calendar',
-    'Calendar provider execution should be connected here.',
-    { action, connected: true, query },
-  );
+  try {
+    const admin = createAdminClient();
+    const { data: financeProfile } = await admin
+      .from('finance_profiles')
+      .select('last_analysis')
+      .eq('user_id', userId)
+      .maybeSingle();
+
+    const integration = parseCalendarIntegrationState(
+      asObject(asObject(financeProfile?.last_analysis).google_calendar_integration),
+    );
+    const tokenState = await getUsableCalendarAccessToken(integration);
+
+    if (action === 'status') {
+      const calendars = await listCalendars(tokenState.accessToken);
+      return buildSuccess(call, 'calendar', {
+        action,
+        connected: true,
+        calendarCount: calendars.length,
+        primaryCalendar: calendars.find((item) => item.primary)?.summary || calendars[0]?.summary || null,
+      }, {
+        requiresAuth: true,
+        summary: 'Calendar connection is healthy and calendars are readable.',
+      });
+    }
+
+    if (/focus time|deep work/i.test(query) || action === 'availability') {
+      const events = await fetchNext7DaysEvents(tokenState.accessToken);
+      const result = buildFreeTimeIntelligence(events);
+      return buildSuccess(call, 'calendar', {
+        action: 'find_focus_time',
+        connected: true,
+        query,
+        summary: result.bestDeepWorkWindow
+          ? `Best deep-work block starts at ${result.bestDeepWorkWindow.startAt}.`
+          : 'No deep-work window found in the next 7 days.',
+        result,
+      }, {
+        requiresAuth: true,
+        summary: 'Computed best focus windows from calendar events.',
+      });
+    }
+
+    if (/busy week|overload|overbooked/i.test(query)) {
+      const [todayEvents, weekEvents] = await Promise.all([
+        fetchTodayEvents(tokenState.accessToken),
+        fetchNext7DaysEvents(tokenState.accessToken),
+      ]);
+      const result = buildOverloadSignals(todayEvents, weekEvents);
+      return buildSuccess(call, 'calendar', {
+        action: 'check_busy_week',
+        connected: true,
+        summary: result.summary,
+        result,
+      }, {
+        requiresAuth: true,
+        summary: 'Computed busy-week and overload indicators.',
+      });
+    }
+
+    if (/weekly reset|reset my week/i.test(query)) {
+      const calendars = await listCalendars(tokenState.accessToken);
+      const primary = calendars.find((calendar) => calendar.primary) || calendars[0];
+      const events = await listEvents({ accessToken: tokenState.accessToken, calendarId: primary?.id || 'primary' });
+      const result = buildWeeklyReset(events);
+
+      return buildSuccess(call, 'calendar', {
+        action: 'weekly_reset',
+        connected: true,
+        summary: `Prepared weekly reset with ${result.bestTimeBlocks.length} high-value time blocks.`,
+        result,
+      }, {
+        requiresAuth: true,
+        summary: 'Prepared weekly reset from upcoming calendar events.',
+      });
+    }
+
+    const events = await fetchTodayEvents(tokenState.accessToken);
+    const result = buildTodayPlanner(events);
+    return buildSuccess(call, 'calendar', {
+      action: 'today_plan',
+      connected: true,
+      query,
+      summary: result.recommendedAction,
+      result,
+    }, {
+      requiresAuth: true,
+      summary: 'Generated today plan from calendar data.',
+    });
+  } catch (error) {
+    return buildFailure(
+      call,
+      'calendar',
+      `Calendar execution failed: ${toErrorMessage(error)}`,
+      { action, query },
+    );
+  }
 }
 
 async function webTool(

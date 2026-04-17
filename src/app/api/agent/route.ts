@@ -204,6 +204,12 @@ function resolveGmailConnected(params: {
   return Boolean(params.userProfile?.gmail_connected);
 }
 
+function resolveCalendarConnected(params: {
+  userProfile?: Record<string, unknown> | null;
+}): boolean {
+  return Boolean(params.userProfile?.google_calendar_connected);
+}
+
 function asObject(value: unknown): Record<string, unknown> {
   return value && typeof value === 'object'
     ? (value as Record<string, unknown>)
@@ -516,6 +522,8 @@ async function runNewAgent(
       })),
     metadata: {
       productState: input.productState,
+      gmailConnected: Boolean(input.productState?.gmailConnected),
+      calendarConnected: Boolean(input.productState?.calendarConnected),
       memory: input.memory || null,
       operatorAlerts: input.operatorAlerts || [],
       outcomes: input.outcomes || [],
@@ -890,6 +898,9 @@ export async function POST(req: Request) {
           bonusAgentRuns,
         },
         gmailConnected: resolveGmailConnected({
+          userProfile: (userProfile as Record<string, unknown> | null) || null,
+        }),
+        calendarConnected: resolveCalendarConnected({
           userProfile: (userProfile as Record<string, unknown> | null) || null,
         }),
         attachmentCount: attachments.length,

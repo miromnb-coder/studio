@@ -67,6 +67,16 @@ export async function POST() {
       throw writeResult.error;
     }
 
+    const profileWriteResult = await supabase.from('profiles').upsert({
+      id: userId,
+      google_calendar_connected: false,
+      google_calendar_last_sync_at: null,
+      updated_at: disconnectedAt,
+    }, { onConflict: 'id' });
+    if (profileWriteResult.error) {
+      throw profileWriteResult.error;
+    }
+
     return NextResponse.json({ success: true, status: 'disconnected' });
   } catch (error) {
     console.error('GOOGLE_CALENDAR_DISCONNECT_ERROR', error);
