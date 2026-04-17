@@ -72,6 +72,42 @@ async function resolveCalendarAccess() {
   };
 }
 
+async function markCalendarSynced(params: {
+  supabase: Awaited<ReturnType<typeof createSupabaseServerClient>>;
+  userId: string;
+  lastAnalysis: Record<string, unknown>;
+  profile: Record<string, unknown> | null;
+}) {
+  const syncedAt = new Date().toISOString();
+
+  await params.supabase.from('profiles').upsert({
+    id: params.userId,
+    google_calendar_connected: true,
+    google_calendar_last_sync_at: syncedAt,
+    updated_at: syncedAt,
+  }, { onConflict: 'id' });
+
+  const currentIntegration = asObject(params.lastAnalysis.google_calendar_integration);
+  await params.supabase.from('finance_profiles').upsert({
+    user_id: params.userId,
+    active_subscriptions: Array.isArray(params.profile?.active_subscriptions) ? params.profile.active_subscriptions : [],
+    total_monthly_cost: typeof params.profile?.total_monthly_cost === 'number' ? params.profile.total_monthly_cost : 0,
+    estimated_savings: typeof params.profile?.estimated_savings === 'number' ? params.profile.estimated_savings : 0,
+    currency: params.profile?.currency || 'USD',
+    memory_summary: params.profile?.memory_summary || '',
+    last_analysis: {
+      ...params.lastAnalysis,
+      google_calendar_integration: {
+        ...currentIntegration,
+        status: 'connected',
+        last_synced_at: syncedAt,
+        last_error: null,
+      },
+    },
+    updated_at: syncedAt,
+  }, { onConflict: 'user_id' });
+}
+
 export async function POST(req: Request) {
   try {
     const body = (await req.json().catch(() => ({}))) as { action?: CalendarOperatorAction };
@@ -83,12 +119,14 @@ export async function POST(req: Request) {
     if (action === 'today_plan') {
       const events = await fetchTodayEvents(auth.accessToken);
       const result = buildTodayPlanner(events);
+      await markCalendarSynced(auth);
       return NextResponse.json({ ok: true, action, result });
     }
 
     if (action === 'find_focus_time') {
       const events = await fetchNext7DaysEvents(auth.accessToken);
       const result = buildFreeTimeIntelligence(events);
+      await markCalendarSynced(auth);
       return NextResponse.json({ ok: true, action, result });
     }
 
@@ -98,6 +136,7 @@ export async function POST(req: Request) {
         fetchNext7DaysEvents(auth.accessToken),
       ]);
       const result = buildOverloadSignals(todayEvents, weekEvents);
+      await markCalendarSynced(auth);
       return NextResponse.json({ ok: true, action, result });
     }
 
@@ -106,6 +145,7 @@ export async function POST(req: Request) {
       const primary = calendars.find((calendar) => calendar.primary) || calendars[0];
       const events = await listEvents({ accessToken: auth.accessToken, calendarId: primary?.id || 'primary' });
       const result = buildWeeklyReset(events);
+      await markCalendarSynced(auth);
       return NextResponse.json({ ok: true, action, result });
     }
 

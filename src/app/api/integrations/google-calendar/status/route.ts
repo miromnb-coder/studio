@@ -65,6 +65,10 @@ export async function GET() {
         : null;
 
     const scope = typeof calendar.scope === 'string' ? calendar.scope : '';
+    const lastError =
+      typeof calendar.last_error === 'string' && calendar.last_error.trim()
+        ? calendar.last_error
+        : null;
 
     return NextResponse.json(
       {
@@ -81,10 +85,8 @@ export async function GET() {
           : typeof calendar.connected_at === 'string'
             ? calendar.connected_at
             : null,
-        errorMessage:
-          typeof calendar.last_error === 'string' && calendar.last_error.trim()
-            ? calendar.last_error
-            : null,
+        errorMessage: lastError,
+        errors: lastError ? [lastError] : [],
       },
       {
         headers: {

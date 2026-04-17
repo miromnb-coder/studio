@@ -19,9 +19,13 @@ export interface GoogleCalendarIntegrationState {
   expires_at?: string | null;
   connected_at?: string | null;
   disconnected_at?: string | null;
+  account_email?: string | null;
   verified_email?: string | null;
   calendars_found?: number;
+  primary_calendar_id?: string | null;
+  primary_calendar_summary?: string | null;
   last_sync_at?: string | null;
+  last_synced_at?: string | null;
   last_error?: string | null;
 }
 

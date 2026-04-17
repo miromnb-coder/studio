@@ -22,6 +22,7 @@ export async function GET(req: Request) {
 
     const requestUrl = new URL(req.url);
     const appOrigin = resolveAppOrigin(requestUrl);
+    const isSecure = appOrigin.startsWith('https://');
     const redirectTo = `${appOrigin}/api/integrations/google-calendar/callback`;
 
     const { data, error } = await supabase.auth.signInWithOAuth({
@@ -49,7 +50,7 @@ export async function GET(req: Request) {
       value: state,
       httpOnly: true,
       sameSite: 'lax',
-      secure: true,
+      secure: isSecure,
       path: '/',
       maxAge: 60 * 10,
     });
@@ -58,7 +59,7 @@ export async function GET(req: Request) {
       value: userId,
       httpOnly: true,
       sameSite: 'lax',
-      secure: true,
+      secure: isSecure,
       path: '/',
       maxAge: 60 * 10,
     });

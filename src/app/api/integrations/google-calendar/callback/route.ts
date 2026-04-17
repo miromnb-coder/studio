@@ -3,7 +3,12 @@ import { NextResponse } from 'next/server';
 import { createClient as createSupabaseServerClient } from '@/lib/supabase/server';
 import { createClient as createSupabaseClient } from '@supabase/supabase-js';
 import { resolveAppOrigin } from '@/lib/auth/redirects';
-import { encryptToken } from '@/lib/integrations/google-calendar';
+import {
+  encryptCalendarToken,
+  getGoogleAccountProfile,
+  GOOGLE_CALENDAR_READONLY_SCOPE,
+  hasCalendarReadonlyScope,
+} from '@/lib/integrations/google-calendar';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -153,8 +158,10 @@ async function writeOrThrow(
 export async function GET(req: Request) {
   const requestUrl = new URL(req.url);
   const appOrigin = resolveAppOrigin(requestUrl);
+  const isSecure = appOrigin.startsWith('https://');
   const code = requestUrl.searchParams.get('code');
   const oauthError = requestUrl.searchParams.get('error');
+  const returnedState = requestUrl.searchParams.get('state');
 
   const failRedirect = (reason: string, step?: string) => {
     const target = new URL('/control', appOrigin);
@@ -180,13 +187,16 @@ export async function GET(req: Request) {
     if (!localState || !userId) {
       return failRedirect('state_mismatch');
     }
+    if (!returnedState || returnedState !== localState) {
+      return failRedirect('state_mismatch');
+    }
 
     const supabase = await createSupabaseServerClient();
     const adminSupabase = createAdminClient();
 
     let accessToken: string | null = null;
     let refreshToken: string | null = null;
-    let tokenScope = 'https://www.googleapis.com/auth/calendar.readonly';
+    let tokenScope = GOOGLE_CALENDAR_READONLY_SCOPE;
     let tokenType = 'Bearer';
     let expiryIso: string | null = null;
 
@@ -228,13 +238,19 @@ export async function GET(req: Request) {
         ? new Date(fallbackTokens.expiryDate).toISOString()
         : null;
     }
+    const scopeFromQuery = requestUrl.searchParams.get('scope');
+    if (scopeFromQuery) {
+      tokenScope = scopeFromQuery;
+    }
+    if (!hasCalendarReadonlyScope(tokenScope)) {
+      tokenScope = `${tokenScope} ${GOOGLE_CALENDAR_READONLY_SCOPE}`.trim();
+    }
 
     const calendarProfile = await verifyCalendarAccessToken(accessToken);
+    const googleProfile = await getGoogleAccountProfile(accessToken);
 
     const { data: authUser } = await adminSupabase.auth.admin.getUserById(userId);
-    const inferredEmail =
-      authUser.user?.email ||
-      null;
+    const inferredEmail = googleProfile.email || authUser.user?.email || null;
 
     const { data: financeProfile } = await adminSupabase
       .from('finance_profiles')
@@ -266,12 +282,13 @@ export async function GET(req: Request) {
           status: 'connected',
           scope: tokenScope,
           token_type: tokenType,
-          access_token_encrypted: encryptToken(accessToken),
-          refresh_token_encrypted: refreshToken ? encryptToken(refreshToken) : null,
+          access_token_encrypted: encryptCalendarToken(accessToken),
+          refresh_token_encrypted: refreshToken ? encryptCalendarToken(refreshToken) : null,
           expires_at: expiryIso,
           connected_at: connectedAt,
           last_synced_at: connectedAt,
           account_email: inferredEmail,
+          verified_email: googleProfile.verifiedEmail ? inferredEmail : null,
           calendars_found: calendarProfile.calendarsFound,
           primary_calendar_id: calendarProfile.primaryCalendarId,
           primary_calendar_summary: calendarProfile.primarySummary,
@@ -335,7 +352,7 @@ export async function GET(req: Request) {
       path: '/',
       httpOnly: true,
       sameSite: 'lax',
-      secure: true,
+      secure: isSecure,
     });
 
     response.cookies.set({
@@ -345,7 +362,7 @@ export async function GET(req: Request) {
       path: '/',
       httpOnly: true,
       sameSite: 'lax',
-      secure: true,
+      secure: isSecure,
     });
 
     return response;

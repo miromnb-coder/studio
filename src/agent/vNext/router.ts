@@ -1,4 +1,5 @@
 import { AGENT_VNEXT_FALLBACK_MESSAGES } from './constants';
+import { resolveRequiredTools } from '@/agent/integrations/integration-router';
 import type {
   AgentIntent,
   AgentRequest,
@@ -371,7 +372,7 @@ function routeIntentFallback(request: AgentRequest, text: string): AgentRouteRes
     intent: 'general',
     confidence: 0.45,
     reason: 'Fallback routing was used because model routing was unavailable.',
-    requiresTools: [],
+    requiresTools: resolveRequiredTools(text, []),
     shouldFetchMemory: true,
     suggestedExecutionMode: 'sync',
     fallbackMessage: AGENT_VNEXT_FALLBACK_MESSAGES.missingContext,
@@ -396,7 +397,7 @@ export async function routeIntent(request: AgentRequest): Promise<AgentRouteResu
       intent: 'unknown',
       confidence: 0.2,
       reason: 'Request did not contain usable text.',
-      requiresTools: [],
+      requiresTools: resolveRequiredTools(text, []),
       shouldFetchMemory: true,
       suggestedExecutionMode: 'sync',
       fallbackMessage: AGENT_VNEXT_FALLBACK_MESSAGES.missingContext,
@@ -436,7 +437,7 @@ export async function routeIntent(request: AgentRequest): Promise<AgentRouteResu
       intent: routed.intent,
       confidence: routed.confidence,
       reason: routed.reason,
-      requiresTools: routed.requiresTools,
+      requiresTools: resolveRequiredTools(text, routed.requiresTools),
       shouldFetchMemory: routed.shouldFetchMemory,
       suggestedExecutionMode: routed.suggestedExecutionMode,
       fallbackMessage:
