@@ -223,7 +223,7 @@ export function MessageThread({ messages, pending }: MessageThreadProps) {
                     <motion.div
                       layout
                       transition={{ duration: 0.22, ease: 'easeOut' }}
-                      className="max-w-[760px]"
+                      className="max-w-[760px] rounded-[24px] border border-[#eaf0f6] bg-[linear-gradient(180deg,rgba(255,255,255,0.98),rgba(248,251,255,0.96))] px-4 py-4 shadow-[0_14px_34px_rgba(132,156,191,0.1)] sm:px-6 sm:py-5"
                     >
                       <AgentResponseMessage
                         message={message}
@@ -271,7 +271,7 @@ export function MessageThread({ messages, pending }: MessageThreadProps) {
               <KivoThinkingState
                 status={thinkingState.status}
                 visualState={thinkingState.visualState}
-                className="max-w-[760px] rounded-[22px] border border-white/70 bg-[linear-gradient(180deg,rgba(255,255,255,0.82),rgba(245,248,252,0.9))] shadow-[0_14px_30px_rgba(15,23,42,0.05)]"
+                className="max-w-[760px]"
               />
             </motion.div>
           ) : null}

@@ -21,7 +21,7 @@ export type ThinkingPresentation = {
 
 const DEFAULT_THINKING_STATE: ThinkingPresentation = {
   visible: true,
-  status: 'Thinking...',
+  status: 'Understanding your request…',
   visualState: 'thinking',
 };
 
@@ -39,7 +39,7 @@ function getToolStatus(tool: string): ThinkingPresentation {
   if (!normalized) {
     return {
       visible: true,
-      status: 'Using tools...',
+      status: 'Analyzing options…',
       visualState: 'planning',
     };
   }
@@ -47,7 +47,7 @@ function getToolStatus(tool: string): ThinkingPresentation {
   if (normalized.includes('gmail') || normalized === 'email') {
     return {
       visible: true,
-      status: 'Checking inbox...',
+      status: 'Checking inbox…',
       visualState: 'gmail',
     };
   }
@@ -55,7 +55,7 @@ function getToolStatus(tool: string): ThinkingPresentation {
   if (normalized.includes('calendar') || normalized.includes('schedule')) {
     return {
       visible: true,
-      status: 'Reviewing schedule...',
+      status: 'Organizing priorities…',
       visualState: 'calendar',
     };
   }
@@ -63,14 +63,14 @@ function getToolStatus(tool: string): ThinkingPresentation {
   if (normalized.includes('memory')) {
     return {
       visible: true,
-      status: 'Using memory...',
+      status: 'Reviewing context…',
       visualState: 'memory',
     };
   }
 
   return {
     visible: true,
-    status: `Using ${toTitleCase(normalized)}...`,
+    status: `Analyzing ${toTitleCase(normalized)}…`,
     visualState: 'planning',
   };
 }
@@ -88,13 +88,13 @@ export function mapAgentEventToThinkingState(
     case 'router_started':
       return {
         visible: true,
-        status: 'Thinking...',
+        status: 'Understanding your request…',
         visualState: 'thinking',
       };
     case 'memory_started':
       return {
         visible: true,
-        status: 'Using memory...',
+        status: 'Reviewing context…',
         visualState: 'memory',
       };
     case 'tool_started':
@@ -102,19 +102,19 @@ export function mapAgentEventToThinkingState(
     case 'planning_started':
       return {
         visible: true,
-        status: 'Planning next steps...',
+        status: 'Building a plan…',
         visualState: 'planning',
       };
     case 'generator_started':
       return {
         visible: true,
-        status: 'Writing answer...',
+        status: 'Preparing the best answer…',
         visualState: 'writing',
       };
     case 'final_started':
       return {
         visible: true,
-        status: 'Finalizing...',
+        status: 'Finalizing response…',
         visualState: 'finalizing',
       };
     default:

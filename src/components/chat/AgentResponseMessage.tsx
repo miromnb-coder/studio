@@ -467,16 +467,16 @@ export function AgentResponseMessage({
       <div className="mb-5 flex items-center gap-3">
         <div className="flex items-center gap-2.5">
           <span
-            className="text-[22px] font-normal leading-none tracking-[-0.04em] text-[#232c39]"
+            className="text-[17px] font-semibold leading-none tracking-[-0.015em] text-[#334155]"
             style={{
               fontFamily:
-                'ui-serif, Georgia, Cambria, "Times New Roman", Times, serif',
+                '-apple-system, BlinkMacSystemFont, "SF Pro Text", "Inter", "Segoe UI", sans-serif',
             }}
           >
             Kivo
           </span>
 
-          <span className="rounded-full border border-[rgba(208,214,224,0.8)] bg-[rgba(236,240,245,0.86)] px-2.5 py-0.5 text-[11px] font-medium tracking-[-0.01em] text-[#677383] shadow-[inset_0_1px_0_rgba(255,255,255,0.5)]">
+          <span className="rounded-full border border-[#d7e3f0] bg-[#f4f8fd] px-2.5 py-0.5 text-[11px] font-medium tracking-[-0.01em] text-[#64748b] shadow-[inset_0_1px_0_rgba(255,255,255,0.72)]">
             {copy.brand}
           </span>
         </div>
