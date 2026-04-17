@@ -1,0 +1,51 @@
+import { ImageResponse } from 'next/og';
+
+export const size = {
+  width: 180,
+  height: 180,
+};
+
+export const contentType = 'image/png';
+
+export default function AppleIcon() {
+  return new ImageResponse(
+    (
+      <div
+        style={{
+          width: '100%',
+          height: '100%',
+          background: '#E8E8E8',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+        }}
+      >
+        <svg width="180" height="180" viewBox="0 0 1024 1024" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <rect width="1024" height="1024" fill="#E8E8E8" />
+          <rect x="112" y="104" width="800" height="816" rx="160" fill="#F4F4F4" />
+          <g stroke="#040B18" strokeWidth="30" fill="none" strokeLinejoin="round">
+            <rect x="300" y="300" width="110" height="110" />
+            <rect x="614" y="300" width="110" height="110" />
+            <rect x="300" y="614" width="110" height="110" />
+            <rect x="614" y="614" width="110" height="110" />
+            <line x1="300" y1="512" x2="180" y2="512" />
+            <line x1="844" y1="512" x2="724" y2="512" />
+            <line x1="512" y1="300" x2="512" y2="180" />
+            <line x1="512" y1="844" x2="512" y2="724" />
+          </g>
+          <g stroke="#040B18" strokeWidth="30" fill="none" strokeLinecap="square">
+            <line x1="410" y1="410" x2="452" y2="452" />
+            <line x1="614" y1="410" x2="572" y2="452" />
+            <line x1="410" y1="614" x2="452" y2="572" />
+            <line x1="614" y1="614" x2="572" y2="572" />
+          </g>
+          <circle cx="512" cy="512" r="108" fill="#F4F4F4" stroke="#040B18" strokeWidth="30" />
+          <circle cx="512" cy="512" r="48" fill="#040B18" />
+        </svg>
+      </div>
+    ),
+    {
+      ...size,
+    }
+  );
+}

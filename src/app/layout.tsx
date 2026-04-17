@@ -7,6 +7,10 @@ import { GlobalMenuProvider } from './components/global-menu-provider';
 export const metadata: Metadata = {
   title: PRODUCT_NAME,
   description: PRODUCT_DESCRIPTION,
+  icons: {
+    icon: [{ url: '/favicon.svg', type: 'image/svg+xml' }, { url: '/icon.svg', type: 'image/svg+xml' }],
+    apple: [{ url: '/apple-icon', sizes: '180x180', type: 'image/png' }],
+  },
 };
 
 export default function RootLayout({
