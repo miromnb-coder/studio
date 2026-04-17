@@ -26,20 +26,38 @@ export default function ControlPage() {
     setConnectors(records);
 
     const run = async () => {
-      const response = await fetch('/api/integrations/gmail/status', { cache: 'no-store' });
-      if (!response.ok) return;
-      const data = await response.json();
-      const state = data.connected ? (data.status === 'error' ? 'error' : 'connected') : 'not_connected';
-      const next: ConnectorRecord = {
-        ...records.gmail,
-        state,
-        accountEmail: data.accountEmail || null,
-        lastSyncAt: data.lastSyncedAt || null,
-        permissions: Array.isArray(data.permissions) && data.permissions.length ? data.permissions : records.gmail.permissions,
-        errorMessage: data.errorMessage || null,
-      };
-      setConnectors((prev) => ({ ...prev, gmail: next }));
-      saveConnectorRecord('gmail', next);
+      const [gmailResponse, calendarResponse] = await Promise.all([
+        fetch('/api/integrations/gmail/status', { cache: 'no-store' }),
+        fetch('/api/integrations/google-calendar/status', { cache: 'no-store' }),
+      ]);
+
+      if (gmailResponse.ok) {
+        const data = await gmailResponse.json();
+        const state = data.connected ? (data.status === 'error' ? 'error' : 'connected') : 'not_connected';
+        const next: ConnectorRecord = {
+          ...records.gmail,
+          state,
+          accountEmail: data.accountEmail || null,
+          lastSyncAt: data.lastSyncedAt || null,
+          permissions: Array.isArray(data.permissions) && data.permissions.length ? data.permissions : records.gmail.permissions,
+          errorMessage: data.errorMessage || null,
+        };
+        setConnectors((prev) => ({ ...prev, gmail: next }));
+        saveConnectorRecord('gmail', next);
+      }
+
+      if (calendarResponse.ok) {
+        const data = await calendarResponse.json();
+        const next: ConnectorRecord = {
+          ...records['google-calendar'],
+          state: data.connected ? 'connected' : 'not_connected',
+          accountEmail: data.accountEmail || null,
+          lastSyncAt: data.lastSyncAt || null,
+          errorMessage: null,
+        };
+        setConnectors((prev) => ({ ...prev, 'google-calendar': next }));
+        saveConnectorRecord('google-calendar', next);
+      }
     };
     void run();
   }, []);
@@ -59,6 +77,10 @@ export default function ControlPage() {
 
     if (id === 'gmail') {
       window.location.assign('/api/integrations/gmail/connect');
+      return;
+    }
+    if (id === 'google-calendar') {
+      window.location.assign('/api/integrations/google-calendar/connect');
       return;
     }
 
@@ -89,6 +111,14 @@ export default function ControlPage() {
         return;
       }
     }
+    if (id === 'google-calendar') {
+      const response = await fetch('/api/integrations/google-calendar/disconnect', { method: 'POST' });
+      if (!response.ok) {
+        updateConnector(id, { ...current, state: 'error', errorMessage: 'Disconnect failed. Please retry.' });
+        setBusy(false);
+        return;
+      }
+    }
 
     updateConnector(id, { ...current, state: 'not_connected', accountEmail: null, errorMessage: null });
     setBusy(false);
@@ -97,6 +127,10 @@ export default function ControlPage() {
   const openTools = (id: ConnectorId) => {
     if (id === 'gmail') {
       router.push('/actions?tool=gmail');
+      return;
+    }
+    if (id === 'google-calendar') {
+      router.push('/actions?tool=google-calendar');
       return;
     }
     router.push('/tools');
