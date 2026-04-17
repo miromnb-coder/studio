@@ -118,66 +118,160 @@ function shouldStopOnToolFailure(context: AgentContext): boolean {
   return !context.runtime.allowToolFallbacks;
 }
 
+type ToolActionInference = {
+  action: string;
+  source: 'keyword' | 'fallback';
+  fallback: boolean;
+};
+
+function hasAnyPattern(text: string, patterns: RegExp[]): boolean {
+  return patterns.some((pattern) => pattern.test(text));
+}
+
 function inferToolAction(
   tool: NonNullable<AgentPlan['steps'][number]['requiredTool']>,
   request: AgentRequest,
-): string {
+): ToolActionInference {
   const text = getRequestText(request).toLowerCase();
+  const decide = (action: string, source: ToolActionInference['source']): ToolActionInference => ({
+    action,
+    source,
+    fallback: source === 'fallback',
+  });
 
   switch (tool) {
     case 'gmail':
-      if (text.includes('receipt') || text.includes('invoice')) {
-        return 'scan_receipts';
+      if (
+        hasAnyPattern(text, [
+          /\b(draft|draft a reply|reply|respond|compose)\b/i,
+          /\b(vastaa|luonnos|escribir respuesta|répondre)\b/i,
+        ])
+      ) {
+        return decide('draft', 'keyword');
       }
-      if (text.includes('subscription') || text.includes('unsubscribe')) {
-        return 'scan_subscriptions';
+
+      if (
+        hasAnyPattern(text, [
+          /\b(subscription|subscriptions|unsubscribe|trial|newsletter)\b/i,
+          /\b(tilaus|suscrip|abonnement)\b/i,
+          /\b(save money from email|cancel subscriptions?)\b/i,
+        ])
+      ) {
+        return decide('subscriptions', 'keyword');
       }
-      if (text.includes('reply') || text.includes('draft') || text.includes('email')) {
-        return 'search';
+
+      if (
+        hasAnyPattern(text, [
+          /\b(urgent|priority|important|need attention|asap)\b/i,
+          /\b(kiireellinen|prioriteetti|urgente)\b/i,
+        ])
+      ) {
+        return decide('urgent', 'keyword');
       }
-      return 'status';
+
+      if (
+        hasAnyPattern(text, [
+          /\b(digest|weekly email digest|email digest|what matters most)\b/i,
+          /\b(resumen semanal|viikkoyhteenveto)\b/i,
+        ])
+      ) {
+        return decide('digest', 'keyword');
+      }
+
+      if (
+        hasAnyPattern(text, [
+          /\b(inbox summary|summari[sz]e my inbox|summari[sz]e inbox|what matters in my email)\b/i,
+          /\b(inbox|email|emails|mailbox|gmail)\b/i,
+          /\b(saapuneet|sähköposti|correo)\b/i,
+        ])
+      ) {
+        return decide('inbox_summary', 'keyword');
+      }
+
+      return decide('inbox_summary', 'fallback');
 
     case 'calendar':
       if (
-        text.includes('meeting') ||
-        text.includes('availability') ||
-        text.includes('schedule') ||
-        text.includes('calendar') ||
-        text.includes('kalenteri')
+        hasAnyPattern(text, [
+          /\b(weekly reset|reset my week|plan next week|next week plan)\b/i,
+          /\b(viikkonollaus|suunnittele ensi viikko)\b/i,
+        ])
       ) {
-        return 'availability';
+        return decide('weekly_reset', 'keyword');
       }
-      return 'status';
+
+      if (
+        hasAnyPattern(text, [
+          /\b(week overloaded|busy week|overbooked|too many meetings|meeting overload)\b/i,
+          /\b(ylikuormitettu viikko|liikaa palavereja)\b/i,
+        ])
+      ) {
+        return decide('check_busy_week', 'keyword');
+      }
+
+      if (
+        hasAnyPattern(text, [
+          /\b(best focus time|focus time|deep work|free hour|when can i focus)\b/i,
+          /\b(paras keskittymisaika|vapaa tunti|tiempo de enfoque)\b/i,
+        ])
+      ) {
+        return decide('find_focus_time', 'keyword');
+      }
+
+      if (
+        hasAnyPattern(text, [
+          /\b(what should i do today|today plan|plan my day|show my day plan)\b/i,
+          /\b(tänään|päiväsuunnitelma|plan de hoy)\b/i,
+          /\b(meeting|availability|schedule|calendar|kalenteri)\b/i,
+        ])
+      ) {
+        return decide('today_plan', 'keyword');
+      }
+
+      return decide('today_plan', 'fallback');
 
     case 'memory':
-      if (text.includes('remember') || text.includes('history') || text.includes('earlier')) {
-        return 'retrieve';
+      if (
+        hasAnyPattern(text, [
+          /\b(what did i say earlier|earlier|remember|history|previously|last time)\b/i,
+          /\b(aiemmin|muistatko|antes|hace rato)\b/i,
+        ])
+      ) {
+        return decide('retrieve', 'keyword');
       }
-      return 'search';
+      if (
+        hasAnyPattern(text, [
+          /\b(what do you know|my goals|search memory|find in memory|about me)\b/i,
+          /\b(tavoitteet|metas|goals)\b/i,
+        ])
+      ) {
+        return decide('search', 'keyword');
+      }
+      return decide('search', 'fallback');
 
     case 'web':
-      return 'search';
+      return decide('search', 'fallback');
 
     case 'compare':
-      return 'compare';
+      return decide('compare', 'fallback');
 
     case 'file':
-      return 'inspect';
+      return decide('inspect', 'fallback');
 
     case 'finance':
       if (text.includes('scan') || text.includes('analyze')) {
-        return 'scan';
+        return decide('scan', 'keyword');
       }
-      return 'overview';
+      return decide('overview', 'fallback');
 
     case 'notes':
       if (text.includes('create note') || text.includes('save this') || text.includes('write this down')) {
-        return 'create';
+        return decide('create', 'keyword');
       }
-      return 'list';
+      return decide('list', 'fallback');
 
     default:
-      return 'default';
+      return decide('default', 'fallback');
   }
 }
 
@@ -286,10 +380,10 @@ function buildToolInput(
   const recentConversation = getRecentConversationSummary(context.request);
   const compareItems = extractCompareItems(requestText);
   const normalizedEntities = extractEntities(requestText);
-  const action = inferToolAction(tool, context.request);
+  const actionInference = inferToolAction(tool, context.request);
 
   const base: Record<string, unknown> = {
-    action,
+    action: actionInference.action,
     message: requestText,
     metadata: context.request.metadata ?? {},
     requestId: context.request.requestId,
@@ -300,6 +394,9 @@ function buildToolInput(
     inputLanguage: context.inputLanguage ?? context.request.inputLanguage ?? 'en',
     responseLanguage: context.responseLanguage ?? context.request.responseLanguage ?? 'en',
     entities: normalizedEntities,
+    source_used: actionInference.source,
+    action_used: actionInference.action,
+    fallback_used: actionInference.fallback,
   };
 
   switch (tool) {
