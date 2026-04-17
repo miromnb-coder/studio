@@ -18,7 +18,13 @@ export type AnalyticsEventName =
   | 'memory_used_in_response'
   | 'memory_resume_action_clicked'
   | 'memory_task_resumed_completed'
-  | 'memory_problem_resolution_accelerated';
+  | 'memory_problem_resolution_accelerated'
+  | 'inbox_summary_opened'
+  | 'urgent_emails_viewed'
+  | 'subscriptions_found'
+  | 'savings_action_clicked'
+  | 'draft_generated'
+  | 'digest_viewed';
 
 export type AnalyticsEvent = {
   name: AnalyticsEventName;
