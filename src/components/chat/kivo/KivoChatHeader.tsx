@@ -1,8 +1,7 @@
 'use client';
 
-import { ArrowLeft, Menu } from 'lucide-react';
+import { ArrowLeft } from 'lucide-react';
 import { useRouter } from 'next/navigation';
-import { useGlobalMenu } from '@/app/components/global-menu-provider';
 
 type KivoChatHeaderProps = {
   onOpenQuickSheet?: () => void;
@@ -10,10 +9,13 @@ type KivoChatHeaderProps = {
 
 export function KivoChatHeader({ onOpenQuickSheet }: KivoChatHeaderProps) {
   const router = useRouter();
-  const { openMenu } = useGlobalMenu();
 
   const handleLeftAction = () => {
     router.push('/home');
+  };
+
+  const handleUpgrade = () => {
+    router.push('/upgrade');
   };
 
   return (
@@ -45,11 +47,11 @@ export function KivoChatHeader({ onOpenQuickSheet }: KivoChatHeaderProps) {
 
         <button
           type="button"
-          onClick={openMenu}
-          aria-label="Open menu"
-          className="inline-flex h-11 w-11 items-center justify-center rounded-full border border-white/70 bg-[rgba(255,255,255,0.52)] text-[#5a6270] shadow-[0_8px_20px_rgba(15,23,42,0.05)] transition-all duration-200 ease-out hover:bg-[rgba(255,255,255,0.72)] active:scale-[0.985]"
+          onClick={handleUpgrade}
+          aria-label="Upgrade"
+          className="inline-flex h-10 items-center justify-center rounded-full bg-[#0b0b0d] px-4 text-[13px] font-semibold tracking-[-0.01em] text-white shadow-[0_8px_20px_rgba(0,0,0,0.16)] transition-all duration-200 ease-out hover:translate-y-[-1px] hover:bg-black active:translate-y-0 active:scale-[0.985]"
         >
-          <Menu className="h-5 w-5" strokeWidth={1.8} />
+          Upgrade
         </button>
       </div>
     </header>

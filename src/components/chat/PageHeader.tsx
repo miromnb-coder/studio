@@ -1,8 +1,8 @@
 'use client';
 
 import type { ReactNode } from 'react';
-import { ArrowLeft, Menu, Sparkles, ChevronRight } from 'lucide-react';
-import { useGlobalMenu } from '@/app/components/global-menu-provider';
+import { ArrowLeft, Sparkles, ChevronRight } from 'lucide-react';
+import { useRouter } from 'next/navigation';
 
 type PageHeaderProps = {
   title: string;
@@ -42,7 +42,7 @@ export function PageHeader({
   sticky = false,
   className = '',
 }: PageHeaderProps) {
-  const { openMenu } = useGlobalMenu();
+  const router = useRouter();
 
   const resolvedLeftAction = onLeftAction ?? onBack;
   const isChat = mood === 'chat';
@@ -117,18 +117,16 @@ export function PageHeader({
           ) : null}
         </div>
 
-        <button
-          type="button"
-          onClick={openMenu}
-          aria-label="Open menu"
-          className={`tap-feedback inline-flex h-[42px] w-[42px] shrink-0 items-center justify-center rounded-full border transition hover:scale-[1.02] active:scale-[0.98] ${
-            isChat
-              ? 'border-[#e6eaf0] bg-white/75 text-[#6b7280] shadow-[0_4px_12px_rgba(148,163,184,0.10)]'
-              : 'border-[#e5e7eb] bg-white/80 text-[#111111] shadow-[0_6px_16px_rgba(15,23,42,0.08)]'
-          }`}
-        >
-          <Menu className="h-[19px] w-[19px]" strokeWidth={1.8} />
-        </button>
+        <div className="flex w-[96px] shrink-0 justify-end">
+          <button
+            type="button"
+            onClick={() => router.push('/upgrade')}
+            aria-label="Upgrade"
+            className="tap-feedback inline-flex h-[38px] items-center justify-center rounded-full bg-[#0b0b0d] px-4 text-[13px] font-semibold tracking-[-0.01em] text-white shadow-[0_8px_18px_rgba(0,0,0,0.16)] transition hover:translate-y-[-1px] hover:bg-black active:translate-y-0 active:scale-[0.98]"
+          >
+            Upgrade
+          </button>
+        </div>
       </div>
 
       {(status || meta || actions) && (
