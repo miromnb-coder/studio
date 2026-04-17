@@ -33,7 +33,7 @@ export const CONNECTOR_META: Record<ConnectorId, Omit<ConnectorRecord, 'state'>>
     accountEmail: null,
     lastSyncAt: null,
     permissions: ['Read calendars', 'Read events'],
-    tools: ['Planner sync', 'Find availability', 'Event reminders'],
+    tools: ['Today Planner', 'Find Focus Time', 'Check Busy Week', 'Weekly Reset'],
     errorMessage: null,
   },
   'google-drive': {
