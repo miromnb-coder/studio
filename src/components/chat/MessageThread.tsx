@@ -129,7 +129,17 @@ export function MessageThread({ messages, pending }: MessageThreadProps) {
   const rows = buildThreadRows(messages);
   const pendingMode = resolveResponseMode(messages);
   const thinkingState = getThinkingState(messages, pending);
-  const showThinkingState = pending && pendingMode !== 'casual' && Boolean(thinkingState);
+  const latestAssistant = [...messages]
+    .reverse()
+    .find((message) => message.role === 'assistant');
+  const assistantHasVisibleStreamContent = Boolean(
+    latestAssistant?.isStreaming && latestAssistant.content.trim().length > 0,
+  );
+  const showThinkingState =
+    pending &&
+    pendingMode !== 'casual' &&
+    Boolean(thinkingState) &&
+    !assistantHasVisibleStreamContent;
 
   if (messages.length === 0) {
     return (

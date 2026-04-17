@@ -207,6 +207,14 @@ function hashIndex(value: string, mod: number): number {
   return [...value].reduce((acc, char) => acc + char.charCodeAt(0), 0) % mod;
 }
 
+function toTitleCase(value: string): string {
+  return value
+    .split(/[\s_-]+/)
+    .filter(Boolean)
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+    .join(' ');
+}
+
 function mapActions(actions?: AgentSuggestedAction[] | string[]): string[] {
   if (!actions) return [];
 
@@ -313,6 +321,13 @@ type ContentBlock =
   | { type: 'paragraph'; content: string }
   | { type: 'list'; items: string[] };
 
+type StructuredSignals = {
+  title: string;
+  actionItems: string[];
+  sourceItems: string[];
+  outcomes: string[];
+};
+
 function isListLine(line: string): boolean {
   return /^([-•*]|\d+\.)\s+/.test(line.trim());
 }
@@ -398,6 +413,80 @@ function buildContentBlocks(content: string): ContentBlock[] {
   return blocks;
 }
 
+function resolveTitle(metadata: AgentResponseMetadata | undefined): string {
+  const fromOperator = metadata?.operatorResponse?.decisionBrief?.trim();
+  if (fromOperator) return fromOperator.length > 42 ? 'Decision Brief' : fromOperator;
+
+  switch (metadata?.intent) {
+    case 'planning':
+      return 'Today Plan';
+    case 'gmail':
+    case 'email':
+      return 'Inbox Summary';
+    case 'scheduling':
+      return 'Schedule Brief';
+    case 'memory':
+      return 'Memory Insight';
+    case 'finance':
+      return 'Money Brief';
+    case 'compare':
+      return 'Decision Brief';
+    default:
+      return 'Operator Summary';
+  }
+}
+
+function buildSourceItems(metadata: AgentResponseMetadata | undefined): string[] {
+  if (!metadata) return [];
+
+  const sources = new Set<string>();
+  const steps = metadata.steps ?? [];
+
+  for (const step of steps) {
+    const tool = String(step.tool || '').toLowerCase();
+    if (!tool) continue;
+    if (tool.includes('gmail') || tool.includes('email')) sources.add('Gmail ✓');
+    else if (tool.includes('calendar') || tool.includes('schedule')) sources.add('Calendar ✓');
+    else if (tool.includes('memory')) sources.add('Memory ✓');
+    else sources.add(`${toTitleCase(tool)} ✓`);
+  }
+
+  if (metadata.memoryUsed) sources.add('Memory ✓');
+
+  return [...sources].slice(0, 4);
+}
+
+function buildOutcomeItems(metadata: AgentResponseMetadata | undefined): string[] {
+  const operator = metadata?.operatorResponse;
+  const candidates = [
+    operator?.timeOpportunity,
+    operator?.savingsOpportunity,
+    operator?.opportunity,
+    operator?.nextStep,
+  ]
+    .map((item) => normalizeText(item))
+    .filter((item): item is string => Boolean(item));
+
+  return candidates.slice(0, 2);
+}
+
+function buildStructuredSignals(args: {
+  metadata: AgentResponseMetadata | undefined;
+  operatorActions: { label: string }[];
+  fallbackActions: string[];
+}): StructuredSignals {
+  const actionItems = args.operatorActions.length
+    ? args.operatorActions.map((item) => item.label).slice(0, 3)
+    : args.fallbackActions.slice(0, 3);
+
+  return {
+    title: resolveTitle(args.metadata),
+    actionItems,
+    sourceItems: buildSourceItems(args.metadata),
+    outcomes: buildOutcomeItems(args.metadata),
+  };
+}
+
 export function AgentResponseMessage({
   message,
   latestUserContent
@@ -424,6 +513,11 @@ export function AgentResponseMessage({
   const contentBlocks = buildContentBlocks(visibleContent);
   const operatorResponse = metadata?.operatorResponse;
   const operatorActions = operatorResponse?.actions ?? [];
+  const structuredSignals = buildStructuredSignals({
+    metadata,
+    operatorActions,
+    fallbackActions: actions,
+  });
   const actionClickedRef = useRef(false);
   const handleOperatorAction = useOperatorActionHandler({
     messageId: message.id,
@@ -464,42 +558,34 @@ export function AgentResponseMessage({
 
   return (
     <div className="max-w-full">
-      <div className="mb-5 flex items-center gap-3">
-        <div className="flex items-center gap-2.5">
-          <span
-            className="text-[17px] font-semibold leading-none tracking-[-0.015em] text-[#334155]"
-            style={{
-              fontFamily:
-                '-apple-system, BlinkMacSystemFont, "SF Pro Text", "Inter", "Segoe UI", sans-serif',
-            }}
-          >
-            Kivo
-          </span>
-
-          <span className="rounded-full border border-[#d7e3f0] bg-[#f4f8fd] px-2.5 py-0.5 text-[11px] font-medium tracking-[-0.01em] text-[#64748b] shadow-[inset_0_1px_0_rgba(255,255,255,0.72)]">
-            {copy.brand}
-          </span>
-        </div>
+      <div className="mb-4 flex items-center gap-3">
+        <span className="rounded-full border border-[#d7e3f0] bg-[#f4f8fd] px-2.5 py-0.5 text-[11px] font-medium tracking-[-0.01em] text-[#64748b] shadow-[inset_0_1px_0_rgba(255,255,255,0.72)]">
+          {copy.brand}
+        </span>
       </div>
 
+      <h3 className="mb-3 text-[22px] font-semibold leading-[1.25] tracking-[-0.026em] text-[#222e3f]">
+        {structuredSignals.title}
+      </h3>
+
       {showIntro ? (
-        <p className="mb-6 max-w-[780px] text-[18px] leading-[1.5] tracking-[-0.024em] text-[#2f3947]">
+        <p className="mb-5 max-w-[780px] text-[17px] leading-[1.56] tracking-[-0.02em] text-[#485467]">
           {copy.intro[introIndex]}
         </p>
       ) : null}
 
-      <div className="max-w-none space-y-5">
+      <div className="max-w-none space-y-4">
         {contentBlocks.length > 0 ? (
           contentBlocks.map((block, index) => {
             if (block.type === 'list') {
               return (
                 <ul
                   key={`list-${index}`}
-                  className="space-y-2.5 pl-1 text-[17px] leading-[1.74] tracking-[-0.016em] text-[#36414f]"
+                  className="space-y-3 pl-0.5 text-[16.5px] leading-[1.72] tracking-[-0.014em] text-[#36414f]"
                 >
                   {block.items.map((item, itemIndex) => (
                     <li key={`item-${index}-${itemIndex}`} className="flex gap-3.5">
-                      <span className="mt-[11px] inline-block h-1.5 w-1.5 shrink-0 rounded-full bg-[#97a3b2]" />
+                      <span className="mt-1.5 inline-block text-[14px] leading-6 text-[#7f8ca0]">✓</span>
                       <span>{item}</span>
                     </li>
                   ))}
@@ -507,14 +593,14 @@ export function AgentResponseMessage({
               );
             }
 
-            const isLead = index === 0 && block.content.length < 140;
+            const isLead = index === 0 && block.content.length < 160;
             return (
               <p
                 key={`paragraph-${index}`}
                 className={
                   isLead
-                    ? 'max-w-[760px] text-[20px] leading-[1.56] tracking-[-0.026em] text-[#2f3947]'
-                    : 'max-w-[760px] text-[17px] leading-[1.74] tracking-[-0.016em] text-[#36414f]'
+                    ? 'max-w-[760px] text-[19px] leading-[1.58] tracking-[-0.024em] text-[#2f3947]'
+                    : 'max-w-[760px] text-[16.8px] leading-[1.72] tracking-[-0.012em] text-[#3f4a5a]'
                 }
               >
                 {block.content}
@@ -522,11 +608,46 @@ export function AgentResponseMessage({
             );
           })
         ) : (
-          <div className="text-[17px] leading-[1.72] tracking-[-0.018em] text-[#36414f]">
+          <div className="text-[16.8px] leading-[1.72] tracking-[-0.012em] text-[#3f4a5a]">
             {visibleContent}
           </div>
         )}
       </div>
+
+      {structuredSignals.actionItems.length ? (
+        <div className="mt-6 rounded-2xl border border-[#e9eef5] bg-[linear-gradient(180deg,#fdfefe,#f7fafe)] px-4 py-3.5">
+          <p className="mb-2 text-[11px] font-semibold uppercase tracking-[0.14em] text-[#8a95a7]">
+            Action list
+          </p>
+          <ul className="space-y-2 text-[15px] leading-[1.6] text-[#334155]">
+            {structuredSignals.actionItems.map((action, index) => (
+              <li key={`${action}-${index}`} className="flex gap-2.5">
+                <span className="mt-0.5 text-[14px] text-[#5d779f]">✓</span>
+                <span>{action}</span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      ) : null}
+
+      {structuredSignals.sourceItems.length ? (
+        <div className="mt-4 flex flex-wrap items-center gap-2 text-[12px] text-[#7a8598]">
+          <span className="font-medium text-[#909bae]">Built from:</span>
+          {structuredSignals.sourceItems.map((source, index) => (
+            <span key={`${source}-${index}`} className="rounded-full border border-[#e6ebf2] bg-[#fbfdff] px-2.5 py-1 font-medium">
+              {source}
+            </span>
+          ))}
+        </div>
+      ) : null}
+
+      {structuredSignals.outcomes.length ? (
+        <div className="mt-3 space-y-1.5 text-[13px] font-medium text-[#607288]">
+          {structuredSignals.outcomes.map((outcome, index) => (
+            <p key={`${outcome}-${index}`}>{outcome}</p>
+          ))}
+        </div>
+      ) : null}
 
       <OperatorActionCard
         operatorResponse={operatorResponse}
