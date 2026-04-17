@@ -92,8 +92,22 @@ interface GmailMessagePayload {
 
 interface GmailMessage {
   id?: string;
+  threadId?: string;
   snippet?: string;
   payload?: GmailMessagePayload;
+  internalDate?: string;
+  labelIds?: string[];
+}
+
+export interface GmailInboxMessage {
+  id: string;
+  threadId: string | null;
+  from: string;
+  subject: string;
+  snippet: string;
+  date: string | null;
+  labels: string[];
+  receivedAt: string | null;
 }
 
 const DEFAULT_ANALYSIS: GmailFinanceAnalysis = {
@@ -297,6 +311,31 @@ function extractHeader(payload: GmailMessagePayload | undefined, name: string): 
   return String(match?.value || '').trim();
 }
 
+function toIsoDate(value: string | undefined): string | null {
+  if (!value) return null;
+  const parsed = Number(value);
+  if (Number.isFinite(parsed) && parsed > 0) {
+    return new Date(parsed).toISOString();
+  }
+  const fallback = new Date(value);
+  return Number.isNaN(fallback.getTime()) ? null : fallback.toISOString();
+}
+
+function toInboxMessage(message: GmailMessage): GmailInboxMessage | null {
+  const id = String(message.id || '').trim();
+  if (!id) return null;
+  return {
+    id,
+    threadId: message.threadId ? String(message.threadId) : null,
+    from: extractHeader(message.payload, 'From'),
+    subject: extractHeader(message.payload, 'Subject'),
+    snippet: String(message.snippet || '').trim(),
+    date: extractHeader(message.payload, 'Date') || null,
+    labels: Array.isArray(message.labelIds) ? message.labelIds.map((label) => String(label)) : [],
+    receivedAt: toIsoDate(message.internalDate),
+  };
+}
+
 export function parseFinancialEmails(messages: GmailMessage[]): ParsedFinancialEmail[] {
   return messages
     .map((message) => {
@@ -349,6 +388,66 @@ export async function fetchFinancialEmails(accessToken: string, maxResults = 100
   );
 
   return parseFinancialEmails(details.filter((item): item is GmailMessage => Boolean(item)));
+}
+
+async function fetchMessageMetadataByIds(accessToken: string, ids: string[]): Promise<GmailInboxMessage[]> {
+  if (!ids.length) return [];
+  const details = await Promise.all(
+    ids.map(async (id) => {
+      const response = await fetch(
+        `https://gmail.googleapis.com/gmail/v1/users/me/messages/${id}?format=metadata&metadataHeaders=From&metadataHeaders=Subject&metadataHeaders=Date`,
+        {
+          headers: {
+            Authorization: `Bearer ${accessToken}`,
+          },
+          cache: 'no-store',
+        },
+      );
+
+      if (!response.ok) return null;
+      return (await response.json()) as GmailMessage;
+    }),
+  );
+
+  return details.map((message) => (message ? toInboxMessage(message) : null)).filter((item): item is GmailInboxMessage => Boolean(item));
+}
+
+export async function fetchInboxMessages(params: {
+  accessToken: string;
+  maxResults?: number;
+  query?: string;
+}): Promise<GmailInboxMessage[]> {
+  const cappedMax = Math.max(10, Math.min(params.maxResults || 40, 100));
+  const query = params.query || 'newer_than:14d -category:social';
+  const listResponse = await fetch(
+    `https://gmail.googleapis.com/gmail/v1/users/me/messages?maxResults=${cappedMax}&q=${encodeURIComponent(query)}`,
+    {
+      headers: { Authorization: `Bearer ${params.accessToken}` },
+      cache: 'no-store',
+    },
+  );
+
+  if (!listResponse.ok) {
+    throw new Error(`Gmail inbox list request failed (${listResponse.status}).`);
+  }
+
+  const listPayload = (await listResponse.json()) as { messages?: Array<{ id?: string }> };
+  const ids = (listPayload.messages || []).map((item) => item.id).filter((id): id is string => Boolean(id));
+  return fetchMessageMetadataByIds(params.accessToken, ids);
+}
+
+export async function fetchInboxMessageById(accessToken: string, messageId: string): Promise<GmailInboxMessage | null> {
+  const response = await fetch(
+    `https://gmail.googleapis.com/gmail/v1/users/me/messages/${encodeURIComponent(messageId)}?format=metadata&metadataHeaders=From&metadataHeaders=Subject&metadataHeaders=Date`,
+    {
+      headers: { Authorization: `Bearer ${accessToken}` },
+      cache: 'no-store',
+    },
+  );
+
+  if (!response.ok) return null;
+  const message = (await response.json()) as GmailMessage;
+  return toInboxMessage(message);
 }
 
 function clampConfidence(value: unknown): number {
