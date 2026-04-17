@@ -1,10 +1,12 @@
 'use client';
 
-import { CircleDashed } from 'lucide-react';
+import { AnimatePresence, motion } from 'framer-motion';
 import type { Message } from '@/app/store/app-store';
 import type { ResponseMode } from '@/agent/types/response-mode';
+import { mapAgentStepsToThinkingState } from '@/lib/mapAgentEventToThinkingState';
 import { AttachmentPreview } from './AttachmentPreview';
 import { AgentResponseMessage } from './AgentResponseMessage';
+import { KivoThinkingState } from './KivoThinkingState';
 
 type MessageThreadProps = {
   messages: Message[];
@@ -112,16 +114,22 @@ function resolveResponseMode(messages: Message[]): ResponseMode {
   return 'fallback';
 }
 
+function getThinkingState(messages: Message[], pending: boolean) {
+  const latestAssistant = [...messages]
+    .reverse()
+    .find((message) => message.role === 'assistant');
+
+  return mapAgentStepsToThinkingState({
+    isStreaming: pending || Boolean(latestAssistant?.isStreaming),
+    steps: latestAssistant?.agentMetadata?.steps,
+  });
+}
+
 export function MessageThread({ messages, pending }: MessageThreadProps) {
   const rows = buildThreadRows(messages);
   const pendingMode = resolveResponseMode(messages);
-  const showPendingText = pendingMode !== 'casual';
-  const pendingLabel =
-    pendingMode === 'operator'
-      ? 'Thinking…'
-      : pendingMode === 'tool'
-        ? 'Using tools…'
-        : 'Working…';
+  const thinkingState = getThinkingState(messages, pending);
+  const showThinkingState = pending && pendingMode !== 'casual' && Boolean(thinkingState);
 
   if (messages.length === 0) {
     return (
@@ -200,7 +208,11 @@ export function MessageThread({ messages, pending }: MessageThreadProps) {
                     ) : null}
                   </div>
                 ) : (
-                  <div className="px-1 py-1">
+                  <motion.div
+                    layout
+                    transition={{ duration: 0.2, ease: 'easeOut' }}
+                    className="px-1 py-1"
+                  >
                     <div className="mb-2 flex items-center gap-2">
                       <div className="h-1.5 w-1.5 rounded-full bg-[rgba(126,136,153,0.72)]" />
                       <span className="text-[11px] font-medium uppercase tracking-[0.16em] text-[#8f98a8]">
@@ -208,12 +220,16 @@ export function MessageThread({ messages, pending }: MessageThreadProps) {
                       </span>
                     </div>
 
-                    <div className="max-w-[760px]">
+                    <motion.div
+                      layout
+                      transition={{ duration: 0.22, ease: 'easeOut' }}
+                      className="max-w-[760px]"
+                    >
                       <AgentResponseMessage
                         message={message}
                         latestUserContent={latestUserContent}
                       />
-                    </div>
+                    </motion.div>
 
                     {message.attachments?.length ? (
                       <div className="mt-4">
@@ -235,30 +251,31 @@ export function MessageThread({ messages, pending }: MessageThreadProps) {
                         {message.error}
                       </p>
                     ) : null}
-                  </div>
+                  </motion.div>
                 )}
               </article>
             </div>
           );
         })}
 
-        {pending ? (
-          <div className="flex justify-start">
-            <div className="max-w-[760px] px-1">
-              <div className="mb-2 flex items-center gap-2">
-                <div className="h-1.5 w-1.5 rounded-full bg-[rgba(126,136,153,0.72)]" />
-                <span className="text-[11px] font-medium uppercase tracking-[0.16em] text-[#8f98a8]">
-                  Kivo
-                </span>
-              </div>
-
-              <div className="inline-flex items-center gap-2.5 text-[13px] font-medium tracking-[-0.01em] text-[#707a8b]">
-                <CircleDashed className="h-4 w-4 animate-spin" />
-                {showPendingText ? pendingLabel : null}
-              </div>
-            </div>
-          </div>
-        ) : null}
+        <AnimatePresence initial={false} mode="wait">
+          {showThinkingState && thinkingState ? (
+            <motion.div
+              key="kivo-thinking"
+              initial={{ opacity: 0, y: 8 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -10 }}
+              transition={{ duration: 0.22, ease: 'easeOut' }}
+              className="flex justify-start"
+            >
+              <KivoThinkingState
+                status={thinkingState.status}
+                visualState={thinkingState.visualState}
+                className="max-w-[760px] rounded-[22px] border border-white/70 bg-[linear-gradient(180deg,rgba(255,255,255,0.82),rgba(245,248,252,0.9))] shadow-[0_14px_30px_rgba(15,23,42,0.05)]"
+              />
+            </motion.div>
+          ) : null}
+        </AnimatePresence>
       </div>
     </div>
   );

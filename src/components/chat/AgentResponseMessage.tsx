@@ -20,7 +20,6 @@ type LocaleCopy = {
   intro: string[];
   fallback: string;
   brand: string;
-  thinking: string;
 };
 
 const COPY: Record<SupportedLocale, LocaleCopy> = {
@@ -32,7 +31,6 @@ const COPY: Record<SupportedLocale, LocaleCopy> = {
     ],
     fallback: 'Done — here is the answer for you.',
     brand: 'Lite',
-    thinking: 'Thinking through the best answer.',
   },
   fi: {
     intro: [
@@ -42,7 +40,6 @@ const COPY: Record<SupportedLocale, LocaleCopy> = {
     ],
     fallback: 'Valmis — tässä vastaus sinulle.',
     brand: 'Lite',
-    thinking: 'Mietin tähän parasta vastausta.',
   },
   sv: {
     intro: [
@@ -52,7 +49,6 @@ const COPY: Record<SupportedLocale, LocaleCopy> = {
     ],
     fallback: 'Klart — här är svaret till dig.',
     brand: 'Lite',
-    thinking: 'Jag arbetar fram det bästa svaret.',
   },
   es: {
     intro: [
@@ -62,7 +58,6 @@ const COPY: Record<SupportedLocale, LocaleCopy> = {
     ],
     fallback: 'Listo — aquí tienes la respuesta.',
     brand: 'Lite',
-    thinking: 'Estoy elaborando la mejor respuesta.',
   },
 };
 
@@ -437,11 +432,6 @@ export function AgentResponseMessage({
     latestUserContent,
     intent: metadata?.intent,
   });
-  const shouldShowStreamingLabel =
-    isStreaming && (responseMode === 'operator' || responseMode === 'tool');
-  const streamingLabel =
-    responseMode === 'tool' ? 'Using tools…' : copy.thinking;
-
   useEffect(() => {
     if (!operatorActions.length || isStreaming) return;
 
@@ -474,7 +464,7 @@ export function AgentResponseMessage({
 
   return (
     <div className="max-w-full">
-      <div className="mb-4 flex items-center gap-3">
+      <div className="mb-5 flex items-center gap-3">
         <div className="flex items-center gap-2.5">
           <span
             className="text-[22px] font-normal leading-none tracking-[-0.04em] text-[#232c39]"
@@ -490,12 +480,6 @@ export function AgentResponseMessage({
             {copy.brand}
           </span>
         </div>
-
-        {shouldShowStreamingLabel ? (
-          <span className="text-[11px] font-medium tracking-[0.01em] text-[#8f98a7]">
-            {streamingLabel}
-          </span>
-        ) : null}
       </div>
 
       {showIntro ? (
@@ -504,18 +488,18 @@ export function AgentResponseMessage({
         </p>
       ) : null}
 
-      <div className="max-w-none space-y-4">
+      <div className="max-w-none space-y-5">
         {contentBlocks.length > 0 ? (
           contentBlocks.map((block, index) => {
             if (block.type === 'list') {
               return (
                 <ul
                   key={`list-${index}`}
-                  className="space-y-2 pl-1 text-[17px] leading-[1.72] tracking-[-0.018em] text-[#36414f]"
+                  className="space-y-2.5 pl-1 text-[17px] leading-[1.74] tracking-[-0.016em] text-[#36414f]"
                 >
                   {block.items.map((item, itemIndex) => (
-                    <li key={`item-${index}-${itemIndex}`} className="flex gap-3">
-                      <span className="mt-[10px] inline-block h-1.5 w-1.5 shrink-0 rounded-full bg-[#97a3b2]" />
+                    <li key={`item-${index}-${itemIndex}`} className="flex gap-3.5">
+                      <span className="mt-[11px] inline-block h-1.5 w-1.5 shrink-0 rounded-full bg-[#97a3b2]" />
                       <span>{item}</span>
                     </li>
                   ))}
@@ -529,8 +513,8 @@ export function AgentResponseMessage({
                 key={`paragraph-${index}`}
                 className={
                   isLead
-                    ? 'max-w-[760px] text-[19px] leading-[1.58] tracking-[-0.024em] text-[#2f3947]'
-                    : 'max-w-[760px] text-[17px] leading-[1.72] tracking-[-0.018em] text-[#36414f]'
+                    ? 'max-w-[760px] text-[20px] leading-[1.56] tracking-[-0.026em] text-[#2f3947]'
+                    : 'max-w-[760px] text-[17px] leading-[1.74] tracking-[-0.016em] text-[#36414f]'
                 }
               >
                 {block.content}
