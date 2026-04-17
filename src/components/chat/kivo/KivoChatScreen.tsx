@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import { usePathname, useRouter } from 'next/navigation';
 import { AlertCircle, Paperclip, X } from 'lucide-react';
@@ -38,6 +38,16 @@ type Notice = {
   title: string;
   detail: string;
 };
+
+type WorkspaceQuickActionId = 'analyze' | 'planner' | 'money-saver' | 'ask-agent';
+type WorkspaceToolId =
+  | 'finance-scanner'
+  | 'memory-search'
+  | 'research-mode'
+  | 'compare-tool'
+  | 'automation-builder';
+type WorkspaceRecentId = 'gmail-sync' | 'subscription-scan' | 'weekly-planner';
+type ConnectorMode = 'connect' | 'connected' | 'manage' | 'toggle';
 
 const COMPOSER_DOCK_HEIGHT = 170;
 const ATTACHMENT_TRAY_HEIGHT = 64;
@@ -180,8 +190,7 @@ export function KivoChatScreen() {
     if (!scroller) return;
 
     const messageCountChanged = messages.length !== lastMessageCountRef.current;
-    const shouldAutoScroll =
-      messageCountChanged || isAgentResponding || isSending;
+    const shouldAutoScroll = messageCountChanged || isAgentResponding || isSending;
 
     if (!shouldAutoScroll) return;
 
@@ -195,68 +204,84 @@ export function KivoChatScreen() {
     lastMessageCountRef.current = messages.length;
   }, [messages.length, isAgentResponding, isSending]);
 
-  const showNotice = (title: string, detail: string) => {
+  const showNotice = useCallback((title: string, detail: string) => {
     setNotice({ title, detail });
-  };
+  }, []);
 
-  const cleanupAttachments = (items: MessageAttachment[]) => {
+  const cleanupAttachments = useCallback((items: MessageAttachment[]) => {
     items.forEach((attachment) => {
       if (attachment.previewUrl) {
         URL.revokeObjectURL(attachment.previewUrl);
       }
     });
-  };
+  }, []);
 
-  const focusComposer = () => {
+  const focusComposer = useCallback(() => {
     requestAnimationFrame(() => {
       const textarea = document.getElementById(
         'kivo-composer-textarea',
       ) as HTMLTextAreaElement | null;
       textarea?.focus();
     });
-  };
+  }, []);
 
-  const createNewChat = () => {
+  const closeWorkspace = useCallback(() => {
+    setWorkspaceOpen(false);
+  }, []);
+
+  const createNewChat = useCallback(() => {
     const conversationId = createConversation();
     openConversation(conversationId);
 
     cleanupAttachments(attachments);
     setAttachments([]);
     setDraftPrompt('');
-    setWorkspaceOpen(false);
+    closeWorkspace();
 
     router.push('/chat');
     focusComposer();
-  };
+  }, [
+    attachments,
+    cleanupAttachments,
+    closeWorkspace,
+    createConversation,
+    focusComposer,
+    openConversation,
+    router,
+    setDraftPrompt,
+  ]);
 
-  const toAttachment = (file: File): MessageAttachment => ({
-    id: `${Date.now()}-${Math.random().toString(16).slice(2)}`,
-    name: file.name,
-    size: file.size,
-    mimeType: file.type || 'application/octet-stream',
-    kind: file.type.startsWith('image/') ? 'image' : 'file',
-    previewUrl: file.type.startsWith('image/')
-      ? URL.createObjectURL(file)
-      : undefined,
-  });
+  const toAttachment = useCallback((file: File): MessageAttachment => {
+    return {
+      id: `${Date.now()}-${Math.random().toString(16).slice(2)}`,
+      name: file.name,
+      size: file.size,
+      mimeType: file.type || 'application/octet-stream',
+      kind: file.type.startsWith('image/') ? 'image' : 'file',
+      previewUrl: file.type.startsWith('image/') ? URL.createObjectURL(file) : undefined,
+    };
+  }, []);
 
-  const addAttachments = (files: FileList | File[]) => {
-    const next = Array.from(files).map(toAttachment);
-    if (!next.length) return;
+  const addAttachments = useCallback(
+    (files: FileList | File[]) => {
+      const next = Array.from(files).map(toAttachment);
+      if (!next.length) return;
 
-    setAttachments((prev) => [...prev, ...next]);
+      setAttachments((prev) => [...prev, ...next]);
 
-    showNotice(
-      'Attachment added',
-      next.length === 1
-        ? `${next[0].name} is ready to send.`
-        : `${next.length} files are ready to send.`,
-    );
+      showNotice(
+        'Attachment added',
+        next.length === 1
+          ? `${next[0].name} is ready to send.`
+          : `${next.length} files are ready to send.`,
+      );
 
-    focusComposer();
-  };
+      focusComposer();
+    },
+    [focusComposer, showNotice, toAttachment],
+  );
 
-  const removeAttachment = (attachmentId: string) => {
+  const removeAttachment = useCallback((attachmentId: string) => {
     setAttachments((prev) => {
       const target = prev.find((item) => item.id === attachmentId);
 
@@ -266,14 +291,14 @@ export function KivoChatScreen() {
 
       return prev.filter((item) => item.id !== attachmentId);
     });
-  };
+  }, []);
 
-  const openFilePicker = (accept = '') => {
+  const openFilePicker = useCallback((accept = '') => {
     setFilePickerAccept(accept);
     fileInputRef.current?.click();
-  };
+  }, []);
 
-  const ensureSpeechRecognition = () => {
+  const ensureSpeechRecognition = useCallback(() => {
     if (recognitionRef.current) return recognitionRef.current;
 
     const SpeechRecognitionCtor =
@@ -312,9 +337,9 @@ export function KivoChatScreen() {
 
     recognitionRef.current = recognition;
     return recognition;
-  };
+  }, [draftPrompt, focusComposer, setDraftPrompt, showNotice]);
 
-  const toggleMic = () => {
+  const toggleMic = useCallback(() => {
     const recognition = ensureSpeechRecognition();
 
     if (!recognition) {
@@ -333,9 +358,9 @@ export function KivoChatScreen() {
 
     setIsListening(true);
     recognition.start();
-  };
+  }, [ensureSpeechRecognition, isListening, showNotice]);
 
-  const handleSend = async () => {
+  const handleSend = useCallback(async () => {
     if (!canSend || isBusy) return;
 
     if (!user?.id) {
@@ -351,12 +376,169 @@ export function KivoChatScreen() {
       setDraftPrompt('');
       cleanupAttachments(attachments);
       setAttachments([]);
-      setWorkspaceOpen(false);
+      closeWorkspace();
       focusComposer();
     } finally {
       setIsSending(false);
     }
-  };
+  }, [
+    attachments,
+    canSend,
+    cleanupAttachments,
+    closeWorkspace,
+    draftPrompt,
+    focusComposer,
+    isBusy,
+    router,
+    sendMessage,
+    setDraftPrompt,
+    showNotice,
+    user?.id,
+  ]);
+
+  const openOperatorRoute = useCallback(
+    (route: string) => {
+      closeWorkspace();
+      router.push(route);
+    },
+    [closeWorkspace, router],
+  );
+
+  const openControlForConnector = useCallback(
+    (connector?: string) => {
+      closeWorkspace();
+      if (connector) {
+        router.push(`/control?connector=${encodeURIComponent(connector)}`);
+        return;
+      }
+      router.push('/control');
+    },
+    [closeWorkspace, router],
+  );
+
+  const handleQuickAction = useCallback(
+    (id: WorkspaceQuickActionId) => {
+      if (id === 'ask-agent') {
+        closeWorkspace();
+        focusComposer();
+        return;
+      }
+
+      if (id === 'analyze') {
+        openOperatorRoute('/analyze');
+        return;
+      }
+
+      if (id === 'planner') {
+        openOperatorRoute('/actions?type=planner');
+        return;
+      }
+
+      openOperatorRoute('/money-saver');
+    },
+    [closeWorkspace, focusComposer, openOperatorRoute],
+  );
+
+  const handleConnectorAction = useCallback(
+    (connector: string, mode: ConnectorMode) => {
+      if (connector === 'gmail') {
+        if (mode === 'connected') {
+          openOperatorRoute('/actions?tool=gmail');
+          return;
+        }
+        openControlForConnector('gmail');
+        return;
+      }
+
+      if (connector === 'google-calendar') {
+        if (mode === 'connected') {
+          openOperatorRoute('/actions?tool=google-calendar');
+          return;
+        }
+        openControlForConnector('google-calendar');
+        return;
+      }
+
+      if (connector === 'google-drive') {
+        if (mode === 'connected') {
+          openOperatorRoute('/tools?source=drive');
+          return;
+        }
+        openControlForConnector('google-drive');
+        return;
+      }
+
+      if (connector === 'outlook') {
+        openControlForConnector('outlook');
+        return;
+      }
+
+      if (connector === 'browser') {
+        if (mode === 'connect') {
+          openOperatorRoute('/tools');
+          return;
+        }
+        openControlForConnector('browser');
+        return;
+      }
+
+      if (connector === 'github') {
+        if (mode === 'connected' || mode === 'manage' || mode === 'toggle') {
+          openOperatorRoute('/agents');
+          return;
+        }
+        openControlForConnector('github');
+        return;
+      }
+
+      openOperatorRoute('/tools');
+    },
+    [openControlForConnector, openOperatorRoute],
+  );
+
+  const handleToolSelect = useCallback(
+    (id: WorkspaceToolId) => {
+      if (id === 'finance-scanner') {
+        openOperatorRoute('/money');
+        return;
+      }
+
+      if (id === 'memory-search') {
+        openOperatorRoute('/memory');
+        return;
+      }
+
+      if (id === 'research-mode') {
+        openOperatorRoute('/agents');
+        return;
+      }
+
+      if (id === 'compare-tool') {
+        openOperatorRoute('/actions');
+        return;
+      }
+
+      openOperatorRoute('/tools');
+    },
+    [openOperatorRoute],
+  );
+
+  const handleRecentSelect = useCallback(
+    (id: WorkspaceRecentId) => {
+      if (id === 'gmail-sync') {
+        openOperatorRoute('/actions?tool=gmail');
+        return;
+      }
+
+      if (id === 'subscription-scan') {
+        openOperatorRoute('/actions?tool=gmail');
+        return;
+      }
+
+      openOperatorRoute('/actions?type=planner');
+    },
+    [openOperatorRoute],
+  );
 
   return (
     <div className="relative min-h-screen overflow-hidden bg-transparent text-[#2f3640]">
@@ -449,7 +631,8 @@ export function KivoChatScreen() {
             )}
           </AnimatePresence>
         </main>
-                <AnimatePresence initial={false}>
+
+        <AnimatePresence initial={false}>
           {hasAttachments ? (
             <motion.div
               key="attachment-tray"
@@ -526,103 +709,11 @@ export function KivoChatScreen() {
 
         <WorkspaceSheet
           open={workspaceOpen}
-          onClose={() => setWorkspaceOpen(false)}
-          onQuickAction={(id) => {
-            if (id === 'ask-agent') {
-              setWorkspaceOpen(false);
-              focusComposer();
-              return;
-            }
-
-            if (id === 'analyze') {
-              setWorkspaceOpen(false);
-              router.push('/analyze');
-              return;
-            }
-
-            if (id === 'planner') {
-              setWorkspaceOpen(false);
-              router.push('/actions?type=planner');
-              return;
-            }
-
-            setWorkspaceOpen(false);
-            router.push('/money-saver');
-          }}
-          onConnectorAction={(connector, mode) => {
-            setWorkspaceOpen(false);
-
-            if (connector === 'gmail') {
-              router.push('/control');
-              return;
-            }
-
-            if (connector === 'google-calendar') {
-              router.push('/control');
-              return;
-            }
-
-            if (connector === 'google-drive') {
-              router.push('/control');
-              return;
-            }
-
-            if (connector === 'outlook') {
-              router.push('/control');
-              return;
-            }
-
-            if (connector === 'browser' && mode === 'connect') {
-              router.push('/tools');
-              return;
-            }
-
-            if (connector === 'github') {
-              return;
-            }
-
-            router.push('/tools');
-          }}
-          onToolSelect={(id) => {
-            setWorkspaceOpen(false);
-
-            if (id === 'finance-scanner') {
-              router.push('/money');
-              return;
-            }
-
-            if (id === 'memory-search') {
-              router.push('/memory');
-              return;
-            }
-
-            if (id === 'research-mode') {
-              router.push('/agents');
-              return;
-            }
-
-            if (id === 'compare-tool') {
-              router.push('/actions');
-              return;
-            }
-
-            router.push('/tools');
-          }}
-          onRecentSelect={(id) => {
-            setWorkspaceOpen(false);
-
-            if (id === 'gmail-sync') {
-              router.push('/control');
-              return;
-            }
-
-            if (id === 'subscription-scan') {
-              router.push('/money-saver');
-              return;
-            }
-
-            router.push('/actions?type=planner');
-          }}
+          onClose={closeWorkspace}
+          onQuickAction={handleQuickAction}
+          onConnectorAction={handleConnectorAction}
+          onToolSelect={handleToolSelect}
+          onRecentSelect={handleRecentSelect}
         />
 
         <input
