@@ -591,6 +591,7 @@ async function runNewAgent(
         toolResults: result.response.toolResults,
         evaluation: result.response.evaluation || null,
         attachments: input.attachments || [],
+        structuredAnswer: result.response.answer.structured,
       },
       suggestedActions: [],
       memoryUsed: result.response.memory.items.length > 0,

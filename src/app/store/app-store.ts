@@ -386,6 +386,7 @@ const actions: AppActions = {
       id: createId(),
       role: 'assistant',
       content: '',
+      structured: undefined,
       createdAt: nowIso(),
       agent,
       isStreaming: true,
@@ -605,6 +606,7 @@ const actions: AppActions = {
                 isStreaming: false,
                 error: message,
                 content: entry.content || '',
+                structured: entry.structured,
               }
             : entry,
         );

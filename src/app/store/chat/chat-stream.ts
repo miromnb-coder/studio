@@ -341,6 +341,7 @@ export async function streamAssistantResponse({
               ? {
                   ...message,
                   content,
+                  structured: event.structured,
                   agentMetadata: normalizedMetadata,
                 }
               : message,

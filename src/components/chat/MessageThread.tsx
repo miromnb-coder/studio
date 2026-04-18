@@ -7,6 +7,7 @@ import { mapAgentStepsToThinkingState } from '@/lib/mapAgentEventToThinkingState
 import { AttachmentPreview } from './AttachmentPreview';
 import { AgentResponseMessage } from './AgentResponseMessage';
 import { KivoThinkingState } from './KivoThinkingState';
+import { StructuredAnswerView } from './StructuredAnswerView';
 
 type MessageThreadProps = {
   messages: Message[];
@@ -235,10 +236,14 @@ export function MessageThread({ messages, pending }: MessageThreadProps) {
                       transition={{ duration: 0.22, ease: 'easeOut' }}
                       className="max-w-[760px] rounded-[24px] border border-[#eaf0f6] bg-[linear-gradient(180deg,rgba(255,255,255,0.98),rgba(248,251,255,0.96))] px-4 py-4 shadow-[0_14px_34px_rgba(132,156,191,0.1)] sm:px-6 sm:py-5"
                     >
-                      <AgentResponseMessage
-                        message={message}
-                        latestUserContent={latestUserContent}
-                      />
+                      {message.structured ? (
+                        <StructuredAnswerView answer={message.structured} />
+                      ) : (
+                        <AgentResponseMessage
+                          message={message}
+                          latestUserContent={latestUserContent}
+                        />
+                      )}
                     </motion.div>
 
                     {message.attachments?.length ? (
