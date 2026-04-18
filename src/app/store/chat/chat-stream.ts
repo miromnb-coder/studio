@@ -61,6 +61,7 @@ function fallbackStepLabel(event: {
     if (tool === 'gmail') return 'Checking Gmail';
     if (tool === 'memory') return 'Retrieving memory';
     if (tool === 'web') return 'Researching sources';
+    if (tool === 'browser_search' || tool === 'browser') return 'Searching the web';
     if (tool === 'compare') return 'Comparing options';
     if (tool === 'finance') return 'Reviewing finances';
     if (tool === 'file' || tool === 'notes') return 'Reviewing files';
