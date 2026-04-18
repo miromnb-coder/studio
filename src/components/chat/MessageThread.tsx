@@ -136,6 +136,7 @@ export function MessageThread({ messages, pending }: MessageThreadProps) {
   const assistantHasVisibleStreamContent = Boolean(
     latestAssistant?.isStreaming && latestAssistant.content.trim().length > 0,
   );
+
   const showThinkingState =
     pending &&
     pendingMode !== 'casual' &&
@@ -224,7 +225,7 @@ export function MessageThread({ messages, pending }: MessageThreadProps) {
                     transition={{ duration: 0.2, ease: 'easeOut' }}
                     className="px-1 py-1"
                   >
-                    <div className="mb-2 flex items-center gap-2">
+                    <div className="mb-3 flex items-center gap-2">
                       <div className="h-1.5 w-1.5 rounded-full bg-[rgba(126,136,153,0.72)]" />
                       <span className="text-[11px] font-medium uppercase tracking-[0.16em] text-[#8f98a8]">
                         Kivo
@@ -234,7 +235,7 @@ export function MessageThread({ messages, pending }: MessageThreadProps) {
                     <motion.div
                       layout
                       transition={{ duration: 0.22, ease: 'easeOut' }}
-                      className="max-w-[760px] rounded-[24px] border border-[#eaf0f6] bg-[linear-gradient(180deg,rgba(255,255,255,0.98),rgba(248,251,255,0.96))] px-4 py-4 shadow-[0_14px_34px_rgba(132,156,191,0.1)] sm:px-6 sm:py-5"
+                      className="max-w-[760px]"
                     >
                       {message.structured ? (
                         <StructuredAnswerView answer={message.structured} />
