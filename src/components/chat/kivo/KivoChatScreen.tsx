@@ -8,6 +8,7 @@ import { useAppStore } from '@/app/store/app-store';
 import type { MessageAttachment } from '@/app/store/app-store';
 import { MessageThread } from '@/components/chat/MessageThread';
 import { WorkspaceSheet } from '@/components/chat/WorkspaceSheet';
+import { KivoActionSheet } from './KivoActionSheet';
 import { KivoChatHeader } from './KivoChatHeader';
 import { KivoComposerDock } from './KivoComposerDock';
 import { KivoReferralSuccessToast } from './KivoReferralSuccessToast';
@@ -77,6 +78,7 @@ export function KivoChatScreen() {
   const [attachments, setAttachments] = useState<MessageAttachment[]>([]);
   const [filePickerAccept, setFilePickerAccept] = useState('');
   const [workspaceOpen, setWorkspaceOpen] = useState(false);
+  const [actionSheetOpen, setActionSheetOpen] = useState(false);
   const [notice, setNotice] = useState<Notice | null>(null);
 
   const [referralToastOpen, setReferralToastOpen] = useState(false);
@@ -88,6 +90,9 @@ export function KivoChatScreen() {
   const noticeTimeoutRef = useRef<number | null>(null);
   const mainScrollRef = useRef<HTMLDivElement | null>(null);
   const lastMessageCountRef = useRef(0);
+  const [gmailConnected, setGmailConnected] = useState(false);
+  const [calendarConnected, setCalendarConnected] = useState(false);
+
 
   const hasMessages = messages.length > 0;
   const hasAttachments = attachments.length > 0;
@@ -136,6 +141,7 @@ export function KivoChatScreen() {
 
   useEffect(() => {
     setWorkspaceOpen(false);
+    setActionSheetOpen(false);
   }, [pathname]);
 
   useEffect(() => {
@@ -244,6 +250,10 @@ export function KivoChatScreen() {
     setWorkspaceOpen(false);
   }, []);
 
+  const closeActionSheet = useCallback(() => {
+    setActionSheetOpen(false);
+  }, []);
+
   const createNewChat = useCallback(() => {
     const conversationId = createConversation();
     openConversation(conversationId);
@@ -252,6 +262,7 @@ export function KivoChatScreen() {
     setAttachments([]);
     setDraftPrompt('');
     closeWorkspace();
+    closeActionSheet();
 
     router.push('/chat');
     focusComposer();
@@ -259,6 +270,7 @@ export function KivoChatScreen() {
     attachments,
     cleanupAttachments,
     closeWorkspace,
+    closeActionSheet,
     createConversation,
     focusComposer,
     openConversation,
@@ -375,6 +387,104 @@ export function KivoChatScreen() {
     recognition.start();
   }, [ensureSpeechRecognition, isListening, showNotice]);
 
+
+  useEffect(() => {
+    if (!actionSheetOpen) return;
+
+    const hydrateToolState = async () => {
+      try {
+        const [gmailResponse, calendarResponse] = await Promise.all([
+          fetch('/api/integrations/gmail/status', { cache: 'no-store' }),
+          fetch('/api/integrations/google-calendar/status', { cache: 'no-store' }),
+        ]);
+
+        if (gmailResponse.ok) {
+          const gmail = (await gmailResponse.json()) as { connected?: boolean };
+          setGmailConnected(gmail.connected === true);
+        }
+
+        if (calendarResponse.ok) {
+          const calendar = (await calendarResponse.json()) as { connected?: boolean };
+          setCalendarConnected(calendar.connected === true);
+        }
+      } catch {
+        // keep last known states
+      }
+    };
+
+    void hydrateToolState();
+  }, [actionSheetOpen]);
+
+  const handlePasteLink = useCallback(async () => {
+    if (typeof navigator === 'undefined' || !navigator.clipboard?.readText) {
+      showNotice('Clipboard unavailable', 'Paste is not supported in this browser.');
+      return;
+    }
+
+    try {
+      const value = (await navigator.clipboard.readText()).trim();
+      if (!value) {
+        showNotice('Clipboard is empty', 'Copy a link first, then try again.');
+        return;
+      }
+
+      const currentDraft =
+        typeof useAppStore.getState === 'function'
+          ? useAppStore.getState().draftPrompt
+          : draftPrompt;
+
+      setDraftPrompt(currentDraft ? `${currentDraft} ${value}` : value);
+      showNotice('Link pasted', 'Added link to your message.');
+      focusComposer();
+    } catch {
+      showNotice('Paste blocked', 'Allow clipboard permission and try again.');
+    }
+  }, [draftPrompt, focusComposer, setDraftPrompt, showNotice]);
+
+  const handleAiAction = useCallback(
+    (id: 'summarize-day' | 'find-priorities' | 'deep-research' | 'live-search') => {
+      const prompts = {
+        'summarize-day': 'Summarize my day and turn everything into a clear plan with time blocks.',
+        'find-priorities': 'Find my top priorities right now and explain what I should do first.',
+        'deep-research': 'Help me do deep research on this topic with steps, sources, and tradeoffs:',
+        'live-search': 'Use live web search to get current information about:',
+      } as const;
+
+      setDraftPrompt(prompts[id]);
+      focusComposer();
+    },
+    [focusComposer, setDraftPrompt],
+  );
+
+  const handleActionTool = useCallback(
+    (id: 'gmail' | 'calendar' | 'money-saver' | 'tasks') => {
+      if (id === 'gmail') {
+        if (!gmailConnected) {
+          window.location.assign('/api/integrations/gmail/connect');
+          return;
+        }
+        openOperatorRoute('/actions?tool=gmail');
+        return;
+      }
+
+      if (id === 'calendar') {
+        if (!calendarConnected) {
+          window.location.assign('/api/integrations/google-calendar/connect');
+          return;
+        }
+        openOperatorRoute('/actions?tool=google-calendar');
+        return;
+      }
+
+      if (id === 'money-saver') {
+        openOperatorRoute('/money-saver');
+        return;
+      }
+
+      openOperatorRoute('/tasks');
+    },
+    [calendarConnected, gmailConnected, openOperatorRoute],
+  );
   const handleSend = useCallback(async () => {
     if (!canSend || isBusy) return;
 
@@ -392,6 +502,7 @@ export function KivoChatScreen() {
       cleanupAttachments(attachments);
       setAttachments([]);
       closeWorkspace();
+      closeActionSheet();
       focusComposer();
     } finally {
       setIsSending(false);
@@ -400,6 +511,7 @@ export function KivoChatScreen() {
     attachments,
     canSend,
     cleanupAttachments,
+    closeActionSheet,
     closeWorkspace,
     draftPrompt,
     focusComposer,
@@ -714,7 +826,7 @@ export function KivoChatScreen() {
           value={draftPrompt}
           onChange={setDraftPrompt}
           onSend={handleSend}
-          onPlusClick={() => openFilePicker()}
+          onPlusClick={() => setActionSheetOpen(true)}
           onQuickActionClick={() => setWorkspaceOpen(true)}
           onMicClick={toggleMic}
           canSend={canSend}
@@ -728,6 +840,38 @@ export function KivoChatScreen() {
           title={referralToastTitle}
           detail={referralToastDetail}
           onClose={() => setReferralToastOpen(false)}
+        />
+
+
+        <KivoActionSheet
+          open={actionSheetOpen}
+          isListening={isListening}
+          attachments={attachments}
+          toolState={{
+            gmail: {
+              connected: gmailConnected,
+              subtitle: 'Inbox summary, urgent emails, subscriptions',
+            },
+            calendar: {
+              connected: calendarConnected,
+              subtitle: 'Today plan, reminders, free time',
+            },
+            'money-saver': {
+              connected: true,
+              subtitle: 'Find leaks, subscriptions, savings',
+            },
+            tasks: {
+              connected: true,
+              subtitle: 'Notes, todos, action items',
+            },
+          }}
+          onClose={closeActionSheet}
+          onAddImages={() => openFilePicker('image/*')}
+          onAddFiles={() => openFilePicker()}
+          onPasteLink={handlePasteLink}
+          onVoiceInput={toggleMic}
+          onAiAction={handleAiAction}
+          onToolAction={handleActionTool}
         />
 
         <WorkspaceSheet
