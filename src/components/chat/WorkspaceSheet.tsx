@@ -1,17 +1,19 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
-import { ChevronLeft, Clock3, Link2, ShieldCheck, Sparkles, X } from 'lucide-react';
-import { AnimatePresence, motion, type PanInfo } from 'framer-motion';
-import { WorkspaceConnectors } from './WorkspaceConnectors';
-import type { ConnectorMode } from './ConnectorRow';
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import { AlertTriangle, ArrowRight, CheckCircle2, ChevronLeft, Loader2, PlugZap, Settings2, Unplug, X } from 'lucide-react';
+import { AnimatePresence, motion, type PanInfo, useDragControls } from 'framer-motion';
+import { ConnectorLogo } from '@/app/components/connector-logos';
 import {
   CONNECTOR_META,
   formatSyncLabel,
   getConnectorRecord,
+  saveConnectorRecord,
   type ConnectorId,
   type ConnectorRecord,
+  type ConnectorState,
 } from '@/app/lib/connectors-state';
+import type { ConnectorMode } from './ConnectorRow';
 
 type QuickActionId = 'analyze' | 'planner' | 'money-saver' | 'ask-agent';
 type ToolId = 'finance-scanner' | 'memory-search' | 'research-mode' | 'compare-tool' | 'automation-builder';
@@ -28,109 +30,82 @@ type WorkspaceSheetProps = {
 
 const CONNECTOR_ORDER: ConnectorId[] = ['gmail', 'google-calendar', 'browser', 'google-drive', 'github', 'outlook'];
 
-const CONNECTOR_DETAIL_CONTENT: Record<ConnectorId, { hero: string; quickActions: string[] }> = {
-  gmail: {
-    hero: 'Turn your inbox into clear actions, money insights, and fast follow-through.',
-    quickActions: ['Summarize inbox', 'Show urgent emails', 'Find subscriptions', 'Search receipts'],
-  },
-  'google-calendar': {
-    hero: 'Use your calendar to plan days, find focus windows, and remove schedule chaos.',
-    quickActions: ['View today', 'Free time finder', 'Add reminder', 'Weekly plan'],
-  },
-  browser: {
-    hero: 'Use live browsing for current research, source capture, and decision support.',
-    quickActions: ['Live research', 'Capture sources', 'Compare options', 'Save findings'],
-  },
-  'google-drive': {
-    hero: 'Search docs, PDFs, and project files instantly inside your operator workflows.',
-    quickActions: ['Search files', 'Open recent docs', 'Find PDFs', 'Summarize document'],
-  },
-  github: {
-    hero: 'Track repo activity, ship faster, and turn code context into practical actions.',
-    quickActions: ['View repo activity', 'Recent commits', 'Open project', 'Analyze codebase'],
-  },
-  outlook: {
-    hero: 'Bring enterprise email and calendar workflows into one premium command center.',
-    quickActions: ['Summarize mailbox', 'Check priorities', 'Open meetings', 'Search messages'],
-  },
+type RuntimeState = {
+  state: ConnectorState;
+  busy: boolean;
 };
 
-function statusLabel(connector: ConnectorRecord) {
-  if (connector.state === 'connected') return 'Connected';
-  if (connector.state === 'connecting' || connector.state === 'reconnecting') return 'Connecting';
-  if (connector.state === 'error') return 'Needs attention';
-  return 'Not connected';
-}
+const DETAIL_SUBTITLE: Record<ConnectorId, string> = {
+  gmail: 'Email actions, search, and subscription intelligence.',
+  'google-calendar': 'Calendar planning and schedule automation.',
+  browser: 'Live browsing context for research workflows.',
+  'google-drive': 'Document search and workspace file context.',
+  github: 'Repository context and code workflow automations.',
+  outlook: 'Enterprise mailbox and meeting operations.',
+};
 
-function OperatorHubPreview({ connectors, onConnectorAction, onRecentSelect }: {
-  connectors: ConnectorRecord[];
-  onConnectorAction: (connector: string, mode: ConnectorMode) => void;
-  onRecentSelect: (id: RecentId) => void;
+const CONNECTOR_STATUS_LABEL: Record<ConnectorState, string> = {
+  connected: 'Connected',
+  connecting: 'Connecting',
+  error: 'Needs attention',
+  not_connected: 'Not connected',
+  reconnecting: 'Connecting',
+};
+
+function ConnectorListRow({
+  connector,
+  onOpen,
+  onAction,
+}: {
+  connector: ConnectorRecord;
+  onOpen: (id: ConnectorId) => void;
+  onAction: (id: ConnectorId) => void;
 }) {
-  const services = CONNECTOR_ORDER.map((id) => connectors.find((c) => c.id === id) ?? getConnectorRecord(id));
-  const calendar = services.find((item) => item.id === 'google-calendar');
-  const nextStep = calendar?.state === 'connected'
-    ? 'Calendar tools are ready. Launch your daily plan in one tap.'
-    : 'Connect Calendar to unlock planning tools.';
+  const isBusy = connector.state === 'connecting' || connector.state === 'reconnecting';
+  const isConnected = connector.state === 'connected';
 
   return (
-    <section className="space-y-3">
-      <div className="rounded-[28px] border border-[#dde3ec] bg-[linear-gradient(180deg,#fbfcfe_0%,#f5f8fd_100%)] p-4 shadow-[0_12px_26px_rgba(47,55,68,0.08)]">
-        <div className="flex items-start justify-between gap-3">
-          <div>
-            <h3 className="text-[20px] font-semibold tracking-[-0.03em] text-[#2d3442]">Operator Hub</h3>
-            <p className="mt-1 text-[12px] text-[#7e8796]">Launch tools, connected services, and recent operator workflows.</p>
-          </div>
-          <span className="inline-flex items-center gap-1 rounded-full border border-[#d8e2ef] bg-white px-2.5 py-1 text-[11px] text-[#5f6876]">
-            <ShieldCheck className="h-3.5 w-3.5" />
-            Live status
+    <li>
+      <div className="flex items-center gap-3 rounded-2xl border border-[#e8edf4] bg-white p-3 shadow-[0_1px_2px_rgba(18,23,34,0.04)]">
+        <button
+          type="button"
+          onClick={() => onOpen(connector.id)}
+          className="flex min-w-0 flex-1 items-center gap-3 text-left"
+          aria-label={`Open ${connector.name} details`}
+        >
+          <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-[#e4e9f1] bg-[#fbfdff] text-[#485365]">
+            <ConnectorLogo name={connector.name as never} />
           </span>
-        </div>
 
-        <div className="mt-3 space-y-2">
-          {services.slice(0, 3).map((service) => (
-            <button
-              key={service.id}
-              type="button"
-              onClick={() => onConnectorAction(service.id, service.state === 'connected' ? 'connected' : 'connect')}
-              className="flex w-full items-center justify-between rounded-2xl border border-[#e4ebf4] bg-white/92 px-3 py-2.5 text-left transition hover:bg-white"
-            >
-              <span>
-                <span className="block text-[13px] font-semibold text-[#2f3744]">{service.name}</span>
-                <span className="text-[12px] text-[#7f8998]">{statusLabel(service)}</span>
-              </span>
-              <span className={`h-2.5 w-2.5 rounded-full ${service.state === 'connected' ? 'bg-[#66b27f]' : 'bg-[#c6cedb]'}`} />
-            </button>
-          ))}
-        </div>
-      </div>
+          <span className="min-w-0">
+            <span className="block truncate text-[15px] font-semibold text-[#1f2937]">{connector.name}</span>
+            <span className="mt-0.5 block text-[12px] text-[#6b7280]">{CONNECTOR_STATUS_LABEL[connector.state]}</span>
+          </span>
+        </button>
 
-      <div className="rounded-[24px] border border-[#dde3ec] bg-white p-4 shadow-[0_8px_18px_rgba(64,72,88,0.06)]">
-        <p className="text-[11px] font-semibold uppercase tracking-[0.15em] text-[#8b93a1]">Recommended next step</p>
-        <p className="mt-2 text-[14px] text-[#2f3744]">{nextStep}</p>
+        {isBusy ? (
+          <span className="inline-flex items-center gap-1 rounded-full border border-[#dde4ef] bg-[#f7f9fc] px-3 py-1.5 text-[11px] font-medium text-[#607086]">
+            <Loader2 className="h-3.5 w-3.5 animate-spin" />
+            Connecting
+          </span>
+        ) : (
+          <button
+            type="button"
+            onClick={() => onAction(connector.id)}
+            className={`inline-flex items-center gap-1 rounded-full px-3 py-1.5 text-[11px] font-semibold transition active:scale-[0.98] ${
+              isConnected
+                ? 'border border-[#dce4f0] bg-white text-[#334155] hover:bg-[#f8fafc]'
+                : connector.state === 'error'
+                  ? 'border border-[#f0d2d2] bg-[#fff7f7] text-[#934646] hover:bg-[#fff1f1]'
+                  : 'bg-[#111827] text-white hover:bg-[#0b1220]'
+            }`}
+          >
+            {isConnected ? 'Manage' : connector.state === 'error' ? 'Reconnect' : 'Connect'}
+            {!isConnected ? <ArrowRight className="h-3.5 w-3.5" /> : null}
+          </button>
+        )}
       </div>
-
-      <div className="rounded-[24px] border border-[#dde3ec] bg-white p-4 shadow-[0_8px_18px_rgba(64,72,88,0.06)]">
-        <p className="text-[11px] font-semibold uppercase tracking-[0.15em] text-[#8b93a1]">Recent workflows</p>
-        <div className="mt-2 space-y-2">
-          {[
-            { id: 'gmail-sync', label: 'Inbox summary completed' },
-            { id: 'subscription-scan', label: 'Subscription scan ready' },
-            { id: 'weekly-planner', label: 'Repo insights available' },
-          ].map((item) => (
-            <button
-              key={item.id}
-              type="button"
-              onClick={() => onRecentSelect(item.id as RecentId)}
-              className="flex w-full items-center justify-between rounded-xl border border-[#e8edf4] bg-[#fafcff] px-3 py-2.5 text-left text-[13px] text-[#364152] transition hover:bg-white"
-            >
-              <span>{item.label}</span>
-              <Clock3 className="h-3.5 w-3.5 text-[#9ba4b2]" />
-            </button>
-          ))}
-        </div>
-      </div>
-    </section>
+    </li>
   );
 }
 
@@ -140,10 +115,65 @@ export function WorkspaceSheet({
   onQuickAction: _onQuickAction,
   onConnectorAction,
   onToolSelect: _onToolSelect,
-  onRecentSelect,
+  onRecentSelect: _onRecentSelect,
 }: WorkspaceSheetProps) {
+  const dragControls = useDragControls();
   const [detailId, setDetailId] = useState<ConnectorId | null>(null);
   const [connectors, setConnectors] = useState<ConnectorRecord[]>([]);
+  const [runtimeState, setRuntimeState] = useState<Partial<Record<ConnectorId, RuntimeState>>>({});
+
+  const hydrateConnectors = useCallback(async () => {
+    const base = CONNECTOR_ORDER.map((id) => getConnectorRecord(id));
+    setConnectors(base);
+
+    try {
+      const [gmailResponse, calendarResponse] = await Promise.all([
+        fetch('/api/integrations/gmail/status', { cache: 'no-store' }),
+        fetch('/api/integrations/google-calendar/status', { cache: 'no-store' }),
+      ]);
+
+      const gmailData = gmailResponse.ok ? (await gmailResponse.json()) as Record<string, unknown> : null;
+      const calendarData = calendarResponse.ok ? (await calendarResponse.json()) as Record<string, unknown> : null;
+
+      setConnectors((prev) =>
+        prev.map((item) => {
+          if (item.id === 'gmail' && gmailData) {
+            const isConnected = gmailData.connected === true;
+            const isError = gmailData.status === 'error';
+            const updated: ConnectorRecord = {
+              ...item,
+              state: isConnected ? (isError ? 'error' : 'connected') : 'not_connected',
+              accountEmail: typeof gmailData.accountEmail === 'string' ? gmailData.accountEmail : null,
+              lastSyncAt: typeof gmailData.lastSyncedAt === 'string' ? gmailData.lastSyncedAt : null,
+              permissions:
+                Array.isArray(gmailData.permissions) && gmailData.permissions.every((permission) => typeof permission === 'string')
+                  ? gmailData.permissions as string[]
+                  : item.permissions,
+              errorMessage: typeof gmailData.errorMessage === 'string' ? gmailData.errorMessage : null,
+            };
+            saveConnectorRecord('gmail', updated);
+            return updated;
+          }
+
+          if (item.id === 'google-calendar' && calendarData) {
+            const updated: ConnectorRecord = {
+              ...item,
+              state: calendarData.connected === true ? 'connected' : 'not_connected',
+              accountEmail: typeof calendarData.accountEmail === 'string' ? calendarData.accountEmail : null,
+              lastSyncAt: typeof calendarData.lastSyncAt === 'string' ? calendarData.lastSyncAt : null,
+              errorMessage: null,
+            };
+            saveConnectorRecord('google-calendar', updated);
+            return updated;
+          }
+
+          return item;
+        }),
+      );
+    } catch {
+      // keep locally hydrated state
+    }
+  }, []);
 
   useEffect(() => {
     if (!open) {
@@ -154,14 +184,15 @@ export function WorkspaceSheet({
     const previousOverflow = document.body.style.overflow;
     document.body.style.overflow = 'hidden';
 
+    void hydrateConnectors();
+
     const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') {
-        if (detailId) {
-          setDetailId(null);
-          return;
-        }
-        onClose();
+      if (event.key !== 'Escape') return;
+      if (detailId) {
+        setDetailId(null);
+        return;
       }
+      onClose();
     };
 
     window.addEventListener('keydown', onKeyDown);
@@ -169,34 +200,75 @@ export function WorkspaceSheet({
       document.body.style.overflow = previousOverflow;
       window.removeEventListener('keydown', onKeyDown);
     };
-  }, [detailId, onClose, open]);
+  }, [detailId, hydrateConnectors, onClose, open]);
+
+  const resolvedConnectors = useMemo(
+    () =>
+      connectors.map((connector) => {
+        const runtime = runtimeState[connector.id];
+        if (!runtime) return connector;
+        return { ...connector, state: runtime.state };
+      }),
+    [connectors, runtimeState],
+  );
 
   const detailConnector = useMemo(
-    () => (detailId ? connectors.find((item) => item.id === detailId) ?? getConnectorRecord(detailId) : null),
-    [connectors, detailId],
+    () => (detailId ? resolvedConnectors.find((item) => item.id === detailId) ?? getConnectorRecord(detailId) : null),
+    [detailId, resolvedConnectors],
+  );
+
+  const handleDragEnd = (_: MouseEvent | TouchEvent | PointerEvent, info: PanInfo) => {
+    if (info.offset.y > 120 || info.velocity.y > 650) onClose();
+  };
+
+  const updateConnector = useCallback((id: ConnectorId, state: ConnectorState, extra?: Partial<ConnectorRecord>) => {
+    setConnectors((prev) => {
+      const next = prev.map((item) => {
+        if (item.id !== id) return item;
+        const updated = { ...item, ...extra, state };
+        saveConnectorRecord(id, updated);
+        return updated;
+      });
+      return next;
+    });
+    setRuntimeState((prev) => ({
+      ...prev,
+      [id]: { state, busy: state === 'connecting' || state === 'reconnecting' },
+    }));
+  }, []);
+
+  const handleConnectorAction = useCallback(
+    (id: ConnectorId, mode: ConnectorMode) => {
+      if (mode === 'connect') {
+        const current = resolvedConnectors.find((item) => item.id === id);
+        updateConnector(id, current?.state === 'error' ? 'reconnecting' : 'connecting', { errorMessage: null });
+      }
+
+      if (mode === 'toggle') {
+        updateConnector(id, 'not_connected', { accountEmail: null, errorMessage: null, lastSyncAt: null });
+      }
+
+      onConnectorAction(id, mode);
+
+      if (mode === 'toggle' || mode === 'manage') {
+        setTimeout(() => {
+          void hydrateConnectors();
+        }, 500);
+      }
+    },
+    [hydrateConnectors, onConnectorAction, resolvedConnectors, updateConnector],
   );
 
   const title = detailConnector ? detailConnector.name : 'Connectors';
-  const subtitle = detailConnector
-    ? CONNECTOR_DETAIL_CONTENT[detailConnector.id].hero
-    : 'Connect apps and services to unlock Kivo operators.';
-
-  const handleDragEnd = (_: MouseEvent | TouchEvent | PointerEvent, info: PanInfo) => {
-    if (info.offset.y > 120 || info.velocity.y > 700) {
-      onClose();
-    }
-  };
-
-  const executeConnect = (id: ConnectorId) => {
-    onConnectorAction(id, 'connect');
-  };
+  const subtitle = detailConnector ? DETAIL_SUBTITLE[detailConnector.id] : 'Connect apps and services';
+  const connectedCount = resolvedConnectors.filter((item) => item.state === 'connected').length;
 
   return (
     <AnimatePresence>
       {open ? (
         <>
           <motion.div
-            className="fixed inset-0 z-40 bg-[#6f7787]/18 backdrop-blur-[2px]"
+            className="fixed inset-0 z-40 bg-[#0f172a]/25 backdrop-blur-[2px]"
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
@@ -204,110 +276,135 @@ export function WorkspaceSheet({
           />
 
           <motion.aside
-            className="fixed inset-x-0 bottom-0 z-50 max-h-[92dvh] overflow-hidden rounded-t-[34px] border border-[#dde2ea] bg-[#f6f7fb] shadow-[0_-18px_48px_rgba(39,45,58,0.16)]"
+            className="fixed inset-x-0 bottom-0 z-50 max-h-[92dvh] overflow-hidden rounded-t-[30px] border border-[#e5eaf2] bg-[#f8faff] shadow-[0_-20px_48px_rgba(15,23,42,0.16)]"
             initial={{ y: '100%' }}
             animate={{ y: 0 }}
             exit={{ y: '100%' }}
-            transition={{ type: 'spring', stiffness: 300, damping: 30 }}
+            transition={{ type: 'spring', stiffness: 320, damping: 34 }}
             drag="y"
+            dragControls={dragControls}
+            dragListener={false}
             dragConstraints={{ top: 0, bottom: 0 }}
-            dragElastic={{ top: 0, bottom: 0.16 }}
+            dragElastic={{ top: 0, bottom: 0.2 }}
             onDragEnd={handleDragEnd}
           >
-            <div className="relative flex h-full max-h-[92dvh] flex-col">
-              <div className="sticky top-0 z-10 bg-[#f6f7fb]/95 px-4 pb-3 pt-3 backdrop-blur-xl sm:px-5">
-                <div className="mx-auto mb-3 h-1.5 w-14 rounded-full bg-[#d8dde6]" />
+            <div className="flex h-full max-h-[92dvh] min-h-[56dvh] flex-col">
+              <header className="sticky top-0 z-10 border-b border-[#e8edf5] bg-[#f8faff]/95 px-4 pb-3 pt-2 backdrop-blur-xl sm:px-5">
+                <button
+                  type="button"
+                  onPointerDown={(event) => dragControls.start(event)}
+                  className="mx-auto mb-2 block w-full touch-none"
+                  aria-label="Drag to dismiss"
+                >
+                  <span className="mx-auto block h-1.5 w-14 rounded-full bg-[#d3dae6]" />
+                </button>
 
-                <div className="mb-1 flex items-center gap-3">
+                <div className="flex items-center gap-3">
                   <button
                     type="button"
                     onClick={detailId ? () => setDetailId(null) : onClose}
-                    className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-full border border-[#d9dee7] bg-[#f9fbfe] text-[#5d6572] shadow-[0_2px_8px_rgba(36,42,55,0.04)] transition hover:bg-white active:scale-[0.97]"
+                    className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-[#dde5f0] bg-white text-[#546173]"
                     aria-label={detailId ? 'Back to connectors' : 'Close connectors'}
                   >
                     {detailId ? <ChevronLeft className="h-5 w-5" /> : <X className="h-5 w-5" />}
                   </button>
 
                   <div className="min-w-0">
-                    <h2 className="text-[22px] font-semibold tracking-[-0.03em] text-[#2d3442]">{title}</h2>
-                    <p className="mt-0.5 text-[13px] text-[#8b93a1]">{subtitle}</p>
+                    <h2 className="truncate text-[22px] font-semibold tracking-[-0.03em] text-[#101827]">{title}</h2>
+                    <p className="truncate text-[13px] text-[#667085]">{subtitle}</p>
                   </div>
                 </div>
-              </div>
+              </header>
 
-              <div className="min-h-0 flex-1 overflow-y-auto px-4 pb-[max(20px,env(safe-area-inset-bottom))] sm:px-5">
+              <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 pb-[max(20px,env(safe-area-inset-bottom))] pt-4 sm:px-5">
                 {detailConnector ? (
-                  <section className="space-y-4 pb-4">
-                    <div className="rounded-[28px] border border-[#dde3ec] bg-[linear-gradient(180deg,#fbfcfe_0%,#f7f9fc_100%)] p-4 shadow-[0_10px_24px_rgba(64,72,88,0.06)]">
-                      <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-[#8b93a1]">{detailConnector.name}</p>
-                      <p className="mt-2 text-[14px] leading-6 text-[#707887]">{CONNECTOR_DETAIL_CONTENT[detailConnector.id].hero}</p>
-
-                      <div className="mt-3 grid grid-cols-2 gap-2">
-                        {CONNECTOR_DETAIL_CONTENT[detailConnector.id].quickActions.map((action) => (
-                          <button key={action} type="button" onClick={() => onConnectorAction(detailConnector.id, 'connected')} className="rounded-2xl border border-[#e4eaf3] bg-white/92 px-3 py-2 text-left text-[12px] font-medium text-[#334155] transition hover:bg-white">
-                            {action}
-                          </button>
-                        ))}
+                  <section className="space-y-4 pb-2">
+                    <div className="rounded-2xl border border-[#e3e9f2] bg-white p-4 shadow-[0_6px_20px_rgba(16,24,40,0.06)]">
+                      <div className="flex items-start justify-between gap-3">
+                        <div>
+                          <p className="text-[13px] font-semibold text-[#1f2937]">Status</p>
+                          <p className="mt-1 text-[12px] text-[#6b7280]">{CONNECTOR_STATUS_LABEL[detailConnector.state]}</p>
+                        </div>
+                        {detailConnector.state === 'error' ? <AlertTriangle className="h-4 w-4 text-[#a34a4a]" /> : <CheckCircle2 className="h-4 w-4 text-[#3c8f5b]" />}
                       </div>
+
+                      <dl className="mt-3 space-y-1.5 text-[12px] text-[#4b5563]">
+                        <div className="flex justify-between gap-3"><dt className="text-[#6b7280]">Account</dt><dd className="truncate text-right">{detailConnector.accountEmail || 'Not connected'}</dd></div>
+                        <div className="flex justify-between gap-3"><dt className="text-[#6b7280]">Last sync</dt><dd className="text-right">{formatSyncLabel(detailConnector.lastSyncAt)}</dd></div>
+                        <div className="flex justify-between gap-3"><dt className="text-[#6b7280]">Permissions</dt><dd className="text-right">{detailConnector.permissions.length}</dd></div>
+                      </dl>
                     </div>
 
-                    <div className="rounded-[24px] border border-[#dde3ec] bg-white p-4 shadow-[0_8px_18px_rgba(64,72,88,0.06)]">
-                      <h4 className="text-[13px] font-semibold text-[#2f3744]">Status</h4>
-                      <div className="mt-2 space-y-1 text-[12px] text-[#6f7887]">
-                        <p>Status: <span className="font-semibold text-[#2f3744]">{statusLabel(detailConnector)}</span></p>
-                        <p>Account: {detailConnector.accountEmail || 'No account connected'}</p>
-                        <p>Last sync: {formatSyncLabel(detailConnector.lastSyncAt)}</p>
-                        <p>Permissions: {detailConnector.permissions.join(', ')}</p>
-                      </div>
-                    </div>
-
-                    <div className="space-y-2 pb-6">
-                      <button type="button" onClick={() => onConnectorAction(detailConnector.id, detailConnector.state === 'connected' ? 'connected' : 'connect')} className="w-full rounded-2xl bg-[#1f242c] px-4 py-3 text-sm font-semibold text-white shadow-[0_10px_24px_rgba(15,23,42,0.22)] transition hover:bg-[#121820]">
+                    <div className="space-y-2">
+                      <button
+                        type="button"
+                        onClick={() => handleConnectorAction(detailConnector.id, detailConnector.state === 'connected' ? 'connected' : 'connect')}
+                        className="inline-flex w-full items-center justify-center gap-2 rounded-2xl bg-[#111827] px-4 py-3 text-sm font-semibold text-white"
+                      >
+                        {detailConnector.state === 'connecting' || detailConnector.state === 'reconnecting' ? <Loader2 className="h-4 w-4 animate-spin" /> : <PlugZap className="h-4 w-4" />}
                         {detailConnector.state === 'connected' ? 'Open tools' : 'Connect'}
                       </button>
-                      <button type="button" onClick={() => onConnectorAction(detailConnector.id, 'manage')} className="w-full rounded-2xl border border-[#d7dfeb] bg-white px-4 py-3 text-sm font-semibold text-[#2f3744] transition hover:bg-[#f7f9fd]">
-                        Reconnect
+
+                      <button
+                        type="button"
+                        onClick={() => handleConnectorAction(detailConnector.id, detailConnector.state === 'connected' ? 'manage' : 'connect')}
+                        className="w-full rounded-2xl border border-[#dce3ee] bg-white px-4 py-3 text-sm font-semibold text-[#334155]"
+                      >
+                        {detailConnector.state === 'connected' ? 'Manage' : 'Reconnect'}
                       </button>
-                      <button type="button" onClick={() => onConnectorAction(detailConnector.id, 'toggle')} className="w-full rounded-2xl border border-[#f1d7d7] bg-[#fff7f7] px-4 py-3 text-sm font-semibold text-[#8e4040] transition hover:bg-[#fff0f0]">
+
+                      <button
+                        type="button"
+                        onClick={() => handleConnectorAction(detailConnector.id, 'toggle')}
+                        className="inline-flex w-full items-center justify-center gap-2 rounded-2xl border border-[#f1d2d2] bg-[#fff7f7] px-4 py-3 text-sm font-semibold text-[#923f3f]"
+                      >
+                        <Unplug className="h-4 w-4" />
                         Disconnect
                       </button>
                     </div>
                   </section>
                 ) : (
-                  <div className="space-y-5 pb-4 pt-1">
-                    <WorkspaceConnectors
-                      onOpenDetail={(connector) => setDetailId(connector)}
-                      onConnectorAction={(connector, mode) => onConnectorAction(connector, mode)}
-                      onOpenAddConnector={() => setDetailId('gmail')}
-                      onOpenManageAccess={() => onConnectorAction('gmail', 'manage')}
-                      onConnectorsChange={setConnectors}
-                    />
+                  <section className="space-y-4">
+                    <div className="rounded-2xl border border-[#e4eaf3] bg-white p-2 shadow-[0_8px_24px_rgba(17,24,39,0.06)]">
+                      <button
+                        type="button"
+                        onClick={() => setDetailId('gmail')}
+                        className="flex w-full items-center justify-between rounded-xl px-3 py-3 text-left hover:bg-[#f8fbff]"
+                      >
+                        <span className="inline-flex items-center gap-2 text-sm font-semibold text-[#1f2937]"><PlugZap className="h-4 w-4" />Add connectors</span>
+                        <span className="text-xs text-[#6b7280]">Start with Gmail</span>
+                      </button>
 
-                    {connectors.filter((item) => item.state === 'connected').length === 0 ? (
-                      <div className="rounded-[24px] border border-[#dde3ec] bg-white p-4 text-center shadow-[0_8px_18px_rgba(64,72,88,0.06)]">
-                        <p className="text-[14px] font-semibold text-[#2f3744]">Connect your first service to unlock real operator actions.</p>
-                        <button
-                          type="button"
-                          onClick={() => executeConnect('gmail')}
-                          className="mt-3 rounded-full bg-[#1f242c] px-4 py-2 text-xs font-semibold text-white"
-                        >
-                          Connect Gmail
-                        </button>
-                      </div>
-                    ) : null}
+                      <div className="mx-3 h-px bg-[#edf1f7]" />
 
-                    <OperatorHubPreview
-                      connectors={connectors}
-                      onConnectorAction={onConnectorAction}
-                      onRecentSelect={onRecentSelect}
-                    />
-
-                    <div className="rounded-[24px] border border-[#dde3ec] bg-white/95 p-4 shadow-[0_8px_18px_rgba(64,72,88,0.06)]">
-                      <p className="inline-flex items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.16em] text-[#8b93a1]"><Link2 className="h-3.5 w-3.5" />Premium connector ecosystem</p>
-                      <p className="mt-2 text-[13px] leading-6 text-[#6f7887]">Every connector includes direct actions, live status, sync details, and clear privacy controls designed for operator-grade workflows.</p>
-                      <p className="mt-2 inline-flex items-center gap-1 text-[12px] font-medium text-[#5f6876]"><Sparkles className="h-3.5 w-3.5" />Polished transitions and mobile-first flow enabled.</p>
+                      <button
+                        type="button"
+                        onClick={() => handleConnectorAction('gmail', 'manage')}
+                        className="flex w-full items-center justify-between rounded-xl px-3 py-3 text-left hover:bg-[#f8fbff]"
+                      >
+                        <span className="inline-flex items-center gap-2 text-sm font-semibold text-[#1f2937]"><Settings2 className="h-4 w-4" />Manage connectors</span>
+                        <span className="text-xs text-[#6b7280]">Permissions and tools</span>
+                      </button>
                     </div>
-                  </div>
+
+                    <div className="rounded-2xl border border-[#e4eaf3] bg-[#fbfdff] p-2 shadow-[0_8px_24px_rgba(17,24,39,0.05)]">
+                      <ul className="space-y-2">
+                        {resolvedConnectors.map((connector) => (
+                          <ConnectorListRow
+                            key={connector.id}
+                            connector={{ ...CONNECTOR_META[connector.id], ...connector }}
+                            onOpen={setDetailId}
+                            onAction={(id) =>
+                              handleConnectorAction(id, connector.state === 'connected' ? 'manage' : 'connect')
+                            }
+                          />
+                        ))}
+                      </ul>
+                    </div>
+
+                    <p className="px-1 text-[12px] text-[#6b7280]">Connect your tools to unlock real operator actions.</p>
+                    <p className="px-1 text-[11px] text-[#9aa4b2]">{connectedCount} connected</p>
+                  </section>
                 )}
               </div>
             </div>
