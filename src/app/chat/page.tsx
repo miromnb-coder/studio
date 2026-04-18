@@ -1,5 +1,3 @@
-'use client';
-
 export const dynamic = 'force-dynamic';
 
 import { KivoChatScreen } from '@/components/chat/kivo/KivoChatScreen';
