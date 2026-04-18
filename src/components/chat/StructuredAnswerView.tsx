@@ -1,12 +1,21 @@
 'use client';
 
 import type { StructuredAnswer } from '@/agent/vNext/types';
-import { KivoResponseBody } from './KivoResponseBody';
+import type { Message } from '@/app/store/app-store-types';
+import { ResponseRenderer } from './ResponseRenderer';
 
 type StructuredAnswerViewProps = {
   answer: StructuredAnswer;
 };
 
 export function StructuredAnswerView({ answer }: StructuredAnswerViewProps) {
-  return <KivoResponseBody answer={answer} />;
+  const syntheticMessage: Message = {
+    id: 'structured-answer',
+    role: 'assistant',
+    content: answer.plainText ?? answer.summary ?? answer.lead ?? '',
+    structured: answer,
+    createdAt: new Date(0).toISOString(),
+  };
+
+  return <ResponseRenderer message={syntheticMessage} />;
 }
