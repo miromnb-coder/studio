@@ -10,17 +10,27 @@ export function StructuredSourceRow({ sources }: StructuredSourceRowProps) {
   if (!sources.length) return null;
 
   return (
-    <div className="flex flex-wrap items-center gap-2 text-[12px] text-[#748196]">
-      <span className="font-medium text-[#8a96a8]">Built from</span>
+    <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[12px] leading-6">
+      <span className="font-medium tracking-[-0.01em] text-[#97a1af]">
+        Built from
+      </span>
+
       {sources.map((source) => (
         <span
           key={source.id}
-          className="inline-flex items-center gap-1.5 rounded-full border border-[#e6ecf4] bg-white/95 px-2.5 py-1 font-medium text-[#5a687d]"
+          className="inline-flex items-center gap-1.5 font-medium tracking-[-0.01em] text-[#5f6c80]"
         >
-          <span className={source.used ? 'text-[#4f8f64]' : 'text-[#9ca9bb]'}>
+          <span
+            className={
+              source.used
+                ? 'text-[#5fa271]'
+                : 'text-[#a4afbe]'
+            }
+          >
             {source.used ? '✓' : '•'}
           </span>
-          {source.label}
+
+          <span>{source.label}</span>
         </span>
       ))}
     </div>
