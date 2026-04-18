@@ -392,7 +392,7 @@ export function ActionsPageClient() {
 
             {toolConnected === false ? (
               <p className="mt-2 text-xs text-[#9f1a1a]">
-                Google Calendar is not connected. Connect it from Control to use Calendar Operator.
+                Google Calendar is not connected. Connect it from Connectors to use Calendar Operator.
               </p>
             ) : null}
           </PremiumCard>
@@ -549,7 +549,7 @@ export function ActionsPageClient() {
 
           {toolConnected === false ? (
             <p className="mt-2 text-xs text-[#9f1a1a]">
-              Gmail is not connected. Connect it from Control to use Email Operator.
+              Gmail is not connected. Connect it from Connectors to use Email Operator.
             </p>
           ) : null}
         </PremiumCard>
