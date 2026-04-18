@@ -38,7 +38,7 @@ type RuntimeState = {
 const DETAIL_SUBTITLE: Record<ConnectorId, string> = {
   gmail: 'Email actions, search, and subscription intelligence.',
   'google-calendar': 'Calendar planning and schedule automation.',
-  browser: 'Live browsing context for research workflows.',
+  browser: 'Live web search, comparisons, and current research.',
   'google-drive': 'Document search and workspace file context.',
   github: 'Repository context and code workflow automations.',
   outlook: 'Enterprise mailbox and meeting operations.',
@@ -127,13 +127,15 @@ export function WorkspaceSheet({
     setConnectors(base);
 
     try {
-      const [gmailResponse, calendarResponse] = await Promise.all([
+      const [gmailResponse, calendarResponse, browserResponse] = await Promise.all([
         fetch('/api/integrations/gmail/status', { cache: 'no-store' }),
         fetch('/api/integrations/google-calendar/status', { cache: 'no-store' }),
+        fetch('/api/integrations/browser/status', { cache: 'no-store' }),
       ]);
 
       const gmailData = gmailResponse.ok ? (await gmailResponse.json()) as Record<string, unknown> : null;
       const calendarData = calendarResponse.ok ? (await calendarResponse.json()) as Record<string, unknown> : null;
+      const browserData = browserResponse.ok ? (await browserResponse.json()) as Record<string, unknown> : null;
 
       setConnectors((prev) =>
         prev.map((item) => {
@@ -161,9 +163,33 @@ export function WorkspaceSheet({
               state: calendarData.connected === true ? 'connected' : 'not_connected',
               accountEmail: typeof calendarData.accountEmail === 'string' ? calendarData.accountEmail : null,
               lastSyncAt: typeof calendarData.lastSyncAt === 'string' ? calendarData.lastSyncAt : null,
-              errorMessage: null,
+              permissions:
+                Array.isArray(calendarData.permissions) && calendarData.permissions.every((permission) => typeof permission === 'string')
+                  ? calendarData.permissions as string[]
+                  : item.permissions,
+              errorMessage: typeof calendarData.errorMessage === 'string' ? calendarData.errorMessage : null,
             };
             saveConnectorRecord('google-calendar', updated);
+            return updated;
+          }
+
+          if (item.id === 'browser' && browserData) {
+            const updated: ConnectorRecord = {
+              ...item,
+              state: browserData.connected === true ? 'connected' : 'not_connected',
+              accountEmail: null,
+              lastSyncAt: null,
+              permissions:
+                Array.isArray(browserData.permissions) && browserData.permissions.every((permission) => typeof permission === 'string')
+                  ? browserData.permissions as string[]
+                  : item.permissions,
+              tools:
+                Array.isArray(browserData.tools) && browserData.tools.every((tool) => typeof tool === 'string')
+                  ? browserData.tools as string[]
+                  : item.tools,
+              errorMessage: typeof browserData.errorMessage === 'string' ? browserData.errorMessage : null,
+            };
+            saveConnectorRecord('browser', updated);
             return updated;
           }
 
@@ -338,11 +364,26 @@ export function WorkspaceSheet({
                     <div className="space-y-2">
                       <button
                         type="button"
-                        onClick={() => handleConnectorAction(detailConnector.id, detailConnector.state === 'connected' ? 'connected' : 'connect')}
+                        onClick={() =>
+                          handleConnectorAction(
+                            detailConnector.id,
+                            detailConnector.state === 'connected' ? 'connected' : 'connect',
+                          )
+                        }
                         className="inline-flex w-full items-center justify-center gap-2 rounded-2xl bg-[#111827] px-4 py-3 text-sm font-semibold text-white"
                       >
-                        {detailConnector.state === 'connecting' || detailConnector.state === 'reconnecting' ? <Loader2 className="h-4 w-4 animate-spin" /> : <PlugZap className="h-4 w-4" />}
-                        {detailConnector.state === 'connected' ? 'Open tools' : 'Connect'}
+                        {detailConnector.state === 'connecting' || detailConnector.state === 'reconnecting' ? (
+                          <Loader2 className="h-4 w-4 animate-spin" />
+                        ) : (
+                          <PlugZap className="h-4 w-4" />
+                        )}
+                        {detailConnector.id === 'browser'
+                          ? detailConnector.state === 'connected'
+                            ? 'Open browser search'
+                            : 'Enable browser search'
+                          : detailConnector.state === 'connected'
+                            ? 'Open tools'
+                            : 'Connect'}
                       </button>
 
                       <button
