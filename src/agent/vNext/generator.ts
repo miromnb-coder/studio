@@ -9,7 +9,6 @@ import type {
   AgentRouteResult,
   AgentStreamEvent,
   StructuredAnswer,
-  StructuredSection,
   AgentToolResult,
 } from './types';
 
@@ -22,14 +21,33 @@ export type GenerateFinalAnswerInput = {
   memorySummary: string;
 };
 
-type LlmAnswerSchema = {
-  answer: string;
-  followUps: string[];
+type LlmHighlightTone = 'default' | 'important' | 'success' | 'warning';
+
+type LlmStructuredAnswerSchema = {
+  title: string | null;
+  lead: string | null;
+  summary: string | null;
+  highlights: Array<{
+    text: string;
+    tone: LlmHighlightTone;
+  }>;
+  nextStep: string | null;
+  sources: Array<{
+    id: string;
+    label: string;
+    used: boolean;
+  }>;
+  plainText: string | null;
 };
 
 function normalizeText(value: unknown): string {
   if (typeof value !== 'string') return '';
   return value.replace(/\s+/g, ' ').trim();
+}
+
+function trimOuterWhitespace(value: unknown): string {
+  if (typeof value !== 'string') return '';
+  return value.trim();
 }
 
 function getRequestText(request: AgentRequest): string {
@@ -80,6 +98,7 @@ function getLanguage(input: GenerateFinalAnswerInput): string {
 function getResponseMode(input: GenerateFinalAnswerInput): ResponseMode {
   const metadata = (input.request.metadata ?? {}) as Record<string, unknown>;
   const mode = metadata.responseModeHint;
+
   if (
     mode === 'casual' ||
     mode === 'fast' ||
@@ -99,36 +118,54 @@ function buildModeInstruction(mode: ResponseMode): string {
       return [
         'Mode: casual.',
         'Reply directly and naturally as in normal conversation.',
-        'Never add workflow/preamble phrases (e.g. "Great request", "I will handle this now").',
-        'No task framing or process narration.',
-        'Keep it warm, concise, premium.',
+        'Keep the structure minimal unless it clearly improves readability.',
+        'No robotic phrasing, no process narration, no workflow theater.',
       ].join(' ');
     case 'fast':
       return [
         'Mode: fast.',
-        'Answer quickly and clearly with minimal overhead.',
-        'Avoid planning theater and long setup text.',
+        'Be concise and immediately useful.',
+        'Keep the answer compact and decisive.',
       ].join(' ');
     case 'tool':
       return [
         'Mode: tool.',
-        'Give a direct answer grounded in available tool context.',
-        'Do not pretend tools were used if data is missing.',
+        'Ground the answer in available tool context.',
+        'Do not pretend missing tools were used.',
       ].join(' ');
     case 'fallback':
       return [
         'Mode: fallback.',
         'Be honest about uncertainty in calm user language.',
-        'No technical/internal error jargon.',
+        'Still provide the most helpful answer possible.',
       ].join(' ');
     case 'operator':
     default:
       return [
         'Mode: operator.',
-        'Use a structured, action-oriented style when it helps execution.',
-        'Stay natural and avoid robotic filler.',
+        'Use a premium, structured, action-oriented style when helpful.',
+        'Prioritize clarity, usefulness, and readable hierarchy.',
       ].join(' ');
   }
+}
+
+function buildLanguageInstruction(language: string): string {
+  const normalizedLanguage = language || 'en';
+
+  return [
+    `Respond ONLY in ${normalizedLanguage}.`,
+    'Use that language consistently across all fields.',
+    'Do not mix languages.',
+    "If uncertain, prefer the user's detected language.",
+  ].join(' ');
+}
+
+function toTitleCase(value: string): string {
+  return value
+    .split(/[\s_-]+/)
+    .filter(Boolean)
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+    .join(' ');
 }
 
 function summarizeToolResults(toolResults: AgentToolResult[]): {
@@ -187,7 +224,8 @@ function estimateConfidence(
   toolResults: AgentToolResult[],
   answerText: string,
 ): number {
-  let confidence = typeof route.confidence === 'number' ? route.confidence : 0.6;
+  let confidence =
+    typeof route.confidence === 'number' ? route.confidence : 0.6;
 
   const okCount = toolResults.filter((item) => item.ok).length;
   const failCount = toolResults.filter((item) => !item.ok).length;
@@ -200,25 +238,6 @@ function estimateConfidence(
   if (answerText.length > 180) confidence += 0.03;
 
   return Math.max(0.22, Math.min(0.97, Number(confidence.toFixed(2))));
-}
-
-function buildLanguageInstruction(language: string): string {
-  const normalizedLanguage = language || 'en';
-  return [
-    `Respond ONLY in ${normalizedLanguage}.`,
-    'Use that language for the entire answer.',
-    'Do not mix languages.',
-    'Do not switch to English automatically.',
-    "If uncertain, prefer the user's detected language.",
-  ].join(' ');
-}
-
-function toTitleCase(value: string): string {
-  return value
-    .split(/[\s_-]+/)
-    .filter(Boolean)
-    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
-    .join(' ');
 }
 
 function buildSourceList(toolResults: AgentToolResult[]) {
@@ -237,232 +256,35 @@ function buildSourceList(toolResults: AgentToolResult[]) {
     }));
 }
 
-function buildTodayPlanStructure(input: GenerateFinalAnswerInput): StructuredAnswer {
-  const sections: StructuredSection[] = [
-    {
-      label: 'Priority',
-      content: input.plan.steps[0]?.title || 'Start with your top-impact task first.',
-      tone: 'important',
-    },
-    {
-      label: 'Focus',
-      content:
-        input.plan.steps[1]?.title ||
-        'Block one uninterrupted deep-work window this morning.',
-      tone: 'default',
-    },
-    {
-      label: 'Savings',
-      content:
-        input.plan.steps[2]?.title ||
-        'Close one low-value subscription or pending small expense.',
-      tone: 'success',
-    },
-  ];
+function isBadTitle(title: string): boolean {
+  const normalized = normalizeText(title).toLowerCase();
 
-  const sources = buildSourceList(input.toolResults);
-
-  return {
-    title: 'Today Plan',
-    summary: 'Built from your current priorities, tools, and recent context.',
-    sections,
-    actions: [
-      { id: 'open_calendar', label: 'Open Calendar', kind: 'primary' },
-      { id: 'show_emails', label: 'Show Emails', kind: 'secondary' },
-    ],
-    sources:
-      sources.length > 0
-        ? sources
-        : [
-            { id: 'calendar', label: 'Calendar', used: true },
-            { id: 'gmail', label: 'Gmail', used: true },
-            { id: 'memory', label: 'Memory', used: true },
-          ],
-    outcome: 'Estimated 1h saved today',
-  };
+  return [
+    'structured answer',
+    'response',
+    'result',
+    'analysis',
+    'answer',
+    'ai output',
+    'assistant response',
+  ].includes(normalized);
 }
 
-function buildGenericStructure(
-  input: GenerateFinalAnswerInput,
-  answerText: string,
-): StructuredAnswer | undefined {
-  const trimmed = normalizeText(answerText);
-  if (!trimmed) return undefined;
-
-  const paragraphs = trimmed
-    .split(/\n{2,}/)
-    .map((item) => normalizeText(item))
-    .filter(Boolean);
-  const firstParagraph = paragraphs[0] || trimmed;
-  const bulletCandidates = trimmed
-    .split('\n')
-    .map((line) => line.trim())
-    .filter((line) => /^([-•*]|\d+\.)\s+/.test(line))
-    .map((line) => line.replace(/^([-•*]|\d+\.)\s+/, ''))
-    .slice(0, 5);
-  const sources = buildSourceList(input.toolResults);
-
-  const sections: StructuredSection[] = input.plan.steps.slice(0, 3).map((step, index) => ({
-    label: step.title,
-    content: step.description || step.title,
-    tone: index === 0 ? 'important' : 'default',
-  }));
-
-  const shouldRender =
-    input.route.intent === 'planning' ||
-    input.route.intent === 'productivity' ||
-    sections.length >= 2 ||
-    bulletCandidates.length >= 2;
-
-  if (!shouldRender) return undefined;
-
-  return {
-    title: input.route.intent === 'planning' ? 'Plan' : 'Structured Answer',
-    summary: firstParagraph.slice(0, 220),
-    sections: sections.length ? sections : undefined,
-    bullets: bulletCandidates.length ? bulletCandidates : undefined,
-    actions: [
-      { id: 'refine_plan', label: 'Refine Plan', kind: 'secondary' },
-      { id: 'next_step', label: 'Take Next Step', kind: 'primary' },
-    ],
-    sources: sources.length ? sources : undefined,
-    outcome: paragraphs[1] || undefined,
-  };
-}
-
-function buildStructuredAnswer(
-  input: GenerateFinalAnswerInput,
-  answerText: string,
-): StructuredAnswer | undefined {
-  const requestText = getRequestText(input.request).toLowerCase();
-  const asksForTodayPlan =
-    /\b(what should i do today|today plan|plan my day|what now today)\b/i.test(
-      requestText,
-    ) || /\b(today|todays|this morning|this afternoon)\b/i.test(requestText);
-
-  if (asksForTodayPlan || input.route.intent === 'planning') {
-    const todayPlan = buildTodayPlanStructure(input);
-    return { ...todayPlan, plainText: answerText };
+function normalizeTone(value: unknown): LlmHighlightTone {
+  if (
+    value === 'important' ||
+    value === 'success' ||
+    value === 'warning' ||
+    value === 'default'
+  ) {
+    return value;
   }
 
-  const generic = buildGenericStructure(input, answerText);
-  if (!generic) return undefined;
-  return { ...generic, plainText: answerText };
-}
-
-function buildLocalizedFallback(
-  language: string,
-  params: {
-    requestText: string;
-    memorySummary: string;
-    successful: string[];
-    failed: string[];
-  },
-): { text: string; followUps: string[] } {
-  const { requestText, memorySummary, successful, failed } = params;
-
-  if (language.startsWith('fi')) {
-    return {
-      text: [
-        `Yhteenveto pyyntöäsi varten: ${requestText || 'Kerro tarkemmin, niin autan mielelläni.'}`,
-        memorySummary ? `Aiempi konteksti huomioituna: ${memorySummary}` : '',
-        successful.length ? `Tärkeimmät löydökset: ${successful.join(', ')}.` : '',
-        failed.length
-          ? `Osa tiedoista jäi epävarmaksi, joten täydennä tarvittaessa: ${failed.join(', ')}.`
-          : '',
-      ]
-        .filter(Boolean)
-        .join(' '),
-      followUps: [
-        'Haluatko tiiviimmän version?',
-        'Haluatko, että teen tästä toimintalistan?',
-      ],
-    };
-  }
-
-  if (language.startsWith('sv')) {
-    return {
-      text: [
-        `Här är en tydlig sammanfattning av din begäran: ${requestText || 'Berätta lite mer så hjälper jag gärna.'}`,
-        memorySummary ? `Med tidigare kontext i åtanke: ${memorySummary}` : '',
-        successful.length ? `Viktigaste resultat: ${successful.join(', ')}.` : '',
-        failed.length
-          ? `Vissa detaljer kan vara ofullständiga: ${failed.join(', ')}.`
-          : '',
-      ]
-        .filter(Boolean)
-        .join(' '),
-      followUps: ['Vill du ha en kortare version?', 'Vill du att jag gör en checklista?'],
-    };
-  }
-
-  if (language.startsWith('es')) {
-    return {
-      text: [
-        `Aquí tienes una respuesta clara para tu solicitud: ${requestText || 'Comparte un poco más de detalle y la ajusto.'}`,
-        memorySummary ? `Teniendo en cuenta el contexto previo: ${memorySummary}` : '',
-        successful.length ? `Hallazgos clave: ${successful.join(', ')}.` : '',
-        failed.length
-          ? `Algunos detalles pueden estar incompletos: ${failed.join(', ')}.`
-          : '',
-      ]
-        .filter(Boolean)
-        .join(' '),
-      followUps: ['¿Quieres una versión más breve?', '¿Quieres que lo convierta en una lista de acciones?'],
-    };
-  }
-
-  return {
-    text: [
-      `Here is a clear answer for your request: ${requestText || 'Share a bit more detail and I can refine this for you.'}`,
-      memorySummary ? `Considering earlier context: ${memorySummary}` : '',
-      successful.length ? `Key findings: ${successful.join(', ')}.` : '',
-      failed.length
-        ? `A few details may be incomplete: ${failed.join(', ')}.`
-        : '',
-    ]
-      .filter(Boolean)
-      .join(' '),
-    followUps: [
-      'Would you like a shorter version?',
-      'Want me to turn this into an action checklist?',
-    ],
-  };
-}
-
-function buildFallbackAnswer(
-  input: GenerateFinalAnswerInput,
-  language: string,
-): AgentFinalAnswer {
-  const requestText = getRequestText(input.request);
-  const { successful, failed } = summarizeToolResults(input.toolResults);
-  const localized = buildLocalizedFallback(language, {
-    requestText,
-    memorySummary: input.memorySummary,
-    successful,
-    failed,
-  });
-
-  return {
-    text: localized.text,
-    structured: buildStructuredAnswer(input, localized.text),
-    confidence: estimateConfidence(input.route, input.toolResults, localized.text),
-    followUps: localized.followUps,
-    metadata: {
-      intent: input.route.intent,
-      inputLanguage: input.route.inputLanguage,
-      responseLanguage: language,
-      successfulTools: input.toolResults.filter((item) => item.ok).map((item) => item.tool),
-      failedTools: input.toolResults.filter((item) => !item.ok).map((item) => item.tool),
-      planId: input.plan.id,
-      stepCount: input.plan.steps.length,
-      mode: 'fallback',
-    },
-  };
+  return 'default';
 }
 
 function extractJsonBlock(text: string): string | null {
-  const trimmed = normalizeText(text);
+  const trimmed = trimOuterWhitespace(text);
   if (!trimmed) return null;
 
   if (trimmed.startsWith('{') && trimmed.endsWith('}')) {
@@ -481,9 +303,264 @@ function extractJsonBlock(text: string): string | null {
   return null;
 }
 
+function normalizeStructuredPayload(
+  parsed: Partial<LlmStructuredAnswerSchema>,
+): LlmStructuredAnswerSchema | null {
+  const title = normalizeText(parsed.title);
+  const lead = normalizeText(parsed.lead);
+  const summary = normalizeText(parsed.summary);
+  const nextStep = normalizeText(parsed.nextStep);
+  const plainText = normalizeText(parsed.plainText);
+
+  const highlights = Array.isArray(parsed.highlights)
+    ? parsed.highlights
+        .map((item) => ({
+          text: normalizeText(item?.text),
+          tone: normalizeTone(item?.tone),
+        }))
+        .filter((item) => item.text.length > 0)
+        .slice(0, 5)
+    : [];
+
+  const sources = Array.isArray(parsed.sources)
+    ? parsed.sources
+        .map((item) => ({
+          id: normalizeText(item?.id),
+          label: normalizeText(item?.label),
+          used: Boolean(item?.used),
+        }))
+        .filter((item) => item.id.length > 0 && item.label.length > 0)
+        .slice(0, 6)
+    : [];
+
+  const cleanedTitle =
+    title && !isBadTitle(title) ? title : '';
+
+  const hasContent = Boolean(
+    cleanedTitle ||
+      lead ||
+      summary ||
+      highlights.length ||
+      nextStep ||
+      plainText,
+  );
+
+  if (!hasContent) return null;
+
+  return {
+    title: cleanedTitle || null,
+    lead: lead || null,
+    summary: summary || null,
+    highlights,
+    nextStep: nextStep || null,
+    sources,
+    plainText: plainText || null,
+  };
+}
+
+function mapLlmStructuredToAppStructured(
+  input: GenerateFinalAnswerInput,
+  payload: LlmStructuredAnswerSchema,
+): StructuredAnswer {
+  const fallbackSources = buildSourceList(input.toolResults);
+
+  return {
+    title: payload.title ?? undefined,
+    summary: payload.lead
+      ? payload.summary
+        ? `${payload.lead}\n\n${payload.summary}`
+        : payload.lead
+      : payload.summary ?? undefined,
+    sections: payload.highlights.length
+      ? payload.highlights.map((item, index) => ({
+          label: index === 0 && item.tone === 'important' ? 'Priority' : undefined,
+          content: item.text,
+          tone: item.tone,
+        }))
+      : undefined,
+    actions: payload.nextStep
+      ? [
+          {
+            id: 'next_step',
+            label: payload.nextStep,
+            kind: 'primary',
+          },
+        ]
+      : undefined,
+    sources:
+      payload.sources.length > 0
+        ? payload.sources
+        : fallbackSources.length > 0
+          ? fallbackSources
+          : undefined,
+    outcome: undefined,
+    plainText:
+      payload.plainText ??
+      [payload.lead, payload.summary]
+        .filter(Boolean)
+        .join(' ')
+        .trim() ||
+      undefined,
+  };
+}
+
+function buildLocalizedFallback(
+  language: string,
+  params: {
+    requestText: string;
+    memorySummary: string;
+    successful: string[];
+    failed: string[];
+  },
+): { text: string } {
+  const { requestText, memorySummary, successful, failed } = params;
+
+  if (language.startsWith('fi')) {
+    return {
+      text: [
+        requestText
+          ? `Tässä paras tiivis vastaus pyyntöösi: ${requestText}.`
+          : 'Tässä paras tiivis vastaus pyyntöösi.',
+        memorySummary ? `Aiempi konteksti huomioiden: ${memorySummary}` : '',
+        successful.length ? `Keskeiset havainnot: ${successful.join(', ')}.` : '',
+        failed.length
+          ? `Osa tiedoista voi olla epävarma: ${failed.join(', ')}.`
+          : '',
+      ]
+        .filter(Boolean)
+        .join(' '),
+    };
+  }
+
+  if (language.startsWith('sv')) {
+    return {
+      text: [
+        requestText
+          ? `Här är det mest användbara svaret på din begäran: ${requestText}.`
+          : 'Här är det mest användbara svaret på din begäran.',
+        memorySummary ? `Med tidigare kontext i åtanke: ${memorySummary}` : '',
+        successful.length ? `Viktigaste resultat: ${successful.join(', ')}.` : '',
+        failed.length
+          ? `Vissa detaljer kan vara osäkra: ${failed.join(', ')}.`
+          : '',
+      ]
+        .filter(Boolean)
+        .join(' '),
+    };
+  }
+
+  if (language.startsWith('es')) {
+    return {
+      text: [
+        requestText
+          ? `Aquí tienes la respuesta más útil para tu solicitud: ${requestText}.`
+          : 'Aquí tienes la respuesta más útil para tu solicitud.',
+        memorySummary ? `Teniendo en cuenta el contexto previo: ${memorySummary}` : '',
+        successful.length ? `Hallazgos clave: ${successful.join(', ')}.` : '',
+        failed.length
+          ? `Algunos detalles pueden ser inciertos: ${failed.join(', ')}.`
+          : '',
+      ]
+        .filter(Boolean)
+        .join(' '),
+    };
+  }
+
+  return {
+    text: [
+      requestText
+        ? `Here is the most useful answer for your request: ${requestText}.`
+        : 'Here is the most useful answer for your request.',
+      memorySummary ? `Considering earlier context: ${memorySummary}` : '',
+      successful.length ? `Key findings: ${successful.join(', ')}.` : '',
+      failed.length
+        ? `A few details may be uncertain: ${failed.join(', ')}.`
+        : '',
+    ]
+      .filter(Boolean)
+      .join(' '),
+  };
+}
+
+function buildFallbackStructuredAnswer(
+  input: GenerateFinalAnswerInput,
+  text: string,
+): StructuredAnswer | undefined {
+  const requestText = getRequestText(input.request);
+  const lowered = requestText.toLowerCase();
+  const sources = buildSourceList(input.toolResults);
+
+  const asksForTodayPlan =
+    /\b(what should i do today|today plan|plan my day|what now today)\b/i.test(
+      lowered,
+    ) || /\b(today|todays|this morning|this afternoon)\b/i.test(lowered);
+
+  if (asksForTodayPlan || input.route.intent === 'planning') {
+    return {
+      title: 'Today plan',
+      summary: text,
+      sections: input.plan.steps.slice(0, 3).map((step, index) => ({
+        label: index === 0 ? 'Priority' : undefined,
+        content: step.title,
+        tone: index === 0 ? 'important' : index === 2 ? 'success' : 'default',
+      })),
+      actions: [
+        { id: 'open_calendar', label: 'Open Calendar', kind: 'primary' },
+      ],
+      sources: sources.length ? sources : undefined,
+      plainText: text,
+    };
+  }
+
+  return {
+    summary: text,
+    sources: sources.length ? sources : undefined,
+    plainText: text,
+  };
+}
+
+function buildFallbackAnswer(
+  input: GenerateFinalAnswerInput,
+  language: string,
+): AgentFinalAnswer {
+  const requestText = getRequestText(input.request);
+  const { successful, failed } = summarizeToolResults(input.toolResults);
+  const localized = buildLocalizedFallback(language, {
+    requestText,
+    memorySummary: input.memorySummary,
+    successful,
+    failed,
+  });
+
+  return {
+    text: localized.text,
+    structured: buildFallbackStructuredAnswer(input, localized.text),
+    confidence: estimateConfidence(
+      input.route,
+      input.toolResults,
+      localized.text,
+    ),
+    followUps: [],
+    metadata: {
+      intent: input.route.intent,
+      inputLanguage: input.route.inputLanguage,
+      responseLanguage: language,
+      successfulTools: input.toolResults
+        .filter((item) => item.ok)
+        .map((item) => item.tool),
+      failedTools: input.toolResults
+        .filter((item) => !item.ok)
+        .map((item) => item.tool),
+      planId: input.plan.id,
+      stepCount: input.plan.steps.length,
+      mode: 'fallback',
+    },
+  };
+}
+
 async function generateWithModel(
   input: GenerateFinalAnswerInput,
-): Promise<LlmAnswerSchema | null> {
+): Promise<LlmStructuredAnswerSchema | null> {
   if (!process.env.GROQ_API_KEY) return null;
 
   const requestText = getRequestText(input.request);
@@ -496,17 +573,48 @@ async function generateWithModel(
     normalizeText(metadata.generatorModel) || 'openai/gpt-oss-120b';
 
   const systemPrompt = [
-    'You are the final answer generator for a premium AI assistant.',
-    'Answer the user directly in a natural and friendly way.',
-    'Never expose reasoning traces, tool logs, or internal process details.',
-    'Do not add sections about memory, planning, or what tools were used.',
-    'Use available context silently and focus on practical value.',
-    'If data is partial, still provide the most useful answer possible.',
+    'You are the final answer generator for Kivo, a premium AI assistant.',
+    'Your job is to create a beautiful user-facing answer.',
+    'Never expose internal reasoning, planning stages, tool logs, or system pipeline labels.',
+    'Never use headings like Structured Answer, Analysis, Interpret Request, Retrieve Memory Context, or Synthesize Findings.',
+    'Only show what helps the user.',
     buildModeInstruction(responseMode),
     buildLanguageInstruction(language),
-    'Return JSON only with this schema:',
-    '{ "answer": "string", "followUps": ["string"] }',
-    'Keep followUps short and useful. Max 3.',
+    'Return ONLY valid JSON with this exact schema:',
+    JSON.stringify(
+      {
+        title: 'string | null',
+        lead: 'string | null',
+        summary: 'string | null',
+        highlights: [
+          {
+            text: 'string',
+            tone: 'default | important | success | warning',
+          },
+        ],
+        nextStep: 'string | null',
+        sources: [
+          {
+            id: 'string',
+            label: 'string',
+            used: true,
+          },
+        ],
+        plainText: 'string | null',
+      },
+      null,
+      2,
+    ),
+    'Rules:',
+    '- title only if genuinely useful',
+    '- lead should directly answer the user',
+    '- summary should add helpful context',
+    '- highlights should be user-helpful, not technical',
+    '- nextStep should be one clear action if helpful',
+    '- sources only if actually used',
+    '- plainText should be a safe fallback',
+    '- no markdown',
+    '- no extra keys',
   ].join('\n');
 
   const userPrompt = [
@@ -523,13 +631,13 @@ async function generateWithModel(
     'Tool results JSON:',
     compactJson,
     `Plan steps: ${input.plan.steps.map((step) => step.title).join(' -> ')}`,
-    'Now produce the final user-facing answer.',
+    'Now produce the best possible structured answer for the user.',
   ].join('\n\n');
 
   try {
     const completion = await groq.chat.completions.create({
       model: generatorModel,
-      temperature: 0.35,
+      temperature: 0.3,
       messages: [
         { role: 'system', content: systemPrompt },
         { role: 'user', content: userPrompt },
@@ -537,27 +645,14 @@ async function generateWithModel(
       response_format: { type: 'json_object' },
     });
 
-    const textOutput = normalizeText(completion.choices?.[0]?.message?.content);
-    if (!textOutput) return null;
+    const rawOutput = trimOuterWhitespace(completion.choices?.[0]?.message?.content);
+    if (!rawOutput) return null;
 
-    const jsonBlock = extractJsonBlock(textOutput);
+    const jsonBlock = extractJsonBlock(rawOutput);
     if (!jsonBlock) return null;
 
-    const parsed = JSON.parse(jsonBlock) as Partial<LlmAnswerSchema>;
-    const answer = normalizeText(parsed.answer);
-    const followUps = Array.isArray(parsed.followUps)
-      ? parsed.followUps
-          .map((item) => normalizeText(item))
-          .filter(Boolean)
-          .slice(0, 3)
-      : [];
-
-    if (!answer) return null;
-
-    return {
-      answer,
-      followUps,
-    };
+    const parsed = JSON.parse(jsonBlock) as Partial<LlmStructuredAnswerSchema>;
+    return normalizeStructuredPayload(parsed);
   } catch {
     return null;
   }
@@ -567,21 +662,31 @@ export async function generateFinalAnswer(
   input: GenerateFinalAnswerInput,
 ): Promise<AgentFinalAnswer> {
   const language = getLanguage(input);
-  const llmAnswer = await generateWithModel(input);
+  const llmStructured = await generateWithModel(input);
 
-  if (!llmAnswer) {
+  if (!llmStructured) {
     return buildFallbackAnswer(input, language);
   }
 
-  const text = llmAnswer.answer;
-  const structured = buildStructuredAnswer(input, text);
-  const confidence = estimateConfidence(input.route, input.toolResults, text);
+  const mappedStructured = mapLlmStructuredToAppStructured(input, llmStructured);
+  const finalText =
+    mappedStructured.plainText ||
+    mappedStructured.summary ||
+    llmStructured.lead ||
+    llmStructured.summary ||
+    '';
+
+  const confidence = estimateConfidence(
+    input.route,
+    input.toolResults,
+    finalText,
+  );
 
   return {
-    text,
-    structured,
+    text: finalText,
+    structured: mappedStructured,
     confidence,
-    followUps: llmAnswer.followUps,
+    followUps: [],
     metadata: {
       intent: input.route.intent,
       inputLanguage: input.route.inputLanguage,
