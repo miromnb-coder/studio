@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo } from 'react';
+import { useEffect, useMemo, type ComponentType, type ReactNode } from 'react';
 import { AnimatePresence, motion, type PanInfo, useDragControls } from 'framer-motion';
 import {
   CalendarClock,
@@ -19,7 +19,12 @@ import {
 } from 'lucide-react';
 import type { MessageAttachment } from '@/app/store/app-store';
 
-type AiActionId = 'summarize-day' | 'find-priorities' | 'deep-research' | 'live-search';
+type AiActionId =
+  | 'summarize-day'
+  | 'find-priorities'
+  | 'deep-research'
+  | 'live-search';
+
 type ProductivityToolId = 'gmail' | 'calendar' | 'money-saver' | 'tasks';
 
 type ToolState = {
@@ -42,7 +47,7 @@ type KivoActionSheetProps = {
 };
 
 type ActionRowProps = {
-  icon: React.ComponentType<{ className?: string; strokeWidth?: number }>;
+  icon: ComponentType<{ className?: string; strokeWidth?: number }>;
   title: string;
   subtitle: string;
   badge?: string;
@@ -65,7 +70,7 @@ export function KivoActionSheet({
   const dragControls = useDragControls();
 
   useEffect(() => {
-    if (!open) return;
+    if (!open || typeof document === 'undefined') return;
 
     const previousOverflow = document.body.style.overflow;
     document.body.style.overflow = 'hidden';
@@ -87,8 +92,13 @@ export function KivoActionSheet({
     [attachments],
   );
 
-  const handleDragEnd = (_: MouseEvent | TouchEvent | PointerEvent, info: PanInfo) => {
-    if (info.offset.y > 120 || info.velocity.y > 650) onClose();
+  const handleDragEnd = (
+    _: MouseEvent | TouchEvent | PointerEvent,
+    info: PanInfo,
+  ) => {
+    if (info.offset.y > 120 || info.velocity.y > 650) {
+      onClose();
+    }
   };
 
   return (
@@ -98,16 +108,16 @@ export function KivoActionSheet({
           <motion.button
             type="button"
             aria-label="Close action sheet"
-            className="fixed inset-0 z-40 bg-[#0f172a]/25 backdrop-blur-[3px]"
+            className="fixed inset-0 z-40 bg-[#101828]/24 backdrop-blur-[2px]"
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            transition={{ duration: 0.2, ease: 'easeOut' }}
+            transition={{ duration: 0.18, ease: 'easeOut' }}
             onClick={onClose}
           />
 
           <motion.aside
-            className="fixed inset-x-0 bottom-0 z-50 mx-auto flex max-h-[90dvh] w-full max-w-[560px] flex-col overflow-hidden rounded-t-[34px] border border-[#e6ebf3] bg-[rgba(250,252,255,0.96)] shadow-[0_-22px_52px_rgba(15,23,42,0.17)] backdrop-blur-2xl"
+            className="fixed inset-x-0 bottom-0 z-50 mx-auto flex max-h-[88dvh] w-full max-w-[560px] flex-col overflow-hidden rounded-t-[34px] border border-[#e8edf4] bg-[rgba(252,253,255,0.98)] shadow-[0_-20px_52px_rgba(15,23,42,0.14)] backdrop-blur-2xl"
             initial={{ y: '100%' }}
             animate={{ y: 0 }}
             exit={{ y: '100%' }}
@@ -116,167 +126,176 @@ export function KivoActionSheet({
             dragControls={dragControls}
             dragListener={false}
             dragConstraints={{ top: 0, bottom: 0 }}
-            dragElastic={{ top: 0, bottom: 0.18 }}
+            dragElastic={{ top: 0, bottom: 0.16 }}
             onDragEnd={handleDragEnd}
           >
-            <header className="sticky top-0 z-10 border-b border-[#e7edf5] bg-[rgba(250,252,255,0.92)] px-4 pb-3 pt-2 backdrop-blur-xl sm:px-5">
+            <div className="sticky top-0 z-10 border-b border-[#edf1f6] bg-[rgba(252,253,255,0.94)] px-4 pb-3 pt-2 backdrop-blur-xl sm:px-5">
               <button
                 type="button"
                 onPointerDown={(event) => dragControls.start(event)}
-                className="mx-auto mb-2 block w-full touch-none"
                 aria-label="Drag to dismiss"
+                className="mx-auto mb-3 block w-full touch-none"
               >
-                <span className="mx-auto block h-1.5 w-14 rounded-full bg-[#d5dceb]" />
+                <span className="mx-auto block h-1.5 w-14 rounded-full bg-[#d8deea]" />
               </button>
 
-              <h2 className="text-[22px] font-semibold tracking-[-0.03em] text-[#111827]">Kivo Action Sheet</h2>
-              <p className="text-[13px] text-[#667085]">Attach media, run AI actions, and open daily tools.</p>
-            </header>
+              <h2 className="text-[21px] font-semibold tracking-[-0.03em] text-[#111827]">
+                Add to chat
+              </h2>
+              <p className="mt-0.5 text-[13px] text-[#667085]">
+                Photos, files, and useful Kivo actions
+              </p>
+            </div>
 
-            <div className="min-h-0 flex-1 space-y-4 overflow-y-auto px-4 pb-[max(22px,env(safe-area-inset-bottom))] pt-4 sm:px-5">
-              <Section title="Media & Attachments" subtitle="Start with photos, files, links, or voice.">
-                <button
-                  type="button"
-                  onClick={() => {
-                    onAddImages();
-                    onClose();
-                  }}
-                  className="w-full rounded-2xl border border-[#dfe8f5] bg-[linear-gradient(140deg,#ffffff_0%,#f3f8ff_100%)] p-4 text-left shadow-[0_10px_22px_rgba(18,34,66,0.08)] transition hover:brightness-[0.99] active:scale-[0.995]"
-                >
-                  <div className="flex items-center gap-3">
-                    <span className="inline-flex h-12 w-12 items-center justify-center rounded-xl border border-[#d7e4f8] bg-white text-[#46679a]">
-                      <Camera className="h-5 w-5" strokeWidth={2} />
-                    </span>
-                    <span>
-                      <span className="block text-[17px] font-semibold tracking-[-0.02em] text-[#111827]">Add image</span>
-                      <span className="mt-0.5 block text-[13px] text-[#5f6f85]">Photo library · Camera · Screenshots</span>
-                    </span>
+            <div className="min-h-0 flex-1 overflow-y-auto px-4 pb-[max(22px,env(safe-area-inset-bottom))] pt-4 sm:px-5">
+              <div className="space-y-5">
+                <section>
+                  <div className="mb-3 flex items-center justify-between">
+                    <h3 className="text-[13px] font-semibold uppercase tracking-[0.12em] text-[#8a94a6]">
+                      Media
+                    </h3>
                   </div>
-                </button>
 
-                {imagePreviews.length ? (
-                  <div className="-mx-1 flex gap-2 overflow-x-auto px-1 pb-1">
+                  <div className="flex gap-3 overflow-x-auto pb-1">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        onAddImages();
+                        onClose();
+                      }}
+                      className="flex h-[124px] w-[124px] shrink-0 flex-col items-center justify-center rounded-[24px] border border-[#e3e9f2] bg-[linear-gradient(180deg,#ffffff_0%,#f7faff_100%)] text-[#5a667a] shadow-[0_10px_24px_rgba(15,23,42,0.06)] transition active:scale-[0.985]"
+                    >
+                      <Camera className="h-8 w-8" strokeWidth={1.9} />
+                      <span className="mt-3 text-[14px] font-medium">Add image</span>
+                    </button>
+
                     {imagePreviews.map((image) => (
                       <div
                         key={image.id}
-                        className="h-16 w-16 shrink-0 overflow-hidden rounded-xl border border-[#dee5f1] bg-white"
+                        className="h-[124px] w-[124px] shrink-0 overflow-hidden rounded-[24px] border border-[#e3e9f2] bg-white shadow-[0_8px_18px_rgba(15,23,42,0.05)]"
                       >
-                        <img src={image.previewUrl} alt={image.name} className="h-full w-full object-cover" />
+                        <img
+                          src={image.previewUrl}
+                          alt={image.name}
+                          className="h-full w-full object-cover"
+                        />
                       </div>
                     ))}
+
+                    <MiniMediaCard
+                      icon={FileText}
+                      title="Files"
+                      onClick={() => {
+                        onAddFiles();
+                        onClose();
+                      }}
+                    />
+                    <MiniMediaCard
+                      icon={Link2}
+                      title="Link"
+                      onClick={() => {
+                        onPasteLink();
+                        onClose();
+                      }}
+                    />
+                    <MiniMediaCard
+                      icon={Mic}
+                      title={isListening ? 'Voice on' : 'Voice'}
+                      active={isListening}
+                      onClick={() => {
+                        onVoiceInput();
+                        onClose();
+                      }}
+                    />
                   </div>
-                ) : null}
+                </section>
 
-                <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-3">
-                  <SecondaryAction
-                    icon={FileText}
-                    title="Add files"
+                <Divider />
+
+                <section className="space-y-1">
+                  <ActionRow
+                    icon={Sparkles}
+                    title="Summarize my day"
+                    subtitle="Turn everything into a clear plan"
                     onClick={() => {
-                      onAddFiles();
+                      onAiAction('summarize-day');
                       onClose();
                     }}
                   />
-                  <SecondaryAction
-                    icon={Link2}
-                    title="Paste link"
+                  <ActionRow
+                    icon={Target}
+                    title="Find priorities"
+                    subtitle="See what matters most now"
                     onClick={() => {
-                      onPasteLink();
+                      onAiAction('find-priorities');
                       onClose();
                     }}
                   />
-                  <SecondaryAction
-                    icon={Mic}
-                    title={isListening ? 'Stop voice' : 'Voice input'}
+                  <ActionRow
+                    icon={Telescope}
+                    title="Deep research"
+                    subtitle="Investigate something thoroughly"
                     onClick={() => {
-                      onVoiceInput();
+                      onAiAction('deep-research');
                       onClose();
                     }}
-                    active={isListening}
                   />
-                </div>
-              </Section>
+                  <ActionRow
+                    icon={Globe}
+                    title="Live search"
+                    subtitle="Get current web information"
+                    onClick={() => {
+                      onAiAction('live-search');
+                      onClose();
+                    }}
+                  />
+                </section>
 
-              <Section title="AI Actions" subtitle="One-tap prompts that keep work moving.">
-                <ActionRow
-                  icon={Sparkles}
-                  title="Summarize my day"
-                  subtitle="Turn everything into a clear plan"
-                  onClick={() => {
-                    onAiAction('summarize-day');
-                    onClose();
-                  }}
-                />
-                <ActionRow
-                  icon={Target}
-                  title="Find priorities"
-                  subtitle="See what matters most now"
-                  onClick={() => {
-                    onAiAction('find-priorities');
-                    onClose();
-                  }}
-                />
-                <ActionRow
-                  icon={Telescope}
-                  title="Deep research"
-                  subtitle="Investigate something thoroughly"
-                  onClick={() => {
-                    onAiAction('deep-research');
-                    onClose();
-                  }}
-                />
-                <ActionRow
-                  icon={Globe}
-                  title="Live search"
-                  subtitle="Get current web information"
-                  onClick={() => {
-                    onAiAction('live-search');
-                    onClose();
-                  }}
-                />
-              </Section>
+                <Divider />
 
-              <Section title="Connected Tools" subtitle="Your daily productivity stack in one place.">
-                <ActionRow
-                  icon={Mail}
-                  title="Gmail"
-                  subtitle={toolState.gmail.subtitle}
-                  badge={toolState.gmail.connected ? 'Connected' : 'Connect'}
-                  onClick={() => {
-                    onToolAction('gmail');
-                    onClose();
-                  }}
-                />
-                <ActionRow
-                  icon={CalendarClock}
-                  title="Calendar"
-                  subtitle={toolState.calendar.subtitle}
-                  badge={toolState.calendar.connected ? 'Connected' : 'Connect'}
-                  onClick={() => {
-                    onToolAction('calendar');
-                    onClose();
-                  }}
-                />
-                <ActionRow
-                  icon={PiggyBank}
-                  title="Money Saver"
-                  subtitle={toolState['money-saver'].subtitle}
-                  badge={toolState['money-saver'].connected ? 'Ready' : 'Open'}
-                  onClick={() => {
-                    onToolAction('money-saver');
-                    onClose();
-                  }}
-                />
-                <ActionRow
-                  icon={Wallet}
-                  title="Tasks"
-                  subtitle={toolState.tasks.subtitle}
-                  badge={toolState.tasks.connected ? 'Ready' : 'Open'}
-                  onClick={() => {
-                    onToolAction('tasks');
-                    onClose();
-                  }}
-                />
-              </Section>
+                <section className="space-y-1 pb-1">
+                  <ActionRow
+                    icon={Mail}
+                    title="Gmail"
+                    subtitle={toolState.gmail.subtitle}
+                    badge={toolState.gmail.connected ? 'Connected' : 'Connect'}
+                    onClick={() => {
+                      onToolAction('gmail');
+                      onClose();
+                    }}
+                  />
+                  <ActionRow
+                    icon={CalendarClock}
+                    title="Calendar"
+                    subtitle={toolState.calendar.subtitle}
+                    badge={toolState.calendar.connected ? 'Connected' : 'Connect'}
+                    onClick={() => {
+                      onToolAction('calendar');
+                      onClose();
+                    }}
+                  />
+                  <ActionRow
+                    icon={PiggyBank}
+                    title="Money Saver"
+                    subtitle={toolState['money-saver'].subtitle}
+                    badge={toolState['money-saver'].connected ? 'Ready' : 'Open'}
+                    onClick={() => {
+                      onToolAction('money-saver');
+                      onClose();
+                    }}
+                  />
+                  <ActionRow
+                    icon={Wallet}
+                    title="Tasks"
+                    subtitle={toolState.tasks.subtitle}
+                    badge={toolState.tasks.connected ? 'Ready' : 'Open'}
+                    onClick={() => {
+                      onToolAction('tasks');
+                      onClose();
+                    }}
+                  />
+                </section>
+              </div>
             </div>
           </motion.aside>
         </>
@@ -285,33 +304,17 @@ export function KivoActionSheet({
   );
 }
 
-function Section({
-  title,
-  subtitle,
-  children,
-}: {
-  title: string;
-  subtitle: string;
-  children: React.ReactNode;
-}) {
-  return (
-    <section className="space-y-2.5 rounded-[24px] border border-[#e6ebf4] bg-white/90 p-3.5 shadow-[0_8px_20px_rgba(16,24,40,0.06)]">
-      <div className="px-1">
-        <h3 className="text-[16px] font-semibold tracking-[-0.02em] text-[#111827]">{title}</h3>
-        <p className="text-[12px] text-[#667085]">{subtitle}</p>
-      </div>
-      <div className="space-y-2">{children}</div>
-    </section>
-  );
+function Divider() {
+  return <div className="h-px bg-[#eceff4]" />;
 }
 
-function SecondaryAction({
+function MiniMediaCard({
   icon: Icon,
   title,
   onClick,
   active = false,
 }: {
-  icon: React.ComponentType<{ className?: string; strokeWidth?: number }>;
+  icon: ComponentType<{ className?: string; strokeWidth?: number }>;
   title: string;
   onClick: () => void;
   active?: boolean;
@@ -320,41 +323,54 @@ function SecondaryAction({
     <button
       type="button"
       onClick={onClick}
-      className={`flex h-[52px] items-center gap-2 rounded-xl border px-3 text-left transition active:scale-[0.99] ${
+      className={`flex h-[124px] w-[92px] shrink-0 flex-col items-center justify-center rounded-[22px] border shadow-[0_8px_18px_rgba(15,23,42,0.05)] transition active:scale-[0.985] ${
         active
-          ? 'border-[#cbddf8] bg-[#edf5ff] text-[#385985]'
-          : 'border-[#e3eaf4] bg-white text-[#475467] hover:bg-[#f8fafc]'
+          ? 'border-[#cfe0fa] bg-[#eef5ff] text-[#44648d]'
+          : 'border-[#e3e9f2] bg-white text-[#667085]'
       }`}
     >
-      <Icon className="h-[18px] w-[18px]" strokeWidth={2} />
-      <span className="text-[13px] font-medium">{title}</span>
+      <Icon className="h-6 w-6" strokeWidth={1.9} />
+      <span className="mt-3 text-[13px] font-medium">{title}</span>
     </button>
   );
 }
 
-function ActionRow({ icon: Icon, title, subtitle, badge, onClick }: ActionRowProps) {
+function ActionRow({
+  icon: Icon,
+  title,
+  subtitle,
+  badge,
+  onClick,
+}: ActionRowProps) {
   return (
     <button
       type="button"
       onClick={onClick}
-      className="flex min-h-[62px] w-full items-center gap-3 rounded-xl border border-[#e7edf5] bg-white px-3.5 py-3 text-left transition hover:bg-[#fbfcfe] active:scale-[0.996]"
+      className="flex min-h-[68px] w-full items-center gap-3 rounded-[18px] px-1 py-3 text-left transition hover:bg-[#fafbfc] active:scale-[0.995]"
     >
-      <span className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-[#dfe7f3] bg-[#f7faff] text-[#516581]">
+      <span className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-[14px] bg-[#f7f9fc] text-[#475467]">
         <Icon className="h-5 w-5" strokeWidth={1.9} />
       </span>
 
       <span className="min-w-0 flex-1">
-        <span className="block text-[15px] font-semibold tracking-[-0.01em] text-[#111827]">{title}</span>
-        <span className="mt-0.5 block truncate text-[12px] text-[#667085]">{subtitle}</span>
+        <span className="block text-[16px] font-semibold tracking-[-0.02em] text-[#111827]">
+          {title}
+        </span>
+        <span className="mt-0.5 block truncate text-[13px] text-[#667085]">
+          {subtitle}
+        </span>
       </span>
 
       {badge ? (
-        <span className="inline-flex h-7 shrink-0 items-center rounded-full border border-[#dce3ef] bg-[#f8faff] px-2.5 text-[11px] font-semibold text-[#50607a]">
+        <span className="inline-flex h-7 shrink-0 items-center rounded-full border border-[#dfe5ee] bg-[#f8fafc] px-2.5 text-[11px] font-semibold text-[#5e6c84]">
           {badge}
         </span>
       ) : null}
 
-      <ChevronRight className="h-[18px] w-[18px] shrink-0 text-[#98a2b3]" strokeWidth={2} />
+      <ChevronRight
+        className="h-[18px] w-[18px] shrink-0 text-[#98a2b3]"
+        strokeWidth={2}
+      />
     </button>
   );
 }
