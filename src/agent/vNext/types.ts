@@ -15,7 +15,13 @@ export type AgentIntent =
 
 export type AgentExecutionMode = 'sync' | 'stream';
 
-export type AgentStepStatus = 'pending' | 'ready' | 'running' | 'completed' | 'failed' | 'skipped';
+export type AgentStepStatus =
+  | 'pending'
+  | 'ready'
+  | 'running'
+  | 'completed'
+  | 'failed'
+  | 'skipped';
 
 export type AgentToolName =
   | 'gmail'
@@ -81,6 +87,8 @@ export type AgentRouteResult = {
   shouldFetchMemory: boolean;
   suggestedExecutionMode: AgentExecutionMode;
   fallbackMessage?: string;
+  userGoal?: string;
+  entities?: string[];
 };
 
 export type AgentPlanStep = {
@@ -119,7 +127,13 @@ export type AgentToolResult = {
   latencyMs?: number;
 };
 
-export type AgentMemoryKind = 'preference' | 'fact' | 'goal' | 'summary' | 'history' | 'other';
+export type AgentMemoryKind =
+  | 'preference'
+  | 'fact'
+  | 'goal'
+  | 'summary'
+  | 'history'
+  | 'other';
 
 export type AgentMemoryItem = {
   id: string;
@@ -139,22 +153,15 @@ export type AgentMemoryContext = {
   source: 'none' | 'local' | 'remote';
 };
 
-export type StructuredSectionTone =
+export type StructuredHighlightTone =
   | 'default'
   | 'important'
   | 'success'
   | 'warning';
 
-export type StructuredSection = {
-  label?: string;
-  content: string;
-  tone?: StructuredSectionTone;
-};
-
-export type StructuredAction = {
-  id: string;
-  label: string;
-  kind?: 'primary' | 'secondary';
+export type StructuredHighlight = {
+  text: string;
+  tone?: StructuredHighlightTone;
 };
 
 export type StructuredSource = {
@@ -165,18 +172,18 @@ export type StructuredSource = {
 
 export type StructuredAnswer = {
   title?: string;
+  lead?: string;
   summary?: string;
-  sections?: StructuredSection[];
-  bullets?: string[];
-  actions?: StructuredAction[];
+  highlights?: StructuredHighlight[];
+  nextStep?: string;
   sources?: StructuredSource[];
-  outcome?: string;
   plainText?: string;
 };
 
 export type AgentAnswer = {
   text: string;
   structured?: StructuredAnswer;
+  confidence?: number;
 };
 
 export type AgentFinalAnswer = {
