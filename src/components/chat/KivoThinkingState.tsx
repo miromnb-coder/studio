@@ -1,7 +1,7 @@
 'use client';
 
 import { AnimatePresence, motion } from 'framer-motion';
-import { useId, useMemo } from 'react';
+import { useMemo } from 'react';
 
 export type KivoThinkingVisualState =
   | 'thinking'
@@ -19,122 +19,98 @@ export type KivoThinkingStateProps = {
   visualState?: KivoThinkingVisualState;
 };
 
-const FALLBACK_STATUS = 'Thinking...';
-
 type VisualConfig = {
-  rotateDuration: number;
+  accent: string;
+  rail: string;
+  titleColor: string;
+  subtitleColor: string;
   pulseDuration: number;
   driftDuration: number;
-  textColor: string;
-  accent: string;
-  secondaryAccent: string;
-  glowOpacity: number[];
-  haloOpacity: number[];
-  scale: number[];
-  textLabel: string;
+  titleFallback: string;
+  subtitle: string;
 };
 
 function getVisualConfig(state: KivoThinkingVisualState): VisualConfig {
   switch (state) {
     case 'gmail':
       return {
-        rotateDuration: 8.2,
-        pulseDuration: 4.1,
-        driftDuration: 6.8,
-        textColor: '#768396',
-        accent: 'rgba(124, 156, 214, 0.32)',
-        secondaryAccent: 'rgba(255, 255, 255, 0.78)',
-        glowOpacity: [0.16, 0.28, 0.18, 0.24],
-        haloOpacity: [0.2, 0.32, 0.22, 0.26],
-        scale: [1, 1.018, 0.994, 1.008, 1],
-        textLabel: 'Checking email...',
+        accent: 'rgba(120, 146, 196, 0.92)',
+        rail: 'rgba(120, 146, 196, 0.2)',
+        titleColor: '#5b6879',
+        subtitleColor: '#8a96a6',
+        pulseDuration: 2.1,
+        driftDuration: 3.4,
+        titleFallback: 'Checking inbox context',
+        subtitle: 'Reviewing the most relevant email information.',
       };
     case 'calendar':
       return {
-        rotateDuration: 10.2,
-        pulseDuration: 5.2,
-        driftDuration: 7.8,
-        textColor: '#778391',
-        accent: 'rgba(138, 169, 214, 0.2)',
-        secondaryAccent: 'rgba(255, 255, 255, 0.74)',
-        glowOpacity: [0.1, 0.18, 0.12, 0.16],
-        haloOpacity: [0.12, 0.2, 0.14, 0.18],
-        scale: [1, 1.01, 0.997, 1.004, 1],
-        textLabel: 'Reviewing schedule...',
+        accent: 'rgba(136, 156, 194, 0.86)',
+        rail: 'rgba(136, 156, 194, 0.18)',
+        titleColor: '#5e6977',
+        subtitleColor: '#8d98a6',
+        pulseDuration: 2.4,
+        driftDuration: 3.8,
+        titleFallback: 'Reviewing schedule context',
+        subtitle: 'Looking at timing, availability, and time-sensitive details.',
       };
     case 'memory':
       return {
-        rotateDuration: 11.8,
-        pulseDuration: 5.6,
-        driftDuration: 8.4,
-        textColor: '#758091',
-        accent: 'rgba(154, 164, 192, 0.2)',
-        secondaryAccent: 'rgba(255, 255, 255, 0.7)',
-        glowOpacity: [0.1, 0.2, 0.13, 0.17],
-        haloOpacity: [0.1, 0.18, 0.12, 0.16],
-        scale: [1, 1.012, 0.996, 1.004, 1],
-        textLabel: 'Checking memory...',
+        accent: 'rgba(150, 158, 187, 0.84)',
+        rail: 'rgba(150, 158, 187, 0.18)',
+        titleColor: '#5d6876',
+        subtitleColor: '#8d97a4',
+        pulseDuration: 2.5,
+        driftDuration: 4,
+        titleFallback: 'Checking memory',
+        subtitle: 'Looking for relevant context from earlier signals.',
       };
     case 'planning':
       return {
-        rotateDuration: 9,
-        pulseDuration: 4.5,
-        driftDuration: 7.2,
-        textColor: '#74808e',
-        accent: 'rgba(120, 144, 184, 0.24)',
-        secondaryAccent: 'rgba(255, 255, 255, 0.76)',
-        glowOpacity: [0.14, 0.24, 0.16, 0.2],
-        haloOpacity: [0.14, 0.24, 0.16, 0.2],
-        scale: [1, 1.014, 0.995, 1.006, 1],
-        textLabel: 'Building a plan...',
+        accent: 'rgba(118, 140, 180, 0.9)',
+        rail: 'rgba(118, 140, 180, 0.2)',
+        titleColor: '#5a6675',
+        subtitleColor: '#8b97a6',
+        pulseDuration: 2.2,
+        driftDuration: 3.6,
+        titleFallback: 'Planning the response',
+        subtitle: 'Choosing the clearest structure and next steps.',
       };
     case 'writing':
       return {
-        rotateDuration: 7.6,
-        pulseDuration: 4,
-        driftDuration: 6.2,
-        textColor: '#717c89',
-        accent: 'rgba(142, 156, 184, 0.22)',
-        secondaryAccent: 'rgba(255, 255, 255, 0.8)',
-        glowOpacity: [0.16, 0.26, 0.18, 0.22],
-        haloOpacity: [0.16, 0.26, 0.18, 0.22],
-        scale: [1, 1.016, 0.994, 1.008, 1],
-        textLabel: 'Writing response...',
+        accent: 'rgba(128, 148, 184, 0.92)',
+        rail: 'rgba(128, 148, 184, 0.2)',
+        titleColor: '#596574',
+        subtitleColor: '#8995a4',
+        pulseDuration: 1.9,
+        driftDuration: 3.2,
+        titleFallback: 'Writing the answer',
+        subtitle: 'Preparing the final response for you.',
       };
     case 'finalizing':
       return {
-        rotateDuration: 12.6,
-        pulseDuration: 6.1,
-        driftDuration: 8.8,
-        textColor: '#7d8795',
-        accent: 'rgba(186, 196, 214, 0.16)',
-        secondaryAccent: 'rgba(255, 255, 255, 0.68)',
-        glowOpacity: [0.08, 0.13, 0.1, 0.12],
-        haloOpacity: [0.08, 0.14, 0.09, 0.12],
-        scale: [1, 1.008, 0.998, 1.002, 1],
-        textLabel: 'Finalizing...',
+        accent: 'rgba(170, 178, 196, 0.78)',
+        rail: 'rgba(170, 178, 196, 0.14)',
+        titleColor: '#64707e',
+        subtitleColor: '#919aa7',
+        pulseDuration: 2.8,
+        driftDuration: 4.4,
+        titleFallback: 'Finalizing response',
+        subtitle: 'Polishing the output before showing it.',
       };
     case 'thinking':
     default:
       return {
-        rotateDuration: 9.4,
-        pulseDuration: 4.8,
-        driftDuration: 7.2,
-        textColor: '#76818f',
-        accent: 'rgba(150, 165, 196, 0.22)',
-        secondaryAccent: 'rgba(255, 255, 255, 0.76)',
-        glowOpacity: [0.12, 0.22, 0.14, 0.18],
-        haloOpacity: [0.14, 0.24, 0.16, 0.2],
-        scale: [1, 1.014, 0.995, 1.006, 1],
-        textLabel: 'Thinking...',
+        accent: 'rgba(130, 148, 186, 0.9)',
+        rail: 'rgba(130, 148, 186, 0.18)',
+        titleColor: '#5a6675',
+        subtitleColor: '#8b97a5',
+        pulseDuration: 2.3,
+        driftDuration: 3.6,
+        titleFallback: 'Analyzing your request',
+        subtitle: 'Understanding intent, context, and the best response path.',
       };
   }
-}
-
-function getStatusText(status: string | undefined, fallback: string): string {
-  const normalized = status?.trim();
-  if (!normalized) return fallback;
-  return normalized;
 }
 
 export function KivoThinkingState({
@@ -143,238 +119,104 @@ export function KivoThinkingState({
   className = '',
   visualState = 'thinking',
 }: KivoThinkingStateProps) {
-  const gradientId = useId();
-  const gradientA = `${gradientId}-grad-a`;
-  const gradientB = `${gradientId}-grad-b`;
-  const blurId = `${gradientId}-blur`;
-
   const config = useMemo(() => getVisualConfig(visualState), [visualState]);
-  const text = useMemo(
-    () => getStatusText(status, config.textLabel || FALLBACK_STATUS),
-    [status, config.textLabel],
+  const title = useMemo(
+    () => status?.trim() || config.titleFallback,
+    [status, config.titleFallback],
   );
 
   return (
     <AnimatePresence initial={false}>
       {visible ? (
         <motion.div
-          initial={{ opacity: 0, y: 8, filter: 'blur(6px)' }}
+          initial={{ opacity: 0, y: 6, filter: 'blur(6px)' }}
           animate={{ opacity: 1, y: 0, filter: 'blur(0px)' }}
-          exit={{ opacity: 0, y: -6, filter: 'blur(6px)' }}
-          transition={{ duration: 0.26, ease: 'easeOut' }}
-          className={`flex items-center gap-4 ${className}`}
+          exit={{ opacity: 0, y: -4, filter: 'blur(4px)' }}
+          transition={{ duration: 0.24, ease: 'easeOut' }}
+          className={`w-full max-w-[760px] ${className}`}
           aria-live="polite"
-          aria-label={text}
+          aria-label={title}
         >
-          <motion.div
-            className="relative h-[48px] w-[48px] shrink-0"
-            animate={{ scale: config.scale, y: [0, -1, 0, 1, 0] }}
-            transition={{
-              duration: config.pulseDuration,
-              repeat: Infinity,
-              ease: 'easeInOut',
-            }}
-          >
-            <motion.div
-              className="absolute inset-[-10px] rounded-full blur-[14px]"
-              style={{
-                background: `radial-gradient(circle, ${config.accent} 0%, rgba(255,255,255,0.08) 46%, rgba(255,255,255,0) 76%)`,
-              }}
-              animate={{ opacity: config.glowOpacity, scale: [0.96, 1.08, 0.98, 1.04, 0.96] }}
-              transition={{
-                duration: config.pulseDuration,
-                repeat: Infinity,
-                ease: 'easeInOut',
-              }}
-            />
-
-            <motion.div
-              className="absolute inset-[-2px] rounded-full blur-[2px]"
-              style={{
-                border: '1px solid rgba(255,255,255,0.22)',
-                background:
-                  'radial-gradient(circle at 50% 50%, rgba(255,255,255,0.08), rgba(255,255,255,0.01) 60%, transparent 75%)',
-              }}
-              animate={{ opacity: config.haloOpacity }}
-              transition={{
-                duration: config.driftDuration,
-                repeat: Infinity,
-                ease: 'easeInOut',
-              }}
-            />
-
-            <motion.svg
-              viewBox="0 0 100 100"
-              className="relative h-full w-full overflow-visible"
-              animate={{ rotate: 360 }}
-              transition={{
-                duration: config.rotateDuration,
-                repeat: Infinity,
-                ease: 'linear',
-              }}
-            >
-              <defs>
-                <linearGradient id={gradientA} x1="0%" y1="0%" x2="100%" y2="100%">
-                  <stop offset="0%" stopColor="rgba(255,255,255,0.98)" />
-                  <stop offset="18%" stopColor={config.secondaryAccent} />
-                  <stop offset="46%" stopColor="rgba(78,86,100,0.72)" />
-                  <stop offset="76%" stopColor="rgba(12,12,16,0.96)" />
-                  <stop offset="100%" stopColor="rgba(250,250,252,0.94)" />
-                </linearGradient>
-
-                <linearGradient id={gradientB} x1="100%" y1="0%" x2="0%" y2="100%">
-                  <stop offset="0%" stopColor="rgba(255,255,255,0.94)" />
-                  <stop offset="24%" stopColor="rgba(214,220,229,0.74)" />
-                  <stop offset="56%" stopColor="rgba(42,46,54,0.88)" />
-                  <stop offset="100%" stopColor="rgba(248,248,250,0.92)" />
-                </linearGradient>
-
-                <filter id={blurId} x="-50%" y="-50%" width="200%" height="200%">
-                  <feGaussianBlur stdDeviation="1.5" />
-                </filter>
-              </defs>
-
-              <motion.g
+          <div className="flex items-start gap-3.5">
+            <div className="relative flex h-[44px] w-[16px] shrink-0 items-center justify-center">
+              <motion.div
+                className="absolute h-[36px] w-[2px] rounded-full"
+                style={{ background: config.rail }}
                 animate={{
-                  scale: [1, 1.016, 0.995, 1.008, 1],
-                  rotate: [0, 2.2, -2.2, 1.2, 0],
-                  x: [0, 0.5, -0.5, 0],
-                  y: [0, -0.4, 0.5, 0],
+                  opacity: [0.45, 0.85, 0.5, 0.72, 0.45],
+                  scaleY: [0.92, 1, 0.95, 0.98, 0.92],
                 }}
                 transition={{
                   duration: config.driftDuration,
                   repeat: Infinity,
                   ease: 'easeInOut',
                 }}
-              >
-                <path
-                  d="M49 9
-                     C63 9, 77 16, 84 29
-                     C89 39, 88 49, 80 57
-                     C74 63, 65 66, 57 64
-                     C50 62, 46 57, 45 51
-                     C44 44, 47 38, 53 33
-                     C59 28, 64 23, 64 18
-                     C64 12, 58 9, 49 9 Z"
-                  fill={`url(#${gradientA})`}
-                  filter={`url(#${blurId})`}
-                />
-                <path
-                  d="M80 57
-                     C75 70, 64 81, 49 85
-                     C38 88, 28 85, 21 77
-                     C16 71, 15 62, 19 55
-                     C23 48, 30 45, 36 45
-                     C43 45, 49 48, 53 54
-                     C57 60, 61 65, 66 66
-                     C72 67, 77 64, 80 57 Z"
-                  fill={`url(#${gradientB})`}
-                  filter={`url(#${blurId})`}
-                />
-                <path
-                  d="M21 77
-                     C11 70, 8 57, 10 42
-                     C12 31, 18 22, 28 16
-                     C36 11, 46 11, 53 15
-                     C60 19, 63 26, 63 32
-                     C63 40, 59 46, 53 50
-                     C47 54, 41 58, 39 63
-                     C37 69, 40 74, 47 78
-                     C37 82, 28 82, 21 77 Z"
-                  fill={`url(#${gradientA})`}
-                  filter={`url(#${blurId})`}
-                />
+              />
 
-                <circle cx="50" cy="50" r="20.5" fill="rgba(0,0,0,0.97)" />
-
-                <circle
-                  cx="50"
-                  cy="50"
-                  r="11.8"
-                  fill="none"
-                  stroke="rgba(255,255,255,0.08)"
-                  strokeWidth="1"
-                />
-
-                <path
-                  d="M49 10 C62 10, 76 17, 83 29"
-                  fill="none"
-                  stroke="rgba(255,255,255,0.22)"
-                  strokeWidth="1.35"
-                  strokeLinecap="round"
-                />
-                <path
-                  d="M80 57 C74 70, 63 80, 49 84"
-                  fill="none"
-                  stroke="rgba(255,255,255,0.18)"
-                  strokeWidth="1.15"
-                  strokeLinecap="round"
-                />
-                <path
-                  d="M21 77 C12 70, 9 58, 10 44"
-                  fill="none"
-                  stroke="rgba(255,255,255,0.14)"
-                  strokeWidth="1.05"
-                  strokeLinecap="round"
-                />
-              </motion.g>
-            </motion.svg>
-          </motion.div>
-
-          <div className="min-w-0">
-            <AnimatePresence mode="wait" initial={false}>
               <motion.div
-                key={`${visualState}-${text}`}
-                initial={{ opacity: 0, y: 4, filter: 'blur(6px)' }}
-                animate={{ opacity: 1, y: 0, filter: 'blur(0px)' }}
-                exit={{ opacity: 0, y: -4, filter: 'blur(6px)' }}
-                transition={{ duration: 0.22, ease: 'easeOut' }}
-                className="flex items-center gap-1.5"
-              >
-                <div
-                  className="text-[19px] font-normal leading-none tracking-[-0.035em]"
-                  style={{
-                    color: config.textColor,
-                    fontFamily:
-                      'Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "SF Pro Display", sans-serif',
-                  }}
-                >
-                  {text}
-                </div>
+                className="absolute h-[14px] w-[14px] rounded-full blur-[8px]"
+                style={{ background: config.accent }}
+                animate={{
+                  opacity: [0.18, 0.34, 0.22, 0.28, 0.18],
+                  y: [-7, 7, -4, 5, -7],
+                  scale: [0.9, 1.08, 0.96, 1.02, 0.9],
+                }}
+                transition={{
+                  duration: config.driftDuration,
+                  repeat: Infinity,
+                  ease: 'easeInOut',
+                }}
+              />
 
+              <motion.div
+                className="absolute h-[7px] w-[7px] rounded-full"
+                style={{ background: config.accent }}
+                animate={{
+                  opacity: [0.65, 1, 0.74, 0.9, 0.65],
+                  y: [-7, 7, -4, 5, -7],
+                  scale: [0.96, 1.14, 1, 1.08, 0.96],
+                }}
+                transition={{
+                  duration: config.pulseDuration,
+                  repeat: Infinity,
+                  ease: 'easeInOut',
+                }}
+              />
+            </div>
+
+            <div className="min-w-0 pt-[1px]">
+              <AnimatePresence mode="wait" initial={false}>
                 <motion.div
-                  className="flex items-end gap-1 pt-1"
-                  aria-hidden="true"
-                  animate={{ opacity: [0.5, 1, 0.55, 0.9, 0.5] }}
-                  transition={{
-                    duration: 1.8,
-                    repeat: Infinity,
-                    ease: 'easeInOut',
-                  }}
+                  key={`${visualState}-${title}`}
+                  initial={{ opacity: 0, y: 4, filter: 'blur(6px)' }}
+                  animate={{ opacity: 1, y: 0, filter: 'blur(0px)' }}
+                  exit={{ opacity: 0, y: -3, filter: 'blur(6px)' }}
+                  transition={{ duration: 0.2, ease: 'easeOut' }}
                 >
-                  {[0, 1, 2].map((index) => (
-                    <motion.span
-                      key={index}
-                      className="h-[4px] w-[4px] rounded-full"
-                      style={{
-                        background: 'rgba(126,136,153,0.72)',
-                      }}
-                      animate={{
-                        y: [0, -2.5, 0],
-                        opacity: [0.35, 0.9, 0.35],
-                        scale: [0.95, 1.05, 0.95],
-                      }}
-                      transition={{
-                        duration: 1.2,
-                        repeat: Infinity,
-                        ease: 'easeInOut',
-                        delay: index * 0.16,
-                      }}
-                    />
-                  ))}
+                  <div
+                    className="text-[16px] font-medium leading-[1.2] tracking-[-0.02em]"
+                    style={{
+                      color: config.titleColor,
+                      fontFamily:
+                        'Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "SF Pro Display", sans-serif',
+                    }}
+                  >
+                    {title}
+                  </div>
+
+                  <p
+                    className="mt-1.5 max-w-[620px] text-[13px] leading-[1.55] tracking-[-0.01em]"
+                    style={{
+                      color: config.subtitleColor,
+                      fontFamily:
+                        'Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "SF Pro Text", sans-serif',
+                    }}
+                  >
+                    {config.subtitle}
+                  </p>
                 </motion.div>
-              </motion.div>
-            </AnimatePresence>
+              </AnimatePresence>
+            </div>
           </div>
         </motion.div>
       ) : null}
