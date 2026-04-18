@@ -23,8 +23,20 @@ export type GenerateFinalAnswerInput = {
 };
 
 type LlmAnswerSchema = {
-  answer: string;
-  followUps: string[];
+  title: string | null;
+  lead: string | null;
+  summary: string | null;
+  highlights: Array<{
+    text: string;
+    tone: 'default' | 'important' | 'success' | 'warning';
+  }>;
+  nextStep: string | null;
+  sources: Array<{
+    id: string;
+    label: string;
+    used: boolean;
+  }>;
+  plainText: string | null;
 };
 
 function normalizeText(value: unknown): string {
@@ -219,6 +231,16 @@ function toTitleCase(value: string): string {
     .filter(Boolean)
     .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
     .join(' ');
+}
+
+function normalizeTone(
+  value: unknown,
+): 'default' | 'important' | 'success' | 'warning' {
+  const tone = normalizeText(value);
+  if (tone === 'important' || tone === 'success' || tone === 'warning') {
+    return tone;
+  }
+  return 'default';
 }
 
 function buildSourceList(toolResults: AgentToolResult[]) {
@@ -462,7 +484,7 @@ function buildFallbackAnswer(
 }
 
 function extractJsonBlock(text: string): string | null {
-  const trimmed = normalizeText(text);
+  const trimmed = text.trim();
   if (!trimmed) return null;
 
   if (trimmed.startsWith('{') && trimmed.endsWith('}')) {
@@ -496,17 +518,24 @@ async function generateWithModel(
     normalizeText(metadata.generatorModel) || 'openai/gpt-oss-120b';
 
   const systemPrompt = [
-    'You are the final answer generator for a premium AI assistant.',
-    'Answer the user directly in a natural and friendly way.',
-    'Never expose reasoning traces, tool logs, or internal process details.',
-    'Do not add sections about memory, planning, or what tools were used.',
-    'Use available context silently and focus on practical value.',
-    'If data is partial, still provide the most useful answer possible.',
+    'You are the response generator for Kivo.',
+    'The user must only see what helps them.',
+    'Never expose reasoning traces, tool logs, planning stages, or internal process details.',
+    'Write in a calm, modern, premium style that is concise, natural, and useful.',
+    'Do not output markdown or extra keys.',
     buildModeInstruction(responseMode),
     buildLanguageInstruction(language),
     'Return JSON only with this schema:',
-    '{ "answer": "string", "followUps": ["string"] }',
-    'Keep followUps short and useful. Max 3.',
+    '{',
+    '  "title": string | null,',
+    '  "lead": string | null,',
+    '  "summary": string | null,',
+    '  "highlights": [{ "text": string, "tone": "default" | "important" | "success" | "warning" }],',
+    '  "nextStep": string | null,',
+    '  "sources": [{ "id": string, "label": string, "used": boolean }],',
+    '  "plainText": string | null',
+    '}',
+    'Usually provide 2-4 highlights when relevant.',
   ].join('\n');
 
   const userPrompt = [
@@ -544,20 +573,69 @@ async function generateWithModel(
     if (!jsonBlock) return null;
 
     const parsed = JSON.parse(jsonBlock) as Partial<LlmAnswerSchema>;
-    const answer = normalizeText(parsed.answer);
-    const followUps = Array.isArray(parsed.followUps)
-      ? parsed.followUps
-          .map((item) => normalizeText(item))
-          .filter(Boolean)
-          .slice(0, 3)
+    const highlights = Array.isArray(parsed.highlights)
+      ? parsed.highlights
+          .map((item) => ({
+            text:
+              item && typeof item === 'object' && 'text' in item
+                ? normalizeText((item as { text?: unknown }).text)
+                : '',
+            tone:
+              item && typeof item === 'object' && 'tone' in item
+                ? normalizeTone((item as { tone?: unknown }).tone)
+                : 'default',
+          }))
+          .filter((item) => item.text)
+          .slice(0, 5)
+      : [];
+    const sources = Array.isArray(parsed.sources)
+      ? parsed.sources
+          .map((item) => ({
+            id:
+              item && typeof item === 'object' && 'id' in item
+                ? normalizeText((item as { id?: unknown }).id)
+                : '',
+            label:
+              item && typeof item === 'object' && 'label' in item
+                ? normalizeText((item as { label?: unknown }).label)
+                : '',
+            used:
+              item && typeof item === 'object' && 'used' in item
+                ? Boolean((item as { used?: unknown }).used)
+                : false,
+          }))
+          .filter((item) => item.id && item.label)
+          .slice(0, 6)
       : [];
 
-    if (!answer) return null;
-
-    return {
-      answer,
-      followUps,
+    const candidate: LlmAnswerSchema = {
+      title:
+        parsed.title === null ? null : normalizeText(parsed.title) || null,
+      lead: parsed.lead === null ? null : normalizeText(parsed.lead) || null,
+      summary:
+        parsed.summary === null ? null : normalizeText(parsed.summary) || null,
+      highlights,
+      nextStep:
+        parsed.nextStep === null
+          ? null
+          : normalizeText(parsed.nextStep) || null,
+      sources,
+      plainText:
+        parsed.plainText === null
+          ? null
+          : normalizeText(parsed.plainText) || null,
     };
+
+    if (
+      !candidate.lead &&
+      !candidate.summary &&
+      !candidate.highlights.length &&
+      !candidate.plainText
+    ) {
+      return null;
+    }
+
+    return candidate;
   } catch {
     return null;
   }
@@ -573,15 +651,40 @@ export async function generateFinalAnswer(
     return buildFallbackAnswer(input, language);
   }
 
-  const text = llmAnswer.answer;
-  const structured = buildStructuredAnswer(input, text);
+  const text =
+    llmAnswer.plainText ||
+    [llmAnswer.lead, llmAnswer.summary, ...llmAnswer.highlights.map((item) => item.text)]
+      .map((item) => normalizeText(item))
+      .filter(Boolean)
+      .join('\n\n');
+  const fallbackSources = buildSourceList(input.toolResults);
+  const selectedSources = llmAnswer.sources.length
+    ? llmAnswer.sources
+    : fallbackSources;
+  const structured: StructuredAnswer = {
+    title: llmAnswer.title || undefined,
+    summary: [llmAnswer.lead, llmAnswer.summary]
+      .map((item) => normalizeText(item))
+      .filter(Boolean)
+      .join(' ')
+      .trim(),
+    sections: llmAnswer.highlights.map((item) => ({
+      content: item.text,
+      tone: item.tone,
+    })),
+    sources: selectedSources.length ? selectedSources : undefined,
+    plainText: llmAnswer.plainText || text,
+    actions: llmAnswer.nextStep
+      ? [{ id: 'next_step', label: llmAnswer.nextStep, kind: 'primary' }]
+      : undefined,
+  };
   const confidence = estimateConfidence(input.route, input.toolResults, text);
 
   return {
     text,
     structured,
     confidence,
-    followUps: llmAnswer.followUps,
+    followUps: llmAnswer.nextStep ? [llmAnswer.nextStep] : undefined,
     metadata: {
       intent: input.route.intent,
       inputLanguage: input.route.inputLanguage,
