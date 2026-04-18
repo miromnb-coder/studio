@@ -38,17 +38,15 @@ export function StructuredActionRow({ actions }: StructuredActionRowProps) {
             type="button"
             onClick={() => {
               const href = resolveActionHref(action.id);
-              if (href) {
-                router.push(href);
-                return;
-              }
-              router.push('/chat');
+              router.push(href || '/chat');
             }}
-            className={`rounded-xl px-4 py-2.5 text-[13px] font-semibold transition-colors ${
+            className={[
+              'inline-flex items-center justify-center rounded-full px-3.5 py-2 text-[13px] font-medium tracking-[-0.01em] transition-all duration-200',
+              'focus:outline-none focus-visible:ring-2 focus-visible:ring-[#cfd8e6] focus-visible:ring-offset-2',
               isPrimary
-                ? 'bg-[#1f2937] text-white hover:bg-[#111827]'
-                : 'border border-[#dce4ef] bg-[#f9fbfe] text-[#445066] hover:bg-white'
-            }`}
+                ? 'bg-[#1f2937] text-white shadow-[0_4px_14px_rgba(31,41,55,0.12)] hover:bg-[#161e2a] active:scale-[0.98]'
+                : 'bg-transparent text-[#556274] hover:bg-[#f5f7fb] active:scale-[0.98]',
+            ].join(' ')}
           >
             {action.label}
           </button>
