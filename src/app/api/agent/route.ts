@@ -1,3 +1,4 @@
+import crypto from 'node:crypto';
 import { NextResponse } from 'next/server';
 import { runAgentVNext } from '@/agent/vNext/orchestrator';
 import type { AgentResponse } from '@/types/agent-response';
@@ -37,6 +38,15 @@ import {
   getUserBonusAgentRuns,
   consumeOneBonusAgentRun,
 } from '@/lib/usage/usage';
+import {
+  formatBrowserSearchContext,
+  hasBrowserSearchConfigured,
+  inferBrowserSearchMode,
+  runBrowserSearch,
+  shouldUseBrowserSearch,
+  type BrowserSearchResult,
+  type BrowserSearchMode,
+} from '@/lib/browser-search/search';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
@@ -91,6 +101,16 @@ type AgentRouteInput = {
   userProfileIntelligence?: Record<string, unknown> | null;
   productState?: Record<string, unknown>;
   attachments?: NormalizedAttachment[];
+};
+
+type BrowserSearchContext = {
+  enabled: boolean;
+  used: boolean;
+  mode: BrowserSearchMode | null;
+  provider: string | null;
+  query: string | null;
+  results: BrowserSearchResult[];
+  error: string | null;
 };
 
 type CompatibleAgentResponse = {
@@ -620,6 +640,42 @@ function inferMemorySummaryType(input: string): 'finance' | 'general' {
     : 'general';
 }
 
+function shouldRunBrowserTool(params: {
+  input: string;
+  attachments: NormalizedAttachment[];
+  actionType: FinanceActionType | null;
+  responseMode: ResponseMode;
+}) {
+  if (params.attachments.length > 0) return false;
+  if (params.actionType) return false;
+
+  return (
+    (params.responseMode === 'operator' ||
+      params.responseMode === 'tool' ||
+      params.responseMode === 'fast') &&
+    shouldUseBrowserSearch(params.input)
+  );
+}
+
+function buildBrowserSuggestedActions(input: string) {
+  return [
+    {
+      id: 'browser-search-follow-up',
+      label: 'Refine browser search',
+      kind: 'comparison',
+      behavior: 'navigate',
+      route: `/tools?tool=browser-search&q=${encodeURIComponent(input)}`,
+    },
+    {
+      id: 'browser-search-deeper',
+      label: 'Search deeper',
+      kind: 'follow_up',
+      behavior: 'enqueue_prompt',
+      prompt: `Use browser search to go deeper on this: ${input}`,
+    },
+  ];
+}
+
 export async function POST(req: Request) {
   const requestId =
     req.headers.get('x-kivo-request-id') || crypto.randomUUID();
@@ -742,7 +798,7 @@ export async function POST(req: Request) {
 
     const { data: userProfile } = await supabase
       .from('profiles')
-      .select('gmail_connected')
+      .select('gmail_connected, google_calendar_connected')
       .eq('id', userId)
       .maybeSingle();
 
@@ -881,10 +937,85 @@ export async function POST(req: Request) {
       requestedActionType: actionType,
     });
 
+    const browserEnabled = hasBrowserSearchConfigured();
+    let browserSearchContext: BrowserSearchContext = {
+      enabled: browserEnabled,
+      used: false,
+      mode: null,
+      provider: null,
+      query: null,
+      results: [],
+      error: null,
+    };
+
+    if (
+      browserEnabled &&
+      shouldRunBrowserTool({
+        input: safeInput || 'Continue',
+        attachments,
+        actionType,
+        responseMode,
+      })
+    ) {
+      const inferredMode = inferBrowserSearchMode(safeInput || 'Continue');
+
+      try {
+        const browserSearch = await runBrowserSearch({
+          query: safeInput || 'Continue',
+          mode: inferredMode,
+        });
+
+        browserSearchContext = {
+          enabled: true,
+          used: browserSearch.results.length > 0,
+          mode: browserSearch.mode,
+          provider: browserSearch.provider,
+          query: safeInput || 'Continue',
+          results: browserSearch.results,
+          error: null,
+        };
+      } catch (error) {
+        console.error('AGENT_BROWSER_SEARCH_ERROR', {
+          requestId,
+          error,
+        });
+
+        browserSearchContext = {
+          enabled: true,
+          used: false,
+          mode: inferredMode,
+          provider: null,
+          query: safeInput || 'Continue',
+          results: [],
+          error: error instanceof Error ? error.message : 'Browser search failed.',
+        };
+      }
+    }
+
+    const browserSystemMessage =
+      browserSearchContext.used &&
+      browserSearchContext.query &&
+      browserSearchContext.mode &&
+      browserSearchContext.provider
+        ? {
+            role: 'system',
+            content: formatBrowserSearchContext({
+              query: browserSearchContext.query,
+              mode: browserSearchContext.mode,
+              provider: browserSearchContext.provider,
+              results: browserSearchContext.results,
+            }),
+          }
+        : null;
+
+    const enrichedHistory = browserSystemMessage
+      ? [browserSystemMessage, ...safeHistory]
+      : safeHistory;
+
     const agentInput = {
       input: safeInput || 'Continue',
       userId,
-      history: safeHistory,
+      history: enrichedHistory,
       memory: memoryEnvelope,
       operatorAlerts: operatorAlertsContext,
       outcomes: recommendationOutcomes,
@@ -904,6 +1035,10 @@ export async function POST(req: Request) {
         calendarConnected: resolveCalendarConnected({
           userProfile: (userProfile as Record<string, unknown> | null) || null,
         }),
+        browserConnected: browserEnabled,
+        browserSearchUsed: browserSearchContext.used,
+        browserSearchMode: browserSearchContext.mode,
+        browserSearchProvider: browserSearchContext.provider,
         attachmentCount: attachments.length,
         responseModeHint: responseMode,
       },
@@ -1123,21 +1258,56 @@ export async function POST(req: Request) {
         intent: agentResult.metadata?.intent || 'general',
         mode: agentResult.metadata?.mode || 'general',
         plan: agentResult.metadata?.plan || 'Partial fallback',
-        steps: Array.isArray(agentResult.metadata?.steps)
-          ? agentResult.metadata.steps.map((step) => ({
-              action: step.title,
-              status:
-                step.status === 'failed' ? 'failed' : 'completed',
-              summary:
-                step.summary ||
-                (step.status === 'failed'
-                  ? step.error || 'Step failed.'
-                  : 'Step completed.'),
-              error: step.error,
-            }))
-          : [],
+        steps: [
+          ...(browserSearchContext.used
+            ? [
+                {
+                  action: 'browser_search',
+                  status: 'completed',
+                  summary: `Searched the live web for "${browserSearchContext.query}".`,
+                  tool: 'browser_search',
+                },
+              ]
+            : browserSearchContext.error
+              ? [
+                  {
+                    action: 'browser_search',
+                    status: 'failed',
+                    summary: browserSearchContext.error,
+                    error: browserSearchContext.error,
+                    tool: 'browser_search',
+                  },
+                ]
+              : []),
+          ...(Array.isArray(agentResult.metadata?.steps)
+            ? agentResult.metadata.steps.map((step) => ({
+                action: step.title,
+                status:
+                  step.status === 'failed' ? 'failed' : 'completed',
+                summary:
+                  step.summary ||
+                  (step.status === 'failed'
+                    ? step.error || 'Step failed.'
+                    : 'Step completed.'),
+                error: step.error,
+              }))
+            : []),
+        ],
         structuredData: {
           ...(agentResult.metadata?.structuredData || {}),
+          ...(browserSearchContext.enabled
+            ? {
+                browser_search: {
+                  enabled: browserSearchContext.enabled,
+                  used: browserSearchContext.used,
+                  mode: browserSearchContext.mode,
+                  provider: browserSearchContext.provider,
+                  query: browserSearchContext.query,
+                  error: browserSearchContext.error,
+                  results: browserSearchContext.results.slice(0, 6),
+                },
+              }
+            : {}),
           ...(agentResult.metadata?.goal
             ? { goal_understanding: agentResult.metadata.goal }
             : {}),
@@ -1157,13 +1327,23 @@ export async function POST(req: Request) {
             storedCount: storedMemoryCount,
           },
         },
-        suggestedActions: agentResult.metadata?.suggestedActions || [],
+        suggestedActions: [
+          ...(agentResult.metadata?.suggestedActions || []),
+          ...(browserSearchContext.used && browserSearchContext.query
+            ? buildBrowserSuggestedActions(browserSearchContext.query)
+            : []),
+        ],
         operatorResponse: buildOperatorResponse({
           answer: reply || SAFE_AGENT_FALLBACK.reply,
           metadata: {
             ...agentResult.metadata,
             plan: agentResult.metadata?.plan || 'Partial fallback',
-            suggestedActions: agentResult.metadata?.suggestedActions || [],
+            suggestedActions: [
+              ...(agentResult.metadata?.suggestedActions || []),
+              ...(browserSearchContext.used && browserSearchContext.query
+                ? buildBrowserSuggestedActions(browserSearchContext.query)
+                : []),
+            ],
           },
           structuredData: {
             ...(agentResult.metadata?.structuredData || {}),
@@ -1190,7 +1370,12 @@ export async function POST(req: Request) {
         metadata: {
           ...agentResult.metadata,
           plan: agentResult.metadata?.plan || 'Partial fallback',
-          suggestedActions: agentResult.metadata?.suggestedActions || [],
+          suggestedActions: [
+            ...(agentResult.metadata?.suggestedActions || []),
+            ...(browserSearchContext.used && browserSearchContext.query
+              ? buildBrowserSuggestedActions(browserSearchContext.query)
+              : []),
+          ],
         },
         structuredData: {
           ...(agentResult.metadata?.structuredData || {}),
