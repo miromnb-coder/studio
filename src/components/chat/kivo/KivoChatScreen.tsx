@@ -85,14 +85,14 @@ export function KivoChatScreen() {
   const [referralToastTitle, setReferralToastTitle] = useState('');
   const [referralToastDetail, setReferralToastDetail] = useState('');
 
+  const [gmailConnected, setGmailConnected] = useState(false);
+  const [calendarConnected, setCalendarConnected] = useState(false);
+
   const recognitionRef = useRef<SpeechRecognitionLike | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const noticeTimeoutRef = useRef<number | null>(null);
   const mainScrollRef = useRef<HTMLDivElement | null>(null);
   const lastMessageCountRef = useRef(0);
-  const [gmailConnected, setGmailConnected] = useState(false);
-  const [calendarConnected, setCalendarConnected] = useState(false);
-
 
   const hasMessages = messages.length > 0;
   const hasAttachments = attachments.length > 0;
@@ -225,6 +225,33 @@ export function KivoChatScreen() {
     lastMessageCountRef.current = messages.length;
   }, [messages.length, isAgentResponding, isSending]);
 
+  useEffect(() => {
+    if (!actionSheetOpen) return;
+
+    const hydrateToolState = async () => {
+      try {
+        const [gmailResponse, calendarResponse] = await Promise.all([
+          fetch('/api/integrations/gmail/status', { cache: 'no-store' }),
+          fetch('/api/integrations/google-calendar/status', { cache: 'no-store' }),
+        ]);
+
+        if (gmailResponse.ok) {
+          const gmail = (await gmailResponse.json()) as { connected?: boolean };
+          setGmailConnected(gmail.connected === true);
+        }
+
+        if (calendarResponse.ok) {
+          const calendar = (await calendarResponse.json()) as { connected?: boolean };
+          setCalendarConnected(calendar.connected === true);
+        }
+      } catch {
+        // keep last known states
+      }
+    };
+
+    void hydrateToolState();
+  }, [actionSheetOpen]);
+
   const showNotice = useCallback((title: string, detail: string) => {
     setNotice({ title, detail });
   }, []);
@@ -253,6 +280,14 @@ export function KivoChatScreen() {
   const closeActionSheet = useCallback(() => {
     setActionSheetOpen(false);
   }, []);
+
+  const openOperatorRoute = useCallback(
+    (route: string) => {
+      closeWorkspace();
+      router.push(route);
+    },
+    [closeWorkspace, router],
+  );
 
   const createNewChat = useCallback(() => {
     const conversationId = createConversation();
@@ -387,34 +422,6 @@ export function KivoChatScreen() {
     recognition.start();
   }, [ensureSpeechRecognition, isListening, showNotice]);
 
-
-  useEffect(() => {
-    if (!actionSheetOpen) return;
-
-    const hydrateToolState = async () => {
-      try {
-        const [gmailResponse, calendarResponse] = await Promise.all([
-          fetch('/api/integrations/gmail/status', { cache: 'no-store' }),
-          fetch('/api/integrations/google-calendar/status', { cache: 'no-store' }),
-        ]);
-
-        if (gmailResponse.ok) {
-          const gmail = (await gmailResponse.json()) as { connected?: boolean };
-          setGmailConnected(gmail.connected === true);
-        }
-
-        if (calendarResponse.ok) {
-          const calendar = (await calendarResponse.json()) as { connected?: boolean };
-          setCalendarConnected(calendar.connected === true);
-        }
-      } catch {
-        // keep last known states
-      }
-    };
-
-    void hydrateToolState();
-  }, [actionSheetOpen]);
-
   const handlePasteLink = useCallback(async () => {
     if (typeof navigator === 'undefined' || !navigator.clipboard?.readText) {
       showNotice('Clipboard unavailable', 'Paste is not supported in this browser.');
@@ -442,12 +449,16 @@ export function KivoChatScreen() {
   }, [draftPrompt, focusComposer, setDraftPrompt, showNotice]);
 
   const handleAiAction = useCallback(
-    (id: 'summarize-day' | 'find-priorities' | 'deep-research' | 'live-search') => {
+    (id: AiActionId) => {
       const prompts = {
-        'summarize-day': 'Summarize my day and turn everything into a clear plan with time blocks.',
-        'find-priorities': 'Find my top priorities right now and explain what I should do first.',
-        'deep-research': 'Help me do deep research on this topic with steps, sources, and tradeoffs:',
-        'live-search': 'Use live web search to get current information about:',
+        'summarize-day':
+          'Summarize my day and turn everything into a clear plan with time blocks.',
+        'find-priorities':
+          'Find my top priorities right now and explain what I should do first.',
+        'deep-research':
+          'Help me do deep research on this topic with steps, sources, and tradeoffs:',
+        'live-search':
+          'Use live web search to get current information about:',
       } as const;
 
       setDraftPrompt(prompts[id]);
@@ -457,7 +468,7 @@ export function KivoChatScreen() {
   );
 
   const handleActionTool = useCallback(
-    (id: 'gmail' | 'calendar' | 'money-saver' | 'tasks') => {
+    (id: ProductivityToolId) => {
       if (id === 'gmail') {
         if (!gmailConnected) {
           window.location.assign('/api/integrations/gmail/connect');
@@ -485,6 +496,7 @@ export function KivoChatScreen() {
     },
     [calendarConnected, gmailConnected, openOperatorRoute],
   );
+
   const handleSend = useCallback(async () => {
     if (!canSend || isBusy) return;
 
@@ -522,14 +534,6 @@ export function KivoChatScreen() {
     showNotice,
     user?.id,
   ]);
-
-  const openOperatorRoute = useCallback(
-    (route: string) => {
-      closeWorkspace();
-      router.push(route);
-    },
-    [closeWorkspace, router],
-  );
 
   const handleQuickAction = useCallback(
     (id: WorkspaceQuickActionId) => {
@@ -570,11 +574,12 @@ export function KivoChatScreen() {
       const disconnect = async (id: string) => {
         if (id === 'gmail') {
           await fetch('/api/integrations/gmail/disconnect', { method: 'POST' });
+          setGmailConnected(false);
           return;
         }
         if (id === 'google-calendar') {
           await fetch('/api/integrations/google-calendar/disconnect', { method: 'POST' });
-          return;
+          setCalendarConnected(false);
         }
       };
 
@@ -609,10 +614,6 @@ export function KivoChatScreen() {
       }
 
       if (connector === 'google-drive') {
-        if (mode === 'connected' || mode === 'manage') {
-          openOperatorRoute('/tools?source=drive');
-          return;
-        }
         openOperatorRoute('/tools?source=drive');
         return;
       }
@@ -628,10 +629,6 @@ export function KivoChatScreen() {
       }
 
       if (connector === 'github') {
-        if (mode === 'connected' || mode === 'manage' || mode === 'toggle') {
-          openOperatorRoute('/agents');
-          return;
-        }
         openOperatorRoute('/agents');
         return;
       }
@@ -841,7 +838,6 @@ export function KivoChatScreen() {
           detail={referralToastDetail}
           onClose={() => setReferralToastOpen(false)}
         />
-
 
         <KivoActionSheet
           open={actionSheetOpen}
