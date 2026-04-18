@@ -1,10 +1,23 @@
 'use client';
 
-import { useEffect, useRef } from 'react';
+import { useEffect, useMemo, useRef } from 'react';
+import {
+  ArrowUpRight,
+  Check,
+  Globe,
+  Newspaper,
+  Search,
+  ShieldCheck,
+  ShoppingBag,
+  Sparkles,
+} from 'lucide-react';
 import type { Message } from '@/app/store/app-store';
 import { trackEvent } from '@/app/lib/analytics-client';
 import { useOperatorActionHandler } from '@/app/hooks/use-operator-action-handler';
-import type { AgentResponseMetadata, AgentSuggestedAction } from '@/types/agent-response';
+import type {
+  AgentResponseMetadata,
+  AgentSuggestedAction,
+} from '@/types/agent-response';
 import type { ResponseMode } from '@/agent/types/response-mode';
 import { ActionSuggestions } from './ActionSuggestions';
 import { OperatorActionCard } from './OperatorActionCard';
@@ -20,6 +33,27 @@ type LocaleCopy = {
   intro: string[];
   fallback: string;
   brand: string;
+  builtFrom: string;
+  liveWeb: string;
+  actionList: string;
+  answerQuality: string;
+};
+
+type BrowserSearchResult = {
+  title: string;
+  url: string;
+  snippet: string;
+  source?: string | null;
+};
+
+type BrowserSearchMetadata = {
+  enabled?: boolean;
+  used?: boolean;
+  mode?: 'search' | 'news' | 'shopping' | null;
+  provider?: string | null;
+  query?: string | null;
+  error?: string | null;
+  results?: BrowserSearchResult[];
 };
 
 const COPY: Record<SupportedLocale, LocaleCopy> = {
@@ -30,16 +64,24 @@ const COPY: Record<SupportedLocale, LocaleCopy> = {
       "Absolutely — I'll handle this step by step.",
     ],
     fallback: 'Done — here is the answer for you.',
-    brand: 'Lite',
+    brand: 'Kivo',
+    builtFrom: 'Built from',
+    liveWeb: 'Live web',
+    actionList: 'Action list',
+    answerQuality: 'Answer quality',
   },
   fi: {
     intro: [
-      'Selvä juttu! Käyn tämän läpi nyt.',
-      'Hyvä pyyntö. Hoidan tämän nyt.',
+      'Selvä — hoidan tämän nyt.',
+      'Hyvä pyyntö. Käyn tämän läpi nyt.',
       'Totta kai — etenen tämän kanssa vaiheittain.',
     ],
     fallback: 'Valmis — tässä vastaus sinulle.',
-    brand: 'Lite',
+    brand: 'Kivo',
+    builtFrom: 'Rakennettu lähteistä',
+    liveWeb: 'Live web',
+    actionList: 'Toimintalista',
+    answerQuality: 'Vastauksen laatu',
   },
   sv: {
     intro: [
@@ -48,7 +90,11 @@ const COPY: Record<SupportedLocale, LocaleCopy> = {
       'Absolut — jag hanterar detta steg för steg.',
     ],
     fallback: 'Klart — här är svaret till dig.',
-    brand: 'Lite',
+    brand: 'Kivo',
+    builtFrom: 'Byggd från',
+    liveWeb: 'Live web',
+    actionList: 'Åtgärdslista',
+    answerQuality: 'Svarskvalitet',
   },
   es: {
     intro: [
@@ -57,7 +103,11 @@ const COPY: Record<SupportedLocale, LocaleCopy> = {
       'Claro — voy a resolver esto paso a paso.',
     ],
     fallback: 'Listo — aquí tienes la respuesta.',
-    brand: 'Lite',
+    brand: 'Kivo',
+    builtFrom: 'Construido con',
+    liveWeb: 'Web en vivo',
+    actionList: 'Lista de acciones',
+    answerQuality: 'Calidad de respuesta',
   },
 };
 
@@ -83,6 +133,10 @@ const HIDDEN_PATTERNS = [
   /^what i used\b/i,
   /^recommended next step\b/i,
 ];
+
+type ContentBlock =
+  | { type: 'paragraph'; content: string }
+  | { type: 'list'; items: string[] };
 
 function normalizeText(value?: string): string {
   if (typeof value !== 'string') return '';
@@ -257,10 +311,6 @@ function sanitizeVisibleContent(content: string): string {
   return joined;
 }
 
-function shouldShowIntro(visibleContent: string): boolean {
-  return Boolean(visibleContent);
-}
-
 function resolveMessageResponseMode(
   metadata?: AgentResponseMetadata,
 ): ResponseMode {
@@ -275,8 +325,7 @@ function resolveMessageResponseMode(
   }
 
   const structuredMode =
-    metadata?.structuredData &&
-    typeof metadata.structuredData === 'object'
+    metadata?.structuredData && typeof metadata.structuredData === 'object'
       ? (metadata.structuredData.response_mode as string | undefined)
       : undefined;
 
@@ -291,13 +340,6 @@ function resolveMessageResponseMode(
   }
 
   return 'fallback';
-}
-
-function shouldShowActions(
-  actions: string[],
-  visibleContent: string,
-): boolean {
-  return actions.length > 0 && Boolean(visibleContent);
 }
 
 function getSafeContent(
@@ -316,17 +358,6 @@ function getSafeContent(
 
   return COPY[locale].fallback;
 }
-
-type ContentBlock =
-  | { type: 'paragraph'; content: string }
-  | { type: 'list'; items: string[] };
-
-type StructuredSignals = {
-  title: string;
-  actionItems: string[];
-  sourceItems: string[];
-  outcomes: string[];
-};
 
 function isListLine(line: string): boolean {
   return /^([-•*]|\d+\.)\s+/.test(line.trim());
@@ -370,7 +401,10 @@ function buildContentBlocks(content: string): ContentBlock[] {
   const blocks: ContentBlock[] = [];
 
   for (const section of rawSections) {
-    const lines = section.split('\n').map((line) => line.trim()).filter(Boolean);
+    const lines = section
+      .split('\n')
+      .map((line) => line.trim())
+      .filter(Boolean);
 
     if (lines.length > 1 && lines.every(isListLine)) {
       blocks.push({
@@ -415,7 +449,25 @@ function buildContentBlocks(content: string): ContentBlock[] {
 
 function resolveTitle(metadata: AgentResponseMetadata | undefined): string {
   const fromOperator = metadata?.operatorResponse?.decisionBrief?.trim();
-  if (fromOperator) return fromOperator.length > 42 ? 'Decision Brief' : fromOperator;
+  if (fromOperator) {
+    return fromOperator.length > 48 ? 'Decision Brief' : fromOperator;
+  }
+
+  const browserData =
+    metadata?.structuredData &&
+    typeof metadata.structuredData === 'object' &&
+    typeof (
+      metadata.structuredData as Record<string, unknown>
+    ).browser_search === 'object'
+      ? ((metadata.structuredData as Record<string, unknown>)
+          .browser_search as BrowserSearchMetadata)
+      : null;
+
+  if (browserData?.used && browserData.query) {
+    if (browserData.mode === 'shopping') return 'Shopping Results';
+    if (browserData.mode === 'news') return 'Live News Brief';
+    return 'Live Search Brief';
+  }
 
   switch (metadata?.intent) {
     case 'planning':
@@ -448,12 +500,29 @@ function buildSourceItems(metadata: AgentResponseMetadata | undefined): string[]
     if (tool.includes('gmail') || tool.includes('email')) sources.add('Gmail ✓');
     else if (tool.includes('calendar') || tool.includes('schedule')) sources.add('Calendar ✓');
     else if (tool.includes('memory')) sources.add('Memory ✓');
-    else sources.add(`${toTitleCase(tool)} ✓`);
+    else if (tool.includes('browser_search') || tool.includes('browser')) {
+      sources.add('Live web ✓');
+    } else {
+      sources.add(`${toTitleCase(tool)} ✓`);
+    }
   }
 
   if (metadata.memoryUsed) sources.add('Memory ✓');
 
-  return [...sources].slice(0, 4);
+  const browserData =
+    metadata.structuredData &&
+    typeof metadata.structuredData === 'object' &&
+    typeof (metadata.structuredData as Record<string, unknown>).browser_search ===
+      'object'
+      ? ((metadata.structuredData as Record<string, unknown>)
+          .browser_search as BrowserSearchMetadata)
+      : null;
+
+  if (browserData?.used && browserData.provider) {
+    sources.add(`${toTitleCase(browserData.provider)} ✓`);
+  }
+
+  return [...sources].slice(0, 5);
 }
 
 function buildOutcomeItems(metadata: AgentResponseMetadata | undefined): string[] {
@@ -470,26 +539,63 @@ function buildOutcomeItems(metadata: AgentResponseMetadata | undefined): string[
   return candidates.slice(0, 2);
 }
 
-function buildStructuredSignals(args: {
-  metadata: AgentResponseMetadata | undefined;
-  operatorActions: { label: string }[];
-  fallbackActions: string[];
-}): StructuredSignals {
-  const actionItems = args.operatorActions.length
-    ? args.operatorActions.map((item) => item.label).slice(0, 3)
-    : args.fallbackActions.slice(0, 3);
+function extractBrowserSearch(
+  metadata: AgentResponseMetadata | undefined,
+): BrowserSearchMetadata | null {
+  if (!metadata?.structuredData || typeof metadata.structuredData !== 'object') {
+    return null;
+  }
+
+  const raw = (metadata.structuredData as Record<string, unknown>).browser_search;
+  if (!raw || typeof raw !== 'object') return null;
+  return raw as BrowserSearchMetadata;
+}
+
+function getModePill(mode?: string | null) {
+  if (mode === 'shopping') {
+    return {
+      label: 'Shopping',
+      icon: ShoppingBag,
+    };
+  }
+
+  if (mode === 'news') {
+    return {
+      label: 'News',
+      icon: Newspaper,
+    };
+  }
 
   return {
-    title: resolveTitle(args.metadata),
-    actionItems,
-    sourceItems: buildSourceItems(args.metadata),
-    outcomes: buildOutcomeItems(args.metadata),
+    label: 'Search',
+    icon: Search,
   };
+}
+
+function inferAnswerQuality(metadata: AgentResponseMetadata | undefined): {
+  label: string;
+  tone: 'strong' | 'medium' | 'light';
+} {
+  const browserData = extractBrowserSearch(metadata);
+
+  if (browserData?.used && (browserData.results?.length ?? 0) >= 4) {
+    return { label: 'Grounded with live results', tone: 'strong' };
+  }
+
+  if (browserData?.used) {
+    return { label: 'Partially grounded', tone: 'medium' };
+  }
+
+  if (metadata?.memoryUsed) {
+    return { label: 'Memory-assisted', tone: 'light' };
+  }
+
+  return { label: 'Model answer', tone: 'light' };
 }
 
 export function AgentResponseMessage({
   message,
-  latestUserContent
+  latestUserContent,
 }: AgentResponseMessageProps) {
   const locale = detectLanguage(latestUserContent);
   const copy = COPY[locale];
@@ -505,19 +611,14 @@ export function AgentResponseMessage({
     isStreaming,
   );
   const introIndex = hashIndex(message.id, copy.intro.length);
-  const showIntro =
-    responseMode === 'operator' || responseMode === 'tool'
-      ? shouldShowIntro(visibleContent)
-      : false;
-  const showActions = shouldShowActions(actions, visibleContent);
   const contentBlocks = buildContentBlocks(visibleContent);
   const operatorResponse = metadata?.operatorResponse;
   const operatorActions = operatorResponse?.actions ?? [];
-  const structuredSignals = buildStructuredSignals({
-    metadata,
-    operatorActions,
-    fallbackActions: actions,
-  });
+  const browserData = extractBrowserSearch(metadata);
+  const sourceItems = buildSourceItems(metadata);
+  const outcomeItems = buildOutcomeItems(metadata);
+  const title = resolveTitle(metadata);
+  const quality = inferAnswerQuality(metadata);
   const actionClickedRef = useRef(false);
   const handleOperatorAction = useOperatorActionHandler({
     messageId: message.id,
@@ -526,6 +627,12 @@ export function AgentResponseMessage({
     latestUserContent,
     intent: metadata?.intent,
   });
+
+  const browserCards = useMemo(() => {
+    const results = Array.isArray(browserData?.results) ? browserData?.results : [];
+    return results.slice(0, 4);
+  }, [browserData]);
+
   useEffect(() => {
     if (!operatorActions.length || isStreaming) return;
 
@@ -556,98 +663,202 @@ export function AgentResponseMessage({
     };
   }, [isStreaming, message.id, metadata?.intent, operatorActions.length, responseMode]);
 
+  const modePill = getModePill(browserData?.mode);
+
   return (
     <div className="max-w-full">
-      <div className="mb-4 flex items-center gap-3">
-        <span className="rounded-full border border-[#d7e3f0] bg-[#f4f8fd] px-2.5 py-0.5 text-[11px] font-medium tracking-[-0.01em] text-[#64748b] shadow-[inset_0_1px_0_rgba(255,255,255,0.72)]">
-          {copy.brand}
-        </span>
-      </div>
+      <div className="rounded-[28px] border border-[rgba(222,229,238,0.78)] bg-[linear-gradient(180deg,rgba(255,255,255,0.92),rgba(248,250,253,0.96))] p-5 shadow-[0_18px_40px_rgba(15,23,42,0.06)] backdrop-blur-xl sm:p-6">
+        <div className="mb-5 flex flex-wrap items-center gap-2.5">
+          <span className="inline-flex items-center gap-1.5 rounded-full border border-[#dde6f0] bg-[#f9fbfe] px-3 py-1.5 text-[11px] font-semibold uppercase tracking-[0.14em] text-[#718096]">
+            <Sparkles className="h-3.5 w-3.5" />
+            {copy.brand}
+          </span>
 
-      <h3 className="mb-3 text-[22px] font-semibold leading-[1.25] tracking-[-0.026em] text-[#222e3f]">
-        {structuredSignals.title}
-      </h3>
-
-      {showIntro ? (
-        <p className="mb-5 max-w-[780px] text-[17px] leading-[1.56] tracking-[-0.02em] text-[#485467]">
-          {copy.intro[introIndex]}
-        </p>
-      ) : null}
-
-      <div className="max-w-none space-y-4">
-        {contentBlocks.length > 0 ? (
-          contentBlocks.map((block, index) => {
-            if (block.type === 'list') {
-              return (
-                <ul
-                  key={`list-${index}`}
-                  className="space-y-3 pl-0.5 text-[16.5px] leading-[1.72] tracking-[-0.014em] text-[#36414f]"
-                >
-                  {block.items.map((item, itemIndex) => (
-                    <li key={`item-${index}-${itemIndex}`} className="flex gap-3.5">
-                      <span className="mt-1.5 inline-block text-[14px] leading-6 text-[#7f8ca0]">✓</span>
-                      <span>{item}</span>
-                    </li>
-                  ))}
-                </ul>
-              );
-            }
-
-            const isLead = index === 0 && block.content.length < 160;
-            return (
-              <p
-                key={`paragraph-${index}`}
-                className={
-                  isLead
-                    ? 'max-w-[760px] text-[19px] leading-[1.58] tracking-[-0.024em] text-[#2f3947]'
-                    : 'max-w-[760px] text-[16.8px] leading-[1.72] tracking-[-0.012em] text-[#3f4a5a]'
-                }
-              >
-                {block.content}
-              </p>
-            );
-          })
-        ) : (
-          <div className="text-[16.8px] leading-[1.72] tracking-[-0.012em] text-[#3f4a5a]">
-            {visibleContent}
-          </div>
-        )}
-      </div>
-
-      {structuredSignals.actionItems.length ? (
-        <div className="mt-6 rounded-2xl border border-[#e9eef5] bg-[linear-gradient(180deg,#fdfefe,#f7fafe)] px-4 py-3.5">
-          <p className="mb-2 text-[11px] font-semibold uppercase tracking-[0.14em] text-[#8a95a7]">
-            Action list
-          </p>
-          <ul className="space-y-2 text-[15px] leading-[1.6] text-[#334155]">
-            {structuredSignals.actionItems.map((action, index) => (
-              <li key={`${action}-${index}`} className="flex gap-2.5">
-                <span className="mt-0.5 text-[14px] text-[#5d779f]">✓</span>
-                <span>{action}</span>
-              </li>
-            ))}
-          </ul>
-        </div>
-      ) : null}
-
-      {structuredSignals.sourceItems.length ? (
-        <div className="mt-4 flex flex-wrap items-center gap-2 text-[12px] text-[#7a8598]">
-          <span className="font-medium text-[#909bae]">Built from:</span>
-          {structuredSignals.sourceItems.map((source, index) => (
-            <span key={`${source}-${index}`} className="rounded-full border border-[#e6ebf2] bg-[#fbfdff] px-2.5 py-1 font-medium">
-              {source}
+          {browserData?.used ? (
+            <span className="inline-flex items-center gap-1.5 rounded-full border border-[#dbe8f3] bg-[#f5faff] px-3 py-1.5 text-[11px] font-semibold text-[#49627d]">
+              <modePill.icon className="h-3.5 w-3.5" />
+              {modePill.label}
             </span>
-          ))}
-        </div>
-      ) : null}
+          ) : null}
 
-      {structuredSignals.outcomes.length ? (
-        <div className="mt-3 space-y-1.5 text-[13px] font-medium text-[#607288]">
-          {structuredSignals.outcomes.map((outcome, index) => (
-            <p key={`${outcome}-${index}`}>{outcome}</p>
-          ))}
+          <span
+            className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-[11px] font-semibold ${
+              quality.tone === 'strong'
+                ? 'border border-[#d7eadc] bg-[#f4fbf6] text-[#3c6c4a]'
+                : quality.tone === 'medium'
+                  ? 'border border-[#e9e1c9] bg-[#fffaf0] text-[#806225]'
+                  : 'border border-[#e4e9f1] bg-[#fafcff] text-[#738296]'
+            }`}
+          >
+            <ShieldCheck className="h-3.5 w-3.5" />
+            {quality.label}
+          </span>
         </div>
-      ) : null}
+
+        <div className="max-w-[820px]">
+          <h3 className="text-[26px] font-semibold leading-[1.08] tracking-[-0.045em] text-[#1f2937] sm:text-[30px]">
+            {title}
+          </h3>
+
+          {(responseMode === 'operator' || responseMode === 'tool') && visibleContent ? (
+            <p className="mt-3 text-[15px] leading-[1.65] tracking-[-0.014em] text-[#748091]">
+              {copy.intro[introIndex]}
+            </p>
+          ) : null}
+        </div>
+
+        <div className="mt-5 space-y-4">
+          {contentBlocks.length > 0 ? (
+            contentBlocks.map((block, index) => {
+              if (block.type === 'list') {
+                return (
+                  <ul
+                    key={`list-${index}`}
+                    className="space-y-3 rounded-[22px] border border-[#ecf1f6] bg-[#fbfdff] p-4 text-[16px] leading-[1.7] tracking-[-0.012em] text-[#364152]"
+                  >
+                    {block.items.map((item, itemIndex) => (
+                      <li key={`item-${index}-${itemIndex}`} className="flex gap-3">
+                        <span className="mt-1.5 inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-[#edf5ff] text-[#58759a]">
+                          <Check className="h-3.5 w-3.5" />
+                        </span>
+                        <span>{item}</span>
+                      </li>
+                    ))}
+                  </ul>
+                );
+              }
+
+              const isLead = index === 0 && block.content.length < 180;
+
+              return (
+                <p
+                  key={`paragraph-${index}`}
+                  className={
+                    isLead
+                      ? 'max-w-[780px] text-[20px] leading-[1.58] tracking-[-0.026em] text-[#2b3441]'
+                      : 'max-w-[780px] text-[16.8px] leading-[1.74] tracking-[-0.012em] text-[#435062]'
+                  }
+                >
+                  {block.content}
+                </p>
+              );
+            })
+          ) : (
+            <div className="text-[16.8px] leading-[1.74] tracking-[-0.012em] text-[#435062]">
+              {visibleContent}
+            </div>
+          )}
+        </div>
+
+        {browserData?.used && browserCards.length ? (
+          <div className="mt-6">
+            <div className="mb-3 flex items-center justify-between gap-3">
+              <div>
+                <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-[#95a0b0]">
+                  {copy.liveWeb}
+                </p>
+                <p className="mt-1 text-[13px] text-[#6c7788]">
+                  {browserData.query || 'Live browser search'}
+                </p>
+              </div>
+
+              <span className="rounded-full border border-[#e5ebf3] bg-white px-3 py-1.5 text-[11px] font-medium text-[#748091]">
+                {browserData.provider ? toTitleCase(browserData.provider) : 'Search'}
+              </span>
+            </div>
+
+            <div className="grid gap-3 sm:grid-cols-2">
+              {browserCards.map((result, index) => (
+                <a
+                  key={`${result.url}-${index}`}
+                  href={result.url}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="group rounded-[22px] border border-[#e7edf5] bg-[linear-gradient(180deg,#ffffff,#fbfdff)] p-4 shadow-[0_8px_20px_rgba(15,23,42,0.04)] transition duration-200 hover:-translate-y-[1px] hover:shadow-[0_12px_28px_rgba(15,23,42,0.08)]"
+                >
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <p className="truncate text-[11px] font-semibold uppercase tracking-[0.14em] text-[#97a1af]">
+                        {result.source || 'Source'}
+                      </p>
+                      <h4 className="mt-2 line-clamp-2 text-[16px] font-semibold leading-[1.35] tracking-[-0.018em] text-[#243041]">
+                        {result.title}
+                      </h4>
+                    </div>
+
+                    <span className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-[#e2e8f0] bg-white text-[#6c7a8f] transition group-hover:text-[#253244]">
+                      <ArrowUpRight className="h-4 w-4" />
+                    </span>
+                  </div>
+
+                  <p className="mt-3 line-clamp-3 text-[13px] leading-[1.65] text-[#5d697a]">
+                    {result.snippet || 'No summary available.'}
+                  </p>
+                </a>
+              ))}
+            </div>
+          </div>
+        ) : null}
+
+        {actions.length ? (
+          <div className="mt-6 rounded-[22px] border border-[#e8edf4] bg-[linear-gradient(180deg,#fbfcfe,#f7fafe)] p-4">
+            <div className="mb-3 flex items-center justify-between gap-3">
+              <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-[#95a0b0]">
+                {copy.actionList}
+              </p>
+              <span className="text-[11px] font-medium text-[#9aa4b2]">
+                {actions.length} items
+              </span>
+            </div>
+
+            <ul className="space-y-2.5">
+              {actions.slice(0, 3).map((action, index) => (
+                <li key={`${action}-${index}`} className="flex gap-3">
+                  <span className="mt-1.5 inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-[#edf5ff] text-[#58759a]">
+                    <Check className="h-3.5 w-3.5" />
+                  </span>
+                  <span className="text-[15px] leading-[1.6] text-[#334155]">{action}</span>
+                </li>
+              ))}
+            </ul>
+          </div>
+        ) : null}
+
+        {(sourceItems.length || outcomeItems.length) ? (
+          <div className="mt-6 flex flex-col gap-3 border-t border-[#edf2f7] pt-4">
+            {sourceItems.length ? (
+              <div className="flex flex-wrap items-center gap-2 text-[12px] text-[#7a8598]">
+                <span className="font-medium text-[#8e99ab]">{copy.builtFrom}</span>
+                {sourceItems.map((source, index) => (
+                  <span
+                    key={`${source}-${index}`}
+                    className="inline-flex items-center gap-1.5 rounded-full border border-[#e7edf4] bg-[#fbfdff] px-2.5 py-1 font-medium"
+                  >
+                    {source.includes('web') ? <Globe className="h-3.5 w-3.5" /> : null}
+                    <span>{source}</span>
+                  </span>
+                ))}
+              </div>
+            ) : null}
+
+            {outcomeItems.length ? (
+              <div className="space-y-1.5">
+                <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-[#95a0b0]">
+                  {copy.answerQuality}
+                </p>
+                {outcomeItems.map((outcome, index) => (
+                  <p
+                    key={`${outcome}-${index}`}
+                    className="text-[13px] font-medium leading-[1.6] text-[#607288]"
+                  >
+                    {outcome}
+                  </p>
+                ))}
+              </div>
+            ) : null}
+          </div>
+        ) : null}
+      </div>
 
       <OperatorActionCard
         operatorResponse={operatorResponse}
@@ -662,13 +873,15 @@ export function AgentResponseMessage({
         }}
       />
 
-      {showActions ? (
-        <div className="mt-6">
+      {actions.length ? (
+        <div className="mt-5">
           <ActionSuggestions
             actions={actions}
             locale={locale}
             onActionClick={(actionLabel) => {
-              const action = operatorActions.find((item) => item.label === actionLabel);
+              const action = operatorActions.find(
+                (item) => item.label === actionLabel,
+              );
               if (!action) return;
               actionClickedRef.current = true;
               void handleOperatorAction(action);
