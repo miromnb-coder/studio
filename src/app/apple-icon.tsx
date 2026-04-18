@@ -14,38 +14,67 @@ export default function AppleIcon() {
         style={{
           width: '100%',
           height: '100%',
-          background: '#E8E8E8',
+          background: '#E9E9E7',
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'center',
         }}
       >
-        <svg width="180" height="180" viewBox="0 0 1024 1024" fill="none" xmlns="http://www.w3.org/2000/svg">
-          <rect width="1024" height="1024" fill="#E8E8E8" />
-          <rect x="112" y="104" width="800" height="816" rx="160" fill="#F4F4F4" />
-          <g stroke="#040B18" strokeWidth="30" fill="none" strokeLinejoin="round">
-            <rect x="300" y="300" width="110" height="110" />
-            <rect x="614" y="300" width="110" height="110" />
-            <rect x="300" y="614" width="110" height="110" />
-            <rect x="614" y="614" width="110" height="110" />
-            <line x1="300" y1="512" x2="180" y2="512" />
-            <line x1="844" y1="512" x2="724" y2="512" />
-            <line x1="512" y1="300" x2="512" y2="180" />
-            <line x1="512" y1="844" x2="512" y2="724" />
+        <svg
+          width="180"
+          height="180"
+          viewBox="0 0 1024 1024"
+          fill="none"
+          xmlns="http://www.w3.org/2000/svg"
+        >
+          <rect width="1024" height="1024" fill="#E9E9E7" />
+
+          <rect
+            x="112"
+            y="104"
+            width="800"
+            height="816"
+            rx="164"
+            fill="#F5F5F3"
+          />
+
+          <g
+            stroke="#040B18"
+            strokeWidth="38"
+            fill="none"
+            strokeLinejoin="round"
+            strokeLinecap="square"
+          >
+            <rect x="294" y="294" width="124" height="124" rx="12" />
+            <rect x="606" y="294" width="124" height="124" rx="12" />
+            <rect x="294" y="606" width="124" height="124" rx="12" />
+            <rect x="606" y="606" width="124" height="124" rx="12" />
+
+            <line x1="294" y1="512" x2="176" y2="512" />
+            <line x1="848" y1="512" x2="730" y2="512" />
+            <line x1="512" y1="294" x2="512" y2="176" />
+            <line x1="512" y1="848" x2="512" y2="730" />
+
+            <line x1="418" y1="418" x2="454" y2="454" />
+            <line x1="606" y1="418" x2="570" y2="454" />
+            <line x1="418" y1="606" x2="454" y2="570" />
+            <line x1="606" y1="606" x2="570" y2="570" />
           </g>
-          <g stroke="#040B18" strokeWidth="30" fill="none" strokeLinecap="square">
-            <line x1="410" y1="410" x2="452" y2="452" />
-            <line x1="614" y1="410" x2="572" y2="452" />
-            <line x1="410" y1="614" x2="452" y2="572" />
-            <line x1="614" y1="614" x2="572" y2="572" />
-          </g>
-          <circle cx="512" cy="512" r="108" fill="#F4F4F4" stroke="#040B18" strokeWidth="30" />
-          <circle cx="512" cy="512" r="48" fill="#040B18" />
+
+          <circle
+            cx="512"
+            cy="512"
+            r="116"
+            fill="#F5F5F3"
+            stroke="#040B18"
+            strokeWidth="38"
+          />
+          <circle cx="512" cy="512" r="52" fill="#040B18" />
         </svg>
       </div>
     ),
     {
       ...size,
-    }
+    },
   );
 }
