@@ -4,12 +4,17 @@ import { useEffect, useMemo, useRef } from 'react';
 import {
   ArrowUpRight,
   Check,
+  CircleDollarSign,
+  ExternalLink,
   Globe,
   Newspaper,
   Search,
   ShieldCheck,
   ShoppingBag,
   Sparkles,
+  Star,
+  TableProperties,
+  Tags,
 } from 'lucide-react';
 import type { Message } from '@/app/store/app-store';
 import { trackEvent } from '@/app/lib/analytics-client';
@@ -37,6 +42,14 @@ type LocaleCopy = {
   liveWeb: string;
   actionList: string;
   answerQuality: string;
+  compareTable: string;
+  compareSignal: string;
+  compareSource: string;
+  compareLink: string;
+  compareOption: string;
+  products: string;
+  productPrice: string;
+  productMerchant: string;
 };
 
 type BrowserSearchResult = {
@@ -44,6 +57,13 @@ type BrowserSearchResult = {
   url: string;
   snippet: string;
   source?: string | null;
+  price?: string | null;
+  imageUrl?: string | null;
+  image?: string | null;
+  thumbnail?: string | null;
+  rating?: number | string | null;
+  reviewCount?: number | string | null;
+  delivery?: string | null;
 };
 
 type BrowserSearchMetadata = {
@@ -54,6 +74,21 @@ type BrowserSearchMetadata = {
   query?: string | null;
   error?: string | null;
   results?: BrowserSearchResult[];
+};
+
+type ContentBlock =
+  | { type: 'paragraph'; content: string }
+  | { type: 'list'; items: string[] };
+
+type ProductCardItem = {
+  title: string;
+  url: string;
+  source: string;
+  price: string;
+  snippet: string;
+  imageUrl: string | null;
+  ratingLabel: string | null;
+  accent: string;
 };
 
 const COPY: Record<SupportedLocale, LocaleCopy> = {
@@ -69,6 +104,14 @@ const COPY: Record<SupportedLocale, LocaleCopy> = {
     liveWeb: 'Live web',
     actionList: 'Action list',
     answerQuality: 'Answer quality',
+    compareTable: 'Compare table',
+    compareSignal: 'Signal',
+    compareSource: 'Source',
+    compareLink: 'Link',
+    compareOption: 'Option',
+    products: 'Products',
+    productPrice: 'Price',
+    productMerchant: 'Merchant',
   },
   fi: {
     intro: [
@@ -82,6 +125,14 @@ const COPY: Record<SupportedLocale, LocaleCopy> = {
     liveWeb: 'Live web',
     actionList: 'Toimintalista',
     answerQuality: 'Vastauksen laatu',
+    compareTable: 'Vertailutaulukko',
+    compareSignal: 'Signaali',
+    compareSource: 'Lähde',
+    compareLink: 'Linkki',
+    compareOption: 'Vaihtoehto',
+    products: 'Tuotteet',
+    productPrice: 'Hinta',
+    productMerchant: 'Kauppa',
   },
   sv: {
     intro: [
@@ -95,6 +146,14 @@ const COPY: Record<SupportedLocale, LocaleCopy> = {
     liveWeb: 'Live web',
     actionList: 'Åtgärdslista',
     answerQuality: 'Svarskvalitet',
+    compareTable: 'Jämförelsetabell',
+    compareSignal: 'Signal',
+    compareSource: 'Källa',
+    compareLink: 'Länk',
+    compareOption: 'Alternativ',
+    products: 'Produkter',
+    productPrice: 'Pris',
+    productMerchant: 'Butik',
   },
   es: {
     intro: [
@@ -108,6 +167,14 @@ const COPY: Record<SupportedLocale, LocaleCopy> = {
     liveWeb: 'Web en vivo',
     actionList: 'Lista de acciones',
     answerQuality: 'Calidad de respuesta',
+    compareTable: 'Tabla comparativa',
+    compareSignal: 'Señal',
+    compareSource: 'Fuente',
+    compareLink: 'Enlace',
+    compareOption: 'Opción',
+    products: 'Productos',
+    productPrice: 'Precio',
+    productMerchant: 'Tienda',
   },
 };
 
@@ -133,10 +200,6 @@ const HIDDEN_PATTERNS = [
   /^what i used\b/i,
   /^recommended next step\b/i,
 ];
-
-type ContentBlock =
-  | { type: 'paragraph'; content: string }
-  | { type: 'list'; items: string[] };
 
 function normalizeText(value?: string): string {
   if (typeof value !== 'string') return '';
@@ -180,9 +243,9 @@ function detectLanguage(input?: string): SupportedLocale {
       'tee',
       'minulle',
       'vertaa',
-      'rakennetaan',
-      'tarkistetaan',
-      'haetaan',
+      'rakennettu',
+      'tarkista',
+      'hae',
       'pyyntö',
       'laatu',
       'nyt',
@@ -456,9 +519,8 @@ function resolveTitle(metadata: AgentResponseMetadata | undefined): string {
   const browserData =
     metadata?.structuredData &&
     typeof metadata.structuredData === 'object' &&
-    typeof (
-      metadata.structuredData as Record<string, unknown>
-    ).browser_search === 'object'
+    typeof (metadata.structuredData as Record<string, unknown>).browser_search ===
+      'object'
       ? ((metadata.structuredData as Record<string, unknown>)
           .browser_search as BrowserSearchMetadata)
       : null;
@@ -498,9 +560,11 @@ function buildSourceItems(metadata: AgentResponseMetadata | undefined): string[]
     const tool = String(step.tool || '').toLowerCase();
     if (!tool) continue;
     if (tool.includes('gmail') || tool.includes('email')) sources.add('Gmail ✓');
-    else if (tool.includes('calendar') || tool.includes('schedule')) sources.add('Calendar ✓');
-    else if (tool.includes('memory')) sources.add('Memory ✓');
-    else if (tool.includes('browser_search') || tool.includes('browser')) {
+    else if (tool.includes('calendar') || tool.includes('schedule')) {
+      sources.add('Calendar ✓');
+    } else if (tool.includes('memory')) {
+      sources.add('Memory ✓');
+    } else if (tool.includes('browser_search') || tool.includes('browser')) {
       sources.add('Live web ✓');
     } else {
       sources.add(`${toTitleCase(tool)} ✓`);
@@ -593,6 +657,125 @@ function inferAnswerQuality(metadata: AgentResponseMetadata | undefined): {
   return { label: 'Model answer', tone: 'light' };
 }
 
+function getHostnameLabel(url: string, fallback?: string | null) {
+  if (fallback && fallback.trim()) return fallback.trim();
+
+  try {
+    const hostname = new URL(url).hostname.replace(/^www\./, '');
+    return hostname;
+  } catch {
+    return 'Source';
+  }
+}
+
+function extractPriceLabel(result: BrowserSearchResult) {
+  const direct =
+    normalizeText(result.price || undefined) ||
+    normalizeText(
+      typeof result.snippet === 'string'
+        ? result.snippet.match(
+            /(?:€|\$|£)\s?\d[\d.,]*|\d[\d.,]*\s?(?:€|eur|usd|sek|kr)/i,
+          )?.[0]
+        : '',
+    );
+
+  return direct || null;
+}
+
+function extractDomain(url: string) {
+  try {
+    return new URL(url).hostname.replace(/^www\./, '');
+  } catch {
+    return '';
+  }
+}
+
+function maybeImage(result: BrowserSearchResult) {
+  return (
+    normalizeText(result.imageUrl || undefined) ||
+    normalizeText(result.image || undefined) ||
+    normalizeText(result.thumbnail || undefined) ||
+    null
+  );
+}
+
+function inferCompareIntent(
+  metadata: AgentResponseMetadata | undefined,
+  browserData: BrowserSearchMetadata | null,
+  latestUserContent?: string,
+) {
+  if (metadata?.intent === 'compare') return true;
+  const query = normalizeText(browserData?.query || latestUserContent).toLowerCase();
+  if (!query) return false;
+  return /\b(compare|comparison|versus|vs|vertaa|vertailu|paras|halvin)\b/i.test(
+    query,
+  );
+}
+
+function summarizeSnippet(snippet: string) {
+  const normalized = normalizeText(snippet);
+  if (!normalized) return 'No comparison signal.';
+  if (normalized.length <= 92) return normalized;
+  return `${normalized.slice(0, 89).trim()}…`;
+}
+
+function initialsFromTitle(title: string) {
+  const letters = title
+    .split(/\s+/)
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((part) => part[0]?.toUpperCase())
+    .join('');
+
+  return letters || 'K';
+}
+
+function productAccent(index: number) {
+  const accents = [
+    'from-[#ebf4ff] to-[#f8fbff]',
+    'from-[#eefbf5] to-[#f8fdfb]',
+    'from-[#fff6ec] to-[#fffaf4]',
+    'from-[#f5f1ff] to-[#faf8ff]',
+  ];
+
+  return accents[index % accents.length];
+}
+
+function buildProductCards(results: BrowserSearchResult[]): ProductCardItem[] {
+  return results.slice(0, 6).map((result, index) => {
+    const ratingValue =
+      typeof result.rating === 'number'
+        ? result.rating.toFixed(1)
+        : normalizeText(
+            typeof result.rating === 'string' ? result.rating : undefined,
+          );
+
+    return {
+      title: normalizeText(result.title) || 'Untitled product',
+      url: normalizeText(result.url),
+      source: getHostnameLabel(result.url, result.source),
+      price: extractPriceLabel(result) || 'See price',
+      snippet: normalizeText(result.snippet) || 'Open product for more details.',
+      imageUrl: maybeImage(result),
+      ratingLabel: ratingValue ? `${ratingValue}/5` : null,
+      accent: productAccent(index),
+    };
+  });
+}
+
+function topSourceChips(results: BrowserSearchResult[]) {
+  const seen = new Set<string>();
+
+  return results
+    .map((result) => getHostnameLabel(result.url, result.source))
+    .filter((item) => {
+      if (!item || seen.has(item)) return false;
+      seen.add(item);
+      return true;
+    })
+    .slice(0, 5);
+}
+
 export function AgentResponseMessage({
   message,
   latestUserContent,
@@ -630,8 +813,20 @@ export function AgentResponseMessage({
 
   const browserCards = useMemo(() => {
     const results = Array.isArray(browserData?.results) ? browserData?.results : [];
-    return results.slice(0, 4);
+    return results.slice(0, 6);
   }, [browserData]);
+
+  const sourceChips = useMemo(() => topSourceChips(browserCards), [browserCards]);
+
+  const compareEnabled = useMemo(
+    () => inferCompareIntent(metadata, browserData, latestUserContent),
+    [metadata, browserData, latestUserContent],
+  );
+
+  const productCards = useMemo(() => {
+    if (browserData?.mode !== 'shopping') return [];
+    return buildProductCards(browserCards);
+  }, [browserCards, browserData?.mode]);
 
   useEffect(() => {
     if (!operatorActions.length || isStreaming) return;
@@ -667,7 +862,7 @@ export function AgentResponseMessage({
 
   return (
     <div className="max-w-full">
-      <div className="rounded-[28px] border border-[rgba(222,229,238,0.78)] bg-[linear-gradient(180deg,rgba(255,255,255,0.92),rgba(248,250,253,0.96))] p-5 shadow-[0_18px_40px_rgba(15,23,42,0.06)] backdrop-blur-xl sm:p-6">
+      <div className="rounded-[30px] border border-[rgba(222,229,238,0.78)] bg-[linear-gradient(180deg,rgba(255,255,255,0.94),rgba(247,250,254,0.98))] p-5 shadow-[0_20px_48px_rgba(15,23,42,0.07)] backdrop-blur-xl sm:p-6">
         <div className="mb-5 flex flex-wrap items-center gap-2.5">
           <span className="inline-flex items-center gap-1.5 rounded-full border border-[#dde6f0] bg-[#f9fbfe] px-3 py-1.5 text-[11px] font-semibold uppercase tracking-[0.14em] text-[#718096]">
             <Sparkles className="h-3.5 w-3.5" />
@@ -693,6 +888,12 @@ export function AgentResponseMessage({
             <ShieldCheck className="h-3.5 w-3.5" />
             {quality.label}
           </span>
+
+          {browserData?.used && browserCards.length ? (
+            <span className="inline-flex items-center gap-1.5 rounded-full border border-[#e4ebf3] bg-white px-3 py-1.5 text-[11px] font-medium text-[#738296]">
+              {browserCards.length} live results
+            </span>
+          ) : null}
         </div>
 
         <div className="max-w-[820px]">
@@ -706,6 +907,41 @@ export function AgentResponseMessage({
             </p>
           ) : null}
         </div>
+
+        {browserData?.used ? (
+          <div className="mt-5 rounded-[24px] border border-[#e7edf5] bg-[linear-gradient(180deg,#fcfdff,#f8fbff)] p-4">
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="inline-flex items-center gap-1.5 rounded-full border border-[#e3e9f2] bg-white px-3 py-1.5 text-[11px] font-semibold uppercase tracking-[0.14em] text-[#8390a3]">
+                <Globe className="h-3.5 w-3.5" />
+                {copy.liveWeb}
+              </span>
+
+              {browserData.query ? (
+                <span className="inline-flex items-center gap-1.5 rounded-full border border-[#e6ecf4] bg-white px-3 py-1.5 text-[12px] text-[#5f7086]">
+                  <Search className="h-3.5 w-3.5" />
+                  <span className="max-w-[36ch] truncate">{browserData.query}</span>
+                </span>
+              ) : null}
+
+              {browserData.provider ? (
+                <span className="inline-flex items-center gap-1.5 rounded-full border border-[#e6ecf4] bg-white px-3 py-1.5 text-[12px] text-[#5f7086]">
+                  <Sparkles className="h-3.5 w-3.5" />
+                  {toTitleCase(browserData.provider)}
+                </span>
+              ) : null}
+
+              {sourceChips.map((chip, index) => (
+                <span
+                  key={`${chip}-${index}`}
+                  className="inline-flex items-center gap-1.5 rounded-full border border-[#e6ecf4] bg-[#fbfdff] px-3 py-1.5 text-[12px] text-[#637489]"
+                >
+                  <Tags className="h-3.5 w-3.5" />
+                  {chip}
+                </span>
+              ))}
+            </div>
+          </div>
+        ) : null}
 
         <div className="mt-5 space-y-4">
           {contentBlocks.length > 0 ? (
@@ -750,7 +986,163 @@ export function AgentResponseMessage({
           )}
         </div>
 
-        {browserData?.used && browserCards.length ? (
+        {browserData?.used && browserData.mode === 'shopping' && productCards.length ? (
+          <div className="mt-7">
+            <div className="mb-3 flex items-center justify-between gap-3">
+              <div>
+                <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-[#95a0b0]">
+                  {copy.products}
+                </p>
+                <p className="mt-1 text-[13px] text-[#6c7788]">
+                  Premium shopping cards
+                </p>
+              </div>
+
+              <span className="rounded-full border border-[#e5ebf3] bg-white px-3 py-1.5 text-[11px] font-medium text-[#748091]">
+                {productCards.length} items
+              </span>
+            </div>
+
+            <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+              {productCards.map((product, index) => (
+                <a
+                  key={`${product.url}-${index}`}
+                  href={product.url}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="group overflow-hidden rounded-[24px] border border-[#e7edf5] bg-[linear-gradient(180deg,#ffffff,#fbfdff)] shadow-[0_10px_24px_rgba(15,23,42,0.05)] transition duration-200 hover:-translate-y-[1px] hover:shadow-[0_16px_30px_rgba(15,23,42,0.08)]"
+                >
+                  <div className={`relative h-44 bg-gradient-to-br ${product.accent}`}>
+                    {product.imageUrl ? (
+                      <img
+                        src={product.imageUrl}
+                        alt={product.title}
+                        className="h-full w-full object-cover"
+                      />
+                    ) : (
+                      <div className="flex h-full w-full items-center justify-center">
+                        <div className="flex h-20 w-20 items-center justify-center rounded-[28px] border border-white/80 bg-white/90 text-[22px] font-semibold text-[#5f7086] shadow-[0_10px_24px_rgba(15,23,42,0.06)]">
+                          {initialsFromTitle(product.title)}
+                        </div>
+                      </div>
+                    )}
+
+                    <div className="absolute left-3 top-3 inline-flex items-center gap-1.5 rounded-full border border-white/80 bg-white/90 px-2.5 py-1 text-[11px] font-medium text-[#576b83] backdrop-blur">
+                      <ShoppingBag className="h-3.5 w-3.5" />
+                      {product.source}
+                    </div>
+
+                    {product.ratingLabel ? (
+                      <div className="absolute right-3 top-3 inline-flex items-center gap-1 rounded-full border border-white/80 bg-white/90 px-2.5 py-1 text-[11px] font-medium text-[#576b83] backdrop-blur">
+                        <Star className="h-3.5 w-3.5" />
+                        {product.ratingLabel}
+                      </div>
+                    ) : null}
+                  </div>
+
+                  <div className="p-4">
+                    <div className="flex items-start justify-between gap-3">
+                      <h4 className="line-clamp-2 text-[16px] font-semibold leading-[1.35] tracking-[-0.02em] text-[#243041]">
+                        {product.title}
+                      </h4>
+                      <ExternalLink className="h-4 w-4 shrink-0 text-[#95a0b0] transition group-hover:text-[#243041]" />
+                    </div>
+
+                    <div className="mt-3 flex flex-wrap gap-2">
+                      <span className="inline-flex items-center gap-1.5 rounded-full border border-[#e6ebf3] bg-[#fbfdff] px-2.5 py-1 text-[12px] font-medium text-[#52677f]">
+                        <CircleDollarSign className="h-3.5 w-3.5" />
+                        {product.price}
+                      </span>
+
+                      <span className="inline-flex items-center gap-1.5 rounded-full border border-[#e6ebf3] bg-[#fbfdff] px-2.5 py-1 text-[12px] font-medium text-[#6c7c90]">
+                        {product.source}
+                      </span>
+                    </div>
+
+                    <p className="mt-3 line-clamp-3 text-[13px] leading-[1.65] text-[#5d697a]">
+                      {product.snippet}
+                    </p>
+                  </div>
+                </a>
+              ))}
+            </div>
+          </div>
+        ) : null}
+
+        {browserData?.used && compareEnabled && browserCards.length >= 2 ? (
+          <div className="mt-7">
+            <div className="mb-3 flex items-center justify-between gap-3">
+              <div>
+                <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-[#95a0b0]">
+                  {copy.compareTable}
+                </p>
+                <p className="mt-1 text-[13px] text-[#6c7788]">
+                  Fast side-by-side scan
+                </p>
+              </div>
+
+              <span className="inline-flex items-center gap-1.5 rounded-full border border-[#e5ebf3] bg-white px-3 py-1.5 text-[11px] font-medium text-[#748091]">
+                <TableProperties className="h-3.5 w-3.5" />
+                {Math.min(browserCards.length, 4)} rows
+              </span>
+            </div>
+
+            <div className="overflow-hidden rounded-[24px] border border-[#e7edf5] bg-white">
+              <div className="grid grid-cols-[minmax(0,1.4fr)_minmax(0,0.85fr)_minmax(0,1.2fr)_auto] gap-3 border-b border-[#edf2f7] bg-[#f8fbff] px-4 py-3 text-[11px] font-semibold uppercase tracking-[0.14em] text-[#8b98a9]">
+                <div>{copy.compareOption}</div>
+                <div>{copy.compareSource}</div>
+                <div>{copy.compareSignal}</div>
+                <div>{copy.compareLink}</div>
+              </div>
+
+              <div className="divide-y divide-[#eef2f7]">
+                {browserCards.slice(0, 4).map((result, index) => (
+                  <div
+                    key={`${result.url}-${index}`}
+                    className="grid grid-cols-[minmax(0,1.4fr)_minmax(0,0.85fr)_minmax(0,1.2fr)_auto] gap-3 px-4 py-4 text-[13px] text-[#425164]"
+                  >
+                    <div className="min-w-0">
+                      <p className="line-clamp-2 font-semibold leading-[1.45] text-[#243041]">
+                        {result.title}
+                      </p>
+                      {browserData.mode === 'shopping' && extractPriceLabel(result) ? (
+                        <p className="mt-1 text-[12px] font-medium text-[#4a6a53]">
+                          {extractPriceLabel(result)}
+                        </p>
+                      ) : null}
+                    </div>
+
+                    <div className="min-w-0">
+                      <span className="inline-flex max-w-full items-center rounded-full border border-[#e7edf4] bg-[#fbfdff] px-2.5 py-1 text-[12px] font-medium text-[#64758b]">
+                        <span className="truncate">
+                          {getHostnameLabel(result.url, result.source)}
+                        </span>
+                      </span>
+                    </div>
+
+                    <div className="min-w-0 text-[12.5px] leading-[1.6] text-[#627184]">
+                      {summarizeSnippet(result.snippet)}
+                    </div>
+
+                    <div className="flex items-start justify-end">
+                      <a
+                        href={result.url}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="inline-flex items-center gap-1.5 rounded-full border border-[#dfe7f1] bg-white px-3 py-1.5 text-[12px] font-medium text-[#415164] transition hover:border-[#cfd9e6] hover:bg-[#f8fbff]"
+                      >
+                        <span>Open</span>
+                        <ArrowUpRight className="h-3.5 w-3.5" />
+                      </a>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        ) : null}
+
+        {browserData?.used && browserData.mode !== 'shopping' && browserCards.length ? (
           <div className="mt-6">
             <div className="mb-3 flex items-center justify-between gap-3">
               <div>
@@ -779,7 +1171,7 @@ export function AgentResponseMessage({
                   <div className="flex items-start justify-between gap-3">
                     <div className="min-w-0">
                       <p className="truncate text-[11px] font-semibold uppercase tracking-[0.14em] text-[#97a1af]">
-                        {result.source || 'Source'}
+                        {result.source || extractDomain(result.url) || 'Source'}
                       </p>
                       <h4 className="mt-2 line-clamp-2 text-[16px] font-semibold leading-[1.35] tracking-[-0.018em] text-[#243041]">
                         {result.title}
@@ -817,7 +1209,9 @@ export function AgentResponseMessage({
                   <span className="mt-1.5 inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-[#edf5ff] text-[#58759a]">
                     <Check className="h-3.5 w-3.5" />
                   </span>
-                  <span className="text-[15px] leading-[1.6] text-[#334155]">{action}</span>
+                  <span className="text-[15px] leading-[1.6] text-[#334155]">
+                    {action}
+                  </span>
                 </li>
               ))}
             </ul>
