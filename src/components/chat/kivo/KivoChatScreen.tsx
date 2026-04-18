@@ -419,18 +419,6 @@ export function KivoChatScreen() {
     [closeWorkspace, router],
   );
 
-  const openControlForConnector = useCallback(
-    (connector?: string) => {
-      closeWorkspace();
-      if (connector) {
-        router.push(`/control?connector=${encodeURIComponent(connector)}`);
-        return;
-      }
-      router.push('/control');
-    },
-    [closeWorkspace, router],
-  );
-
   const handleQuickAction = useCallback(
     (id: WorkspaceQuickActionId) => {
       if (id === 'ask-agent') {
@@ -456,44 +444,74 @@ export function KivoChatScreen() {
 
   const handleConnectorAction = useCallback(
     (connector: string, mode: ConnectorMode) => {
+      const openConnect = (id: string) => {
+        if (id === 'gmail') {
+          window.location.assign('/api/integrations/gmail/connect');
+          return;
+        }
+        if (id === 'google-calendar') {
+          window.location.assign('/api/integrations/google-calendar/connect');
+          return;
+        }
+      };
+
+      const disconnect = async (id: string) => {
+        if (id === 'gmail') {
+          await fetch('/api/integrations/gmail/disconnect', { method: 'POST' });
+          return;
+        }
+        if (id === 'google-calendar') {
+          await fetch('/api/integrations/google-calendar/disconnect', { method: 'POST' });
+          return;
+        }
+      };
+
       if (connector === 'gmail') {
-        if (mode === 'connected') {
+        if (mode === 'connect') {
+          openConnect('gmail');
+          return;
+        }
+        if (mode === 'toggle') {
+          void disconnect('gmail');
+          return;
+        }
+        if (mode === 'connected' || mode === 'manage') {
           openOperatorRoute('/actions?tool=gmail');
           return;
         }
-        openControlForConnector('gmail');
-        return;
       }
 
       if (connector === 'google-calendar') {
-        if (mode === 'connected') {
+        if (mode === 'connect') {
+          openConnect('google-calendar');
+          return;
+        }
+        if (mode === 'toggle') {
+          void disconnect('google-calendar');
+          return;
+        }
+        if (mode === 'connected' || mode === 'manage') {
           openOperatorRoute('/actions?tool=google-calendar');
           return;
         }
-        openControlForConnector('google-calendar');
-        return;
       }
 
       if (connector === 'google-drive') {
-        if (mode === 'connected') {
+        if (mode === 'connected' || mode === 'manage') {
           openOperatorRoute('/tools?source=drive');
           return;
         }
-        openControlForConnector('google-drive');
+        openOperatorRoute('/tools?source=drive');
         return;
       }
 
       if (connector === 'outlook') {
-        openControlForConnector('outlook');
+        openOperatorRoute('/tools');
         return;
       }
 
       if (connector === 'browser') {
-        if (mode === 'connect') {
-          openOperatorRoute('/tools');
-          return;
-        }
-        openControlForConnector('browser');
+        openOperatorRoute('/tools');
         return;
       }
 
@@ -502,13 +520,13 @@ export function KivoChatScreen() {
           openOperatorRoute('/agents');
           return;
         }
-        openControlForConnector('github');
+        openOperatorRoute('/agents');
         return;
       }
 
       openOperatorRoute('/tools');
     },
-    [openControlForConnector, openOperatorRoute],
+    [openOperatorRoute],
   );
 
   const handleToolSelect = useCallback(
