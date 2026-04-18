@@ -68,12 +68,12 @@ export const CONNECTOR_META: Record<ConnectorId, Omit<ConnectorRecord, 'state'>>
   },
   browser: {
     id: 'browser',
-    name: 'Browser',
-    description: 'Capture research from browser sessions and pages.',
+    name: 'Browser Search',
+    description: 'Live web search, product comparison, and research inside Kivo.',
     accountEmail: null,
     lastSyncAt: null,
-    permissions: ['Capture active tab metadata'],
-    tools: ['Research capture', 'Source tracker', 'Web summary'],
+    permissions: ['Live web search', 'Search result retrieval'],
+    tools: ['Live Search', 'News Search', 'Shopping Compare'],
     errorMessage: null,
   },
 };
