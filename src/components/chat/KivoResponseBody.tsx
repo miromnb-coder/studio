@@ -9,15 +9,19 @@ type KivoResponseBodyProps = {
 function hasRenderableContent(answer: StructuredAnswer) {
   return Boolean(
     answer.title ||
+      answer.lead ||
       answer.summary ||
-      answer.sections?.length ||
-      answer.bullets?.length ||
+      answer.highlights?.length ||
+      answer.nextStep ||
+      answer.sources?.some((source) => source.used) ||
       answer.plainText
   );
 }
 
 export function KivoResponseBody({ answer }: KivoResponseBodyProps) {
   if (!hasRenderableContent(answer)) return null;
+
+  const visibleSources = answer.sources?.filter((source) => source.used) ?? [];
 
   return (
     <div className="space-y-5">
@@ -27,71 +31,92 @@ export function KivoResponseBody({ answer }: KivoResponseBodyProps) {
         </h3>
       ) : null}
 
+      {answer.lead ? (
+        <p className="max-w-[760px] text-[17px] font-normal leading-[1.68] tracking-[-0.016em] text-[#334155]">
+          {answer.lead}
+        </p>
+      ) : null}
+
       {answer.summary ? (
-        <p className="max-w-[760px] text-[16px] leading-[1.72] tracking-[-0.015em] text-[#4f5d72]">
+        <p className="max-w-[760px] text-[15px] leading-[1.72] tracking-[-0.012em] text-[#556274]">
           {answer.summary}
         </p>
       ) : null}
 
-      {answer.sections?.length ? (
-        <div className="space-y-4">
-          {answer.sections.map((section, index) => {
-            const tone = section.tone ?? 'default';
+      {answer.highlights?.length ? (
+        <div className="space-y-3">
+          {answer.highlights.map((highlight, index) => {
+            const tone = highlight.tone ?? 'default';
 
-            const labelColor =
+            const dotColor =
               tone === 'important'
-                ? 'text-[#b8871a]'
+                ? 'bg-[#e0b04b]'
                 : tone === 'success'
-                ? 'text-[#5f9770]'
+                ? 'bg-[#7fb08d]'
                 : tone === 'warning'
-                ? 'text-[#c17a7a]'
-                : 'text-[#8f98a7]';
+                  ? 'bg-[#d79a9a]'
+                  : 'bg-[#c9d2df]';
 
             const textColor =
               tone === 'important'
-                ? 'text-[#5b3c0d]'
+                ? 'text-[#5a3b09]'
                 : tone === 'success'
-                ? 'text-[#1f5132]'
-                : tone === 'warning'
-                ? 'text-[#6a2b2b]'
-                : 'text-[#334155]';
+                  ? 'text-[#214d33]'
+                  : tone === 'warning'
+                    ? 'text-[#6a2b2b]'
+                    : 'text-[#334155]';
 
             return (
-              <section key={`${section.label ?? 'section'}-${index}`} className="space-y-1.5">
-                {section.label ? (
-                  <h4
-                    className={`text-[11px] font-semibold uppercase tracking-[0.14em] ${labelColor}`}
-                  >
-                    {section.label}
-                  </h4>
-                ) : null}
-
+              <div key={`${highlight.text}-${index}`} className="flex gap-3">
+                <span
+                  className={`mt-[9px] h-1.5 w-1.5 shrink-0 rounded-full ${dotColor}`}
+                />
                 <p
-                  className={`text-[15px] leading-[1.68] tracking-[-0.012em] ${textColor}`}
+                  className={`text-[15px] leading-[1.7] tracking-[-0.012em] ${textColor}`}
                 >
-                  {section.content}
+                  {highlight.text}
                 </p>
-              </section>
+              </div>
             );
           })}
         </div>
       ) : null}
 
-      {answer.bullets?.length ? (
-        <ul className="space-y-2.5 text-[15px] leading-[1.7] tracking-[-0.01em] text-[#37465b]">
-          {answer.bullets.map((bullet, index) => (
-            <li key={`${bullet}-${index}`} className="flex gap-3">
-              <span className="mt-[2px] text-[#97a1af]">•</span>
-              <span>{bullet}</span>
-            </li>
+      {answer.nextStep ? (
+        <div className="space-y-1.5 pt-1">
+          <div className="text-[11px] font-semibold uppercase tracking-[0.14em] text-[#96a0af]">
+            Next step
+          </div>
+          <p className="max-w-[760px] text-[15px] leading-[1.68] tracking-[-0.012em] text-[#334155]">
+            {answer.nextStep}
+          </p>
+        </div>
+      ) : null}
+
+      {visibleSources.length ? (
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-1 pt-1 text-[12px] leading-6">
+          <span className="font-medium tracking-[-0.01em] text-[#97a1af]">
+            Built from
+          </span>
+
+          {visibleSources.map((source) => (
+            <span
+              key={source.id}
+              className="inline-flex items-center gap-1.5 font-medium tracking-[-0.01em] text-[#5f6c80]"
+            >
+              <span className="text-[#5fa271]">✓</span>
+              <span>{source.label}</span>
+            </span>
           ))}
-        </ul>
+        </div>
       ) : null}
 
       {!answer.title &&
+      !answer.lead &&
       !answer.summary &&
-      !answer.sections?.length &&
-      !answer.bullets?.length &&
+      !answer.highlights?.length &&
+      !answer.nextStep &&
+      !visibleSources.length &&
       answer.plainText ? (
         <p className="max-w-[760px] whitespace-pre-wrap text-[15px] leading-[1.72] tracking-[-0.012em] text-[#334155]">
           {answer.plainText}
