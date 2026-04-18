@@ -4,6 +4,7 @@ import type {
 } from '@/types/agent-response';
 import type { OperatorResponse } from '@/types/operator-response';
 import type { FinanceActionType } from '@/lib/finance/types';
+import type { StructuredAnswer } from '@/agent/vNext/types';
 
 export type AgentName =
   | 'Supervisor Agent'
@@ -31,6 +32,7 @@ export type Message = {
   id: string;
   role: MessageRole;
   content: string;
+  structured?: StructuredAnswer;
   createdAt: string;
   attachments?: MessageAttachment[];
   agent?: AgentName;
@@ -180,6 +182,7 @@ export type ChatStreamEvent =
   | {
       type: 'answer_completed';
       content?: string;
+      structured?: StructuredAnswer;
       metadata?: AgentResponseMetadata;
       operatorResponse?: OperatorResponse;
       metrics?: { ttfbMs?: number; completionMs?: number; charCount?: number };

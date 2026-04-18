@@ -139,12 +139,54 @@ export type AgentMemoryContext = {
   source: 'none' | 'local' | 'remote';
 };
 
+export type StructuredSectionTone =
+  | 'default'
+  | 'important'
+  | 'success'
+  | 'warning';
+
+export type StructuredSection = {
+  label?: string;
+  content: string;
+  tone?: StructuredSectionTone;
+};
+
+export type StructuredAction = {
+  id: string;
+  label: string;
+  kind?: 'primary' | 'secondary';
+};
+
+export type StructuredSource = {
+  id: string;
+  label: string;
+  used: boolean;
+};
+
+export type StructuredAnswer = {
+  title?: string;
+  summary?: string;
+  sections?: StructuredSection[];
+  bullets?: string[];
+  actions?: StructuredAction[];
+  sources?: StructuredSource[];
+  outcome?: string;
+  plainText?: string;
+};
+
+export type AgentAnswer = {
+  text: string;
+  structured?: StructuredAnswer;
+};
+
 export type AgentFinalAnswer = {
   text: string;
+  structured?: StructuredAnswer;
   confidence: number;
   citations?: string[];
   followUps?: string[];
   structuredData?: Record<string, unknown>;
+  metadata?: Record<string, unknown>;
 };
 
 export type AgentEvaluationResult = {

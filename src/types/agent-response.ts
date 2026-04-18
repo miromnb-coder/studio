@@ -1,6 +1,7 @@
 import type { FinanceActionResult, FinanceAnalysis } from '@/lib/finance/types';
 import type { OperatorResponse } from '@/types/operator-response';
 import type { ResponseMode } from '@/agent/types/response-mode';
+import type { StructuredAnswer } from '@/agent/vNext/types';
 
 export type AgentIntent =
   | 'general'
@@ -108,6 +109,7 @@ export type AgentStructuredData = {
   goal_understanding?: Record<string, unknown>;
   response_mode?: string;
   operator_alerts?: Array<Record<string, unknown>>;
+  structuredAnswer?: StructuredAnswer;
   [key: string]: unknown;
 } | null;
 

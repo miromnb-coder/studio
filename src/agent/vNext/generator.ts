@@ -8,6 +8,8 @@ import type {
   AgentRequest,
   AgentRouteResult,
   AgentStreamEvent,
+  StructuredAnswer,
+  StructuredSection,
   AgentToolResult,
 } from './types';
 
@@ -211,6 +213,143 @@ function buildLanguageInstruction(language: string): string {
   ].join(' ');
 }
 
+function toTitleCase(value: string): string {
+  return value
+    .split(/[\s_-]+/)
+    .filter(Boolean)
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+    .join(' ');
+}
+
+function buildSourceList(toolResults: AgentToolResult[]) {
+  const byTool = new Map<string, boolean>();
+
+  for (const result of toolResults) {
+    byTool.set(result.tool, Boolean(result.ok) || byTool.get(result.tool) === true);
+  }
+
+  return [...byTool.entries()]
+    .slice(0, 5)
+    .map(([tool, used]) => ({
+      id: tool,
+      label: toTitleCase(tool),
+      used,
+    }));
+}
+
+function buildTodayPlanStructure(input: GenerateFinalAnswerInput): StructuredAnswer {
+  const sections: StructuredSection[] = [
+    {
+      label: 'Priority',
+      content: input.plan.steps[0]?.title || 'Start with your top-impact task first.',
+      tone: 'important',
+    },
+    {
+      label: 'Focus',
+      content:
+        input.plan.steps[1]?.title ||
+        'Block one uninterrupted deep-work window this morning.',
+      tone: 'default',
+    },
+    {
+      label: 'Savings',
+      content:
+        input.plan.steps[2]?.title ||
+        'Close one low-value subscription or pending small expense.',
+      tone: 'success',
+    },
+  ];
+
+  const sources = buildSourceList(input.toolResults);
+
+  return {
+    title: 'Today Plan',
+    summary: 'Built from your current priorities, tools, and recent context.',
+    sections,
+    actions: [
+      { id: 'open_calendar', label: 'Open Calendar', kind: 'primary' },
+      { id: 'show_emails', label: 'Show Emails', kind: 'secondary' },
+    ],
+    sources:
+      sources.length > 0
+        ? sources
+        : [
+            { id: 'calendar', label: 'Calendar', used: true },
+            { id: 'gmail', label: 'Gmail', used: true },
+            { id: 'memory', label: 'Memory', used: true },
+          ],
+    outcome: 'Estimated 1h saved today',
+  };
+}
+
+function buildGenericStructure(
+  input: GenerateFinalAnswerInput,
+  answerText: string,
+): StructuredAnswer | undefined {
+  const trimmed = normalizeText(answerText);
+  if (!trimmed) return undefined;
+
+  const paragraphs = trimmed
+    .split(/\n{2,}/)
+    .map((item) => normalizeText(item))
+    .filter(Boolean);
+  const firstParagraph = paragraphs[0] || trimmed;
+  const bulletCandidates = trimmed
+    .split('\n')
+    .map((line) => line.trim())
+    .filter((line) => /^([-•*]|\d+\.)\s+/.test(line))
+    .map((line) => line.replace(/^([-•*]|\d+\.)\s+/, ''))
+    .slice(0, 5);
+  const sources = buildSourceList(input.toolResults);
+
+  const sections: StructuredSection[] = input.plan.steps.slice(0, 3).map((step, index) => ({
+    label: step.title,
+    content: step.description || step.title,
+    tone: index === 0 ? 'important' : 'default',
+  }));
+
+  const shouldRender =
+    input.route.intent === 'planning' ||
+    input.route.intent === 'productivity' ||
+    sections.length >= 2 ||
+    bulletCandidates.length >= 2;
+
+  if (!shouldRender) return undefined;
+
+  return {
+    title: input.route.intent === 'planning' ? 'Plan' : 'Structured Answer',
+    summary: firstParagraph.slice(0, 220),
+    sections: sections.length ? sections : undefined,
+    bullets: bulletCandidates.length ? bulletCandidates : undefined,
+    actions: [
+      { id: 'refine_plan', label: 'Refine Plan', kind: 'secondary' },
+      { id: 'next_step', label: 'Take Next Step', kind: 'primary' },
+    ],
+    sources: sources.length ? sources : undefined,
+    outcome: paragraphs[1] || undefined,
+  };
+}
+
+function buildStructuredAnswer(
+  input: GenerateFinalAnswerInput,
+  answerText: string,
+): StructuredAnswer | undefined {
+  const requestText = getRequestText(input.request).toLowerCase();
+  const asksForTodayPlan =
+    /\b(what should i do today|today plan|plan my day|what now today)\b/i.test(
+      requestText,
+    ) || /\b(today|todays|this morning|this afternoon)\b/i.test(requestText);
+
+  if (asksForTodayPlan || input.route.intent === 'planning') {
+    const todayPlan = buildTodayPlanStructure(input);
+    return { ...todayPlan, plainText: answerText };
+  }
+
+  const generic = buildGenericStructure(input, answerText);
+  if (!generic) return undefined;
+  return { ...generic, plainText: answerText };
+}
+
 function buildLocalizedFallback(
   language: string,
   params: {
@@ -306,6 +445,7 @@ function buildFallbackAnswer(
 
   return {
     text: localized.text,
+    structured: buildStructuredAnswer(input, localized.text),
     confidence: estimateConfidence(input.route, input.toolResults, localized.text),
     followUps: localized.followUps,
     metadata: {
@@ -434,10 +574,12 @@ export async function generateFinalAnswer(
   }
 
   const text = llmAnswer.answer;
+  const structured = buildStructuredAnswer(input, text);
   const confidence = estimateConfidence(input.route, input.toolResults, text);
 
   return {
     text,
+    structured,
     confidence,
     followUps: llmAnswer.followUps,
     metadata: {

@@ -2,6 +2,7 @@ import { NextRequest } from 'next/server';
 import type { AgentResponse } from '@/types/agent-response';
 import type { OperatorResponse } from '@/types/operator-response';
 import type { ResponseMode } from '@/agent/types/response-mode';
+import type { StructuredAnswer } from '@/agent/vNext/types';
 
 const encoder = new TextEncoder();
 
@@ -160,6 +161,29 @@ function getStructuredData(result: AgentResponse | null) {
     typeof result.metadata.structuredData === 'object'
     ? (result.metadata.structuredData as Record<string, unknown>)
     : {};
+}
+
+function getStructuredAnswer(
+  result: AgentResponse | null,
+  structuredData: Record<string, unknown>,
+): StructuredAnswer | undefined {
+  const fromMetadata = structuredData.structuredAnswer;
+  if (fromMetadata && typeof fromMetadata === 'object') {
+    return fromMetadata as StructuredAnswer;
+  }
+
+  if (
+    result?.operatorResponse &&
+    typeof result.operatorResponse === 'object' &&
+    typeof result.operatorResponse.answer === 'string'
+  ) {
+    return {
+      summary: result.operatorResponse.answer,
+      plainText: result.reply,
+    };
+  }
+
+  return undefined;
 }
 
 function getConfidence(
@@ -409,6 +433,7 @@ export async function POST(request: NextRequest) {
   const final = getSafeReply(agentResult);
   const steps = getSteps(agentResult);
   const structuredData = getStructuredData(agentResult);
+  const structured = getStructuredAnswer(agentResult, structuredData);
   const confidence = getConfidence(agentResult, structuredData);
   const tools = getToolNames(agentResult, structuredData);
   const memoryUsed = getMemoryUsed(agentResult, structuredData);
@@ -551,6 +576,7 @@ export async function POST(request: NextRequest) {
       send({
         type: 'answer_completed',
         content: final,
+        structured,
         route,
         metadata: {
           ...(agentResult?.metadata || {}),
