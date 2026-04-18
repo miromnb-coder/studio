@@ -97,8 +97,7 @@ function resolveResponseMode(messages: Message[]): ResponseMode {
   }
 
   const structuredMode =
-    metadata?.structuredData &&
-    typeof metadata.structuredData === 'object'
+    metadata?.structuredData && typeof metadata.structuredData === 'object'
       ? (metadata.structuredData.response_mode as string | undefined)
       : undefined;
 
@@ -158,7 +157,7 @@ export function MessageThread({ messages, pending }: MessageThreadProps) {
 
   return (
     <div className="min-h-0 flex-1 px-4 pb-[196px] pt-6 sm:px-6">
-      <div className="mx-auto w-full max-w-[920px] space-y-8">
+      <div className="mx-auto w-full max-w-[980px] space-y-8">
         {rows.map((row) => {
           if (row.type === 'divider') {
             return (
@@ -192,11 +191,11 @@ export function MessageThread({ messages, pending }: MessageThreadProps) {
                 className={`w-full ${
                   isUser
                     ? 'max-w-[82%] sm:max-w-[70%]'
-                    : 'max-w-full sm:max-w-[94%]'
+                    : 'max-w-full'
                 }`}
               >
                 {isUser ? (
-                  <div className="rounded-[26px] border border-white/70 bg-[linear-gradient(180deg,rgba(255,255,255,0.86),rgba(247,249,252,0.92))] px-4 py-3.5 shadow-[0_12px_28px_rgba(15,23,42,0.05)] backdrop-blur-xl">
+                  <div className="rounded-[28px] border border-white/70 bg-[linear-gradient(180deg,rgba(255,255,255,0.88),rgba(247,249,252,0.94))] px-4 py-3.5 shadow-[0_12px_28px_rgba(15,23,42,0.05)] backdrop-blur-xl">
                     <p className="whitespace-pre-wrap text-[15px] leading-[1.68] tracking-[-0.016em] text-[#414958]">
                       {message.content}
                     </p>
@@ -223,7 +222,7 @@ export function MessageThread({ messages, pending }: MessageThreadProps) {
                   <motion.div
                     layout
                     transition={{ duration: 0.2, ease: 'easeOut' }}
-                    className="px-1 py-1"
+                    className="w-full px-1 py-1"
                   >
                     <div className="mb-3 flex items-center gap-2">
                       <div className="h-1.5 w-1.5 rounded-full bg-[rgba(126,136,153,0.72)]" />
@@ -235,7 +234,7 @@ export function MessageThread({ messages, pending }: MessageThreadProps) {
                     <motion.div
                       layout
                       transition={{ duration: 0.22, ease: 'easeOut' }}
-                      className="max-w-[760px]"
+                      className="w-full max-w-[840px]"
                     >
                       {message.structured ? (
                         <StructuredAnswerView answer={message.structured} />
