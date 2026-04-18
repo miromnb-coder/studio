@@ -560,16 +560,6 @@ export function KivoChatScreen() {
       <div className="pointer-events-none absolute inset-0 overflow-hidden">
         <div className="absolute inset-0 bg-[linear-gradient(180deg,#f8f8f9_0%,#f4f5f7_36%,#eef2f6_100%)]" />
 
-        <div
-          className="absolute inset-0 opacity-[0.72]"
-          style={{
-            backgroundImage:
-              'radial-gradient(rgba(120,126,138,0.34) 1px, transparent 1px)',
-            backgroundSize: '13px 13px',
-            backgroundPosition: 'center top',
-          }}
-        />
-
         <div className="absolute inset-x-0 top-0 h-[220px] bg-[radial-gradient(ellipse_at_top,rgba(255,255,255,0.92)_0%,rgba(255,255,255,0.42)_46%,rgba(255,255,255,0)_82%)]" />
 
         <motion.div
