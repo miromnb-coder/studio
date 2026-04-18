@@ -5,9 +5,8 @@ import type { Message } from '@/app/store/app-store';
 import type { ResponseMode } from '@/agent/types/response-mode';
 import { mapAgentStepsToThinkingState } from '@/lib/mapAgentEventToThinkingState';
 import { AttachmentPreview } from './AttachmentPreview';
-import { AgentResponseMessage } from './AgentResponseMessage';
 import { KivoThinkingState } from './KivoThinkingState';
-import { StructuredAnswerView } from './StructuredAnswerView';
+import { ResponseRenderer } from './ResponseRenderer';
 
 type MessageThreadProps = {
   messages: Message[];
@@ -236,14 +235,10 @@ export function MessageThread({ messages, pending }: MessageThreadProps) {
                       transition={{ duration: 0.22, ease: 'easeOut' }}
                       className="w-full max-w-[840px]"
                     >
-                      {message.structured ? (
-                        <StructuredAnswerView answer={message.structured} />
-                      ) : (
-                        <AgentResponseMessage
-                          message={message}
-                          latestUserContent={latestUserContent}
-                        />
-                      )}
+                      <ResponseRenderer
+                        message={message}
+                        latestUserContent={latestUserContent}
+                      />
                     </motion.div>
 
                     {message.attachments?.length ? (
