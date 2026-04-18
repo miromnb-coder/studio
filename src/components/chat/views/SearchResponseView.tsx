@@ -1,12 +1,16 @@
 'use client';
 
-import { Globe, Tags } from 'lucide-react';
+import { useMemo, useState } from 'react';
+import { ChevronDown, ChevronUp, Globe, Tags } from 'lucide-react';
 import type { PresentationModel } from '@/lib/presentation/build-presentation-model';
 import { PlainResponseView } from './PlainResponseView';
 
 type SearchResponseViewProps = {
   model: PresentationModel;
 };
+
+const INITIAL_CHIP_COUNT = 3;
+const INITIAL_SOURCE_COUNT = 2;
 
 function SourceCard({
   domain,
@@ -53,7 +57,34 @@ function SourceCard({
   );
 }
 
+function ToggleButton({
+  expanded,
+  hiddenCount,
+  onClick,
+}: {
+  expanded: boolean;
+  hiddenCount: number;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className="inline-flex items-center gap-2 rounded-full border border-[#dde5ef] bg-white px-4 py-2 text-[13px] font-medium text-[#44566b] transition hover:border-[#cfd9e6] hover:bg-[#fbfdff]"
+    >
+      <span>
+        {expanded
+          ? 'Näytä vähemmän'
+          : `Näytä lisää lähteitä${hiddenCount > 0 ? ` (${hiddenCount})` : ''}`}
+      </span>
+      {expanded ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+    </button>
+  );
+}
+
 export function SearchResponseView({ model }: SearchResponseViewProps) {
+  const [expanded, setExpanded] = useState(false);
+
   if (!model.sources.length) {
     return (
       <PlainResponseView
@@ -63,6 +94,23 @@ export function SearchResponseView({ model }: SearchResponseViewProps) {
       />
     );
   }
+
+  const visibleSources = expanded
+    ? model.sources
+    : model.sources.slice(0, INITIAL_SOURCE_COUNT);
+
+  const visibleChips = expanded
+    ? model.chips
+    : model.chips.slice(0, INITIAL_CHIP_COUNT);
+
+  const hiddenSourceCount = Math.max(model.sources.length - INITIAL_SOURCE_COUNT, 0);
+  const hiddenChipCount = Math.max(model.chips.length - INITIAL_CHIP_COUNT, 0);
+
+  const shouldShowToggle = model.sources.length > INITIAL_SOURCE_COUNT;
+  const chipSummary = useMemo(() => {
+    if (expanded || hiddenChipCount <= 0) return null;
+    return `+${hiddenChipCount} more`;
+  }, [expanded, hiddenChipCount]);
 
   return (
     <div className="max-w-[840px] space-y-4">
@@ -78,7 +126,7 @@ export function SearchResponseView({ model }: SearchResponseViewProps) {
           Live sources
         </span>
 
-        {model.chips.map((chip) => (
+        {visibleChips.map((chip) => (
           <span
             key={chip}
             className="inline-flex items-center gap-1.5 rounded-full border border-[#e6ecf4] bg-[#fbfdff] px-3 py-1.5 text-[12px] text-[#637489]"
@@ -87,10 +135,16 @@ export function SearchResponseView({ model }: SearchResponseViewProps) {
             {chip}
           </span>
         ))}
+
+        {chipSummary ? (
+          <span className="inline-flex items-center rounded-full border border-[#edf2f7] bg-[#fafcff] px-3 py-1.5 text-[12px] text-[#8a97a8]">
+            {chipSummary}
+          </span>
+        ) : null}
       </div>
 
       <div className="grid gap-3 sm:grid-cols-2">
-        {model.sources.map((source) => (
+        {visibleSources.map((source) => (
           <SourceCard
             key={source.id}
             domain={source.domain}
@@ -100,6 +154,16 @@ export function SearchResponseView({ model }: SearchResponseViewProps) {
           />
         ))}
       </div>
+
+      {shouldShowToggle ? (
+        <div className="pt-1">
+          <ToggleButton
+            expanded={expanded}
+            hiddenCount={hiddenSourceCount}
+            onClick={() => setExpanded((value) => !value)}
+          />
+        </div>
+      ) : null}
     </div>
   );
 }
