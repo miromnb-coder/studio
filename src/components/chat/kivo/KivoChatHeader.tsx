@@ -1,5 +1,6 @@
 'use client';
 
+import Image from 'next/image';
 import { ArrowLeft } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 
@@ -18,40 +19,60 @@ export function KivoChatHeader({ onOpenQuickSheet }: KivoChatHeaderProps) {
     router.push('/upgrade');
   };
 
+  const handleTitleClick = () => {
+    if (onOpenQuickSheet) {
+      onOpenQuickSheet();
+    }
+  };
+
   return (
-    <header className="sticky top-0 z-30 border-b border-white/40 bg-[rgba(248,248,250,0.48)] backdrop-blur-[22px]">
-      <div className="relative flex h-[76px] items-center justify-between px-6">
+    <header className="sticky top-0 z-30 border-b border-black/[0.04] bg-[rgba(255,255,255,0.78)] backdrop-blur-[20px]">
+      <div className="relative flex h-[78px] items-center justify-between px-6">
         <button
           type="button"
           onClick={handleLeftAction}
-          aria-label="Open home"
-          className="inline-flex h-11 w-11 items-center justify-center rounded-full border border-white/70 bg-[rgba(255,255,255,0.52)] text-[#5a6270] shadow-[0_8px_20px_rgba(15,23,42,0.05)] transition-all duration-200 ease-out hover:bg-[rgba(255,255,255,0.72)] active:scale-[0.985]"
+          aria-label="Go back"
+          className="inline-flex items-center justify-center p-1 text-[#2d3440] transition-all duration-200 ease-out hover:opacity-65 active:scale-[0.97]"
         >
-          <ArrowLeft className="h-5 w-5" strokeWidth={1.9} />
+          <ArrowLeft className="h-[22px] w-[22px]" strokeWidth={2} />
         </button>
 
-        {onOpenQuickSheet ? (
+        <div className="absolute left-1/2 top-1/2 flex -translate-x-1/2 -translate-y-1/2 items-center">
           <button
             type="button"
-            onClick={onOpenQuickSheet}
-            aria-label="Open quick actions"
-            className="absolute left-1/2 top-1/2 hidden -translate-x-1/2 -translate-y-1/2 rounded-full border border-white/70 bg-[rgba(255,255,255,0.44)] px-3.5 py-1.5 text-[12px] font-medium tracking-[-0.01em] text-[#6a7280] shadow-[0_8px_18px_rgba(15,23,42,0.04)] backdrop-blur-xl transition-all duration-200 ease-out hover:bg-[rgba(255,255,255,0.64)] active:scale-[0.985] sm:inline-flex"
+            onClick={handleTitleClick}
+            disabled={!onOpenQuickSheet}
+            aria-label={onOpenQuickSheet ? 'Open quick actions' : 'Kivo'}
+            className={`flex items-center gap-2.5 transition-all duration-200 ease-out ${
+              onOpenQuickSheet
+                ? 'cursor-pointer hover:opacity-80 active:scale-[0.985]'
+                : 'cursor-default'
+            }`}
           >
-            Kivo
-          </button>
-        ) : null}
+            <div className="relative h-[18px] w-[18px] overflow-hidden rounded-[4px]">
+              <Image
+                src="/kivo-mark.png"
+                alt="Kivo"
+                fill
+                className="object-contain"
+                sizes="18px"
+                priority
+              />
+            </div>
 
-        <h1 className="text-[20px] font-medium tracking-[-0.045em] text-[#333946] sm:hidden">
-          Kivo
-        </h1>
+            <span className="text-[22px] font-semibold tracking-[-0.045em] text-[#2b313d]">
+              Kivo
+            </span>
+          </button>
+        </div>
 
         <button
           type="button"
           onClick={handleUpgrade}
-          aria-label="Upgrade"
-          className="inline-flex h-10 items-center justify-center rounded-full bg-[#0b0b0d] px-4 text-[13px] font-semibold tracking-[-0.01em] text-white shadow-[0_8px_20px_rgba(0,0,0,0.16)] transition-all duration-200 ease-out hover:translate-y-[-1px] hover:bg-black active:translate-y-0 active:scale-[0.985]"
+          aria-label="Upgrade to Kivo Plus"
+          className="inline-flex h-11 items-center justify-center rounded-full bg-[linear-gradient(180deg,#101114_0%,#050608_100%)] px-5 text-[13px] font-semibold tracking-[-0.015em] text-white shadow-[0_10px_24px_rgba(0,0,0,0.16)] transition-all duration-200 ease-out hover:translate-y-[-1px] hover:shadow-[0_14px_28px_rgba(0,0,0,0.18)] active:translate-y-0 active:scale-[0.985]"
         >
-          Upgrade
+          Kivo Plus
         </button>
       </div>
     </header>
