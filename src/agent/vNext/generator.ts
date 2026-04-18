@@ -333,8 +333,7 @@ function normalizeStructuredPayload(
         .slice(0, 6)
     : [];
 
-  const cleanedTitle =
-    title && !isBadTitle(title) ? title : '';
+  const cleanedTitle = title && !isBadTitle(title) ? title : '';
 
   const hasContent = Boolean(
     cleanedTitle ||
@@ -363,6 +362,10 @@ function mapLlmStructuredToAppStructured(
   payload: LlmStructuredAnswerSchema,
 ): StructuredAnswer {
   const fallbackSources = buildSourceList(input.toolResults);
+
+  const fallbackPlainText =
+    payload.plainText ??
+    ([payload.lead, payload.summary].filter(Boolean).join(' ').trim() || undefined);
 
   return {
     title: payload.title ?? undefined,
@@ -394,13 +397,7 @@ function mapLlmStructuredToAppStructured(
           ? fallbackSources
           : undefined,
     outcome: undefined,
-    plainText:
-      payload.plainText ??
-      [payload.lead, payload.summary]
-        .filter(Boolean)
-        .join(' ')
-        .trim() ||
-      undefined,
+    plainText: fallbackPlainText,
   };
 }
 
@@ -621,8 +618,12 @@ async function generateWithModel(
     `User request: ${requestText}`,
     `Intent: ${input.route.intent}`,
     `Response mode: ${responseMode}`,
-    `User goal: ${normalizeText(input.route.userGoal) || 'Help with the user request.'}`,
-    `Entities: ${Array.isArray(input.route.entities) ? input.route.entities.join(', ') : ''}`,
+    `User goal: ${normalizeText((input.route as AgentRouteResult & { userGoal?: string }).userGoal) || 'Help with the user request.'}`,
+    `Entities: ${
+      Array.isArray((input.route as AgentRouteResult & { entities?: string[] }).entities)
+        ? ((input.route as AgentRouteResult & { entities?: string[] }).entities ?? []).join(', ')
+        : ''
+    }`,
     `Memory summary: ${normalizeText(input.memorySummary) || 'none'}`,
     'Recent conversation:',
     conversation.length
