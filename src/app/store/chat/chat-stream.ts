@@ -43,6 +43,25 @@ function buildStreamPayload(messages: Message[], userId?: string) {
   };
 }
 
+function buildSafeStructuredData(
+  value: unknown,
+): Record<string, unknown> | undefined {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return undefined;
+  return value as Record<string, unknown>;
+}
+
+function buildSafeToolResults(
+  value: unknown,
+): Array<Record<string, unknown>> | undefined {
+  if (!Array.isArray(value)) return undefined;
+
+  const normalized = value
+    .filter((item) => Boolean(item) && typeof item === 'object')
+    .map((item) => item as Record<string, unknown>);
+
+  return normalized.length ? normalized : undefined;
+}
+
 function fallbackStepLabel(event: {
   type: string;
   label?: string;
@@ -59,6 +78,7 @@ function fallbackStepLabel(event: {
     const tool = String(event.tool || '').trim().toLowerCase();
 
     if (tool === 'gmail') return 'Checking Gmail';
+    if (tool === 'calendar') return 'Checking Calendar';
     if (tool === 'memory') return 'Retrieving memory';
     if (tool === 'web') return 'Researching sources';
     if (tool === 'browser_search' || tool === 'browser') return 'Searching the web';
@@ -192,18 +212,6 @@ export async function streamAssistantResponse({
     event: Extract<ChatStreamEvent, { stepId?: string; label?: string }>,
   ) => {
     const label = fallbackStepLabel(event);
-
-    console.log('STREAM STEP EVENT', {
-      requestId,
-      conversationId,
-      assistantMessageId,
-      type: event.type,
-      rawLabel: event.label,
-      fallbackLabel: label,
-      tool: event.tool,
-      stepId: event.stepId,
-    });
-
     if (!label) return;
 
     const normalizedEvent = {
@@ -309,9 +317,11 @@ export async function streamAssistantResponse({
         },
         fallbackSteps,
       );
+
       const responseMode = mergedMetadata.responseMode;
       const shouldKeepWorkflowSteps =
         responseMode === 'operator' || responseMode === 'tool';
+
       const normalizedMetadata = shouldKeepWorkflowSteps
         ? mergedMetadata
         : {
@@ -319,14 +329,13 @@ export async function streamAssistantResponse({
             steps: [],
           };
 
-      console.log('STREAM ANSWER COMPLETED', {
-        requestId,
-        assistantMessageId,
-        inFlightSteps,
-        fallbackSteps,
-        mergedMetadata,
-        normalizedMetadata,
-      });
+      const structuredData =
+        buildSafeStructuredData(event.structuredData) ??
+        buildSafeStructuredData(normalizedMetadata.structuredData);
+
+      const toolResults =
+        buildSafeToolResults(event.toolResults) ??
+        buildSafeToolResults(structuredData?.toolResults);
 
       return {
         ...prev,
@@ -343,7 +352,17 @@ export async function streamAssistantResponse({
                   ...message,
                   content,
                   structured: event.structured,
-                  agentMetadata: normalizedMetadata,
+                  structuredData,
+                  toolResults,
+                  agentMetadata: structuredData
+                    ? {
+                        ...normalizedMetadata,
+                        structuredData: {
+                          ...(normalizedMetadata.structuredData ?? {}),
+                          ...structuredData,
+                        },
+                      }
+                    : normalizedMetadata,
                 }
               : message,
           ),
@@ -376,8 +395,6 @@ export async function streamAssistantResponse({
   };
 
   const handleStreamEvent = (event: ChatStreamEvent) => {
-    console.debug('[chat-stream] event', event);
-
     if (STREAM_STEP_EVENT_TYPES.has(event.type)) {
       handleStepEvent(
         event as Extract<ChatStreamEvent, { stepId?: string; label?: string }>,
@@ -409,11 +426,8 @@ export async function streamAssistantResponse({
       try {
         const parsed = JSON.parse(line) as ChatStreamEvent;
         handleStreamEvent(parsed);
-      } catch (error) {
-        console.error('CHAT_STREAM_PARSE_ERROR', {
-          line,
-          error,
-        });
+      } catch {
+        // Ignore malformed lines to keep stream resilient
       }
     }
   }
