@@ -25,7 +25,7 @@ function cleanListLine(line: string): string {
 function splitLongParagraph(text: string): string[] {
   const normalized = normalize(text);
   if (!normalized) return [];
-  if (normalized.length <= 260) return [normalized];
+  if (normalized.length <= 300) return [normalized];
 
   const sentences = normalized.match(/[^.!?]+[.!?]+|\S.+$/g) ?? [normalized];
   const chunks: string[] = [];
@@ -34,7 +34,7 @@ function splitLongParagraph(text: string): string[] {
   for (const sentence of sentences.map((item) => item.trim()).filter(Boolean)) {
     const next = current ? `${current} ${sentence}` : sentence;
 
-    if (next.length > 240 && current) {
+    if (next.length > 260 && current) {
       chunks.push(current.trim());
       current = sentence;
     } else {
@@ -112,27 +112,27 @@ export function PlainResponseView({
   const blocks = buildBlocks(text);
 
   return (
-    <div className="max-w-[780px] space-y-3">
+    <div className="max-w-[800px] space-y-3.5">
       {title ? (
-        <h3 className="text-[24px] font-semibold leading-[1.16] tracking-[-0.03em] text-[#1f2937]">
+        <h3 className="text-[23px] font-semibold leading-[1.15] tracking-[-0.03em] text-[#1f2937]">
           {title}
         </h3>
       ) : null}
 
       {lead ? (
-        <p className="text-[18px] leading-[1.65] tracking-[-0.015em] text-[#2f3b4b]">
+        <p className="text-[17px] leading-[1.68] tracking-[-0.014em] text-[#2f3b4b]">
           {lead}
         </p>
       ) : null}
 
       {blocks.length > 0 ? (
-        <div className="space-y-3">
+        <div className="space-y-3.5">
           {blocks.map((block, index) => {
             if (block.type === 'list') {
               return (
                 <ul
                   key={`list-${index}`}
-                  className="space-y-2 pl-5 text-[16px] leading-[1.75] tracking-[-0.01em] text-[#3f4b5c]"
+                  className="space-y-2.5 pl-5 text-[15px] leading-[1.74] tracking-[-0.01em] text-[#405063]"
                 >
                   {block.items.map((item, itemIndex) => (
                     <li key={`item-${index}-${itemIndex}`}>{item}</li>
@@ -141,15 +141,16 @@ export function PlainResponseView({
               );
             }
 
-            const isLeadParagraph = !lead && index === 0 && block.content.length < 190;
+            const isLeadParagraph =
+              !lead && index === 0 && block.content.length < 190;
 
             return (
               <p
                 key={`paragraph-${index}`}
                 className={
                   isLeadParagraph
-                    ? 'whitespace-pre-wrap text-[17px] leading-[1.72] tracking-[-0.012em] text-[#334155]'
-                    : 'whitespace-pre-wrap text-[16px] leading-[1.75] tracking-[-0.01em] text-[#3f4b5c]'
+                    ? 'whitespace-pre-wrap text-[16.5px] leading-[1.72] tracking-[-0.012em] text-[#334155]'
+                    : 'whitespace-pre-wrap text-[15px] leading-[1.76] tracking-[-0.01em] text-[#405063]'
                 }
               >
                 {block.content}
@@ -158,7 +159,7 @@ export function PlainResponseView({
           })}
         </div>
       ) : (
-        <p className="whitespace-pre-wrap text-[16px] leading-[1.75] tracking-[-0.01em] text-[#3f4b5c]">
+        <p className="whitespace-pre-wrap text-[15px] leading-[1.76] tracking-[-0.01em] text-[#405063]">
           {text}
         </p>
       )}
