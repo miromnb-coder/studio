@@ -2,6 +2,7 @@ import { AGENT_VNEXT_DEFAULT_RUNTIME_OPTIONS } from './constants';
 import { AgentExecutionError, normalizeAgentError } from './errors';
 import { evaluateExecution } from './evaluator';
 import { generateFinalAnswer, generateFinalAnswerStream } from './generator';
+import { detectIntegrationIntent } from '@/agent/integrations/integration-intent';
 import { agentLogger } from './logger';
 import { buildMemoryContext, fetchMemory, rankMemory } from './memory';
 import { createPlan } from './planner';
@@ -18,6 +19,7 @@ import type {
   AgentRuntimeOptions,
   AgentStreamEvent,
   AgentToolCall,
+  AgentToolName,
   AgentToolResult,
 } from './types';
 
@@ -25,6 +27,44 @@ type ConversationMessage = {
   id?: string;
   role: 'system' | 'user' | 'assistant';
   content: string;
+};
+
+type ToolActionInference = {
+  action: string;
+  source: 'explicit_metadata' | 'integration_intent' | 'route_intent' | 'tool_default';
+  confidence: number;
+  fallback: boolean;
+  reason: string;
+};
+
+const TOOL_ACTION_ALLOWLIST: Record<AgentToolName, readonly string[]> = {
+  gmail: [
+    'status',
+    'search',
+    'scan_subscriptions',
+    'subscriptions',
+    'scan_receipts',
+    'urgent',
+    'digest',
+    'draft_reply',
+    'summarize_inbox',
+    'inbox_summary',
+  ],
+  memory: ['status', 'search', 'retrieve', 'store'],
+  calendar: [
+    'status',
+    'availability',
+    'today_plan',
+    'find_focus_time',
+    'check_busy_week',
+    'weekly_reset',
+    'list_events',
+  ],
+  web: ['search', 'fetch', 'status'],
+  compare: ['compare'],
+  file: ['inspect', 'parse', 'summarize'],
+  finance: ['overview', 'status', 'scan'],
+  notes: ['list', 'search', 'create'],
 };
 
 function mergeRuntimeOptions(request: AgentRequest): AgentRuntimeOptions {
@@ -37,6 +77,25 @@ function mergeRuntimeOptions(request: AgentRequest): AgentRuntimeOptions {
 function normalizeText(value: unknown): string {
   if (typeof value !== 'string') return '';
   return value.replace(/\s+/g, ' ').trim();
+}
+
+function normalizeLower(value: unknown): string {
+  return normalizeText(value).toLowerCase();
+}
+
+function asObject(value: unknown): Record<string, unknown> {
+  return value && typeof value === 'object' && !Array.isArray(value)
+    ? (value as Record<string, unknown>)
+    : {};
+}
+
+function asStringArray(value: unknown): string[] {
+  if (!Array.isArray(value)) return [];
+  return value.map((item) => normalizeText(item)).filter(Boolean);
+}
+
+function unique<T>(items: T[]): T[] {
+  return [...new Set(items)];
 }
 
 function getRequestText(request: AgentRequest): string {
@@ -118,215 +177,75 @@ function shouldStopOnToolFailure(context: AgentContext): boolean {
   return !context.runtime.allowToolFallbacks;
 }
 
-type ToolActionInference = {
-  action: string;
-  source: 'keyword' | 'fallback';
-  fallback: boolean;
-};
-
-function hasAnyPattern(text: string, patterns: RegExp[]): boolean {
-  return patterns.some((pattern) => pattern.test(text));
+function allowlistedAction(
+  tool: AgentToolName,
+  action: unknown,
+): string | null {
+  const normalized = normalizeLower(action);
+  if (!normalized) return null;
+  return TOOL_ACTION_ALLOWLIST[tool].includes(normalized) ? normalized : null;
 }
 
-function inferToolAction(
-  tool: NonNullable<AgentPlan['steps'][number]['requiredTool']>,
-  request: AgentRequest,
-): ToolActionInference {
-  const text = getRequestText(request).toLowerCase();
-  const decide = (action: string, source: ToolActionInference['source']): ToolActionInference => ({
-    action,
-    source,
-    fallback: source === 'fallback',
-  });
+function getExplicitActionFromMetadata(
+  tool: AgentToolName,
+  metadata: Record<string, unknown>,
+): string | null {
+  const specificKey =
+    tool === 'gmail'
+      ? 'gmailAction'
+      : tool === 'calendar'
+        ? 'calendarAction'
+        : tool === 'memory'
+          ? 'memoryAction'
+          : tool === 'web'
+            ? 'webAction'
+            : tool === 'compare'
+              ? 'compareAction'
+              : tool === 'file'
+                ? 'fileAction'
+                : tool === 'finance'
+                  ? 'financeAction'
+                  : 'notesAction';
 
-  switch (tool) {
-    case 'gmail':
-      if (
-        hasAnyPattern(text, [
-          /\b(draft|draft a reply|reply|respond|compose)\b/i,
-          /\b(vastaa|luonnos|escribir respuesta|répondre)\b/i,
-        ])
-      ) {
-        return decide('draft', 'keyword');
-      }
-
-      if (
-        hasAnyPattern(text, [
-          /\b(subscription|subscriptions|unsubscribe|trial|newsletter)\b/i,
-          /\b(tilaus|suscrip|abonnement)\b/i,
-          /\b(save money from email|cancel subscriptions?)\b/i,
-        ])
-      ) {
-        return decide('subscriptions', 'keyword');
-      }
-
-      if (
-        hasAnyPattern(text, [
-          /\b(urgent|priority|important|need attention|asap)\b/i,
-          /\b(kiireellinen|prioriteetti|urgente)\b/i,
-        ])
-      ) {
-        return decide('urgent', 'keyword');
-      }
-
-      if (
-        hasAnyPattern(text, [
-          /\b(digest|weekly email digest|email digest|what matters most)\b/i,
-          /\b(resumen semanal|viikkoyhteenveto)\b/i,
-        ])
-      ) {
-        return decide('digest', 'keyword');
-      }
-
-      if (
-        hasAnyPattern(text, [
-          /\b(inbox summary|summari[sz]e my inbox|summari[sz]e inbox|what matters in my email)\b/i,
-          /\b(inbox|email|emails|mailbox|gmail)\b/i,
-          /\b(saapuneet|sähköposti|correo)\b/i,
-        ])
-      ) {
-        return decide('inbox_summary', 'keyword');
-      }
-
-      return decide('inbox_summary', 'fallback');
-
-    case 'calendar':
-      if (
-        hasAnyPattern(text, [
-          /\b(weekly reset|reset my week|plan next week|next week plan)\b/i,
-          /\b(viikkonollaus|suunnittele ensi viikko)\b/i,
-        ])
-      ) {
-        return decide('weekly_reset', 'keyword');
-      }
-
-      if (
-        hasAnyPattern(text, [
-          /\b(week overloaded|busy week|overbooked|too many meetings|meeting overload)\b/i,
-          /\b(ylikuormitettu viikko|liikaa palavereja)\b/i,
-        ])
-      ) {
-        return decide('check_busy_week', 'keyword');
-      }
-
-      if (
-        hasAnyPattern(text, [
-          /\b(best focus time|focus time|deep work|free hour|when can i focus)\b/i,
-          /\b(paras keskittymisaika|vapaa tunti|tiempo de enfoque)\b/i,
-        ])
-      ) {
-        return decide('find_focus_time', 'keyword');
-      }
-
-      if (
-        hasAnyPattern(text, [
-          /\b(what should i do today|today plan|plan my day|show my day plan)\b/i,
-          /\b(tänään|päiväsuunnitelma|plan de hoy)\b/i,
-          /\b(meeting|availability|schedule|calendar|kalenteri)\b/i,
-        ])
-      ) {
-        return decide('today_plan', 'keyword');
-      }
-
-      return decide('today_plan', 'fallback');
-
-    case 'memory':
-      if (
-        hasAnyPattern(text, [
-          /\b(what did i say earlier|earlier|remember|history|previously|last time)\b/i,
-          /\b(aiemmin|muistatko|antes|hace rato)\b/i,
-        ])
-      ) {
-        return decide('retrieve', 'keyword');
-      }
-      if (
-        hasAnyPattern(text, [
-          /\b(what do you know|my goals|search memory|find in memory|about me)\b/i,
-          /\b(tavoitteet|metas|goals)\b/i,
-        ])
-      ) {
-        return decide('search', 'keyword');
-      }
-      return decide('search', 'fallback');
-
-    case 'web':
-      return decide('search', 'fallback');
-
-    case 'compare':
-      return decide('compare', 'fallback');
-
-    case 'file':
-      return decide('inspect', 'fallback');
-
-    case 'finance':
-      if (text.includes('scan') || text.includes('analyze')) {
-        return decide('scan', 'keyword');
-      }
-      return decide('overview', 'fallback');
-
-    case 'notes':
-      if (text.includes('create note') || text.includes('save this') || text.includes('write this down')) {
-        return decide('create', 'keyword');
-      }
-      return decide('list', 'fallback');
-
-    default:
-      return decide('default', 'fallback');
-  }
+  return (
+    allowlistedAction(tool, metadata[specificKey]) ??
+    allowlistedAction(tool, metadata.action)
+  );
 }
 
-function extractEntities(text: string): string[] {
+function extractEntities(text: string, metadata?: Record<string, unknown>): string[] {
+  const metaEntities = asStringArray(metadata?.entities);
+
   const quoted = [...text.matchAll(/"([^"]+)"|'([^']+)'/g)]
-    .map((match) => (match[1] || match[2] || '').trim())
+    .map((match) => normalizeText(match[1] || match[2] || ''))
     .filter(Boolean);
 
-  const comparePatterns = [
-    /(.+?)\s+(?:vs|versus|contra|gegen)\s+(.+?)(?:[.?!]|$)/i,
-    /(?:compare|vertaa|compara|jämför)\s+(.+?)\s+(?:and|ja|y|och|und)\s+(.+?)(?:[.?!]|$)/i,
-  ];
-
-  const fromComparison = comparePatterns.flatMap((pattern) => {
-    const match = text.match(pattern);
-    if (!match) return [];
-    return [match[1], match[2]].map((part) => part?.trim()).filter(Boolean) as string[];
-  });
-
-  return [...new Set([...quoted, ...fromComparison])]
-    .map((item) => item.replace(/^[,.\s]+|[,.\s]+$/g, ''))
-    .filter((item) => item.length > 1)
-    .slice(0, 8);
+  return unique([...metaEntities, ...quoted]).slice(0, 8);
 }
 
-function normalizeCompareLabel(value: string): string {
-  return value
-    .replace(
-      /\b(which is better|kumpi kannattaa|for budget users|budjetilla|minulle|for me)\b/gi,
-      '',
-    )
-    .replace(/[?!.]+$/g, '')
-    .trim();
-}
+function extractCompareItems(
+  text: string,
+  metadata?: Record<string, unknown>,
+): string[] {
+  const metadataItems = unique([
+    ...asStringArray(metadata?.items),
+    ...asStringArray(metadata?.options),
+    ...asStringArray(metadata?.entities),
+  ]).slice(0, 6);
 
-function extractCompareItems(text: string): string[] {
+  if (metadataItems.length >= 2) return metadataItems;
+
   const normalized = normalizeText(text);
+  if (!normalized) return metadataItems;
 
-  const patterns = [
-    /(?:compare|vertaa)\s+(.+?)\s+(?:vs|versus)\s+(.+?)(?:[.?!]|$)/i,
-    /(?:compare|vertaa)\s+(.+?)\s+(?:and|ja)\s+(.+?)(?:[.?!]|$)/i,
-    /(.+?)\s+(?:vs|versus)\s+(.+?)(?:[.?!]|$)/i,
-  ];
-
-  for (const pattern of patterns) {
-    const match = normalized.match(pattern);
-    if (!match) continue;
-
-    const left = normalizeCompareLabel(match[1]);
-    const right = normalizeCompareLabel(match[2]);
-
-    if (left && right) return [left, right];
+  const vsMatch = normalized.match(/(.+?)\s+(?:vs|versus)\s+(.+?)(?:[.?!]|$)/i);
+  if (vsMatch) {
+    const left = normalizeText(vsMatch[1]).replace(/[?!.]+$/g, '');
+    const right = normalizeText(vsMatch[2]).replace(/[?!.]+$/g, '');
+    if (left && right) return unique([left, right]).slice(0, 6);
   }
 
-  return [];
+  return metadataItems;
 }
 
 function buildWebQuery(
@@ -342,6 +261,7 @@ function buildWebQuery(
 
   if (routeIntent === 'research') return text;
   if (routeIntent === 'compare') return text;
+  if (routeIntent === 'shopping') return text;
   if (routeIntent === 'gmail') return `${text} email workflow`;
 
   return text;
@@ -356,7 +276,8 @@ function normalizeMultilingualRequest(request: AgentRequest): AgentRequest {
     (request as AgentRequest & { inputLanguage?: string }).inputLanguage,
   );
 
-  const entities = extractEntities(message);
+  const metadata = asObject(request.metadata);
+  const entities = extractEntities(message, metadata);
 
   return {
     ...request,
@@ -364,28 +285,219 @@ function normalizeMultilingualRequest(request: AgentRequest): AgentRequest {
     inputLanguage: requestedInputLanguage || undefined,
     responseLanguage: requestedResponseLanguage || undefined,
     metadata: {
-      ...(request.metadata ?? {}),
+      ...metadata,
       entities,
       recentConversationSummary: getRecentConversationSummary(request),
     },
   };
 }
 
+function inferToolAction(params: {
+  tool: AgentToolName;
+  request: AgentRequest;
+  planIntent: AgentPlan['intent'];
+  routeIntent?: string;
+}): ToolActionInference {
+  const { tool, request, planIntent } = params;
+  const requestText = getRequestText(request);
+  const metadata = asObject(request.metadata);
+
+  const explicit = getExplicitActionFromMetadata(tool, metadata);
+  if (explicit) {
+    return {
+      action: explicit,
+      source: 'explicit_metadata',
+      confidence: 0.98,
+      fallback: false,
+      reason: `Explicit ${tool} action was provided in metadata.`,
+    };
+  }
+
+  const integrationIntent = detectIntegrationIntent(requestText, {
+    routeIntent: params.routeIntent || planIntent,
+    currentTools: [tool],
+    metadata,
+  });
+
+  if (tool === 'gmail' && integrationIntent.gmailAction) {
+    return {
+      action: integrationIntent.gmailAction,
+      source: 'integration_intent',
+      confidence: Math.max(0.72, integrationIntent.confidence),
+      fallback: false,
+      reason: `Integration intent selected Gmail action "${integrationIntent.gmailAction}".`,
+    };
+  }
+
+  if (tool === 'calendar' && integrationIntent.calendarAction) {
+    return {
+      action: integrationIntent.calendarAction,
+      source: 'integration_intent',
+      confidence: Math.max(0.72, integrationIntent.confidence),
+      fallback: false,
+      reason: `Integration intent selected Calendar action "${integrationIntent.calendarAction}".`,
+    };
+  }
+
+  switch (tool) {
+    case 'gmail':
+      if (planIntent === 'finance') {
+        return {
+          action: 'subscriptions',
+          source: 'route_intent',
+          confidence: 0.78,
+          fallback: false,
+          reason: 'Finance-oriented requests are best served by subscription/billing email analysis.',
+        };
+      }
+      if (planIntent === 'gmail') {
+        return {
+          action: 'inbox_summary',
+          source: 'route_intent',
+          confidence: 0.74,
+          fallback: false,
+          reason: 'Gmail intent defaults to inbox summary when no stronger action signal exists.',
+        };
+      }
+      if (planIntent === 'planning' || planIntent === 'productivity') {
+        return {
+          action: 'digest',
+          source: 'route_intent',
+          confidence: 0.68,
+          fallback: false,
+          reason: 'Planning/productivity requests benefit from compact inbox digest by default.',
+        };
+      }
+      return {
+        action: 'inbox_summary',
+        source: 'tool_default',
+        confidence: 0.56,
+        fallback: true,
+        reason: 'Defaulted to inbox summary because no stronger Gmail action signal was available.',
+      };
+
+    case 'calendar':
+      if (planIntent === 'planning' || planIntent === 'productivity') {
+        return {
+          action: 'today_plan',
+          source: 'route_intent',
+          confidence: 0.78,
+          fallback: false,
+          reason: 'Planning/productivity requests default to a day-plan/schedule-oriented action.',
+        };
+      }
+      return {
+        action: 'today_plan',
+        source: 'tool_default',
+        confidence: 0.58,
+        fallback: true,
+        reason: 'Defaulted to today_plan because no stronger Calendar action signal was available.',
+      };
+
+    case 'memory':
+      if (planIntent === 'memory') {
+        return {
+          action: 'retrieve',
+          source: 'route_intent',
+          confidence: 0.8,
+          fallback: false,
+          reason: 'Memory intent should retrieve personal or historical context.',
+        };
+      }
+      return {
+        action: 'search',
+        source: 'tool_default',
+        confidence: 0.62,
+        fallback: true,
+        reason: 'Defaulted to memory search for supporting context.',
+      };
+
+    case 'web':
+      return {
+        action: 'search',
+        source: 'tool_default',
+        confidence: 0.7,
+        fallback: true,
+        reason: 'Web tool defaults to search.',
+      };
+
+    case 'compare':
+      return {
+        action: 'compare',
+        source: 'tool_default',
+        confidence: 0.76,
+        fallback: true,
+        reason: 'Compare tool defaults to structured comparison.',
+      };
+
+    case 'file':
+      return {
+        action: 'inspect',
+        source: 'tool_default',
+        confidence: 0.74,
+        fallback: true,
+        reason: 'File tool defaults to inspection.',
+      };
+
+    case 'finance':
+      return {
+        action: 'overview',
+        source: 'tool_default',
+        confidence: 0.68,
+        fallback: true,
+        reason: 'Finance tool defaults to overview when no stronger action exists.',
+      };
+
+    case 'notes':
+      if (metadata.saveToNotes === true || metadata.createNote === true) {
+        return {
+          action: 'create',
+          source: 'explicit_metadata',
+          confidence: 0.92,
+          fallback: false,
+          reason: 'Metadata explicitly indicates note creation.',
+        };
+      }
+      return {
+        action: 'list',
+        source: 'tool_default',
+        confidence: 0.64,
+        fallback: true,
+        reason: 'Notes tool defaults to list/search mode.',
+      };
+
+    default:
+      return {
+        action: 'default',
+        source: 'tool_default',
+        confidence: 0.3,
+        fallback: true,
+        reason: 'Unknown tool default action.',
+      };
+  }
+}
+
 function buildToolInput(
-  tool: NonNullable<AgentPlan['steps'][number]['requiredTool']>,
+  tool: AgentToolName,
   context: AgentContext,
   plan: AgentPlan,
 ): Record<string, unknown> {
   const requestText = getRequestText(context.request);
   const recentConversation = getRecentConversationSummary(context.request);
-  const compareItems = extractCompareItems(requestText);
-  const normalizedEntities = extractEntities(requestText);
-  const actionInference = inferToolAction(tool, context.request);
+  const metadata = asObject(context.request.metadata);
+  const normalizedEntities = extractEntities(requestText, metadata);
+  const compareItems = extractCompareItems(requestText, metadata);
+  const actionInference = inferToolAction({
+    tool,
+    request: context.request,
+    planIntent: plan.intent,
+    routeIntent: plan.intent,
+  });
 
   const base: Record<string, unknown> = {
     action: actionInference.action,
     message: requestText,
-    metadata: context.request.metadata ?? {},
+    metadata,
     requestId: context.request.requestId,
     userId: context.request.userId,
     recentConversation,
@@ -397,6 +509,8 @@ function buildToolInput(
     source_used: actionInference.source,
     action_used: actionInference.action,
     fallback_used: actionInference.fallback,
+    action_confidence: actionInference.confidence,
+    action_reason: actionInference.reason,
   };
 
   switch (tool) {
@@ -422,6 +536,13 @@ function buildToolInput(
         query: requestText || recentConversation || 'current conversation context',
       };
 
+    case 'notes':
+      return {
+        ...base,
+        note: requestText,
+        query: requestText,
+      };
+
     case 'gmail':
     case 'calendar':
     case 'finance':
@@ -429,12 +550,6 @@ function buildToolInput(
       return {
         ...base,
         query: requestText,
-      };
-
-    case 'notes':
-      return {
-        ...base,
-        note: requestText,
       };
 
     default:
@@ -460,14 +575,31 @@ function sortStepsForExecution(plan: AgentPlan): AgentPlan['steps'] {
   return [...plan.steps].sort((a, b) => a.priority - b.priority);
 }
 
+function getExecutableToolSteps(plan: AgentPlan, context: AgentContext): AgentPlan['steps'] {
+  const ordered = sortStepsForExecution(plan).filter((step) => Boolean(step.requiredTool));
+  const limited = ordered.slice(0, Math.max(1, context.runtime.maxToolCalls));
+
+  const seen = new Set<string>();
+  const deduped: AgentPlan['steps'] = [];
+
+  for (const step of limited) {
+    const tool = step.requiredTool;
+    if (!tool) continue;
+
+    const signature = `${tool}:${step.id}`;
+    if (seen.has(signature)) continue;
+    seen.add(signature);
+    deduped.push(step);
+  }
+
+  return deduped;
+}
+
 export async function executePlanSteps(
   plan: AgentPlan,
   context: AgentContext,
 ): Promise<AgentToolResult[]> {
-  const steps = sortStepsForExecution(plan).filter((step) =>
-    Boolean(step.requiredTool),
-  );
-
+  const steps = getExecutableToolSteps(plan, context);
   const results: AgentToolResult[] = [];
 
   for (const step of steps) {
@@ -630,9 +762,12 @@ export async function runAgentVNext(
       requestId: request.requestId,
       intent: routeWithLanguage.intent,
       confidence: answer.confidence,
+      routingConfidence: routeWithLanguage.confidence,
       score: evaluation?.score,
       stepCount: plan.steps.length,
       toolCount: toolResults.length,
+      inputLanguage: routeWithLanguage.inputLanguage,
+      responseLanguage: routeWithLanguage.responseLanguage,
     });
 
     return {
@@ -740,10 +875,7 @@ export async function* runAgentVNextStream(
       memoryContext: memory,
     };
 
-    const orderedSteps = sortStepsForExecution(plan).filter((step) =>
-      Boolean(step.requiredTool),
-    );
-
+    const orderedSteps = getExecutableToolSteps(plan, executionContext);
     const toolResults: AgentToolResult[] = [];
 
     for (const step of orderedSteps) {
