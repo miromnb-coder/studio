@@ -1,244 +1,317 @@
-import type { Message } from '@/app/store/app-store-types';
-import type { AgentResponseMetadata } from '@/types/agent-response';
-
-export type UiMode =
+export type ResponseViewKind =
   | 'plain'
-  | 'casual'
+  | 'email'
+  | 'calendar'
   | 'search'
   | 'compare'
   | 'shopping'
-  | 'email'
   | 'operator';
 
-type ResolveUiModeInput = {
-  message: Message;
-  metadata?: AgentResponseMetadata;
-  structured?: Message['structured'];
-  latestUserContent?: string;
+export type ResponseViewResolution = {
+  view: ResponseViewKind;
+  confidence: number;
+  reason: string;
 };
 
-type BrowserSearchMetadata = {
-  used?: boolean;
-  results?: unknown[];
-  mode?: string | null;
+export type ResolveResponseViewInput = {
+  text?: string | null;
+  structured?: Record<string, unknown> | null;
+  structuredData?: Record<string, unknown> | null;
+  metadata?: Record<string, unknown> | null;
+  toolResults?: Array<Record<string, unknown>> | null;
+  isStreaming?: boolean;
 };
 
-type OperatorLike = {
-  nextStep?: string;
-  decisionBrief?: string;
-  risk?: string;
-  opportunity?: string;
-  savingsOpportunity?: string;
-  timeOpportunity?: string;
-  actions?: Array<{ label?: string }>;
+type ToolSignal = {
+  gmail: boolean;
+  calendar: boolean;
+  web: boolean;
+  compare: boolean;
+  finance: boolean;
 };
 
-function normalize(value?: string): string {
-  return (value ?? '').trim().toLowerCase();
+function normalizeText(value: unknown): string {
+  if (typeof value !== 'string') return '';
+  return value.replace(/\s+/g, ' ').trim();
 }
 
-function clean(value?: string): string {
-  return (value ?? '').trim();
+function normalizeLower(value: unknown): string {
+  return normalizeText(value).toLowerCase();
 }
 
-function countTruthy(values: unknown[]): number {
-  return values.filter(Boolean).length;
+function asObject(value: unknown): Record<string, unknown> {
+  return value && typeof value === 'object' && !Array.isArray(value)
+    ? (value as Record<string, unknown>)
+    : {};
 }
 
-function getStructuredResponseMode(metadata?: AgentResponseMetadata): string {
-  const raw =
-    metadata?.structuredData &&
-    typeof metadata.structuredData === 'object' &&
-    typeof metadata.structuredData.response_mode === 'string'
-      ? metadata.structuredData.response_mode
-      : '';
-
-  return normalize(raw);
+function asArray(value: unknown): unknown[] {
+  return Array.isArray(value) ? value : [];
 }
 
-function getBrowserSearch(metadata?: AgentResponseMetadata): BrowserSearchMetadata | null {
-  const raw =
-    metadata?.structuredData &&
-    typeof metadata.structuredData === 'object'
-      ? (metadata.structuredData.browser_search as BrowserSearchMetadata | undefined)
-      : undefined;
-
-  if (!raw || typeof raw !== 'object') return null;
-  return raw;
+function hasTruthy(value: unknown): boolean {
+  if (typeof value === 'string') return value.trim().length > 0;
+  if (Array.isArray(value)) return value.length > 0;
+  return Boolean(value);
 }
 
-function hasBrowserSearch(metadata?: AgentResponseMetadata): boolean {
-  const browserSearch = getBrowserSearch(metadata);
+function getCombinedData(input: ResolveResponseViewInput): Record<string, unknown> {
+  return {
+    ...asObject(input.structured),
+    ...asObject(input.structuredData),
+    ...asObject(input.metadata),
+  };
+}
 
-  return Boolean(
-    browserSearch?.used ||
-      browserSearch?.mode ||
-      (Array.isArray(browserSearch?.results) && browserSearch.results.length > 0),
+function detectToolSignals(toolResults: Array<Record<string, unknown>>): ToolSignal {
+  const names = toolResults
+    .map((result) => normalizeLower(result.tool))
+    .filter(Boolean);
+
+  return {
+    gmail: names.includes('gmail'),
+    calendar: names.includes('calendar'),
+    web: names.includes('web'),
+    compare: names.includes('compare'),
+    finance: names.includes('finance'),
+  };
+}
+
+function hasEmailLikeData(data: Record<string, unknown>): boolean {
+  return (
+    hasTruthy(data.inboxSummary) ||
+    hasTruthy(data.emailSummary) ||
+    hasTruthy(data.urgentEmails) ||
+    hasTruthy(data.importantEmails) ||
+    hasTruthy(data.messages) ||
+    hasTruthy(data.emailItems) ||
+    hasTruthy(data.inboxItems) ||
+    hasTruthy(data.gmail) ||
+    normalizeLower(data.responseType) === 'email' ||
+    normalizeLower(data.view) === 'email'
   );
 }
 
-function getBrowserResultCount(metadata?: AgentResponseMetadata): number {
-  const browserSearch = getBrowserSearch(metadata);
-  return Array.isArray(browserSearch?.results) ? browserSearch.results.length : 0;
+function hasCalendarLikeData(data: Record<string, unknown>): boolean {
+  return (
+    hasTruthy(data.dayPlan) ||
+    hasTruthy(data.calendarSummary) ||
+    hasTruthy(data.events) ||
+    hasTruthy(data.focusTime) ||
+    hasTruthy(data.availability) ||
+    hasTruthy(data.busyWeek) ||
+    hasTruthy(data.weeklyReset) ||
+    hasTruthy(data.calendar) ||
+    normalizeLower(data.responseType) === 'calendar' ||
+    normalizeLower(data.view) === 'calendar'
+  );
 }
 
-function getOperatorResponse(metadata?: AgentResponseMetadata): OperatorLike | null {
-  const raw = metadata?.operatorResponse;
-  if (!raw || typeof raw !== 'object') return null;
-  return raw as OperatorLike;
+function hasSearchLikeData(data: Record<string, unknown>): boolean {
+  return (
+    hasTruthy(data.sources) ||
+    hasTruthy(data.searchResults) ||
+    hasTruthy(data.resultChips) ||
+    hasTruthy(data.sourceChips) ||
+    hasTruthy(data.webResults) ||
+    hasTruthy(data.groundedSources) ||
+    normalizeLower(data.responseType) === 'search' ||
+    normalizeLower(data.view) === 'search'
+  );
 }
 
-function hasOperatorData(metadata?: AgentResponseMetadata): boolean {
-  const operator = getOperatorResponse(metadata);
-  if (!operator) return false;
+function hasCompareLikeData(data: Record<string, unknown>): boolean {
+  return (
+    hasTruthy(data.compareRows) ||
+    hasTruthy(data.compareTable) ||
+    hasTruthy(data.comparison) ||
+    hasTruthy(data.scorecards) ||
+    hasTruthy(data.criteria) ||
+    normalizeLower(data.responseType) === 'compare' ||
+    normalizeLower(data.view) === 'compare'
+  );
+}
 
-  const actionCount = Array.isArray(operator.actions)
-    ? operator.actions.filter((action) => clean(action?.label).length > 0).length
-    : 0;
+function hasShoppingLikeData(data: Record<string, unknown>): boolean {
+  return (
+    hasTruthy(data.products) ||
+    hasTruthy(data.productCards) ||
+    hasTruthy(data.shoppingResults) ||
+    hasTruthy(data.offers) ||
+    normalizeLower(data.responseType) === 'shopping' ||
+    normalizeLower(data.view) === 'shopping'
+  );
+}
 
-  const signalCount = countTruthy([
-    clean(operator.decisionBrief),
-    clean(operator.nextStep),
-    clean(operator.risk),
-    clean(operator.opportunity),
-    clean(operator.savingsOpportunity),
-    clean(operator.timeOpportunity),
-    actionCount > 0,
+function hasOperatorLikeData(data: Record<string, unknown>): boolean {
+  return (
+    hasTruthy(data.operator) ||
+    hasTruthy(data.nextActions) ||
+    hasTruthy(data.decision) ||
+    hasTruthy(data.risks) ||
+    hasTruthy(data.opportunities) ||
+    hasTruthy(data.strategy) ||
+    normalizeLower(data.responseType) === 'operator' ||
+    normalizeLower(data.view) === 'operator'
+  );
+}
+
+function countMeaningfulTextSignals(text: string, patterns: RegExp[]): number {
+  return patterns.reduce((sum, pattern) => sum + (pattern.test(text) ? 1 : 0), 0);
+}
+
+function pickStrongest(scored: Array<ResponseViewResolution>): ResponseViewResolution {
+  return [...scored].sort((a, b) => b.confidence - a.confidence)[0] ?? {
+    view: 'plain',
+    confidence: 0.4,
+    reason: 'Defaulted to plain view.',
+  };
+}
+
+export function resolveResponseView(
+  input: ResolveResponseViewInput,
+): ResponseViewResolution {
+  const text = normalizeText(input.text);
+  const lowered = normalizeLower(text);
+  const data = getCombinedData(input);
+  const toolSignals = detectToolSignals(
+    asArray(input.toolResults)
+      .map((item) => asObject(item))
+      .filter((item) => Object.keys(item).length > 0),
+  );
+
+  if (input.isStreaming) {
+    return {
+      view: 'plain',
+      confidence: 0.98,
+      reason: 'Streaming responses default to plain view to prevent layout jumping.',
+    };
+  }
+
+  const scores: Array<ResponseViewResolution> = [];
+
+  if (hasEmailLikeData(data) || toolSignals.gmail) {
+    scores.push({
+      view: 'email',
+      confidence: hasEmailLikeData(data) ? 0.96 : 0.82,
+      reason: hasEmailLikeData(data)
+        ? 'Email-specific structured data was detected.'
+        : 'Gmail tool results were detected.',
+    });
+  }
+
+  if (hasCalendarLikeData(data) || toolSignals.calendar) {
+    scores.push({
+      view: 'calendar',
+      confidence: hasCalendarLikeData(data) ? 0.95 : 0.8,
+      reason: hasCalendarLikeData(data)
+        ? 'Calendar-specific structured data was detected.'
+        : 'Calendar tool results were detected.',
+    });
+  }
+
+  if (hasShoppingLikeData(data)) {
+    scores.push({
+      view: 'shopping',
+      confidence: 0.97,
+      reason: 'Product/shopping structured data was detected.',
+    });
+  }
+
+  if (hasCompareLikeData(data) || toolSignals.compare) {
+    scores.push({
+      view: 'compare',
+      confidence: hasCompareLikeData(data) ? 0.95 : 0.84,
+      reason: hasCompareLikeData(data)
+        ? 'Comparison structured data was detected.'
+        : 'Compare tool results were detected.',
+    });
+  }
+
+  if (hasSearchLikeData(data) || toolSignals.web) {
+    scores.push({
+      view: 'search',
+      confidence: hasSearchLikeData(data) ? 0.92 : 0.78,
+      reason: hasSearchLikeData(data)
+        ? 'Search/source structured data was detected.'
+        : 'Web/search tool results were detected.',
+    });
+  }
+
+  if (hasOperatorLikeData(data) || toolSignals.finance) {
+    scores.push({
+      view: 'operator',
+      confidence: hasOperatorLikeData(data) ? 0.9 : 0.72,
+      reason: hasOperatorLikeData(data)
+        ? 'Operator/decision structured data was detected.'
+        : 'Finance/operator-like tool results were detected.',
+    });
+  }
+
+  const emailTopicOnlyScore = countMeaningfulTextSignals(lowered, [
+    /\bemail\b/i,
+    /\binbox\b/i,
+    /\bgmail\b/i,
+    /\bsähköposti\b/i,
   ]);
 
-  return signalCount >= 2;
-}
+  const calendarTopicOnlyScore = countMeaningfulTextSignals(lowered, [
+    /\bcalendar\b/i,
+    /\bschedule\b/i,
+    /\bavailability\b/i,
+    /\bkalenteri\b/i,
+    /\baikataulu\b/i,
+  ]);
 
-function hasStrongEmailData(metadata?: AgentResponseMetadata): boolean {
-  const emails =
-    metadata?.structuredData &&
-    typeof metadata.structuredData === 'object' &&
-    Array.isArray((metadata.structuredData as Record<string, unknown>).emails)
-      ? ((metadata.structuredData as Record<string, unknown>).emails as unknown[])
-      : [];
+  if (!scores.length && emailTopicOnlyScore >= 2) {
+    scores.push({
+      view: 'email',
+      confidence: 0.7,
+      reason: 'The response text appears strongly email-oriented.',
+    });
+  }
 
-  return emails.length > 0;
-}
+  if (!scores.length && calendarTopicOnlyScore >= 2) {
+    scores.push({
+      view: 'calendar',
+      confidence: 0.7,
+      reason: 'The response text appears strongly calendar-oriented.',
+    });
+  }
 
-function hasStrongCompareData(metadata?: AgentResponseMetadata): boolean {
-  const browserSearch = getBrowserSearch(metadata);
-  const count = Array.isArray(browserSearch?.results) ? browserSearch.results.length : 0;
-  if (count >= 2) return true;
-
-  const compareData =
-    metadata?.structuredData &&
-    typeof metadata.structuredData === 'object'
-      ? (metadata.structuredData as Record<string, unknown>).compare
-      : undefined;
-
-  return Boolean(compareData);
-}
-
-function hasStrongShoppingData(metadata?: AgentResponseMetadata): boolean {
-  const browserSearch = getBrowserSearch(metadata);
-  if (!browserSearch) return false;
-
-  return normalize(browserSearch.mode ?? '') === 'shopping' && getBrowserResultCount(metadata) >= 2;
-}
-
-function responseModeHint(metadata?: AgentResponseMetadata): UiMode | null {
-  const mode = metadata?.responseMode;
-
-  if (mode === 'casual') return 'casual';
-  if (mode === 'operator') return 'operator';
-  return null;
-}
-
-function getToolSignals(metadata?: AgentResponseMetadata): string[] {
-  const steps = Array.isArray(metadata?.steps) ? metadata!.steps : [];
-
-  return steps
-    .map((step) => normalize((step as { tool?: string }).tool))
-    .filter(Boolean);
-}
-
-function hasToolSignal(metadata: AgentResponseMetadata | undefined, tool: string): boolean {
-  return getToolSignals(metadata).includes(tool);
-}
-
-function isLikelyCasual(text: string): boolean {
-  if (!text) return false;
-  const compact = text.trim();
-  return compact.length <= 24 && compact.split(/\s+/).filter(Boolean).length <= 4;
-}
-
-export function resolveUiMode(input: ResolveUiModeInput): UiMode {
-  const metadata = input.metadata ?? input.message.agentMetadata;
-  const structured = input.structured ?? input.message.structured;
-  const latestUserContent = clean(input.latestUserContent);
-  const intent = normalize(metadata?.intent);
-  const responseHint = responseModeHint(metadata);
-  const structuredMode = getStructuredResponseMode(metadata);
-  const browserSearch = getBrowserSearch(metadata);
+  // Strong guardrail: email/calendar answers should not accidentally degrade
+  // into search/compare layouts just because generic sources/rows exist.
+  const strongest = pickStrongest(scores);
 
   if (
-    responseHint === 'casual' ||
-    structuredMode === 'casual' ||
-    (intent === 'general' &&
-      !hasBrowserSearch(metadata) &&
-      !hasStrongEmailData(metadata) &&
-      !hasOperatorData(metadata) &&
-      isLikelyCasual(latestUserContent))
+    strongest.view === 'email' &&
+    (hasSearchLikeData(data) || hasCompareLikeData(data))
   ) {
-    return 'casual';
+    return {
+      view: 'email',
+      confidence: Math.max(strongest.confidence, 0.96),
+      reason: 'Email view was locked because email answers should not fall through into search/compare layouts.',
+    };
   }
 
   if (
-    structuredMode === 'shopping' ||
-    normalize(browserSearch?.mode ?? '') === 'shopping' ||
-    intent === 'shopping' ||
-    (hasStrongShoppingData(metadata) && hasBrowserSearch(metadata))
+    strongest.view === 'calendar' &&
+    (hasSearchLikeData(data) || hasCompareLikeData(data))
   ) {
-    return 'shopping';
+    return {
+      view: 'calendar',
+      confidence: Math.max(strongest.confidence, 0.95),
+      reason: 'Calendar view was locked because schedule answers should not fall through into search/compare layouts.',
+    };
   }
 
-  if (
-    structuredMode === 'compare' ||
-    intent === 'compare' ||
-    hasToolSignal(metadata, 'compare') ||
-    hasStrongCompareData(metadata)
-  ) {
-    return 'compare';
+  if (scores.length) {
+    return strongest;
   }
 
-  if (
-    structuredMode === 'email' ||
-    intent === 'gmail' ||
-    hasToolSignal(metadata, 'gmail') ||
-    hasStrongEmailData(metadata)
-  ) {
-    return 'email';
-  }
-
-  if (
-    responseHint === 'operator' ||
-    structuredMode === 'operator' ||
-    intent === 'planning' ||
-    intent === 'productivity' ||
-    hasOperatorData(metadata)
-  ) {
-    return 'operator';
-  }
-
-  if (
-    structuredMode === 'search' ||
-    intent === 'research' ||
-    hasToolSignal(metadata, 'web') ||
-    (hasBrowserSearch(metadata) &&
-      normalize(browserSearch?.mode ?? '') !== 'shopping' &&
-      getBrowserResultCount(metadata) > 0)
-  ) {
-    return 'search';
-  }
-
-  if (structured?.sources?.some((source) => source.used) && !latestUserContent) {
-    return 'plain';
-  }
-
-  return 'plain';
+  return {
+    view: 'plain',
+    confidence: 0.88,
+    reason: 'No specialized response layout was strongly indicated.',
+  };
 }
