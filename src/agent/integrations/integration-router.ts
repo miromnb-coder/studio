@@ -1,4 +1,5 @@
 import { detectIntegrationIntent, type IntegrationIntentHints } from './integration-intent';
+import { detectToolNecessity } from './tool-necessity';
 import type { AgentIntent, AgentToolName } from '@/agent/vNext/types';
 
 function unique<T>(items: T[]): T[] {
@@ -96,26 +97,38 @@ export function resolveRequiredTools(
   hints: IntegrationIntentHints = {},
 ): AgentToolName[] {
   const routeIntent = normalizeIntent(hints.routeIntent);
+
   const detected = detectIntegrationIntent(message, {
     ...hints,
     routeIntent,
     currentTools,
   });
 
+  const necessity = detectToolNecessity(message, {
+    routeIntent,
+    currentTools,
+    metadata: hints.metadata,
+  });
+
   let next = [...currentTools];
 
+  // Only force user-owned sources when the new necessity layer says they are actually needed.
+  if (necessity.gmail.required) {
+    next = addIfMissing(next, 'gmail');
+  }
+
+  if (necessity.calendar.required) {
+    next = addIfMissing(next, 'calendar');
+  }
+
+  if (necessity.memory.required) {
+    next = addIfMissing(next, 'memory');
+  }
+
+  // Integration intent still helps when the request is clearly in that source domain.
+  // But do not aggressively add Gmail/Calendar just because the topic is related.
   for (const source of detected.sources) {
-    if (source === 'gmail') {
-      next = addIfMissing(next, 'gmail');
-      continue;
-    }
-
-    if (source === 'calendar') {
-      next = addIfMissing(next, 'calendar');
-      continue;
-    }
-
-    if (source === 'memory') {
+    if (source === 'memory' && necessity.memory.required) {
       next = addIfMissing(next, 'memory');
     }
   }
@@ -125,16 +138,16 @@ export function resolveRequiredTools(
 
   if (
     detected.combineSources &&
-    detected.sources.includes('gmail') &&
-    detected.sources.includes('memory')
+    necessity.gmail.required &&
+    necessity.memory.required
   ) {
     next = addIfMissing(next, 'memory');
   }
 
   if (
     detected.combineSources &&
-    detected.sources.includes('calendar') &&
-    detected.sources.includes('memory')
+    necessity.calendar.required &&
+    necessity.memory.required
   ) {
     next = addIfMissing(next, 'memory');
   }
