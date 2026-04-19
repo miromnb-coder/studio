@@ -81,10 +81,14 @@ export function WorkspaceConnectors({
             if (item.id !== 'google-calendar') return item;
             const next: ConnectorRecord = {
               ...item,
-              state: data.connected ? 'connected' : 'not_connected',
+              state: data.connected ? 'connected' : data.status === 'error' ? 'error' : 'not_connected',
               accountEmail: data.accountEmail || null,
               lastSyncAt: data.lastSyncAt || null,
-              errorMessage: null,
+              permissions:
+                Array.isArray(data.permissions) && data.permissions.length
+                  ? data.permissions
+                  : item.permissions,
+              errorMessage: data.errorMessage || null,
             };
             saveConnectorRecord('google-calendar', next);
             return next;

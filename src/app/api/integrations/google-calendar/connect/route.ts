@@ -17,13 +17,12 @@ export async function GET(req: Request) {
       return NextResponse.json({ error: 'AUTH_REQUIRED' }, { status: 401 });
     }
 
-    const stateNonce = crypto.randomBytes(18).toString('hex');
-    const state = `${userId}:${stateNonce}`;
+    const flowNonce = crypto.randomBytes(18).toString('hex');
 
     const requestUrl = new URL(req.url);
     const appOrigin = resolveAppOrigin(requestUrl);
     const isSecure = appOrigin.startsWith('https://');
-    const redirectTo = `${appOrigin}/api/integrations/google-calendar/callback`;
+    const redirectTo = `${appOrigin}/api/integrations/google-calendar/callback?flow=${encodeURIComponent(flowNonce)}`;
 
     const { data, error } = await supabase.auth.signInWithOAuth({
       provider: 'google',
@@ -31,7 +30,6 @@ export async function GET(req: Request) {
         redirectTo,
         scopes: GOOGLE_CALENDAR_READONLY_SCOPE,
         queryParams: {
-          state,
           access_type: 'offline',
           prompt: 'consent',
           include_granted_scopes: 'true',
@@ -46,8 +44,8 @@ export async function GET(req: Request) {
 
     const response = NextResponse.redirect(data.url);
     response.cookies.set({
-      name: 'google_calendar_oauth_state',
-      value: state,
+      name: 'google_calendar_oauth_flow',
+      value: flowNonce,
       httpOnly: true,
       sameSite: 'lax',
       secure: isSecure,

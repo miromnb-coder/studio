@@ -158,9 +158,11 @@ export function WorkspaceSheet({
           }
 
           if (item.id === 'google-calendar' && calendarData) {
+            const isConnected = calendarData.connected === true;
+            const isError = calendarData.status === 'error';
             const updated: ConnectorRecord = {
               ...item,
-              state: calendarData.connected === true ? 'connected' : 'not_connected',
+              state: isConnected ? 'connected' : isError ? 'error' : 'not_connected',
               accountEmail: typeof calendarData.accountEmail === 'string' ? calendarData.accountEmail : null,
               lastSyncAt: typeof calendarData.lastSyncAt === 'string' ? calendarData.lastSyncAt : null,
               permissions:
@@ -359,6 +361,11 @@ export function WorkspaceSheet({
                         <div className="flex justify-between gap-3"><dt className="text-[#6b7280]">Last sync</dt><dd className="text-right">{formatSyncLabel(detailConnector.lastSyncAt)}</dd></div>
                         <div className="flex justify-between gap-3"><dt className="text-[#6b7280]">Permissions</dt><dd className="text-right">{detailConnector.permissions.length}</dd></div>
                       </dl>
+                      {detailConnector.state === 'error' && detailConnector.errorMessage ? (
+                        <p className="mt-3 rounded-xl border border-[#f2d1d1] bg-[#fff6f6] px-3 py-2 text-[12px] text-[#9f3a3a]">
+                          {detailConnector.errorMessage}
+                        </p>
+                      ) : null}
                     </div>
 
                     <div className="space-y-2">
