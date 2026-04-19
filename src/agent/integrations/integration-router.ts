@@ -9,21 +9,121 @@ function hasTool(tools: AgentToolName[], tool: AgentToolName): boolean {
   return tools.includes(tool);
 }
 
+function normalizeIntent(value: unknown): AgentIntent | 'unknown' {
+  return value === 'compare' ||
+    value === 'finance' ||
+    value === 'planning' ||
+    value === 'productivity' ||
+    value === 'gmail' ||
+    value === 'coding' ||
+    value === 'memory' ||
+    value === 'research' ||
+    value === 'shopping' ||
+    value === 'general' ||
+    value === 'unknown'
+    ? value
+    : 'unknown';
+}
+
+function addIfMissing(tools: AgentToolName[], tool: AgentToolName): AgentToolName[] {
+  return hasTool(tools, tool) ? tools : [...tools, tool];
+}
+
+function ensureMemoryWhenHelpful(
+  tools: AgentToolName[],
+  routeIntent: AgentIntent | 'unknown',
+): AgentToolName[] {
+  if (hasTool(tools, 'memory')) return tools;
+
+  if (
+    routeIntent === 'gmail' ||
+    routeIntent === 'finance' ||
+    routeIntent === 'planning' ||
+    routeIntent === 'productivity' ||
+    routeIntent === 'memory' ||
+    routeIntent === 'compare' ||
+    routeIntent === 'shopping'
+  ) {
+    return [...tools, 'memory'];
+  }
+
+  return tools;
+}
+
 export function resolveRequiredTools(
   message: string,
   currentTools: AgentToolName[],
   hints: IntegrationIntentHints = {},
 ): AgentToolName[] {
-  const intent = detectIntegrationIntent(message, {
+  const routeIntent = normalizeIntent(hints.routeIntent);
+  const detected = detectIntegrationIntent(message, {
     ...hints,
+    routeIntent,
     currentTools,
   });
 
-  const next = [...currentTools];
+  let next = [...currentTools];
 
-  if (intent.sources.includes('gmail') && !hasTool(next, 'gmail')) next.push('gmail');
-  if (intent.sources.includes('calendar') && !hasTool(next, 'calendar')) next.push('calendar');
-  if (intent.sources.includes('memory') && !hasTool(next, 'memory')) next.push('memory');
+  for (const source of detected.sources) {
+    if (source === 'gmail') {
+      next = addIfMissing(next, 'gmail');
+      continue;
+    }
+
+    if (source === 'calendar') {
+      next = addIfMissing(next, 'calendar');
+      continue;
+    }
+
+    if (source === 'memory') {
+      next = addIfMissing(next, 'memory');
+    }
+  }
+
+  next = ensureMemoryWhenHelpful(next, routeIntent);
+
+  if (routeIntent === 'finance') {
+    next = addIfMissing(next, 'finance');
+  }
+
+  if (routeIntent === 'research') {
+    next = addIfMissing(next, 'web');
+  }
+
+  if (routeIntent === 'shopping') {
+    next = addIfMissing(next, 'web');
+    next = addIfMissing(next, 'compare');
+  }
+
+  if (routeIntent === 'compare') {
+    next = addIfMissing(next, 'compare');
+    next = addIfMissing(next, 'web');
+  }
+
+  if (routeIntent === 'coding') {
+    next = addIfMissing(next, 'file');
+    next = addIfMissing(next, 'web');
+  }
+
+  if (routeIntent === 'memory') {
+    next = addIfMissing(next, 'notes');
+  }
+
+  if (
+    detected.combineSources &&
+    detected.sources.includes('gmail') &&
+    detected.sources.includes('memory')
+  ) {
+    next = addIfMissing(next, 'memory');
+  }
+
+  if (
+    detected.combineSources &&
+    detected.sources.includes('calendar') &&
+    detected.sources.includes('memory')
+  ) {
+    next = addIfMissing(next, 'memory');
+  }
 
   return unique(next);
 }
@@ -32,21 +132,33 @@ export function resolveDefaultToolsForIntent(intent: AgentIntent): AgentToolName
   switch (intent) {
     case 'gmail':
       return ['gmail', 'memory'];
+
     case 'finance':
       return ['finance', 'gmail', 'memory'];
+
     case 'planning':
     case 'productivity':
       return ['calendar', 'memory', 'notes'];
+
     case 'coding':
       return ['file', 'web', 'memory'];
+
     case 'research':
       return ['web', 'memory'];
+
     case 'shopping':
       return ['web', 'compare', 'memory'];
+
     case 'compare':
       return ['compare', 'web', 'memory'];
+
     case 'memory':
       return ['memory', 'notes'];
+
+    case 'general':
+      return ['memory'];
+
+    case 'unknown':
     default:
       return ['memory'];
   }
