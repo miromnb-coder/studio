@@ -122,7 +122,12 @@ export function KivoChatScreen() {
   const measureBottomOverlayInset = useCallback(() => {
     if (typeof window === 'undefined') return;
 
-    const viewportBottom = window.innerHeight;
+    const viewportBottom = window.visualViewport
+      ? window.visualViewport.height + window.visualViewport.offsetTop
+      : window.innerHeight;
+    const scrollerBottom =
+      mainScrollRef.current?.getBoundingClientRect().bottom ?? viewportBottom;
+    const measurementBottom = Math.min(viewportBottom, scrollerBottom);
     const nodes = [composerDockRef.current, attachmentTrayRef.current].filter(
       (node): node is HTMLElement => Boolean(node),
     );
@@ -130,7 +135,7 @@ export function KivoChatScreen() {
     const nextInset = nodes.reduce((maxInset, node) => {
       const rect = node.getBoundingClientRect();
       if (rect.height <= 0 || rect.width <= 0) return maxInset;
-      return Math.max(maxInset, Math.max(0, viewportBottom - rect.top));
+      return Math.max(maxInset, Math.max(0, measurementBottom - rect.top));
     }, 0);
 
     setBottomOverlayInset((current) =>
@@ -249,6 +254,7 @@ export function KivoChatScreen() {
         setKeyboardOffset((current) =>
           Math.abs(current - nextOffset) < 1 ? current : nextOffset,
         );
+        measureBottomOverlayInset();
       });
     };
 
