@@ -18,6 +18,8 @@ type SourceSignal = {
   reason: string;
 };
 
+type SourceScores = Record<IntegrationSource, number>;
+
 function normalizeText(value: unknown): string {
   if (typeof value !== 'string') return '';
   return value.replace(/\s+/g, ' ').trim();
@@ -35,10 +37,35 @@ function asObject(value: unknown): Record<string, unknown> {
   return value && typeof value === 'object' ? (value as Record<string, unknown>) : {};
 }
 
+function asArray(value: unknown): unknown[] {
+  return Array.isArray(value) ? value : [];
+}
+
 function hasTruthy(value: unknown): boolean {
   if (typeof value === 'string') return value.trim().length > 0;
   if (Array.isArray(value)) return value.length > 0;
   return Boolean(value);
+}
+
+function clamp01(value: number): number {
+  if (Number.isNaN(value)) return 0;
+  return Math.max(0, Math.min(1, Number(value.toFixed(2))));
+}
+
+function normalizeIntent(value: unknown): AgentIntent | 'unknown' {
+  return value === 'compare' ||
+    value === 'finance' ||
+    value === 'planning' ||
+    value === 'productivity' ||
+    value === 'gmail' ||
+    value === 'coding' ||
+    value === 'memory' ||
+    value === 'research' ||
+    value === 'shopping' ||
+    value === 'general' ||
+    value === 'unknown'
+    ? value
+    : 'unknown';
 }
 
 function normalizeToolList(value: unknown): AgentToolName[] {
@@ -59,22 +86,6 @@ function normalizeToolList(value: unknown): AgentToolName[] {
   );
 }
 
-function normalizeIntent(value: unknown): AgentIntent | 'unknown' {
-  return value === 'compare' ||
-    value === 'finance' ||
-    value === 'planning' ||
-    value === 'productivity' ||
-    value === 'gmail' ||
-    value === 'coding' ||
-    value === 'memory' ||
-    value === 'research' ||
-    value === 'shopping' ||
-    value === 'general' ||
-    value === 'unknown'
-    ? value
-    : 'unknown';
-}
-
 function addSignal(
   bucket: Map<IntegrationSource, SourceSignal[]>,
   source: IntegrationSource,
@@ -88,11 +99,6 @@ function addSignal(
 
 function sumWeights(signals: SourceSignal[]): number {
   return signals.reduce((sum, signal) => sum + signal.weight, 0);
-}
-
-function clamp01(value: number): number {
-  if (Number.isNaN(value)) return 0;
-  return Math.max(0, Math.min(1, Number(value.toFixed(2))));
 }
 
 function collectPromptLikeText(metadata: Record<string, unknown>): string {
@@ -116,7 +122,8 @@ function collectPromptLikeText(metadata: Record<string, unknown>): string {
 }
 
 function extractEntities(metadata: Record<string, unknown>): string[] {
-  const raw = Array.isArray(metadata.entities) ? metadata.entities : [];
+  const raw = asArray(metadata.entities);
+
   return unique(
     raw
       .map((item) => normalizeText(item))
@@ -132,7 +139,7 @@ function deriveSignalsFromTools(
   if (tools.includes('gmail')) {
     signals.push({
       source: 'gmail',
-      weight: 0.92,
+      weight: 0.94,
       reason: 'Current tool set already includes Gmail.',
     });
   }
@@ -140,7 +147,7 @@ function deriveSignalsFromTools(
   if (tools.includes('calendar')) {
     signals.push({
       source: 'calendar',
-      weight: 0.92,
+      weight: 0.94,
       reason: 'Current tool set already includes Calendar.',
     });
   }
@@ -148,7 +155,7 @@ function deriveSignalsFromTools(
   if (tools.includes('memory')) {
     signals.push({
       source: 'memory',
-      weight: 0.9,
+      weight: 0.88,
       reason: 'Current tool set already includes Memory.',
     });
   }
@@ -164,13 +171,13 @@ function deriveSignalsFromIntent(
       return [
         {
           source: 'gmail',
-          weight: 0.88,
-          reason: 'Route intent is Gmail-specific.',
+          weight: 0.9,
+          reason: 'Top-level route intent is Gmail-specific.',
         },
         {
           source: 'memory',
-          weight: 0.42,
-          reason: 'Memory can improve email triage with prior context.',
+          weight: 0.38,
+          reason: 'Memory can improve inbox prioritization with prior context.',
         },
       ];
 
@@ -179,13 +186,13 @@ function deriveSignalsFromIntent(
       return [
         {
           source: 'calendar',
-          weight: 0.82,
+          weight: 0.84,
           reason: 'Planning/productivity intent strongly suggests calendar context.',
         },
         {
           source: 'memory',
-          weight: 0.46,
-          reason: 'Memory can improve planning with past preferences and context.',
+          weight: 0.42,
+          reason: 'Memory can improve planning using prior preferences and context.',
         },
       ];
 
@@ -193,13 +200,13 @@ function deriveSignalsFromIntent(
       return [
         {
           source: 'gmail',
-          weight: 0.7,
+          weight: 0.68,
           reason: 'Finance intent often benefits from subscription and billing email signals.',
         },
         {
           source: 'memory',
-          weight: 0.44,
-          reason: 'Memory can improve financial advice with prior preferences.',
+          weight: 0.4,
+          reason: 'Memory can improve financial advice with historical preferences.',
         },
       ];
 
@@ -207,17 +214,11 @@ function deriveSignalsFromIntent(
       return [
         {
           source: 'memory',
-          weight: 0.9,
-          reason: 'Route intent is explicitly memory-oriented.',
+          weight: 0.92,
+          reason: 'Top-level route intent is explicitly memory-oriented.',
         },
       ];
 
-    case 'research':
-    case 'compare':
-    case 'shopping':
-    case 'coding':
-    case 'general':
-    case 'unknown':
     default:
       return [];
   }
@@ -231,7 +232,7 @@ function deriveSignalsFromMetadata(
   if (hasTruthy(metadata.gmailAction) || hasTruthy(metadata.emails)) {
     signals.push({
       source: 'gmail',
-      weight: 0.82,
+      weight: 0.84,
       reason: 'Metadata already contains Gmail-specific action or email payload.',
     });
   }
@@ -239,7 +240,7 @@ function deriveSignalsFromMetadata(
   if (hasTruthy(metadata.calendarAction) || hasTruthy(metadata.events)) {
     signals.push({
       source: 'calendar',
-      weight: 0.82,
+      weight: 0.84,
       reason: 'Metadata already contains Calendar-specific action or event payload.',
     });
   }
@@ -247,7 +248,7 @@ function deriveSignalsFromMetadata(
   if (hasTruthy(metadata.memory) || hasTruthy(metadata.memoryContext)) {
     signals.push({
       source: 'memory',
-      weight: 0.78,
+      weight: 0.8,
       reason: 'Metadata already contains memory context.',
     });
   }
@@ -256,8 +257,8 @@ function deriveSignalsFromMetadata(
   for (const signal of deriveSignalsFromTools(sourceHints)) {
     signals.push({
       ...signal,
-      weight: Math.max(0.72, signal.weight - 0.08),
-      reason: `Metadata requires tools indicates ${signal.source}.`,
+      weight: Math.max(0.72, signal.weight - 0.1),
+      reason: `Metadata requiresTools suggests ${signal.source}.`,
     });
   }
 
@@ -276,12 +277,13 @@ function deriveSignalsFromSemanticMetadata(
     hasTruthy(metadata.urgentEmails) ||
     hasTruthy(metadata.subscriptionSignals) ||
     hasTruthy(metadata.receipts) ||
-    hasTruthy(metadata.draftEmail);
+    hasTruthy(metadata.draftEmail) ||
+    hasTruthy(metadata.emailWorkflow);
 
   if (emailish) {
     signals.push({
       source: 'gmail',
-      weight: 0.78,
+      weight: 0.8,
       reason: 'Metadata semantics indicate inbox/email work.',
     });
   }
@@ -293,13 +295,14 @@ function deriveSignalsFromSemanticMetadata(
     hasTruthy(metadata.availability) ||
     hasTruthy(metadata.focusTime) ||
     hasTruthy(metadata.busyWeek) ||
-    hasTruthy(metadata.weeklyReset);
+    hasTruthy(metadata.weeklyReset) ||
+    hasTruthy(metadata.scheduleWorkflow);
 
   if (calendarish) {
     signals.push({
       source: 'calendar',
-      weight: 0.78,
-      reason: 'Metadata semantics indicate scheduling/time planning work.',
+      weight: 0.8,
+      reason: 'Metadata semantics indicate schedule/time planning work.',
     });
   }
 
@@ -307,13 +310,14 @@ function deriveSignalsFromSemanticMetadata(
     hasTruthy(metadata.userProfile) ||
     hasTruthy(metadata.preferences) ||
     hasTruthy(metadata.personalContext) ||
-    hasTruthy(metadata.priorContext);
+    hasTruthy(metadata.priorContext) ||
+    hasTruthy(metadata.historyContext);
 
   if (memoryish) {
     signals.push({
       source: 'memory',
-      weight: 0.72,
-      reason: 'Metadata semantics indicate personal context/memory relevance.',
+      weight: 0.74,
+      reason: 'Metadata semantics indicate personal context or memory relevance.',
     });
   }
 
@@ -326,6 +330,8 @@ function minimalFallbackTextSignal(input: string): SourceSignal[] {
 
   const signals: SourceSignal[] = [];
 
+  // Keep this intentionally tiny. These are explicit product/source references,
+  // not multilingual keyword routing.
   if (lowered.includes('gmail') || lowered.includes('inbox')) {
     signals.push({
       source: 'gmail',
@@ -353,7 +359,7 @@ function minimalFallbackTextSignal(input: string): SourceSignal[] {
   return signals;
 }
 
-function buildSourceScores(signals: SourceSignal[]): Record<IntegrationSource, number> {
+function buildSourceScores(signals: SourceSignal[]): SourceScores {
   const bucket = new Map<IntegrationSource, SourceSignal[]>();
 
   for (const signal of signals) {
@@ -367,9 +373,7 @@ function buildSourceScores(signals: SourceSignal[]): Record<IntegrationSource, n
   };
 }
 
-function resolvePrimarySources(
-  scores: Record<IntegrationSource, number>,
-): IntegrationSource[] {
+function resolvePrimarySources(scores: SourceScores): IntegrationSource[] {
   const entries = (Object.entries(scores) as Array<[IntegrationSource, number]>)
     .filter(([, score]) => score > 0.36)
     .sort((a, b) => b[1] - a[1]);
@@ -384,7 +388,7 @@ function resolvePrimarySources(
 
 function shouldCombineSources(
   sources: IntegrationSource[],
-  scores: Record<IntegrationSource, number>,
+  scores: SourceScores,
 ): boolean {
   if (sources.length <= 1) return false;
 
@@ -393,7 +397,7 @@ function shouldCombineSources(
   const memoryScore = scores.memory;
 
   if (sources.includes('memory') && (sources.includes('gmail') || sources.includes('calendar'))) {
-    return memoryScore >= 0.42;
+    return memoryScore >= 0.4;
   }
 
   if (sources.includes('gmail') && sources.includes('calendar')) {
@@ -401,6 +405,32 @@ function shouldCombineSources(
   }
 
   return true;
+}
+
+function computeConfidence(
+  selectedSources: IntegrationSource[],
+  scores: SourceScores,
+): number {
+  if (!selectedSources.length) return 0.18;
+
+  const selectedScores = selectedSources
+    .map((source) => scores[source])
+    .sort((a, b) => b - a);
+
+  const topScore = selectedScores[0] ?? 0;
+  const secondaryScore = selectedScores[1] ?? 0;
+
+  if (selectedSources.length === 1) {
+    if (topScore >= 1.5) return 0.95;
+    if (topScore >= 1.05) return 0.88;
+    if (topScore >= 0.78) return 0.8;
+    if (topScore >= 0.52) return 0.68;
+    return 0.56;
+  }
+
+  if (topScore >= 1.2 && secondaryScore >= 0.62) return 0.9;
+  if (topScore >= 0.9 && secondaryScore >= 0.46) return 0.82;
+  return 0.72;
 }
 
 function buildReason(
@@ -430,7 +460,7 @@ function buildReason(
 function resolveGmailAction(
   hints: IntegrationIntentHints,
   selectedSources: IntegrationSource[],
-  sourceScores: Record<IntegrationSource, number>,
+  sourceScores: SourceScores,
 ): GmailAutoAction | undefined {
   if (!selectedSources.includes('gmail')) return undefined;
 
@@ -450,6 +480,7 @@ function resolveGmailAction(
 
   if (routeIntent === 'finance') return 'subscriptions';
   if (routeIntent === 'gmail') return 'inbox_summary';
+
   if (routeIntent === 'planning' || routeIntent === 'productivity') {
     return sourceScores.gmail >= 0.72 ? 'digest' : 'inbox_summary';
   }
@@ -460,7 +491,7 @@ function resolveGmailAction(
 function resolveCalendarAction(
   hints: IntegrationIntentHints,
   selectedSources: IntegrationSource[],
-  sourceScores: Record<IntegrationSource, number>,
+  sourceScores: SourceScores,
 ): CalendarAutoAction | undefined {
   if (!selectedSources.includes('calendar')) return undefined;
 
@@ -483,33 +514,6 @@ function resolveCalendarAction(
   }
 
   return 'today_plan';
-}
-
-function computeConfidence(
-  selectedSources: IntegrationSource[],
-  scores: Record<IntegrationSource, number>,
-): number {
-  if (!selectedSources.length) return 0.18;
-
-  const topScore = Math.max(...selectedSources.map((source) => scores[source]));
-  const secondaryScore =
-    selectedSources.length > 1
-      ? [...selectedSources]
-          .map((source) => scores[source])
-          .sort((a, b) => b - a)[1] ?? 0
-      : 0;
-
-  if (selectedSources.length === 1) {
-    if (topScore >= 1.5) return 0.95;
-    if (topScore >= 1.05) return 0.88;
-    if (topScore >= 0.78) return 0.8;
-    if (topScore >= 0.52) return 0.68;
-    return 0.56;
-  }
-
-  if (topScore >= 1.2 && secondaryScore >= 0.62) return 0.9;
-  if (topScore >= 0.9 && secondaryScore >= 0.46) return 0.82;
-  return 0.72;
 }
 
 export function detectIntegrationIntent(
