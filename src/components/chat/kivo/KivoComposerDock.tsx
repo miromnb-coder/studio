@@ -14,6 +14,7 @@ type KivoComposerDockProps = {
   isListening?: boolean;
   isSending?: boolean;
   placeholder?: string;
+  keyboardOffset?: number;
 };
 
 const MIN_TEXTAREA_HEIGHT = 30;
@@ -30,6 +31,7 @@ export function KivoComposerDock({
   isListening = false,
   isSending = false,
   placeholder = 'Assign a task or ask anything',
+  keyboardOffset = 0,
 }: KivoComposerDockProps) {
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
 
@@ -45,7 +47,12 @@ export function KivoComposerDock({
   }, [value]);
 
   return (
-    <div className="pointer-events-none fixed inset-x-0 bottom-0 z-40 mx-auto w-full max-w-[560px] px-4 pb-5">
+    <div
+      className="pointer-events-none fixed inset-x-0 z-40 mx-auto w-full max-w-[560px] px-4 pb-4"
+      style={{
+        bottom: `calc(env(safe-area-inset-bottom, 0px) + ${Math.max(0, keyboardOffset)}px)`,
+      }}
+    >
       <div className="pointer-events-auto rounded-[34px] border border-white/60 bg-[rgba(255,255,255,0.54)] px-4 pb-3 pt-4 shadow-[0_16px_40px_rgba(15,23,42,0.05)] backdrop-blur-[22px]">
         <div className="px-2">
           <textarea

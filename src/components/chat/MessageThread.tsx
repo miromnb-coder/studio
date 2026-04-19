@@ -155,7 +155,7 @@ export function MessageThread({ messages, pending }: MessageThreadProps) {
   }
 
   return (
-    <div className="min-h-0 flex-1 px-4 pb-[196px] pt-6 sm:px-6">
+    <div className="min-h-0 flex-1 px-4 pb-8 pt-6 sm:px-6">
       <div className="mx-auto w-full max-w-[980px] space-y-8">
         {rows.map((row) => {
           if (row.type === 'divider') {

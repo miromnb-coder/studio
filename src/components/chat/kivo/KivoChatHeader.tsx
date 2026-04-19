@@ -67,7 +67,10 @@ export function KivoChatHeader({ onOpenQuickSheet }: KivoChatHeaderProps) {
   };
 
   return (
-    <header className="sticky top-0 z-30 border-b border-black/[0.035] bg-white/82 backdrop-blur-2xl">
+    <header
+      className="relative z-30 border-b border-black/[0.035] bg-white/82 backdrop-blur-2xl"
+      style={{ paddingTop: 'env(safe-area-inset-top, 0px)' }}
+    >
       <div className="mx-auto flex h-[78px] w-full max-w-[560px] items-center px-5">
         <div className="flex w-[52px] shrink-0 justify-start">
           <button
