@@ -1,5 +1,8 @@
 import { AGENT_VNEXT_FALLBACK_MESSAGES } from './constants';
-import { resolveRequiredTools, resolveDefaultToolsForIntent } from '@/agent/integrations/integration-router';
+import {
+  resolveRequiredTools,
+  resolveDefaultToolsForIntent,
+} from '@/agent/integrations/integration-router';
 import type {
   AgentIntent,
   AgentRequest,
@@ -22,13 +25,25 @@ type ModelRouteSchema = {
   reason: string;
 };
 
+const ROUTER_MODEL_FALLBACK = 'gpt-4.1-mini';
+
 function normalizeText(value: unknown): string {
   if (typeof value !== 'string') return '';
   return value.replace(/\s+/g, ' ').trim();
 }
 
+function normalizeLower(value: unknown): string {
+  return normalizeText(value).toLowerCase();
+}
+
 function unique<T>(items: T[]): T[] {
   return [...new Set(items)];
+}
+
+function asObject(value: unknown): Record<string, unknown> {
+  return value && typeof value === 'object' && !Array.isArray(value)
+    ? (value as Record<string, unknown>)
+    : {};
 }
 
 function getRequestText(request: AgentRequest): string {
@@ -85,6 +100,7 @@ function detectLanguageFromScript(text: string): {
   inputLanguage: string;
   responseLanguage: string;
   languageConfidence: number;
+  multilingual: boolean;
 } {
   const normalized = normalizeText(text);
   if (!normalized) {
@@ -92,33 +108,69 @@ function detectLanguageFromScript(text: string): {
       inputLanguage: 'unknown',
       responseLanguage: 'en',
       languageConfidence: 0.2,
+      multilingual: false,
     };
   }
 
   if (/[\u4E00-\u9FFF\u3040-\u30FF]/u.test(normalized)) {
-    return { inputLanguage: 'ja', responseLanguage: 'ja', languageConfidence: 0.72 };
+    return {
+      inputLanguage: 'ja',
+      responseLanguage: 'ja',
+      languageConfidence: 0.78,
+      multilingual: true,
+    };
   }
 
   if (/[\u0400-\u04FF]/u.test(normalized)) {
-    return { inputLanguage: 'ru', responseLanguage: 'ru', languageConfidence: 0.7 };
+    return {
+      inputLanguage: 'ru',
+      responseLanguage: 'ru',
+      languageConfidence: 0.76,
+      multilingual: true,
+    };
   }
 
   if (/[\u0600-\u06FF]/u.test(normalized)) {
-    return { inputLanguage: 'ar', responseLanguage: 'ar', languageConfidence: 0.7 };
+    return {
+      inputLanguage: 'ar',
+      responseLanguage: 'ar',
+      languageConfidence: 0.76,
+      multilingual: true,
+    };
   }
 
   if (/[\uAC00-\uD7AF]/u.test(normalized)) {
-    return { inputLanguage: 'ko', responseLanguage: 'ko', languageConfidence: 0.72 };
+    return {
+      inputLanguage: 'ko',
+      responseLanguage: 'ko',
+      languageConfidence: 0.78,
+      multilingual: true,
+    };
   }
 
   if (/[\u0E00-\u0E7F]/u.test(normalized)) {
-    return { inputLanguage: 'th', responseLanguage: 'th', languageConfidence: 0.72 };
+    return {
+      inputLanguage: 'th',
+      responseLanguage: 'th',
+      languageConfidence: 0.78,
+      multilingual: true,
+    };
+  }
+
+  if (/[åäö]/i.test(normalized)) {
+    return {
+      inputLanguage: 'fi',
+      responseLanguage: 'fi',
+      languageConfidence: 0.64,
+      multilingual: true,
+    };
   }
 
   return {
     inputLanguage: 'unknown',
     responseLanguage: 'en',
     languageConfidence: 0.35,
+    multilingual: false,
   };
 }
 
@@ -158,19 +210,17 @@ function clamp01(value: unknown, fallback: number): number {
 
 function uniqueTools(values: unknown): AgentToolName[] {
   if (!Array.isArray(values)) return [];
-  return [...new Set(values.filter(isToolName))];
+  return unique(values.filter(isToolName));
 }
 
 function uniqueEntities(values: unknown): string[] {
   if (!Array.isArray(values)) return [];
-  return [
-    ...new Set(
-      values
-        .filter((item): item is string => typeof item === 'string')
-        .map((item) => normalizeText(item))
-        .filter(Boolean),
-    ),
-  ].slice(0, 8);
+  return unique(
+    values
+      .filter((item): item is string => typeof item === 'string')
+      .map((item) => normalizeText(item))
+      .filter(Boolean),
+  ).slice(0, 8);
 }
 
 function normalizeModelRoute(raw: unknown): ModelRouteSchema | null {
@@ -224,6 +274,276 @@ function extractJsonBlock(text: string): string | null {
   return null;
 }
 
+function hasAnyPattern(text: string, patterns: RegExp[]): boolean {
+  return patterns.some((pattern) => pattern.test(text));
+}
+
+function inferEntitiesFromText(text: string): string[] {
+  const quoted = [...text.matchAll(/"([^"]+)"|'([^']+)'/g)]
+    .map((match) => normalizeText(match[1] || match[2] || ''))
+    .filter(Boolean);
+
+  const vsMatch = text.match(/(.+?)\s+(?:vs|versus)\s+(.+?)(?:[.?!]|$)/i);
+  const compared = vsMatch
+    ? [normalizeText(vsMatch[1]), normalizeText(vsMatch[2])].filter(Boolean)
+    : [];
+
+  return unique([...quoted, ...compared]).slice(0, 8);
+}
+
+function inferIntentFromText(text: string): AgentIntent {
+  const lowered = normalizeLower(text);
+  if (!lowered) return 'unknown';
+
+  if (
+    hasAnyPattern(lowered, [
+      /\bcompare\b/i,
+      /\bversus\b/i,
+      /\bvs\b/i,
+      /\bkumpi\b/i,
+      /\bwhich is better\b/i,
+    ])
+  ) {
+    return 'compare';
+  }
+
+  if (
+    hasAnyPattern(lowered, [
+      /\bprice\b/i,
+      /\bcost\b/i,
+      /\bsubscription\b/i,
+      /\bsave money\b/i,
+      /\bbudget\b/i,
+      /\btilaus\b/i,
+      /\bhinta\b/i,
+      /\braha\b/i,
+    ])
+  ) {
+    return 'finance';
+  }
+
+  if (
+    hasAnyPattern(lowered, [
+      /\binbox\b/i,
+      /\bgmail\b/i,
+      /\bemail\b/i,
+      /\bmailbox\b/i,
+      /\bsähköposti\b/i,
+    ])
+  ) {
+    return 'gmail';
+  }
+
+  if (
+    hasAnyPattern(lowered, [
+      /\bcalendar\b/i,
+      /\bschedule\b/i,
+      /\bavailability\b/i,
+      /\bfree time\b/i,
+      /\btoday plan\b/i,
+      /\bkalenteri\b/i,
+      /\baikataulu\b/i,
+      /\bvapaa\b/i,
+    ])
+  ) {
+    return 'planning';
+  }
+
+  if (
+    hasAnyPattern(lowered, [
+      /\blatest\b/i,
+      /\brecent\b/i,
+      /\bnews\b/i,
+      /\bcurrent\b/i,
+      /\bresearch\b/i,
+      /\blook up\b/i,
+      /\betsi\b/i,
+      /\bajankohta/i,
+      /\buusin/i,
+    ])
+  ) {
+    return 'research';
+  }
+
+  if (
+    hasAnyPattern(lowered, [
+      /\bbuy\b/i,
+      /\bworth it\b/i,
+      /\bwhich one should i buy\b/i,
+      /\bshop\b/i,
+      /\bproduct\b/i,
+      /\bosta\b/i,
+      /\bparas vaihtoehto\b/i,
+    ])
+  ) {
+    return 'shopping';
+  }
+
+  if (
+    hasAnyPattern(lowered, [
+      /\bremember\b/i,
+      /\bearlier\b/i,
+      /\bpreviously\b/i,
+      /\babout me\b/i,
+      /\bmuista\b/i,
+      /\baiemmin\b/i,
+    ])
+  ) {
+    return 'memory';
+  }
+
+  if (
+    hasAnyPattern(lowered, [
+      /\bcode\b/i,
+      /\bbug\b/i,
+      /\berror\b/i,
+      /\btypescript\b/i,
+      /\breact\b/i,
+      /\bnext\.?js\b/i,
+      /\bkoodi\b/i,
+      /\bvirhe\b/i,
+    ])
+  ) {
+    return 'coding';
+  }
+
+  if (
+    hasAnyPattern(lowered, [
+      /\bplan\b/i,
+      /\borganize\b/i,
+      /\bprioritize\b/i,
+      /\bnext step\b/i,
+      /\bsuunnitel/i,
+      /\bpriorisoi\b/i,
+    ])
+  ) {
+    return 'planning';
+  }
+
+  return 'general';
+}
+
+function inferToolNeedsFromText(
+  text: string,
+  intent: AgentIntent,
+): AgentToolName[] {
+  const lowered = normalizeLower(text);
+  const tools = resolveDefaultToolsForIntent(intent);
+
+  if (
+    hasAnyPattern(lowered, [
+      /\bupload\b/i,
+      /\bfile\b/i,
+      /\bpdf\b/i,
+      /\bcsv\b/i,
+      /\bdocx?\b/i,
+      /\btiedosto\b/i,
+    ])
+  ) {
+    tools.push('file');
+  }
+
+  if (
+    hasAnyPattern(lowered, [
+      /\btoday\b/i,
+      /\btomorrow\b/i,
+      /\bthis week\b/i,
+      /\bnext week\b/i,
+      /\bdeadline\b/i,
+      /\btänään\b/i,
+      /\bhuomenna\b/i,
+      /\bviikko\b/i,
+    ])
+  ) {
+    tools.push('calendar');
+  }
+
+  if (
+    hasAnyPattern(lowered, [
+      /\bmy\b/i,
+      /\bfor me\b/i,
+      /\bmy preference\b/i,
+      /\bminun\b/i,
+      /\bminulle\b/i,
+    ])
+  ) {
+    tools.push('memory');
+  }
+
+  return unique(tools.filter(isToolName));
+}
+
+function inferShouldFetchMemory(intent: AgentIntent, text: string): boolean {
+  if (
+    intent === 'gmail' ||
+    intent === 'finance' ||
+    intent === 'planning' ||
+    intent === 'productivity' ||
+    intent === 'memory' ||
+    intent === 'shopping' ||
+    intent === 'compare'
+  ) {
+    return true;
+  }
+
+  const lowered = normalizeLower(text);
+
+  return hasAnyPattern(lowered, [
+    /\bmy\b/i,
+    /\bfor me\b/i,
+    /\babout me\b/i,
+    /\bpreferences\b/i,
+    /\bgoals\b/i,
+    /\bminun\b/i,
+    /\bminulle\b/i,
+    /\btavoitte/i,
+  ]);
+}
+
+function inferExecutionMode(
+  intent: AgentIntent,
+  text: string,
+  tools: AgentToolName[],
+): 'sync' | 'stream' {
+  const lowered = normalizeLower(text);
+
+  const complex =
+    text.split(/\s+/).filter(Boolean).length > 24 ||
+    tools.length > 2 ||
+    intent === 'research' ||
+    intent === 'compare' ||
+    intent === 'shopping' ||
+    hasAnyPattern(lowered, [
+      /\bdeep\b/i,
+      /\bdetailed\b/i,
+      /\bstep by step\b/i,
+      /\bresearch\b/i,
+      /\btradeoff\b/i,
+      /\byksityiskoht/i,
+      /\bperusteelli/i,
+    ]);
+
+  return complex ? 'stream' : 'sync';
+}
+
+function inferFallbackConfidence(
+  intent: AgentIntent,
+  detectedLanguageConfidence: number,
+  tools: AgentToolName[],
+): number {
+  let base =
+    intent === 'general'
+      ? 0.44
+      : intent === 'unknown'
+        ? 0.22
+        : 0.6;
+
+  if (tools.length >= 2) base += 0.05;
+  if (detectedLanguageConfidence >= 0.7) base += 0.04;
+
+  return clamp01(base, 0.56);
+}
+
 async function routeIntentWithModel(
   request: AgentRequest,
   text: string,
@@ -232,13 +552,20 @@ async function routeIntentWithModel(
 
   const conversationText = getConversationText(request);
   const requestedLanguage = defaultResponseLanguage(request);
+  const metadata = asObject(request.metadata);
+  const routerModel = normalizeText(metadata.routerModel) || ROUTER_MODEL_FALLBACK;
+  const candidateEntities = unique([
+    ...asStringArray(metadata.entities),
+    ...inferEntitiesFromText(text),
+  ]).slice(0, 8);
 
   const prompt = [
-    'You are a multilingual routing model for an AI agent.',
+    'You are a strict multilingual routing engine for an AI operator.',
     'Return JSON only.',
-    'Infer the user intent from meaning, not from keyword lists.',
-    'The user may write in any language.',
-    'Do not explain reasoning outside JSON.',
+    'Infer the user goal from meaning, context, and constraints.',
+    'Do not rely on language-specific keyword lists.',
+    'Choose tools only when they are useful.',
+    'Prefer the lightest effective path.',
     '',
     'Schema:',
     '{',
@@ -252,107 +579,105 @@ async function routeIntentWithModel(
     '  "entities": ["string"],',
     '  "requiresTools": ["gmail" | "memory" | "calendar" | "web" | "compare" | "file" | "finance" | "notes"],',
     '  "shouldFetchMemory": true,',
-    '  "suggestedExecutionMode": "sync" | "stream",',
+    '  ' + '"suggestedExecutionMode": "sync" | "stream",' ,
     '  "reason": "short reason"',
     '}',
     '',
-    'Tool rules:',
-    '- Use gmail for inbox/email-related work.',
-    '- Use calendar for schedule/availability/time planning.',
-    '- Use web for current/live/external information.',
-    '- Use compare for structured side-by-side choices.',
-    '- Use finance for money/subscription/cost analysis.',
-    '- Use file for uploaded/referenced file/document inspection.',
-    '- Use notes for note/task-like structured internal material.',
-    '- Use memory when personal context helps.',
+    'Tool guidelines:',
+    '- gmail: inbox, email, subscription, urgent message, draft/reply help.',
+    '- calendar: schedule, time planning, availability, focus time, week planning.',
+    '- web: current/live/external information.',
+    '- compare: structured option comparison.',
+    '- file: uploaded/referenced file inspection.',
+    '- finance: money, subscriptions, cost/savings analysis.',
+    '- notes: note/task-like internal structured material.',
+    '- memory: personal context, preferences, goals, prior facts.',
     '',
     `Requested response language: ${requestedLanguage || 'none'}`,
     `Latest user message: ${text}`,
     `Recent conversation context: ${conversationText || 'none'}`,
+    `Candidate entities: ${candidateEntities.join(', ') || 'none'}`,
   ].join('\n');
 
-  const metadata = (request.metadata ?? {}) as Record<string, unknown>;
-  const routerModel = normalizeText(metadata.routerModel) || 'gpt-4.1-mini';
-
-  const response = await fetch('https://api.openai.com/v1/responses', {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      Authorization: `Bearer ${process.env.OPENAI_API_KEY}`,
-    },
-    body: JSON.stringify({
-      model: routerModel,
-      temperature: 0,
-      input: [
-        {
-          role: 'system',
-          content: [
-            {
-              type: 'input_text',
-              text: 'You are a strict multilingual routing engine. Output JSON only.',
-            },
-          ],
-        },
-        {
-          role: 'user',
-          content: [{ type: 'input_text', text: prompt }],
-        },
-      ],
-    }),
-  });
-
-  if (!response.ok) return null;
-
-  const payload = (await response.json()) as {
-    output_text?: string;
-  };
-
-  const textOutput = normalizeText(payload.output_text);
-  if (!textOutput) return null;
-
-  const jsonBlock = extractJsonBlock(textOutput);
-  if (!jsonBlock) return null;
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 9000);
 
   try {
-    const parsed = JSON.parse(jsonBlock) as unknown;
-    return normalizeModelRoute(parsed);
+    const response = await fetch('https://api.openai.com/v1/responses', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${process.env.OPENAI_API_KEY}`,
+      },
+      body: JSON.stringify({
+        model: routerModel,
+        temperature: 0,
+        input: [
+          {
+            role: 'system',
+            content: [
+              {
+                type: 'input_text',
+                text: 'You are a strict multilingual routing engine. Output JSON only.',
+              },
+            ],
+          },
+          {
+            role: 'user',
+            content: [{ type: 'input_text', text: prompt }],
+          },
+        ],
+      }),
+      signal: controller.signal,
+    });
+
+    if (!response.ok) return null;
+
+    const payload = (await response.json()) as {
+      output_text?: string;
+    };
+
+    const textOutput = normalizeText(payload.output_text);
+    if (!textOutput) return null;
+
+    const jsonBlock = extractJsonBlock(textOutput);
+    if (!jsonBlock) return null;
+
+    try {
+      const parsed = JSON.parse(jsonBlock) as unknown;
+      return normalizeModelRoute(parsed);
+    } catch {
+      return null;
+    }
   } catch {
     return null;
+  } finally {
+    clearTimeout(timeout);
   }
-}
-
-function heuristicFallbackIntent(text: string): AgentIntent {
-  const trimmed = normalizeText(text);
-  if (!trimmed) return 'unknown';
-
-  const lowered = trimmed.toLowerCase();
-
-  if (lowered.includes(' vs ') || lowered.includes(' versus ')) return 'compare';
-  if (/[$€£¥₹]/u.test(trimmed)) return 'shopping';
-  if (trimmed.includes('http://') || trimmed.includes('https://')) return 'research';
-  if (trimmed.includes('.pdf') || trimmed.includes('.doc') || trimmed.includes('.csv')) {
-    return 'coding';
-  }
-
-  return 'general';
 }
 
 function routeIntentFallback(request: AgentRequest, text: string): AgentRouteResult {
   const requestedLanguage = defaultResponseLanguage(request);
   const detectedLanguage = detectLanguageFromScript(text);
-  const intent = heuristicFallbackIntent(text);
-  const seededTools = resolveDefaultToolsForIntent(intent);
+  const intent = inferIntentFromText(text);
+  const inferredEntities = inferEntitiesFromText(text);
+  const seededTools = inferToolNeedsFromText(text, intent);
+  const requiresTools = resolveRequiredTools(text, seededTools, {
+    routeIntent: intent,
+    metadata: request.metadata,
+  });
 
   return {
     intent,
-    confidence: intent === 'general' ? 0.42 : 0.56,
+    confidence: inferFallbackConfidence(
+      intent,
+      detectedLanguage.languageConfidence,
+      requiresTools,
+    ),
     reason: 'Fallback routing was used because model routing was unavailable.',
-    requiresTools: resolveRequiredTools(text, seededTools, {
-      routeIntent: intent,
-      metadata: request.metadata,
-    }),
-    shouldFetchMemory: intent !== 'general',
-    suggestedExecutionMode: 'sync',
+    requiresTools,
+    shouldFetchMemory: inferShouldFetchMemory(intent, text),
+    suggestedExecutionMode: inferExecutionMode(intent, text, requiresTools),
     fallbackMessage:
       intent === 'unknown'
         ? AGENT_VNEXT_FALLBACK_MESSAGES.missingContext
@@ -365,7 +690,9 @@ function routeIntentFallback(request: AgentRequest, text: string): AgentRouteRes
       (request as AgentRequest & { languageConfidence?: number }).languageConfidence,
       detectedLanguage.languageConfidence,
     ),
-    multilingual: detectedLanguage.inputLanguage !== 'unknown',
+    multilingual: detectedLanguage.multilingual,
+    userGoal: text || 'Help the user effectively.',
+    entities: inferredEntities,
   };
 }
 
@@ -391,6 +718,8 @@ export async function routeIntent(request: AgentRequest): Promise<AgentRouteResu
         detectedLanguage.languageConfidence,
       ),
       multilingual: false,
+      userGoal: 'Clarify the user request.',
+      entities: [],
     };
   }
 
@@ -401,13 +730,14 @@ export async function routeIntent(request: AgentRequest): Promise<AgentRouteResu
       return routeIntentFallback(request, text);
     }
 
+    const requestedResponseLanguage = normalizeText(defaultResponseLanguage(request));
     const resolvedInputLanguage =
       routed.inputLanguage === 'unknown' || !routed.inputLanguage
         ? detectedLanguage.inputLanguage
         : routed.inputLanguage;
 
     const resolvedResponseLanguage =
-      normalizeText(defaultResponseLanguage(request)) ||
+      requestedResponseLanguage ||
       normalizeText(routed.responseLanguage) ||
       (resolvedInputLanguage !== 'unknown'
         ? resolvedInputLanguage
@@ -418,15 +748,17 @@ export async function routeIntent(request: AgentRequest): Promise<AgentRouteResu
         ? Math.max(routed.languageConfidence, detectedLanguage.languageConfidence)
         : routed.languageConfidence;
 
+    const enrichedTools = resolveRequiredTools(text, routed.requiresTools, {
+      routeIntent: routed.intent,
+      currentTools: routed.requiresTools,
+      metadata: request.metadata,
+    });
+
     return {
       intent: routed.intent,
       confidence: routed.confidence,
       reason: routed.reason,
-      requiresTools: resolveRequiredTools(text, routed.requiresTools, {
-        routeIntent: routed.intent,
-        currentTools: routed.requiresTools,
-        metadata: request.metadata,
-      }),
+      requiresTools: enrichedTools,
       shouldFetchMemory: routed.shouldFetchMemory,
       suggestedExecutionMode: routed.suggestedExecutionMode,
       fallbackMessage:
@@ -439,9 +771,9 @@ export async function routeIntent(request: AgentRequest): Promise<AgentRouteResu
         resolvedLanguageConfidence,
         detectedLanguage.languageConfidence,
       ),
-      multilingual: routed.multilingual,
+      multilingual: routed.multilingual || detectedLanguage.multilingual,
       userGoal: routed.userGoal,
-      entities: unique(routed.entities),
+      entities: unique([...routed.entities, ...inferEntitiesFromText(text)]).slice(0, 8),
     };
   } catch {
     return routeIntentFallback(request, text);
