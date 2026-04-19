@@ -103,12 +103,6 @@ function toStringArray(value: unknown): string[] {
   return asArray(value).map((item) => normalizeText(item)).filter(Boolean);
 }
 
-function hasTruthy(value: unknown): boolean {
-  if (typeof value === 'string') return value.trim().length > 0;
-  if (Array.isArray(value)) return value.length > 0;
-  return Boolean(value);
-}
-
 function firstNonEmpty(...values: unknown[]): string {
   for (const value of values) {
     const normalized = normalizeText(value);
@@ -132,9 +126,17 @@ function buildSourceChips(data: Record<string, unknown>): ResponseSourceChip[] {
       : asArray(data.sources);
 
   return raw
-    .map((item, index) => {
+    .map((item) => {
       const record = asObject(item);
-      const label = firstNonEmpty(record.label, record.source, record.name, item);
+      const label = firstNonEmpty(
+        record.label,
+        record.source,
+        record.domain,
+        record.publisher,
+        record.name,
+        item,
+      );
+
       if (!label) return null;
 
       return {
@@ -160,7 +162,12 @@ function buildEmailMessages(data: Record<string, unknown>): EmailMessageCard[] {
       const subject = firstNonEmpty(record.subject, record.title, record.label);
       if (!subject) return null;
 
-      const importanceRaw = firstNonEmpty(record.importance, record.priority, record.tone).toLowerCase();
+      const importanceRaw = firstNonEmpty(
+        record.importance,
+        record.priority,
+        record.tone,
+      ).toLowerCase();
+
       const importance: EmailMessageCard['importance'] =
         importanceRaw === 'urgent' || importanceRaw === 'important'
           ? importanceRaw
@@ -192,7 +199,8 @@ function buildCalendarEvents(data: Record<string, unknown>): CalendarEventCard[]
         id: firstNonEmpty(record.id) || `event-${index}`,
         title,
         time: firstNonEmpty(record.time, record.startAt, record.start) || null,
-        subtitle: firstNonEmpty(record.subtitle, record.location, record.description) || null,
+        subtitle:
+          firstNonEmpty(record.subtitle, record.location, record.description) || null,
       } satisfies CalendarEventCard;
     })
     .filter((item): item is CalendarEventCard => Boolean(item))
@@ -205,19 +213,39 @@ function buildSearchResults(data: Record<string, unknown>): SearchResultCard[] {
       ? asArray(data.searchResults)
       : asArray(data.webResults).length > 0
         ? asArray(data.webResults)
-        : asArray(data.results);
+        : asArray(data.results).length > 0
+          ? asArray(data.results)
+          : asArray(data.sources);
 
   return raw
     .map((item, index) => {
       const record = asObject(item);
-      const title = firstNonEmpty(record.title, record.label, record.name);
+
+      const title = firstNonEmpty(
+        record.title,
+        record.label,
+        record.name,
+        record.headline,
+        record.domain,
+        record.source,
+        record.publisher,
+      );
+
       if (!title) return null;
 
       return {
         id: firstNonEmpty(record.id) || `search-${index}`,
         title,
-        source: firstNonEmpty(record.source, record.domain, record.publisher) || null,
-        snippet: firstNonEmpty(record.snippet, record.summary, record.preview) || null,
+        source:
+          firstNonEmpty(record.source, record.domain, record.publisher, record.label) ||
+          null,
+        snippet:
+          firstNonEmpty(
+            record.snippet,
+            record.summary,
+            record.preview,
+            record.description,
+          ) || null,
         href: firstNonEmpty(record.href, record.url) || null,
       } satisfies SearchResultCard;
     })
@@ -277,7 +305,8 @@ function buildShoppingProducts(data: Record<string, unknown>): ShoppingCard[] {
         source: firstNonEmpty(record.source, record.store, record.vendor) || null,
         image: firstNonEmpty(record.image, record.imageUrl, record.thumbnail) || null,
         href: firstNonEmpty(record.href, record.url) || null,
-        description: firstNonEmpty(record.description, record.summary, record.preview) || null,
+        description:
+          firstNonEmpty(record.description, record.summary, record.preview) || null,
       } satisfies ShoppingCard;
     })
     .filter((item): item is ShoppingCard => Boolean(item))
@@ -300,7 +329,6 @@ function sanitizeForView(
   view: ResponseViewKind,
   presentation: ResponsePresentation,
 ): ResponsePresentation {
-  // Strong layout guardrails.
   if (view === 'email') {
     return {
       ...presentation,
@@ -363,7 +391,8 @@ export function buildResponsePresentation(
     sourceChips: buildSourceChips(data),
     email: {
       urgentLabel:
-        firstNonEmpty(data.urgentLabel, data.urgentSummary, data.urgentHeadline) || null,
+        firstNonEmpty(data.urgentLabel, data.urgentSummary, data.urgentHeadline) ||
+        null,
       messages: buildEmailMessages(data),
     },
     calendar: {
