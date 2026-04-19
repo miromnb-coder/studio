@@ -1,484 +1,383 @@
-import type { Message } from '@/app/store/app-store-types';
-import type { AgentResponseMetadata } from '@/types/agent-response';
-import type { UiMode } from './resolve-ui-mode';
+import type { ResponseViewKind } from './resolve-response-view';
 
-export type PresentationSource = {
-  id: string;
-  title: string;
-  url: string;
-  snippet?: string;
-  domain: string;
+export type ResponseSourceChip = {
+  label: string;
+  href?: string | null;
 };
 
-export type CompareItem = {
+export type EmailMessageCard = {
   id: string;
-  option: string;
-  source: string;
-  signal: string;
-  url?: string;
-};
-
-export type ProductItem = {
-  id: string;
-  title: string;
-  price: string;
-  source: string;
-  imageUrl?: string;
-  url?: string;
-  snippet?: string;
-};
-
-export type EmailItem = {
-  id: string;
-  sender: string;
+  sender?: string | null;
   subject: string;
-  summary: string;
+  preview?: string | null;
+  importance?: 'urgent' | 'important' | 'normal';
+  href?: string | null;
 };
 
-export type OperatorItem = {
-  decision?: string;
-  nextStep?: string;
-  risk?: string;
-  opportunity?: string;
-  actions: string[];
+export type CalendarEventCard = {
+  id: string;
+  title: string;
+  time?: string | null;
+  subtitle?: string | null;
 };
 
-export type PresentationModel = {
-  mode: UiMode;
-  title?: string;
-  lead?: string;
-  summary: string;
+export type SearchResultCard = {
+  id: string;
+  title: string;
+  source?: string | null;
+  snippet?: string | null;
+  href?: string | null;
+};
+
+export type CompareRow = {
+  label: string;
+  values: string[];
+};
+
+export type ShoppingCard = {
+  id: string;
+  title: string;
+  price?: string | null;
+  source?: string | null;
+  image?: string | null;
+  href?: string | null;
+  description?: string | null;
+};
+
+export type ResponsePresentation = {
+  view: ResponseViewKind;
+  title?: string | null;
+  lead?: string | null;
+  summary?: string | null;
   plainText: string;
-  chips: string[];
-  sources: PresentationSource[];
-  compareItems: CompareItem[];
-  products: ProductItem[];
-  emails: EmailItem[];
-  operator?: OperatorItem;
-  isStreaming: boolean;
+  sourceChips: ResponseSourceChip[];
+  email: {
+    urgentLabel?: string | null;
+    messages: EmailMessageCard[];
+  };
+  calendar: {
+    events: CalendarEventCard[];
+  };
+  search: {
+    results: SearchResultCard[];
+  };
+  compare: {
+    headers: string[];
+    rows: CompareRow[];
+  };
+  shopping: {
+    products: ShoppingCard[];
+  };
+  operator: {
+    nextActions: string[];
+    risks: string[];
+    opportunities: string[];
+  };
 };
 
-type Args = {
-  mode: UiMode;
-  message: Message;
-  metadata?: AgentResponseMetadata;
-  latestUserContent?: string;
+export type BuildResponsePresentationInput = {
+  view: ResponseViewKind;
+  text?: string | null;
+  structured?: Record<string, unknown> | null;
+  structuredData?: Record<string, unknown> | null;
+  metadata?: Record<string, unknown> | null;
+  toolResults?: Array<Record<string, unknown>> | null;
 };
 
-type BrowserSearchResult = {
-  title?: string;
-  url?: string;
-  snippet?: string;
-  source?: string;
-  price?: string;
-  imageUrl?: string;
-  image?: string;
-  thumbnail?: string;
-};
-
-type RuntimeStructuredSource = {
-  id?: string;
-  label?: string;
-  used?: boolean;
-  url?: string;
-  snippet?: string;
-  domain?: string;
-  price?: string;
-  imageUrl?: string;
-  image?: string;
-  thumbnail?: string;
-};
-
-type EmailRecord = {
-  id?: string;
-  sender?: string;
-  from?: string;
-  subject?: string;
-  summary?: string;
-  snippet?: string;
-};
-
-function normalize(value?: string | null): string {
-  return (value ?? '').trim();
+function normalizeText(value: unknown): string {
+  if (typeof value !== 'string') return '';
+  return value.replace(/\s+/g, ' ').trim();
 }
 
-function firstAvailable(...values: Array<string | undefined | null>): string {
-  return values.map((value) => normalize(value)).find(Boolean) ?? '';
+function asObject(value: unknown): Record<string, unknown> {
+  return value && typeof value === 'object' && !Array.isArray(value)
+    ? (value as Record<string, unknown>)
+    : {};
 }
 
-function domainFromUrl(url: string): string {
-  if (!url) return 'Source';
+function asArray(value: unknown): unknown[] {
+  return Array.isArray(value) ? value : [];
+}
 
-  try {
-    return new URL(url).hostname.replace(/^www\./, '');
-  } catch {
-    return 'Source';
+function toStringArray(value: unknown): string[] {
+  return asArray(value).map((item) => normalizeText(item)).filter(Boolean);
+}
+
+function hasTruthy(value: unknown): boolean {
+  if (typeof value === 'string') return value.trim().length > 0;
+  if (Array.isArray(value)) return value.length > 0;
+  return Boolean(value);
+}
+
+function firstNonEmpty(...values: unknown[]): string {
+  for (const value of values) {
+    const normalized = normalizeText(value);
+    if (normalized) return normalized;
   }
+  return '';
 }
 
-function isNonNullable<T>(value: T | null | undefined): value is T {
-  return value != null;
+function getCombinedData(input: BuildResponsePresentationInput): Record<string, unknown> {
+  return {
+    ...asObject(input.structured),
+    ...asObject(input.structuredData),
+    ...asObject(input.metadata),
+  };
 }
 
-function buildPlainText(message: Message): string {
-  if (normalize(message.content)) return normalize(message.content);
-
-  const structured = message.structured;
-
-  return firstAvailable(
-    structured?.summary,
-    structured?.lead,
-    structured?.plainText,
-    structured?.title,
-  );
-}
-
-function buildSummary(message: Message): string {
-  const structured = message.structured;
-
-  return firstAvailable(
-    structured?.summary,
-    structured?.lead,
-    structured?.plainText,
-    normalize(message.content),
-    structured?.title,
-  );
-}
-
-function buildLead(message: Message): string {
-  return firstAvailable(message.structured?.lead);
-}
-
-function extractBrowserResults(metadata?: AgentResponseMetadata): BrowserSearchResult[] {
-  const raw = metadata?.structuredData?.browser_search as
-    | { results?: BrowserSearchResult[] }
-    | undefined;
-
-  return Array.isArray(raw?.results) ? raw.results : [];
-}
-
-function extractStructuredSources(message: Message): RuntimeStructuredSource[] {
-  const raw = message.structured?.sources as RuntimeStructuredSource[] | undefined;
-  return Array.isArray(raw) ? raw.filter((source) => source?.used !== false) : [];
-}
-
-function extractPrice(value: {
-  price?: string;
-  snippet?: string;
-  title?: string;
-}): string {
-  const direct = normalize(value.price);
-  if (direct) return direct;
-
-  const text = `${normalize(value.title)} ${normalize(value.snippet)}`;
-  const fromText = text.match(
-    /(?:€|\$|£)\s?\d[\d.,]*|\d[\d.,]*\s?(?:€|eur|usd|sek|kr)/i,
-  )?.[0];
-
-  return fromText ?? '';
-}
-
-function uniqueByKey<T>(items: T[], getKey: (item: T) => string): T[] {
-  const seen = new Set<string>();
-  const output: T[] = [];
-
-  for (const item of items) {
-    const key = getKey(item);
-    if (!key || seen.has(key)) continue;
-    seen.add(key);
-    output.push(item);
-  }
-
-  return output;
-}
-
-function sourceKey(source: PresentationSource): string {
-  return `${source.url}::${source.title}::${source.domain}`;
-}
-
-function buildSources(
-  message: Message,
-  metadata?: AgentResponseMetadata,
-): PresentationSource[] {
-  const browserResults = extractBrowserResults(metadata);
-  const structuredSources = extractStructuredSources(message);
-
-  const sourcesFromBrowser = browserResults
-    .map((result, index) => {
-      const url = normalize(result.url);
-      const title = normalize(result.title);
-
-      if (!url && !title) return null;
-
-      const domain = normalize(result.source) || domainFromUrl(url);
-
-      return {
-        id: `web-${index}`,
-        title: title || domain || 'Source',
-        url,
-        snippet: normalize(result.snippet) || undefined,
-        domain: domain || 'Source',
-      } satisfies PresentationSource;
-    })
-    .filter(isNonNullable);
-
-  const sourcesFromStructured = structuredSources
-    .map((source, index) => {
-      const title = firstAvailable(source.label, source.domain, 'Source');
-      const url = normalize(source.url);
-      const snippet = normalize(source.snippet) || undefined;
-      const domain =
-        firstAvailable(source.domain, domainFromUrl(url), source.label) || 'Source';
-
-      if (!title && !url && !snippet) return null;
-
-      return {
-        id: normalize(source.id) || `structured-${index}`,
-        title,
-        url,
-        snippet,
-        domain,
-      } satisfies PresentationSource;
-    })
-    .filter(isNonNullable);
-
-  return uniqueByKey(
-    [...sourcesFromBrowser, ...sourcesFromStructured].slice(0, 12),
-    sourceKey,
-  ).slice(0, 8);
-}
-
-function buildChips(sources: PresentationSource[]): string[] {
-  return Array.from(
-    new Set(
-      sources
-        .map((source) => normalize(source.domain))
-        .filter(Boolean),
-    ),
-  ).slice(0, 6);
-}
-
-function buildCompareItems(
-  mode: UiMode,
-  message: Message,
-  metadata?: AgentResponseMetadata,
-): CompareItem[] {
-  if (mode !== 'compare') return [];
-
-  const browserResults = extractBrowserResults(metadata);
-  const structuredSources = extractStructuredSources(message);
-
-  const browserCompare = browserResults
-    .map((result, index) => {
-      const option = normalize(result.title);
-      if (!option) return null;
-
-      const signal = firstAvailable(result.snippet, 'No comparison signal.');
-      const url = normalize(result.url) || undefined;
-      const source = firstAvailable(result.source, domainFromUrl(normalize(result.url)), 'Source');
-
-      return {
-        id: `compare-web-${index}`,
-        option,
-        source,
-        signal,
-        url,
-      } satisfies CompareItem;
-    })
-    .filter(isNonNullable);
-
-  const structuredCompare = structuredSources
-    .map((source, index) => {
-      const option = normalize(source.label);
-      if (!option) return null;
-
-      return {
-        id: normalize(source.id) || `compare-structured-${index}`,
-        option,
-        source: firstAvailable(source.domain, domainFromUrl(normalize(source.url)), 'Source'),
-        signal: firstAvailable(source.snippet, 'No comparison signal.'),
-        url: normalize(source.url) || undefined,
-      } satisfies CompareItem;
-    })
-    .filter(isNonNullable);
-
-  return uniqueByKey(
-    [...browserCompare, ...structuredCompare],
-    (item) => `${item.option}::${item.source}::${item.url ?? ''}`,
-  ).slice(0, 4);
-}
-
-function buildProducts(
-  mode: UiMode,
-  message: Message,
-  metadata?: AgentResponseMetadata,
-): ProductItem[] {
-  if (mode !== 'shopping') return [];
-
-  const browserResults = extractBrowserResults(metadata);
-  const structuredSources = extractStructuredSources(message);
-
-  const browserProducts = browserResults
-    .map((result, index) => {
-      const title = normalize(result.title);
-      if (!title) return null;
-
-      const url = normalize(result.url) || undefined;
-      const source = firstAvailable(result.source, domainFromUrl(normalize(result.url)), 'Store');
-
-      return {
-        id: `product-web-${index}`,
-        title,
-        price: extractPrice(result) || 'See price',
-        source,
-        imageUrl:
-          firstAvailable(result.imageUrl, result.image, result.thumbnail) || undefined,
-        url,
-        snippet: normalize(result.snippet) || undefined,
-      } satisfies ProductItem;
-    })
-    .filter(isNonNullable);
-
-  const structuredProducts = structuredSources
-    .map((source, index) => {
-      const title = normalize(source.label);
-      if (!title) return null;
-
-      const url = normalize(source.url) || undefined;
-      const domain = firstAvailable(source.domain, domainFromUrl(normalize(source.url)), 'Store');
-
-      return {
-        id: normalize(source.id) || `product-structured-${index}`,
-        title,
-        price: extractPrice({
-          price: source.price,
-          snippet: source.snippet,
-          title: source.label,
-        }) || 'See price',
-        source: domain,
-        imageUrl:
-          firstAvailable(source.imageUrl, source.image, source.thumbnail) || undefined,
-        url,
-        snippet: normalize(source.snippet) || undefined,
-      } satisfies ProductItem;
-    })
-    .filter(isNonNullable);
-
-  return uniqueByKey(
-    [...browserProducts, ...structuredProducts],
-    (item) => `${item.title}::${item.source}::${item.url ?? ''}`,
-  ).slice(0, 6);
-}
-
-function extractEmailRecords(metadata?: AgentResponseMetadata): EmailRecord[] {
+function buildSourceChips(data: Record<string, unknown>): ResponseSourceChip[] {
   const raw =
-    metadata?.structuredData &&
-    typeof metadata.structuredData === 'object'
-      ? (metadata.structuredData as Record<string, unknown>).emails
-      : undefined;
+    asArray(data.sourceChips).length > 0
+      ? asArray(data.sourceChips)
+      : asArray(data.sources);
 
-  return Array.isArray(raw) ? (raw as EmailRecord[]) : [];
-}
-
-function buildEmails(mode: UiMode, metadata?: AgentResponseMetadata): EmailItem[] {
-  if (mode !== 'email') return [];
-
-  return extractEmailRecords(metadata)
-    .map((email, index) => {
-      const sender = firstAvailable(email.sender, email.from, 'Unknown sender');
-      const subject = firstAvailable(email.subject, 'No subject');
-      const summary = firstAvailable(email.summary, email.snippet, subject);
-
-      if (!summary) return null;
+  return raw
+    .map((item, index) => {
+      const record = asObject(item);
+      const label = firstNonEmpty(record.label, record.source, record.name, item);
+      if (!label) return null;
 
       return {
-        id: normalize(email.id) || `email-${index}`,
-        sender,
-        subject,
-        summary,
-      } satisfies EmailItem;
+        label,
+        href: firstNonEmpty(record.href, record.url) || null,
+      } satisfies ResponseSourceChip;
     })
-    .filter(isNonNullable)
-    .slice(0, 6);
+    .filter((item): item is ResponseSourceChip => Boolean(item))
+    .slice(0, 8);
 }
 
-function buildOperator(metadata?: AgentResponseMetadata): OperatorItem | undefined {
-  const operator = metadata?.operatorResponse;
-  if (!operator) return undefined;
+function buildEmailMessages(data: Record<string, unknown>): EmailMessageCard[] {
+  const raw =
+    asArray(data.emailItems).length > 0
+      ? asArray(data.emailItems)
+      : asArray(data.messages).length > 0
+        ? asArray(data.messages)
+        : asArray(data.importantEmails);
 
-  const actions = (operator.actions ?? [])
-    .map((action) => normalize(action.label))
-    .filter(Boolean)
-    .slice(0, 4);
+  return raw
+    .map((item, index) => {
+      const record = asObject(item);
+      const subject = firstNonEmpty(record.subject, record.title, record.label);
+      if (!subject) return null;
 
-  const decision = normalize(operator.decisionBrief) || undefined;
-  const nextStep = normalize(operator.nextStep) || undefined;
-  const risk = normalize(operator.risk) || undefined;
-  const opportunity =
-    firstAvailable(
-      operator.opportunity,
-      operator.savingsOpportunity,
-      operator.timeOpportunity,
-    ) || undefined;
+      const importanceRaw = firstNonEmpty(record.importance, record.priority, record.tone).toLowerCase();
+      const importance: EmailMessageCard['importance'] =
+        importanceRaw === 'urgent' || importanceRaw === 'important'
+          ? importanceRaw
+          : 'normal';
 
-  const signalCount = [decision, nextStep, risk, opportunity, actions.length ? '1' : '']
-    .filter(Boolean).length;
+      return {
+        id: firstNonEmpty(record.id) || `email-${index}`,
+        sender: firstNonEmpty(record.sender, record.from) || null,
+        subject,
+        preview: firstNonEmpty(record.preview, record.snippet, record.summary) || null,
+        importance,
+        href: firstNonEmpty(record.href, record.url) || null,
+      } satisfies EmailMessageCard;
+    })
+    .filter((item): item is EmailMessageCard => Boolean(item))
+    .slice(0, 8);
+}
 
-  if (signalCount < 2) return undefined;
+function buildCalendarEvents(data: Record<string, unknown>): CalendarEventCard[] {
+  const raw = asArray(data.events);
+
+  return raw
+    .map((item, index) => {
+      const record = asObject(item);
+      const title = firstNonEmpty(record.title, record.summary, record.label);
+      if (!title) return null;
+
+      return {
+        id: firstNonEmpty(record.id) || `event-${index}`,
+        title,
+        time: firstNonEmpty(record.time, record.startAt, record.start) || null,
+        subtitle: firstNonEmpty(record.subtitle, record.location, record.description) || null,
+      } satisfies CalendarEventCard;
+    })
+    .filter((item): item is CalendarEventCard => Boolean(item))
+    .slice(0, 10);
+}
+
+function buildSearchResults(data: Record<string, unknown>): SearchResultCard[] {
+  const raw =
+    asArray(data.searchResults).length > 0
+      ? asArray(data.searchResults)
+      : asArray(data.webResults).length > 0
+        ? asArray(data.webResults)
+        : asArray(data.results);
+
+  return raw
+    .map((item, index) => {
+      const record = asObject(item);
+      const title = firstNonEmpty(record.title, record.label, record.name);
+      if (!title) return null;
+
+      return {
+        id: firstNonEmpty(record.id) || `search-${index}`,
+        title,
+        source: firstNonEmpty(record.source, record.domain, record.publisher) || null,
+        snippet: firstNonEmpty(record.snippet, record.summary, record.preview) || null,
+        href: firstNonEmpty(record.href, record.url) || null,
+      } satisfies SearchResultCard;
+    })
+    .filter((item): item is SearchResultCard => Boolean(item))
+    .slice(0, 8);
+}
+
+function buildCompareSection(data: Record<string, unknown>): {
+  headers: string[];
+  rows: CompareRow[];
+} {
+  const headers = toStringArray(data.compareHeaders);
+  const rawRows =
+    asArray(data.compareRows).length > 0
+      ? asArray(data.compareRows)
+      : asArray(data.rows);
+
+  const rows = rawRows
+    .map((item) => {
+      const record = asObject(item);
+      const label = firstNonEmpty(record.label, record.name, record.title);
+      const values = asArray(record.values)
+        .map((value) => normalizeText(value))
+        .filter(Boolean);
+
+      if (!label || !values.length) return null;
+
+      return { label, values } satisfies CompareRow;
+    })
+    .filter((item): item is CompareRow => Boolean(item))
+    .slice(0, 12);
 
   return {
-    decision,
-    nextStep,
-    risk,
-    opportunity,
-    actions,
+    headers,
+    rows,
   };
 }
 
-export function buildPresentationModel(args: Args): PresentationModel {
-  const metadata = args.metadata ?? args.message.agentMetadata;
+function buildShoppingProducts(data: Record<string, unknown>): ShoppingCard[] {
+  const raw =
+    asArray(data.productCards).length > 0
+      ? asArray(data.productCards)
+      : asArray(data.products).length > 0
+        ? asArray(data.products)
+        : asArray(data.shoppingResults);
 
-  const sources = buildSources(args.message, metadata);
-  const chips = buildChips(sources);
-  const compareItems = buildCompareItems(args.mode, args.message, metadata);
-  const products = buildProducts(args.mode, args.message, metadata);
-  const emails = buildEmails(args.mode, metadata);
-  const operator = buildOperator(metadata);
+  return raw
+    .map((item, index) => {
+      const record = asObject(item);
+      const title = firstNonEmpty(record.title, record.name, record.label);
+      if (!title) return null;
 
-  let mode = args.mode;
+      return {
+        id: firstNonEmpty(record.id) || `product-${index}`,
+        title,
+        price: firstNonEmpty(record.price, record.formattedPrice) || null,
+        source: firstNonEmpty(record.source, record.store, record.vendor) || null,
+        image: firstNonEmpty(record.image, record.imageUrl, record.thumbnail) || null,
+        href: firstNonEmpty(record.href, record.url) || null,
+        description: firstNonEmpty(record.description, record.summary, record.preview) || null,
+      } satisfies ShoppingCard;
+    })
+    .filter((item): item is ShoppingCard => Boolean(item))
+    .slice(0, 12);
+}
 
-  if (mode === 'compare' && compareItems.length < 2) {
-    mode = 'plain';
-  }
-
-  if (mode === 'shopping' && products.length < 2) {
-    mode = 'plain';
-  }
-
-  if (mode === 'email' && emails.length === 0) {
-    mode = 'plain';
-  }
-
-  if (mode === 'operator' && !operator) {
-    mode = 'plain';
-  }
-
-  if (mode === 'search' && sources.length === 0) {
-    mode = 'plain';
-  }
-
+function buildOperatorSection(data: Record<string, unknown>): {
+  nextActions: string[];
+  risks: string[];
+  opportunities: string[];
+} {
   return {
-    mode,
-    title: normalize(args.message.structured?.title) || undefined,
-    lead: buildLead(args.message) || undefined,
-    summary: buildSummary(args.message),
-    plainText: buildPlainText(args.message),
-    chips,
-    sources,
-    compareItems,
-    products,
-    emails,
-    operator,
-    isStreaming: Boolean(args.message.isStreaming),
+    nextActions: toStringArray(data.nextActions).slice(0, 6),
+    risks: toStringArray(data.risks).slice(0, 6),
+    opportunities: toStringArray(data.opportunities).slice(0, 6),
   };
+}
+
+function sanitizeForView(
+  view: ResponseViewKind,
+  presentation: ResponsePresentation,
+): ResponsePresentation {
+  // Strong layout guardrails.
+  if (view === 'email') {
+    return {
+      ...presentation,
+      sourceChips: [],
+      search: { results: [] },
+      compare: { headers: [], rows: [] },
+      shopping: { products: [] },
+      calendar: { events: [] },
+    };
+  }
+
+  if (view === 'calendar') {
+    return {
+      ...presentation,
+      sourceChips: [],
+      search: { results: [] },
+      compare: { headers: [], rows: [] },
+      shopping: { products: [] },
+      email: { urgentLabel: null, messages: [] },
+    };
+  }
+
+  if (view === 'plain') {
+    return {
+      ...presentation,
+      sourceChips: [],
+      email: { urgentLabel: null, messages: [] },
+      calendar: { events: [] },
+      search: { results: [] },
+      compare: { headers: [], rows: [] },
+      shopping: { products: [] },
+      operator: { nextActions: [], risks: [], opportunities: [] },
+    };
+  }
+
+  return presentation;
+}
+
+export function buildResponsePresentation(
+  input: BuildResponsePresentationInput,
+): ResponsePresentation {
+  const data = getCombinedData(input);
+  const plainText = normalizeText(input.text);
+  const title = firstNonEmpty(data.title, data.heading) || null;
+  const lead = firstNonEmpty(data.lead, data.subtitle) || null;
+  const summary =
+    firstNonEmpty(
+      data.summary,
+      data.conciseSummary,
+      data.headline,
+      data.recommendedAction,
+    ) || null;
+
+  const presentation: ResponsePresentation = {
+    view: input.view,
+    title,
+    lead,
+    summary,
+    plainText,
+    sourceChips: buildSourceChips(data),
+    email: {
+      urgentLabel:
+        firstNonEmpty(data.urgentLabel, data.urgentSummary, data.urgentHeadline) || null,
+      messages: buildEmailMessages(data),
+    },
+    calendar: {
+      events: buildCalendarEvents(data),
+    },
+    search: {
+      results: buildSearchResults(data),
+    },
+    compare: buildCompareSection(data),
+    shopping: {
+      products: buildShoppingProducts(data),
+    },
+    operator: buildOperatorSection(data),
+  };
+
+  return sanitizeForView(input.view, presentation);
 }
