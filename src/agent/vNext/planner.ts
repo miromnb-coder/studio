@@ -4,6 +4,7 @@ import type {
   AgentPlan,
   AgentPlanStep,
   AgentRouteResult,
+  AgentToolCall,
   AgentToolName,
 } from './types';
 
@@ -56,7 +57,6 @@ function getEntities(route: AgentRouteResult, context: AgentContext): string[] {
 
 function buildHints(route: AgentRouteResult, context: AgentContext): PlanHint {
   const requestText = getRequestText(context);
-  const lower = requestText.toLowerCase();
   const wordCount = requestText.split(/\s+/).filter(Boolean).length;
   const entities = getEntities(route, context);
 
@@ -64,26 +64,15 @@ function buildHints(route: AgentRouteResult, context: AgentContext): PlanHint {
     requestText,
     wordCount,
     isLong: wordCount > 24,
-    hasComparison:
-      route.intent === 'compare' ||
-      /( vs | versus | compare | verta| jämför| compara)/i.test(requestText),
-    hasFreshnessNeed:
-      route.intent === 'research' ||
-      /\b(latest|recent|today|new|fresh|current|uuti|viime|nyt|tänään)\b/i.test(lower),
+    hasComparison: route.intent === 'compare' || route.requiresTools.includes('compare'),
+    hasFreshnessNeed: route.intent === 'research' || route.requiresTools.includes('web'),
     hasActionRequest:
-      route.intent === 'execution' ||
+      route.intent === 'planning' ||
       route.intent === 'productivity' ||
-      /\b(do|make|create|write|draft|build|fix|schedule|plan|tee|luo|kirjoita|korjaa)\b/i.test(
-        lower,
-      ),
-    hasFileReference:
-      route.requiresTools.includes('file') ||
-      /\b(file|document|pdf|repo|github|code|tiedosto|dokum|repo)\b/i.test(lower),
-    hasTimeReference:
-      route.requiresTools.includes('calendar') ||
-      /\b(today|tomorrow|week|month|deadline|meeting|calendar|aikataulu|viikko|kuukausi|deadline)\b/i.test(
-        lower,
-      ),
+      route.intent === 'gmail' ||
+      route.intent === 'coding',
+    hasFileReference: route.requiresTools.includes('file'),
+    hasTimeReference: route.requiresTools.includes('calendar'),
     entities,
   };
 }
@@ -117,29 +106,6 @@ function baseStep(params: {
     dependsOn: params.dependsOn,
     input: params.input,
   };
-}
-
-function getToolDescription(tool: AgentToolName): string {
-  switch (tool) {
-    case 'gmail':
-      return 'Retrieve relevant inbox data, receipts, subscriptions, or email actions.';
-    case 'memory':
-      return 'Load relevant memory, preferences, prior conversations, or saved context.';
-    case 'calendar':
-      return 'Check availability, events, scheduling options, or timeline constraints.';
-    case 'web':
-      return 'Collect fresh external information and trustworthy sources.';
-    case 'compare':
-      return 'Evaluate options using structured comparison logic.';
-    case 'file':
-      return 'Inspect uploaded files or referenced documents.';
-    case 'finance':
-      return 'Analyze spending, subscriptions, savings, or finance context.';
-    case 'notes':
-      return 'Create, retrieve, or update structured notes.';
-    default:
-      return `Use ${tool} integration.`;
-  }
 }
 
 function buildMemoryStep(): AgentPlanStep {
@@ -184,21 +150,13 @@ function buildIntentSpecificSteps(
           id: 'step-research-scope',
           title: 'Define research scope',
           description:
-            'Clarify what should be researched, freshness needs, and expected output format.',
+            'Clarify what should be researched, freshness needs, and expected output.',
           priority: 14,
           dependsOn,
           input: {
             freshnessRequired: hints.hasFreshnessNeed,
             entities: hints.entities,
           },
-        }),
-        baseStep({
-          id: 'step-source-review',
-          title: 'Review sources',
-          description:
-            'Assess credibility, relevance, and consistency of collected information.',
-          priority: 65,
-          dependsOn: ['step-research-scope'],
         }),
       ];
 
@@ -208,21 +166,13 @@ function buildIntentSpecificSteps(
           id: 'step-criteria',
           title: 'Define comparison criteria',
           description:
-            'Identify metrics, priorities, tradeoffs, and decision factors.',
+            'Identify metrics, priorities, tradeoffs, and recommendation factors.',
           priority: 14,
           dependsOn,
           input: {
             entities: hints.entities,
             comparisonDetected: hints.hasComparison,
           },
-        }),
-        baseStep({
-          id: 'step-ranking',
-          title: 'Rank options',
-          description:
-            'Score options against criteria and prepare recommendation logic.',
-          priority: 66,
-          dependsOn: ['step-criteria'],
         }),
       ];
 
@@ -236,37 +186,20 @@ function buildIntentSpecificSteps(
           priority: 14,
           dependsOn,
         }),
-        baseStep({
-          id: 'step-roadmap',
-          title: 'Build roadmap',
-          description:
-            'Convert goals into actionable milestones and next steps.',
-          priority: 66,
-          dependsOn: ['step-goals'],
-        }),
       ];
 
     case 'productivity':
-    case 'execution':
       return [
         baseStep({
-          id: 'step-validate',
-          title: 'Validate action request',
+          id: 'step-productivity-scope',
+          title: 'Clarify productivity scope',
           description:
-            'Check permissions, feasibility, blockers, and success conditions.',
+            'Determine whether the user needs scheduling, prioritization, or execution guidance.',
           priority: 14,
           dependsOn,
           input: {
-            actionRequest: hints.hasActionRequest,
+            timeReference: hints.hasTimeReference,
           },
-        }),
-        baseStep({
-          id: 'step-execute-shape',
-          title: 'Prepare execution output',
-          description:
-            'Shape the requested deliverable, action result, or next-step output.',
-          priority: 66,
-          dependsOn: ['step-validate'],
         }),
       ];
 
@@ -276,20 +209,19 @@ function buildIntentSpecificSteps(
           id: 'step-finance-goal',
           title: 'Clarify financial goal',
           description:
-            'Identify whether the user wants savings, budgeting, comparison, or broader financial guidance.',
+            'Identify whether the user wants savings, budgeting, subscription review, or broader financial guidance.',
           priority: 14,
           dependsOn,
         }),
       ];
 
     case 'gmail':
-    case 'email':
       return [
         baseStep({
           id: 'step-email-scope',
-          title: 'Clarify email scope',
+          title: 'Clarify inbox task',
           description:
-            'Determine whether the user needs search, summary, drafting, subscription review, or receipt extraction.',
+            'Determine whether the user needs summary, urgent triage, subscription review, or a digest.',
           priority: 14,
           dependsOn,
         }),
@@ -334,38 +266,103 @@ function buildIntentSpecificSteps(
         }),
       ];
 
-    case 'scheduling':
-      return [
-        baseStep({
-          id: 'step-time-constraints',
-          title: 'Review time constraints',
-          description:
-            'Understand deadlines, duration, availability, and conflicts.',
-          priority: 14,
-          dependsOn,
-          input: {
-            hasTimeReference: hints.hasTimeReference,
-          },
-        }),
-      ];
-
     default:
       return [];
   }
 }
 
+function buildToolInput(
+  tool: AgentToolName,
+  route: AgentRouteResult,
+  hints: PlanHint,
+  context: AgentContext,
+): Record<string, unknown> {
+  const common = {
+    query: hints.requestText,
+    entities: hints.entities,
+    userGoal: route.userGoal,
+    intentHint: route.intent,
+    responseLanguage: route.responseLanguage,
+    userId: context.request.userId,
+  };
+
+  switch (tool) {
+    case 'gmail':
+      return {
+        ...common,
+        action:
+          route.intent === 'finance'
+            ? 'scan_subscriptions'
+            : route.intent === 'gmail'
+              ? 'summarize_inbox'
+              : 'digest',
+      };
+
+    case 'calendar':
+      return {
+        ...common,
+        action:
+          route.intent === 'planning' || route.intent === 'productivity'
+            ? 'today_plan'
+            : 'availability',
+      };
+
+    case 'web':
+      return {
+        ...common,
+        action: 'search',
+        freshnessRequired: hints.hasFreshnessNeed,
+      };
+
+    case 'compare':
+      return {
+        ...common,
+        action: 'compare',
+        items: hints.entities,
+      };
+
+    case 'file':
+      return {
+        ...common,
+        action: 'inspect',
+      };
+
+    case 'finance':
+      return {
+        ...common,
+        action: 'overview',
+      };
+
+    case 'notes':
+      return {
+        ...common,
+        action: 'list',
+      };
+
+    case 'memory':
+    default:
+      return {
+        ...common,
+        action: 'search',
+      };
+  }
+}
+
 function createToolSteps(
   route: AgentRouteResult,
+  hints: PlanHint,
+  context: AgentContext,
   dependsOn: string[],
 ): AgentPlanStep[] {
   return route.requiresTools.map((tool, index) =>
     baseStep({
       id: `step-tool-${tool}`,
       title: `Use ${tool} tool`,
-      description: getToolDescription(tool),
+      description: `Run the ${tool} capability with intent-driven inputs.`,
       priority: 30 + index,
       requiredTool: tool,
       dependsOn,
+      input: buildToolInput(tool, route, hints, context),
     }),
   );
 }
@@ -435,11 +432,7 @@ function trimSteps(steps: AgentPlanStep[], max: number): AgentPlanStep[] {
   return sortSteps(repaired);
 }
 
-function summarizePlan(
-  route: AgentRouteResult,
-  steps: AgentPlanStep[],
-  toolCount: number,
-): string {
+function summarizePlan(route: AgentRouteResult, steps: AgentPlanStep[], toolCount: number): string {
   const titles = steps
     .map((step) => step.title)
     .slice(0, 4)
@@ -468,11 +461,12 @@ export function createPlan(
         intent: route.intent,
         responseLanguage: route.responseLanguage,
         entities: hints.entities,
+        userGoal: route.userGoal,
       },
     }),
   ];
 
-  if (route.shouldFetchMemory) {
+  if (route.shouldFetchMemory && route.requiresTools.includes('memory')) {
     steps.push(buildMemoryStep());
   }
 
@@ -483,7 +477,7 @@ export function createPlan(
 
   const earlyDependencies = unique([
     'step-intake',
-    ...(route.shouldFetchMemory ? ['step-memory'] : []),
+    ...(route.shouldFetchMemory && route.requiresTools.includes('memory') ? ['step-memory'] : []),
     ...(complexityStep ? [complexityStep.id] : []),
   ]);
 
@@ -495,14 +489,14 @@ export function createPlan(
     ...intentSpecificSteps.map((step) => step.id),
   ]);
 
-  const toolSteps = createToolSteps(route, toolDependencyBase);
+  const toolSteps = createToolSteps(route, hints, context, toolDependencyBase);
   steps.push(...toolSteps);
 
-  const synthesisDependsOn = unique([
-    ...steps
+  const synthesisDependsOn = unique(
+    steps
       .filter((step) => step.id !== 'step-intake')
       .map((step) => step.id),
-  ]);
+  );
 
   steps.push(buildSynthesisStep(synthesisDependsOn));
   steps.push(buildGenerateStep(['step-synthesize']));
@@ -517,14 +511,5 @@ export function createPlan(
     summary: summarizePlan(route, finalSteps, toolCount),
     steps: finalSteps,
     createdAt: context.nowIso,
-    metadata: {
-      maxSteps,
-      toolCount,
-      memoryEnabled: route.shouldFetchMemory,
-      executionMode: route.suggestedExecutionMode,
-      entities: hints.entities,
-      wordCount: hints.wordCount,
-      responseLanguage: route.responseLanguage,
-    },
   };
 }
