@@ -1,6 +1,6 @@
 'use client';
 
-import { useLayoutEffect, useRef, type ReactNode } from 'react';
+import { useLayoutEffect, useRef, type ReactNode, type Ref } from 'react';
 import { ArrowUp, Mic, Plus, Sparkles } from 'lucide-react';
 
 type KivoComposerDockProps = {
@@ -15,6 +15,7 @@ type KivoComposerDockProps = {
   isSending?: boolean;
   placeholder?: string;
   keyboardOffset?: number;
+  containerRef?: Ref<HTMLDivElement>;
 };
 
 const MIN_TEXTAREA_HEIGHT = 30;
@@ -32,6 +33,7 @@ export function KivoComposerDock({
   isSending = false,
   placeholder = 'Assign a task or ask anything',
   keyboardOffset = 0,
+  containerRef,
 }: KivoComposerDockProps) {
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
 
@@ -48,6 +50,7 @@ export function KivoComposerDock({
 
   return (
     <div
+      ref={containerRef}
       className="pointer-events-none fixed inset-x-0 z-40 mx-auto w-full max-w-[560px] px-4 pb-4"
       style={{
         bottom: `calc(env(safe-area-inset-bottom, 0px) + ${Math.max(0, keyboardOffset)}px)`,
