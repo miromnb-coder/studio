@@ -59,6 +59,8 @@ const SAFE_BOTTOM_SPACE = 28;
 const BASE_SCROLL_BOTTOM_PADDING = COMPOSER_DOCK_HEIGHT + SAFE_BOTTOM_SPACE;
 const SCROLL_BOTTOM_PADDING_WITH_ATTACHMENTS =
   COMPOSER_DOCK_HEIGHT + ATTACHMENT_TRAY_HEIGHT + SAFE_BOTTOM_SPACE + 18;
+const NEAR_BOTTOM_THRESHOLD = 140;
+const SCROLL_MEMORY_KEY = 'kivo-chat-scroll-memory-v1';
 
 export function KivoChatScreen() {
   const router = useRouter();
@@ -75,6 +77,7 @@ export function KivoChatScreen() {
   const openConversation = useAppStore((s) => s.openConversation);
   const isAgentResponding = useAppStore((s) => s.isAgentResponding);
   const streamError = useAppStore((s) => s.streamError);
+  const activeConversationId = useAppStore((s) => s.activeConversationId);
 
   const [isSending, setIsSending] = useState(false);
   const [isListening, setIsListening] = useState(false);
@@ -96,6 +99,11 @@ export function KivoChatScreen() {
   const noticeTimeoutRef = useRef<number | null>(null);
   const mainScrollRef = useRef<HTMLDivElement | null>(null);
   const lastMessageCountRef = useRef(0);
+  const isNearBottomRef = useRef(true);
+  const scrollMemoryRef = useRef<Record<string, number>>({});
+  const [showScrollToLatest, setShowScrollToLatest] = useState(false);
+  const [keyboardOffset, setKeyboardOffset] = useState(0);
+  const scrollTickingRef = useRef(false);
 
   const hasMessages = messages.length > 0;
   const hasAttachments = attachments.length > 0;
@@ -105,6 +113,41 @@ export function KivoChatScreen() {
   const scrollBottomPadding = hasAttachments
     ? SCROLL_BOTTOM_PADDING_WITH_ATTACHMENTS
     : BASE_SCROLL_BOTTOM_PADDING;
+
+  const persistScrollMemory = useCallback(() => {
+    if (typeof window === 'undefined') return;
+    window.sessionStorage.setItem(
+      SCROLL_MEMORY_KEY,
+      JSON.stringify(scrollMemoryRef.current),
+    );
+  }, []);
+
+  const updateScrollState = useCallback(() => {
+    const scroller = mainScrollRef.current;
+    if (!scroller) return;
+
+    const distanceFromBottom =
+      scroller.scrollHeight - (scroller.scrollTop + scroller.clientHeight);
+    const nearBottom = distanceFromBottom <= NEAR_BOTTOM_THRESHOLD;
+
+    isNearBottomRef.current = nearBottom;
+    setShowScrollToLatest(!nearBottom && hasMessages);
+
+    scrollMemoryRef.current[activeConversationId] = Math.max(distanceFromBottom, 0);
+  }, [activeConversationId, hasMessages]);
+
+  const scrollToLatest = useCallback(
+    (behavior: ScrollBehavior = 'smooth') => {
+      const scroller = mainScrollRef.current;
+      if (!scroller) return;
+
+      scroller.scrollTo({
+        top: scroller.scrollHeight,
+        behavior,
+      });
+    },
+    [],
+  );
 
   const placeholder = useMemo(() => {
     if (hasAttachments && !draftPrompt.trim()) {
@@ -133,6 +176,21 @@ export function KivoChatScreen() {
   }, [hydrate, hydrated]);
 
   useEffect(() => {
+    if (typeof window === 'undefined') return;
+
+    try {
+      const raw = window.sessionStorage.getItem(SCROLL_MEMORY_KEY);
+      if (!raw) return;
+      const parsed = JSON.parse(raw) as Record<string, number>;
+      if (parsed && typeof parsed === 'object') {
+        scrollMemoryRef.current = parsed;
+      }
+    } catch {
+      scrollMemoryRef.current = {};
+    }
+  }, []);
+
+  useEffect(() => {
     return () => {
       attachments.forEach((attachment) => {
         if (attachment.previewUrl) {
@@ -146,6 +204,30 @@ export function KivoChatScreen() {
     setWorkspaceOpen(false);
     setActionSheetOpen(false);
   }, [pathname]);
+
+  useEffect(() => {
+    if (typeof window === 'undefined' || !window.visualViewport) return;
+
+    const viewport = window.visualViewport;
+
+    const syncKeyboardOffset = () => {
+      const nextOffset = Math.max(
+        0,
+        window.innerHeight - viewport.height - viewport.offsetTop,
+      );
+      setKeyboardOffset(nextOffset);
+    };
+
+    syncKeyboardOffset();
+
+    viewport.addEventListener('resize', syncKeyboardOffset);
+    viewport.addEventListener('scroll', syncKeyboardOffset);
+
+    return () => {
+      viewport.removeEventListener('resize', syncKeyboardOffset);
+      viewport.removeEventListener('scroll', syncKeyboardOffset);
+    };
+  }, []);
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
@@ -213,20 +295,78 @@ export function KivoChatScreen() {
     const scroller = mainScrollRef.current;
     if (!scroller) return;
 
-    const messageCountChanged = messages.length !== lastMessageCountRef.current;
-    const shouldAutoScroll = messageCountChanged || isAgentResponding || isSending;
+    const handleScroll = () => {
+      if (scrollTickingRef.current) return;
+      scrollTickingRef.current = true;
 
-    if (!shouldAutoScroll) return;
+      requestAnimationFrame(() => {
+        updateScrollState();
+        scrollTickingRef.current = false;
+      });
+    };
+
+    scroller.addEventListener('scroll', handleScroll, { passive: true });
+    updateScrollState();
+
+    return () => {
+      scroller.removeEventListener('scroll', handleScroll);
+      scrollTickingRef.current = false;
+      updateScrollState();
+      persistScrollMemory();
+    };
+  }, [persistScrollMemory, updateScrollState]);
+
+  useEffect(() => {
+    const scroller = mainScrollRef.current;
+    if (!scroller) return;
+
+    const preservedDistance = scrollMemoryRef.current[activeConversationId];
 
     requestAnimationFrame(() => {
-      scroller.scrollTo({
-        top: scroller.scrollHeight,
-        behavior: messageCountChanged ? 'smooth' : 'auto',
-      });
+      if (
+        typeof preservedDistance === 'number' &&
+        Number.isFinite(preservedDistance)
+      ) {
+        scroller.scrollTop = Math.max(
+          0,
+          scroller.scrollHeight - scroller.clientHeight - preservedDistance,
+        );
+      } else {
+        scroller.scrollTop = scroller.scrollHeight;
+      }
+
+      updateScrollState();
     });
 
     lastMessageCountRef.current = messages.length;
-  }, [messages.length, isAgentResponding, isSending]);
+  }, [activeConversationId, messages.length, updateScrollState]);
+
+  const lastMessageKey = useMemo(() => {
+    const lastMessage = messages[messages.length - 1];
+    if (!lastMessage) return 'empty';
+    return `${lastMessage.id}:${lastMessage.content.length}:${lastMessage.isStreaming ? 's' : 'f'}:${messages.length}`;
+  }, [messages]);
+
+  useEffect(() => {
+    const messageCountChanged = messages.length !== lastMessageCountRef.current;
+    const shouldFollow =
+      isNearBottomRef.current ||
+      (messageCountChanged &&
+        messages[messages.length - 1]?.role === 'user');
+
+    if (!shouldFollow) {
+      lastMessageCountRef.current = messages.length;
+      return;
+    }
+
+    const behavior: ScrollBehavior = messageCountChanged ? 'smooth' : 'auto';
+    requestAnimationFrame(() => {
+      scrollToLatest(behavior);
+      updateScrollState();
+    });
+
+    lastMessageCountRef.current = messages.length;
+  }, [isAgentResponding, isSending, lastMessageKey, messages, scrollToLatest, updateScrollState]);
 
   useEffect(() => {
     if (!actionSheetOpen) return;
@@ -696,7 +836,7 @@ export function KivoChatScreen() {
   );
 
   return (
-    <div className="relative min-h-screen overflow-hidden bg-transparent text-[#2f3640]">
+    <div className="relative h-[100dvh] overflow-hidden bg-transparent text-[#2f3640]">
       <div className="pointer-events-none absolute inset-0 overflow-hidden">
         <div className="absolute inset-0 bg-[linear-gradient(180deg,#f8f8f9_0%,#f4f5f7_36%,#eef2f6_100%)]" />
 
@@ -717,12 +857,12 @@ export function KivoChatScreen() {
         <div className="absolute inset-x-0 bottom-0 h-[280px] bg-[linear-gradient(180deg,rgba(244,246,249,0)_0%,rgba(241,244,248,0.34)_36%,rgba(236,240,246,0.88)_76%,rgba(234,239,246,1)_100%)]" />
       </div>
 
-      <div className="relative mx-auto flex min-h-screen w-full max-w-[560px] flex-col">
+      <div className="relative mx-auto flex h-full w-full max-w-[560px] flex-col">
         <KivoChatHeader />
 
         <main
           ref={mainScrollRef}
-          className="relative flex min-h-0 flex-1 flex-col overflow-y-auto"
+          className="relative flex min-h-0 flex-1 flex-col overflow-y-auto overscroll-contain [scrollbar-gutter:stable] [-webkit-overflow-scrolling:touch]"
           style={{ paddingBottom: scrollBottomPadding }}
         >
           <AnimatePresence initial={false}>
@@ -778,6 +918,29 @@ export function KivoChatScreen() {
         </main>
 
         <AnimatePresence initial={false}>
+          {showScrollToLatest ? (
+            <motion.button
+              key="scroll-to-latest"
+              type="button"
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: 6 }}
+              transition={{ duration: 0.18, ease: 'easeOut' }}
+              onClick={() => {
+                scrollToLatest('smooth');
+                requestAnimationFrame(() => updateScrollState());
+              }}
+              className="fixed right-5 z-30 inline-flex items-center rounded-full border border-black/[0.08] bg-white/90 px-3 py-2 text-[12px] font-medium tracking-[-0.01em] text-[#495264] shadow-[0_10px_24px_rgba(15,23,42,0.09)] backdrop-blur-md transition-all duration-150 hover:bg-white"
+              style={{
+                bottom: `calc(${scrollBottomPadding}px + ${Math.max(12, keyboardOffset)}px)`,
+              }}
+            >
+              Latest
+            </motion.button>
+          ) : null}
+        </AnimatePresence>
+
+        <AnimatePresence initial={false}>
           {hasAttachments ? (
             <motion.div
               key="attachment-tray"
@@ -785,7 +948,10 @@ export function KivoChatScreen() {
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: 8 }}
               transition={{ duration: 0.18, ease: 'easeOut' }}
-              className="pointer-events-none fixed inset-x-0 bottom-[138px] z-20 mx-auto w-full max-w-[560px] px-5"
+              className="pointer-events-none fixed inset-x-0 z-20 mx-auto w-full max-w-[560px] px-5"
+              style={{
+                bottom: `calc(138px + env(safe-area-inset-bottom, 0px) + ${Math.max(0, keyboardOffset)}px)`,
+              }}
             >
               <div className="pointer-events-auto mx-auto flex max-w-[500px] flex-wrap gap-2">
                 {attachments.map((attachment) => (
@@ -843,6 +1009,7 @@ export function KivoChatScreen() {
           isListening={isListening}
           isSending={isBusy}
           placeholder={placeholder}
+          keyboardOffset={keyboardOffset}
         />
 
         <KivoReferralSuccessToast
