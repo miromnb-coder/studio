@@ -40,6 +40,68 @@ type LlmStructuredAnswerSchema = {
   plainText: string | null;
 };
 
+type StructuredPayloadSchema = {
+  responseType:
+    | 'plain'
+    | 'email'
+    | 'calendar'
+    | 'search'
+    | 'compare'
+    | 'shopping'
+    | 'operator';
+  title?: string | null;
+  lead?: string | null;
+  summary?: string | null;
+  sourceChips?: Array<{ label: string; href?: string | null }>;
+  sources?: Array<{
+    id: string;
+    title: string;
+    domain?: string | null;
+    snippet?: string | null;
+    url?: string | null;
+  }>;
+  emailItems?: Array<{
+    id: string;
+    sender?: string | null;
+    subject: string;
+    preview?: string | null;
+    importance?: 'urgent' | 'important' | 'normal';
+    href?: string | null;
+  }>;
+  urgentLabel?: string | null;
+  events?: Array<{
+    id: string;
+    title: string;
+    time?: string | null;
+    subtitle?: string | null;
+  }>;
+  compareHeaders?: string[];
+  compareRows?: Array<{
+    label: string;
+    values: string[];
+  }>;
+  productCards?: Array<{
+    id: string;
+    title: string;
+    price?: string | null;
+    source?: string | null;
+    imageUrl?: string | null;
+    description?: string | null;
+    href?: string | null;
+  }>;
+  nextActions?: string[];
+  risks?: string[];
+  opportunities?: string[];
+};
+
+type ToolSummaryItem = {
+  tool: string;
+  ok: boolean;
+  summary: string;
+  error: string;
+  data: Record<string, unknown>;
+};
+
 function normalizeText(value: unknown): string {
   if (typeof value !== 'string') return '';
   return value.replace(/\s+/g, ' ').trim();
@@ -48,6 +110,29 @@ function normalizeText(value: unknown): string {
 function trimOuterWhitespace(value: unknown): string {
   if (typeof value !== 'string') return '';
   return value.trim();
+}
+
+function asObject(value: unknown): Record<string, unknown> {
+  return value && typeof value === 'object' && !Array.isArray(value)
+    ? (value as Record<string, unknown>)
+    : {};
+}
+
+function asArray(value: unknown): unknown[] {
+  return Array.isArray(value) ? value : [];
+}
+
+function unique<T>(items: T[]): T[] {
+  return [...new Set(items)];
+}
+
+function toStringArray(value: unknown): string[] {
+  return asArray(value).map((item) => normalizeText(item)).filter(Boolean);
+}
+
+function clamp01(value: number): number {
+  if (Number.isNaN(value)) return 0;
+  return Math.max(0, Math.min(1, Number(value.toFixed(2))));
 }
 
 function getRequestText(request: AgentRequest): string {
@@ -172,33 +257,30 @@ function summarizeToolResults(toolResults: AgentToolResult[]): {
   successful: string[];
   failed: string[];
   compactJson: string;
+  structured: ToolSummaryItem[];
 } {
   const successful: string[] = [];
   const failed: string[] = [];
 
-  const compact = toolResults.map((result) => {
+  const compact: ToolSummaryItem[] = toolResults.map((result) => {
+    const data = asObject(result.data);
+    const meta = asObject(data.meta);
+
     const summary =
-      typeof result.data?.summary === 'string'
-        ? normalizeText(result.data.summary)
-        : typeof result.data?.message === 'string'
-          ? normalizeText(result.data.message)
-          : typeof result.data?.meta === 'object' &&
-              result.data?.meta &&
-              'summary' in result.data.meta &&
-              typeof (result.data.meta as { summary?: unknown }).summary ===
-                'string'
-            ? normalizeText((result.data.meta as { summary: string }).summary)
+      typeof data.summary === 'string'
+        ? normalizeText(data.summary)
+        : typeof data.message === 'string'
+          ? normalizeText(data.message)
+          : typeof meta.summary === 'string'
+            ? normalizeText(meta.summary)
             : '';
 
-    const item = {
+    const item: ToolSummaryItem = {
       tool: result.tool,
       ok: result.ok,
       summary,
       error: normalizeText(result.error),
-      data:
-        typeof result.data === 'object' && result.data
-          ? result.data
-          : {},
+      data,
     };
 
     if (result.ok) {
@@ -216,6 +298,7 @@ function summarizeToolResults(toolResults: AgentToolResult[]): {
     successful,
     failed,
     compactJson: JSON.stringify(compact, null, 2),
+    structured: compact,
   };
 }
 
@@ -223,6 +306,7 @@ function estimateConfidence(
   route: AgentRouteResult,
   toolResults: AgentToolResult[],
   answerText: string,
+  structuredData?: StructuredPayloadSchema,
 ): number {
   let confidence =
     typeof route.confidence === 'number' ? route.confidence : 0.6;
@@ -236,6 +320,10 @@ function estimateConfidence(
   if (failCount > okCount) confidence -= 0.08;
   if (answerText.length < 80) confidence -= 0.08;
   if (answerText.length > 180) confidence += 0.03;
+
+  if (structuredData?.responseType && structuredData.responseType !== 'plain') {
+    confidence += 0.03;
+  }
 
   return Math.max(0.22, Math.min(0.97, Number(confidence.toFixed(2))));
 }
@@ -369,36 +457,354 @@ function mapLlmStructuredToAppStructured(
 
   return {
     title: payload.title ?? undefined,
-    summary: payload.lead
-      ? payload.summary
-        ? `${payload.lead}\n\n${payload.summary}`
-        : payload.lead
-      : payload.summary ?? undefined,
-    sections: payload.highlights.length
-      ? payload.highlights.map((item, index) => ({
-          label: index === 0 && item.tone === 'important' ? 'Priority' : undefined,
-          content: item.text,
-          tone: item.tone,
-        }))
-      : undefined,
-    actions: payload.nextStep
-      ? [
-          {
-            id: 'next_step',
-            label: payload.nextStep,
-            kind: 'primary',
-          },
-        ]
-      : undefined,
+    lead: payload.lead ?? undefined,
+    summary: payload.summary ?? undefined,
+    highlights: payload.highlights.length ? payload.highlights : undefined,
+    nextStep: payload.nextStep ?? undefined,
     sources:
       payload.sources.length > 0
         ? payload.sources
         : fallbackSources.length > 0
           ? fallbackSources
           : undefined,
-    outcome: undefined,
     plainText: fallbackPlainText,
   };
+}
+
+function inferResponseType(
+  input: GenerateFinalAnswerInput,
+  toolSummaries: ToolSummaryItem[],
+): StructuredPayloadSchema['responseType'] {
+  if (input.route.intent === 'shopping') return 'shopping';
+  if (input.route.intent === 'compare') return 'compare';
+  if (input.route.intent === 'research') return 'search';
+  if (input.route.intent === 'gmail') return 'email';
+  if (input.route.intent === 'planning' || input.route.intent === 'productivity') {
+    return 'calendar';
+  }
+
+  const okTools = toolSummaries.filter((item) => item.ok).map((item) => item.tool);
+
+  if (okTools.includes('gmail')) return 'email';
+  if (okTools.includes('calendar')) return 'calendar';
+  if (okTools.includes('compare')) return 'compare';
+  if (okTools.includes('web')) return 'search';
+  if (okTools.includes('finance')) return 'operator';
+
+  return 'plain';
+}
+
+function buildSourceChipsFromToolData(toolSummaries: ToolSummaryItem[]) {
+  const chips: Array<{ label: string; href?: string | null }> = [];
+
+  for (const item of toolSummaries) {
+    if (!item.ok) continue;
+
+    const data = asObject(item.data);
+
+    const sourceish = asArray(data.sources);
+    for (const source of sourceish) {
+      const record = asObject(source);
+      const label = normalizeText(record.label || record.source || record.domain || record.name);
+      if (!label) continue;
+      chips.push({
+        label,
+        href: normalizeText(record.href || record.url) || null,
+      });
+    }
+  }
+
+  return unique(
+    chips.map((chip) => JSON.stringify(chip)),
+  )
+    .map((value) => JSON.parse(value) as { label: string; href?: string | null })
+    .slice(0, 8);
+}
+
+function buildSearchPayload(toolSummaries: ToolSummaryItem[]): Partial<StructuredPayloadSchema> {
+  const results: StructuredPayloadSchema['sources'] = [];
+
+  for (const item of toolSummaries) {
+    if (item.tool !== 'web' || !item.ok) continue;
+
+    const data = asObject(item.data);
+    const rawResults =
+      asArray(data.results).length > 0
+        ? asArray(data.results)
+        : asArray(data.webResults).length > 0
+          ? asArray(data.webResults)
+          : asArray(data.searchResults);
+
+    for (const raw of rawResults) {
+      const record = asObject(raw);
+      const title = normalizeText(record.title || record.label || record.name);
+      if (!title) continue;
+
+      results.push({
+        id: normalizeText(record.id) || `result-${results.length}`,
+        title,
+        domain: normalizeText(record.domain || record.source || record.publisher) || null,
+        snippet: normalizeText(record.snippet || record.summary || record.preview) || null,
+        url: normalizeText(record.url || record.href) || null,
+      });
+    }
+  }
+
+  return {
+    sourceChips: buildSourceChipsFromToolData(toolSummaries),
+    sources: results.slice(0, 8),
+  };
+}
+
+function buildEmailPayload(toolSummaries: ToolSummaryItem[]): Partial<StructuredPayloadSchema> {
+  const emailItems: StructuredPayloadSchema['emailItems'] = [];
+  let urgentLabel: string | null = null;
+
+  for (const item of toolSummaries) {
+    if (item.tool !== 'gmail' || !item.ok) continue;
+
+    const data = asObject(item.data);
+    const result = asObject(data.result);
+
+    if (!urgentLabel) {
+      urgentLabel =
+        normalizeText(result.summary) ||
+        normalizeText(data.summary) ||
+        null;
+    }
+
+    const rawMessages =
+      asArray(result.urgentMessages).length > 0
+        ? asArray(result.urgentMessages)
+        : asArray(result.messages).length > 0
+          ? asArray(result.messages)
+          : asArray(data.messages).length > 0
+            ? asArray(data.messages)
+            : asArray(data.emails).length > 0
+              ? asArray(data.emails)
+              : [];
+
+    for (const raw of rawMessages) {
+      const record = asObject(raw);
+      const subject = normalizeText(record.subject || record.title || record.label);
+      if (!subject) continue;
+
+      const importanceRaw = normalizeText(record.importance || record.priority || record.tone).toLowerCase();
+      const importance =
+        importanceRaw === 'urgent' || importanceRaw === 'important'
+          ? (importanceRaw as 'urgent' | 'important')
+          : 'normal';
+
+      emailItems.push({
+        id: normalizeText(record.id) || `email-${emailItems.length}`,
+        sender: normalizeText(record.sender || record.from) || null,
+        subject,
+        preview: normalizeText(record.preview || record.snippet || record.summary) || null,
+        importance,
+        href: normalizeText(record.href || record.url) || null,
+      });
+    }
+  }
+
+  return {
+    urgentLabel,
+    emailItems: emailItems.slice(0, 8),
+  };
+}
+
+function buildCalendarPayload(toolSummaries: ToolSummaryItem[]): Partial<StructuredPayloadSchema> {
+  const events: StructuredPayloadSchema['events'] = [];
+
+  for (const item of toolSummaries) {
+    if (item.tool !== 'calendar' || !item.ok) continue;
+
+    const data = asObject(item.data);
+    const result = asObject(data.result);
+
+    const rawEvents =
+      asArray(data.events).length > 0
+        ? asArray(data.events)
+        : asArray(result.events).length > 0
+          ? asArray(result.events)
+          : [];
+
+    for (const raw of rawEvents) {
+      const record = asObject(raw);
+      const title = normalizeText(record.title || record.summary || record.label);
+      if (!title) continue;
+
+      events.push({
+        id: normalizeText(record.id) || `event-${events.length}`,
+        title,
+        time: normalizeText(record.time || record.startAt || record.start) || null,
+        subtitle: normalizeText(record.subtitle || record.location || record.description) || null,
+      });
+    }
+  }
+
+  return {
+    events: events.slice(0, 10),
+  };
+}
+
+function buildComparePayload(toolSummaries: ToolSummaryItem[]): Partial<StructuredPayloadSchema> {
+  for (const item of toolSummaries) {
+    if (item.tool !== 'compare' || !item.ok) continue;
+
+    const data = asObject(item.data);
+    const comparedItems = toStringArray(data.comparedItems);
+    const criteria = toStringArray(data.criteria);
+    const scorecards = asArray(data.scorecards);
+
+    const rows: NonNullable<StructuredPayloadSchema['compareRows']> = scorecards
+      .map((raw) => {
+        const record = asObject(raw);
+        const label = normalizeText(record.item);
+        const scores = asObject(record.scores);
+
+        const values = criteria.length
+          ? criteria.map((criterion) => `${criterion}: ${normalizeText(String(scores[criterion] ?? '—'))}`)
+          : Object.entries(scores)
+              .slice(0, 4)
+              .map(([key, value]) => `${key}: ${normalizeText(String(value))}`);
+
+        if (!label || !values.length) return null;
+        return { label, values };
+      })
+      .filter((row): row is { label: string; values: string[] } => Boolean(row));
+
+    const headers =
+      comparedItems.length > 0
+        ? ['Option', ...criteria.slice(0, 3)]
+        : ['Option', 'Details'];
+
+    return {
+      compareHeaders: headers,
+      compareRows: rows.slice(0, 12),
+    };
+  }
+
+  return {};
+}
+
+function buildShoppingPayload(toolSummaries: ToolSummaryItem[]): Partial<StructuredPayloadSchema> {
+  const cards: NonNullable<StructuredPayloadSchema['productCards']> = [];
+
+  for (const item of toolSummaries) {
+    if (!item.ok) continue;
+
+    const data = asObject(item.data);
+    const rawProducts =
+      item.tool === 'web'
+        ? asArray(data.products).length > 0
+          ? asArray(data.products)
+          : asArray(data.shoppingResults)
+        : asArray(data.products);
+
+    for (const raw of rawProducts) {
+      const record = asObject(raw);
+      const title = normalizeText(record.title || record.name || record.label);
+      if (!title) continue;
+
+      cards.push({
+        id: normalizeText(record.id) || `product-${cards.length}`,
+        title,
+        price: normalizeText(record.price || record.formattedPrice) || null,
+        source: normalizeText(record.source || record.store || record.vendor) || null,
+        imageUrl: normalizeText(record.imageUrl || record.image || record.thumbnail) || null,
+        description: normalizeText(record.description || record.summary || record.preview) || null,
+        href: normalizeText(record.href || record.url) || null,
+      });
+    }
+  }
+
+  return {
+    productCards: cards.slice(0, 12),
+  };
+}
+
+function buildOperatorPayload(
+  input: GenerateFinalAnswerInput,
+  structured: StructuredAnswer,
+  toolSummaries: ToolSummaryItem[],
+): Partial<StructuredPayloadSchema> {
+  const nextActions = structured.nextStep ? [structured.nextStep] : [];
+  const opportunities: string[] = [];
+  const risks: string[] = [];
+
+  for (const item of toolSummaries) {
+    if (item.ok) {
+      const summary = normalizeText(item.summary);
+      if (summary) opportunities.push(summary);
+    } else {
+      const error = normalizeText(item.error);
+      if (error) risks.push(`${toTitleCase(item.tool)}: ${error}`);
+    }
+  }
+
+  return {
+    nextActions: nextActions.slice(0, 5),
+    opportunities: unique(opportunities).slice(0, 5),
+    risks: unique(risks).slice(0, 5),
+  };
+}
+
+function buildStructuredData(
+  input: GenerateFinalAnswerInput,
+  structured: StructuredAnswer,
+  toolSummaries: ToolSummaryItem[],
+): StructuredPayloadSchema {
+  const responseType = inferResponseType(input, toolSummaries);
+  const base: StructuredPayloadSchema = {
+    responseType,
+    title: structured.title ?? null,
+    lead: structured.lead ?? null,
+    summary: structured.summary ?? null,
+  };
+
+  if (responseType === 'email') {
+    return {
+      ...base,
+      ...buildEmailPayload(toolSummaries),
+    };
+  }
+
+  if (responseType === 'calendar') {
+    return {
+      ...base,
+      ...buildCalendarPayload(toolSummaries),
+    };
+  }
+
+  if (responseType === 'search') {
+    return {
+      ...base,
+      ...buildSearchPayload(toolSummaries),
+    };
+  }
+
+  if (responseType === 'compare') {
+    return {
+      ...base,
+      ...buildComparePayload(toolSummaries),
+    };
+  }
+
+  if (responseType === 'shopping') {
+    return {
+      ...base,
+      ...buildShoppingPayload(toolSummaries),
+    };
+  }
+
+  if (responseType === 'operator') {
+    return {
+      ...base,
+      ...buildOperatorPayload(input, structured, toolSummaries),
+    };
+  }
+
+  return base;
 }
 
 function buildLocalizedFallback(
@@ -496,14 +902,11 @@ function buildFallbackStructuredAnswer(
     return {
       title: 'Today plan',
       summary: text,
-      sections: input.plan.steps.slice(0, 3).map((step, index) => ({
-        label: index === 0 ? 'Priority' : undefined,
-        content: step.title,
+      highlights: input.plan.steps.slice(0, 3).map((step, index) => ({
+        text: step.title,
         tone: index === 0 ? 'important' : index === 2 ? 'success' : 'default',
       })),
-      actions: [
-        { id: 'open_calendar', label: 'Open Calendar', kind: 'primary' },
-      ],
+      nextStep: 'Open Calendar',
       sources: sources.length ? sources : undefined,
       plainText: text,
     };
@@ -521,7 +924,7 @@ function buildFallbackAnswer(
   language: string,
 ): AgentFinalAnswer {
   const requestText = getRequestText(input.request);
-  const { successful, failed } = summarizeToolResults(input.toolResults);
+  const { successful, failed, structured } = summarizeToolResults(input.toolResults);
   const localized = buildLocalizedFallback(language, {
     requestText,
     memorySummary: input.memorySummary,
@@ -529,13 +932,20 @@ function buildFallbackAnswer(
     failed,
   });
 
+  const structuredAnswer = buildFallbackStructuredAnswer(input, localized.text);
+  const structuredData = structuredAnswer
+    ? buildStructuredData(input, structuredAnswer, structured)
+    : undefined;
+
   return {
     text: localized.text,
-    structured: buildFallbackStructuredAnswer(input, localized.text),
+    structured: structuredAnswer,
+    structuredData,
     confidence: estimateConfidence(
       input.route,
       input.toolResults,
       localized.text,
+      structuredData,
     ),
     followUps: [],
     metadata: {
@@ -551,6 +961,7 @@ function buildFallbackAnswer(
       planId: input.plan.id,
       stepCount: input.plan.steps.length,
       mode: 'fallback',
+      responseType: structuredData?.responseType ?? 'plain',
     },
   };
 }
@@ -669,9 +1080,13 @@ export async function generateFinalAnswer(
     return buildFallbackAnswer(input, language);
   }
 
+  const toolSummary = summarizeToolResults(input.toolResults);
   const mappedStructured = mapLlmStructuredToAppStructured(input, llmStructured);
+  const structuredData = buildStructuredData(input, mappedStructured, toolSummary.structured);
+
   const finalText =
     mappedStructured.plainText ||
+    mappedStructured.lead ||
     mappedStructured.summary ||
     llmStructured.lead ||
     llmStructured.summary ||
@@ -681,11 +1096,13 @@ export async function generateFinalAnswer(
     input.route,
     input.toolResults,
     finalText,
+    structuredData,
   );
 
   return {
     text: finalText,
     structured: mappedStructured,
+    structuredData,
     confidence,
     followUps: [],
     metadata: {
@@ -701,6 +1118,7 @@ export async function generateFinalAnswer(
       planId: input.plan.id,
       stepCount: input.plan.steps.length,
       mode: 'model',
+      responseType: structuredData.responseType,
     },
   };
 }
@@ -743,13 +1161,15 @@ export async function* generateFinalAnswerStream(
     return;
   }
 
-  for (const chunk of chunks) {
+  for (let index = 0; index < chunks.length; index += 1) {
+    const chunk = chunks[index];
+
     yield {
       type: 'answer_delta',
       requestId: input.request.requestId,
       timestamp: new Date().toISOString(),
       payload: {
-        delta: `${chunk}${chunk === chunks[chunks.length - 1] ? '' : ' '}`,
+        delta: `${chunk}${index === chunks.length - 1 ? '' : ' '}`,
       },
     };
   }
