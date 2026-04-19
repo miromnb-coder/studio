@@ -1,5 +1,5 @@
 import { AGENT_VNEXT_FALLBACK_MESSAGES } from './constants';
-import { resolveRequiredTools } from '@/agent/integrations/integration-router';
+import { resolveRequiredTools, resolveDefaultToolsForIntent } from '@/agent/integrations/integration-router';
 import type {
   AgentIntent,
   AgentRequest,
@@ -25,6 +25,10 @@ type ModelRouteSchema = {
 function normalizeText(value: unknown): string {
   if (typeof value !== 'string') return '';
   return value.replace(/\s+/g, ' ').trim();
+}
+
+function unique<T>(items: T[]): T[] {
+  return [...new Set(items)];
 }
 
 function getRequestText(request: AgentRequest): string {
@@ -77,12 +81,12 @@ function defaultResponseLanguage(request: AgentRequest): string | undefined {
   return undefined;
 }
 
-function detectLanguageFromText(text: string): {
+function detectLanguageFromScript(text: string): {
   inputLanguage: string;
   responseLanguage: string;
   languageConfidence: number;
 } {
-  const normalized = normalizeText(text).toLowerCase();
+  const normalized = normalizeText(text);
   if (!normalized) {
     return {
       inputLanguage: 'unknown',
@@ -91,68 +95,24 @@ function detectLanguageFromText(text: string): {
     };
   }
 
-  const compact = normalized
-    .normalize('NFKD')
-    .replace(/[^\p{L}\p{N}\s?!.,]/gu, ' ')
-    .replace(/\s+/g, ' ')
-    .trim();
-
-  const directMap: Record<string, 'fi' | 'sv' | 'es' | 'en'> = {
-    'hei': 'fi',
-    'moi': 'fi',
-    'mita kuuluu': 'fi',
-    'mita kuuluu?': 'fi',
-    'mitä kuuluu': 'fi',
-    'mitä kuuluu?': 'fi',
-    'vad hander': 'sv',
-    'vad hander?': 'sv',
-    'vad händer': 'sv',
-    'vad händer?': 'sv',
-    'hola': 'es',
-    'hola!': 'es',
-    'hello': 'en',
-    'hello!': 'en',
-  };
-
-  const direct = directMap[compact];
-  if (direct) {
-    return {
-      inputLanguage: direct,
-      responseLanguage: direct,
-      languageConfidence: 0.98,
-    };
+  if (/[\u4E00-\u9FFF\u3040-\u30FF]/u.test(normalized)) {
+    return { inputLanguage: 'ja', responseLanguage: 'ja', languageConfidence: 0.72 };
   }
 
-  if (/\b(että|mikä|mitä|kuuluu|suomi|minä|sinä|tämä|ole|kiitos)\b/.test(compact)) {
-    return {
-      inputLanguage: 'fi',
-      responseLanguage: 'fi',
-      languageConfidence: 0.86,
-    };
+  if (/[\u0400-\u04FF]/u.test(normalized)) {
+    return { inputLanguage: 'ru', responseLanguage: 'ru', languageConfidence: 0.7 };
   }
 
-  if (/\b(vad|händer|hej|jag|du|och|är|detta)\b/.test(compact)) {
-    return {
-      inputLanguage: 'sv',
-      responseLanguage: 'sv',
-      languageConfidence: 0.86,
-    };
+  if (/[\u0600-\u06FF]/u.test(normalized)) {
+    return { inputLanguage: 'ar', responseLanguage: 'ar', languageConfidence: 0.7 };
   }
 
-  if (/[\u00e1\u00e9\u00ed\u00f3\u00fa\u00f1\u00bf\u00a1]/.test(compact) || /\b(hola|gracias|que|cómo|puedo|ayudar|está)\b/.test(compact)) {
-    return {
-      inputLanguage: 'es',
-      responseLanguage: 'es',
-      languageConfidence: 0.84,
-    };
+  if (/[\uAC00-\uD7AF]/u.test(normalized)) {
+    return { inputLanguage: 'ko', responseLanguage: 'ko', languageConfidence: 0.72 };
   }
 
-  if (/\b(hello|hi|what|how|can|help|please|thanks)\b/.test(compact)) {
-    return {
-      inputLanguage: 'en',
-      responseLanguage: 'en',
-      languageConfidence: 0.8,
-    };
+  if (/[\u0E00-\u0E7F]/u.test(normalized)) {
+    return { inputLanguage: 'th', responseLanguage: 'th', languageConfidence: 0.72 };
   }
 
   return {
@@ -173,10 +133,6 @@ function isAgentIntent(value: unknown): value is AgentIntent {
     value === 'research' ||
     value === 'compare' ||
     value === 'planning' ||
-    value === 'execution' ||
-    value === 'email' ||
-    value === 'scheduling' ||
-    value === 'tool_use' ||
     value === 'shopping' ||
     value === 'unknown'
   );
@@ -223,19 +179,16 @@ function normalizeModelRoute(raw: unknown): ModelRouteSchema | null {
 
   if (!isAgentIntent(record.intent)) return null;
 
-  const suggestedExecutionMode =
-    record.suggestedExecutionMode === 'stream' ? 'stream' : 'sync';
-
-  const normalized: ModelRouteSchema = {
+  return {
     inputLanguage: normalizeText(record.inputLanguage) || 'unknown',
     responseLanguage:
       normalizeText(record.responseLanguage) ||
       normalizeText(record.inputLanguage) ||
       'en',
-    languageConfidence: clamp01(record.languageConfidence, 0.7),
+    languageConfidence: clamp01(record.languageConfidence, 0.72),
     multilingual: Boolean(record.multilingual),
     intent: record.intent,
-    confidence: clamp01(record.confidence, 0.72),
+    confidence: clamp01(record.confidence, 0.76),
     userGoal: normalizeText(record.userGoal) || 'Help the user effectively.',
     entities: uniqueEntities(record.entities),
     requiresTools: uniqueTools(record.requiresTools),
@@ -243,13 +196,12 @@ function normalizeModelRoute(raw: unknown): ModelRouteSchema | null {
       typeof record.shouldFetchMemory === 'boolean'
         ? record.shouldFetchMemory
         : record.intent !== 'general',
-    suggestedExecutionMode,
+    suggestedExecutionMode:
+      record.suggestedExecutionMode === 'stream' ? 'stream' : 'sync',
     reason:
       normalizeText(record.reason) ||
       'Model-based routing selected the most likely intent.',
   };
-
-  return normalized;
 }
 
 function extractJsonBlock(text: string): string | null {
@@ -276,15 +228,17 @@ async function routeIntentWithModel(
   request: AgentRequest,
   text: string,
 ): Promise<ModelRouteSchema | null> {
+  if (!process.env.OPENAI_API_KEY) return null;
+
   const conversationText = getConversationText(request);
   const requestedLanguage = defaultResponseLanguage(request);
 
   const prompt = [
-    'You are a routing model for a multilingual AI agent.',
+    'You are a multilingual routing model for an AI agent.',
     'Return JSON only.',
-    'Do not explain your reasoning.',
-    'Infer meaning semantically, not by keyword matching.',
-    'Understand any language you can.',
+    'Infer the user intent from meaning, not from keyword lists.',
+    'The user may write in any language.',
+    'Do not explain reasoning outside JSON.',
     '',
     'Schema:',
     '{',
@@ -292,7 +246,7 @@ async function routeIntentWithModel(
     '  "responseLanguage": "string",',
     '  "languageConfidence": 0.0,',
     '  "multilingual": false,',
-    '  "intent": "general | finance | gmail | productivity | coding | memory | research | compare | planning | execution | email | scheduling | tool_use | shopping | unknown",',
+    '  "intent": "general | finance | gmail | productivity | coding | memory | research | compare | planning | shopping | unknown",',
     '  "confidence": 0.0,',
     '  "userGoal": "string",',
     '  "entities": ["string"],',
@@ -302,13 +256,15 @@ async function routeIntentWithModel(
     '  "reason": "short reason"',
     '}',
     '',
-    'Rules:',
-    '- The entire output must be valid JSON.',
-    '- responseLanguage should follow explicit user language instruction when present.',
-    '- If no explicit override exists, use the language of the latest user message.',
-    '- Use tools only when genuinely helpful.',
-    '- entities should contain concrete items, products, people, documents, or topics when present.',
-    '- userGoal should describe what the user is actually trying to achieve.',
+    'Tool rules:',
+    '- Use gmail for inbox/email-related work.',
+    '- Use calendar for schedule/availability/time planning.',
+    '- Use web for current/live/external information.',
+    '- Use compare for structured side-by-side choices.',
+    '- Use finance for money/subscription/cost analysis.',
+    '- Use file for uploaded/referenced file/document inspection.',
+    '- Use notes for note/task-like structured internal material.',
+    '- Use memory when personal context helps.',
     '',
     `Requested response language: ${requestedLanguage || 'none'}`,
     `Latest user message: ${text}`,
@@ -365,39 +321,64 @@ async function routeIntentWithModel(
   }
 }
 
+function heuristicFallbackIntent(text: string): AgentIntent {
+  const trimmed = normalizeText(text);
+  if (!trimmed) return 'unknown';
+
+  const lowered = trimmed.toLowerCase();
+
+  if (lowered.includes(' vs ') || lowered.includes(' versus ')) return 'compare';
+  if (/[$€£¥₹]/u.test(trimmed)) return 'shopping';
+  if (trimmed.includes('http://') || trimmed.includes('https://')) return 'research';
+  if (trimmed.includes('.pdf') || trimmed.includes('.doc') || trimmed.includes('.csv')) {
+    return 'coding';
+  }
+
+  return 'general';
+}
+
 function routeIntentFallback(request: AgentRequest, text: string): AgentRouteResult {
   const requestedLanguage = defaultResponseLanguage(request);
+  const detectedLanguage = detectLanguageFromScript(text);
+  const intent = heuristicFallbackIntent(text);
+  const seededTools = resolveDefaultToolsForIntent(intent);
 
   return {
-    intent: 'general',
-    confidence: 0.45,
+    intent,
+    confidence: intent === 'general' ? 0.42 : 0.56,
     reason: 'Fallback routing was used because model routing was unavailable.',
-    requiresTools: resolveRequiredTools(text, []),
-    shouldFetchMemory: true,
+    requiresTools: resolveRequiredTools(text, seededTools, {
+      routeIntent: intent,
+      metadata: request.metadata,
+    }),
+    shouldFetchMemory: intent !== 'general',
     suggestedExecutionMode: 'sync',
-    fallbackMessage: AGENT_VNEXT_FALLBACK_MESSAGES.missingContext,
+    fallbackMessage:
+      intent === 'unknown'
+        ? AGENT_VNEXT_FALLBACK_MESSAGES.missingContext
+        : undefined,
     inputLanguage:
       normalizeText((request as AgentRequest & { inputLanguage?: string }).inputLanguage) ||
-      'unknown',
-    responseLanguage: requestedLanguage || 'en',
+      detectedLanguage.inputLanguage,
+    responseLanguage: requestedLanguage || detectedLanguage.responseLanguage,
     languageConfidence: clamp01(
       (request as AgentRequest & { languageConfidence?: number }).languageConfidence,
-      0.35,
+      detectedLanguage.languageConfidence,
     ),
-    multilingual: false,
+    multilingual: detectedLanguage.inputLanguage !== 'unknown',
   };
 }
 
 export async function routeIntent(request: AgentRequest): Promise<AgentRouteResult> {
   const text = getRequestText(request);
-  const detectedLanguage = detectLanguageFromText(text);
+  const detectedLanguage = detectLanguageFromScript(text);
 
   if (!text) {
     return {
       intent: 'unknown',
       confidence: 0.2,
       reason: 'Request did not contain usable text.',
-      requiresTools: resolveRequiredTools(text, []),
+      requiresTools: ['memory'],
       shouldFetchMemory: true,
       suggestedExecutionMode: 'sync',
       fallbackMessage: AGENT_VNEXT_FALLBACK_MESSAGES.missingContext,
@@ -424,10 +405,14 @@ export async function routeIntent(request: AgentRequest): Promise<AgentRouteResu
       routed.inputLanguage === 'unknown' || !routed.inputLanguage
         ? detectedLanguage.inputLanguage
         : routed.inputLanguage;
+
     const resolvedResponseLanguage =
       normalizeText(defaultResponseLanguage(request)) ||
       normalizeText(routed.responseLanguage) ||
-      (resolvedInputLanguage !== 'unknown' ? resolvedInputLanguage : detectedLanguage.responseLanguage);
+      (resolvedInputLanguage !== 'unknown'
+        ? resolvedInputLanguage
+        : detectedLanguage.responseLanguage);
+
     const resolvedLanguageConfidence =
       routed.inputLanguage === 'unknown'
         ? Math.max(routed.languageConfidence, detectedLanguage.languageConfidence)
@@ -437,7 +422,11 @@ export async function routeIntent(request: AgentRequest): Promise<AgentRouteResu
       intent: routed.intent,
       confidence: routed.confidence,
       reason: routed.reason,
-      requiresTools: resolveRequiredTools(text, routed.requiresTools),
+      requiresTools: resolveRequiredTools(text, routed.requiresTools, {
+        routeIntent: routed.intent,
+        currentTools: routed.requiresTools,
+        metadata: request.metadata,
+      }),
       shouldFetchMemory: routed.shouldFetchMemory,
       suggestedExecutionMode: routed.suggestedExecutionMode,
       fallbackMessage:
@@ -446,10 +435,13 @@ export async function routeIntent(request: AgentRequest): Promise<AgentRouteResu
           : undefined,
       inputLanguage: resolvedInputLanguage,
       responseLanguage: resolvedResponseLanguage,
-      languageConfidence: clamp01(resolvedLanguageConfidence, detectedLanguage.languageConfidence),
+      languageConfidence: clamp01(
+        resolvedLanguageConfidence,
+        detectedLanguage.languageConfidence,
+      ),
       multilingual: routed.multilingual,
       userGoal: routed.userGoal,
-      entities: routed.entities,
+      entities: unique(routed.entities),
     };
   } catch {
     return routeIntentFallback(request, text);
