@@ -28,6 +28,13 @@ import { scoreInboxMessage, buildInboxSummary } from '@/server/email-operator/su
 import { detectUrgentEmails } from '@/server/email-operator/urgent';
 import { buildSubscriptionScannerResult } from '@/server/email-operator/subscriptions';
 import { buildWeeklyDigest } from '@/server/email-operator/digest';
+import {
+  hasBrowserSearchConfigured,
+  inferBrowserSearchMode,
+  runBrowserSearch,
+  type BrowserSearchMode,
+  type BrowserSearchResult,
+} from '@/lib/browser-search/search';
 
 export type AgentToolHandler = (
   call: AgentToolCall,
@@ -64,6 +71,26 @@ type PersistedFinanceProfile = {
   last_analysis?: unknown;
 };
 
+type WebAction = 'status' | 'search' | 'research' | 'shopping' | 'products' | 'fetch';
+
+type WebSearchItem = {
+  id: string;
+  title: string;
+  url: string;
+  snippet: string;
+  source: string | null;
+};
+
+type WebProductItem = {
+  id: string;
+  title: string;
+  price: string | null;
+  source: string | null;
+  imageUrl: string | null;
+  url: string;
+  description: string | null;
+};
+
 const DEFAULT_EMAIL_PREFERENCES = {
   concise: false,
   prioritizeSavings: true,
@@ -79,7 +106,7 @@ const TOOL_CONFIDENCE = {
   notes: 0.62,
   finance: 0.58,
   file: 0.4,
-  web: 0.4,
+  web: 0.82,
 } as const;
 
 function createAdminClient() {
@@ -442,6 +469,79 @@ function normalizeCalendarAction(input: ToolInput): string {
   }
 }
 
+function normalizeWebAction(input: ToolInput, query: string): WebAction {
+  const explicit = normalizeLower(input.action);
+
+  if (
+    explicit === 'status' ||
+    explicit === 'search' ||
+    explicit === 'research' ||
+    explicit === 'shopping' ||
+    explicit === 'products' ||
+    explicit === 'fetch'
+  ) {
+    return explicit;
+  }
+
+  const modeHint = normalizeLower(input.mode);
+
+  if (modeHint === 'shopping') return 'shopping';
+  if (modeHint === 'news') return 'research';
+
+  const lowered = normalizeLower(query);
+
+  if (
+    hasAnyPattern(lowered, [
+      /\bshopping\b/i,
+      /\bproduct\b/i,
+      /\bproducts\b/i,
+      /\bbuy\b/i,
+      /\bbest price\b/i,
+      /\bcheapest\b/i,
+      /\bprice\b/i,
+      /\bshop\b/i,
+      /\bhalvin\b/i,
+      /\bhinta\b/i,
+      /\bosta\b/i,
+      /\bparas\b/i,
+    ])
+  ) {
+    return 'shopping';
+  }
+
+  if (
+    hasAnyPattern(lowered, [
+      /\bresearch\b/i,
+      /\bnews\b/i,
+      /\blatest\b/i,
+      /\bcurrent\b/i,
+      /\btoday\b/i,
+      /\buusin\b/i,
+      /\bajankoht/i,
+      /\buutis/i,
+    ])
+  ) {
+    return 'research';
+  }
+
+  if (
+    hasAnyPattern(lowered, [
+      /\bfetch\b/i,
+      /\bopen\b/i,
+      /\blook up\b/i,
+      /\bfind\b/i,
+      /\betsi\b/i,
+      /\bhae\b/i,
+      /\bselvitä\b/i,
+      /\bselvita\b/i,
+    ])
+  ) {
+    return 'search';
+  }
+
+  return 'search';
+}
+
 async function persistFinanceLastAnalysisUpdate(params: {
   userId: string;
   financeProfile: PersistedFinanceProfile | null | undefined;
@@ -521,6 +621,89 @@ function pickRelevantSentences(text: string, query: string, max = 3): string[] {
   });
 
   return ranked.slice(0, max);
+}
+
+function normalizeBrowserResult(
+  result: BrowserSearchResult,
+  index: number,
+): WebSearchItem {
+  return {
+    id: `web-result-${index + 1}`,
+    title: normalizeText(result.title) || 'Untitled',
+    url: normalizeText(result.url),
+    snippet: normalizeText(result.snippet),
+    source: normalizeText(result.source) || null,
+  };
+}
+
+function extractPriceFromSnippet(snippet: string): string | null {
+  const text = normalizeText(snippet);
+  if (!text) return null;
+
+  const patterns = [
+    /€\s?\d[\d.,]*/i,
+    /\d[\d.,]*\s?€/i,
+    /\$\s?\d[\d.,]*/i,
+    /\d[\d.,]*\s?\$/i,
+    /\b\d[\d.,]*\s?(eur|usd|gbp)\b/i,
+  ];
+
+  for (const pattern of patterns) {
+    const match = text.match(pattern);
+    if (match?.[0]) return match[0].trim();
+  }
+
+  return null;
+}
+
+function inferImageUrl(value: unknown): string | null {
+  const text = normalizeText(value);
+  if (!text) return null;
+  return /^https?:\/\//i.test(text) ? text : null;
+}
+
+function normalizeShoppingProducts(results: WebSearchItem[]): WebProductItem[] {
+  return results.map((result, index) => ({
+    id: `web-product-${index + 1}`,
+    title: result.title,
+    price: extractPriceFromSnippet(result.snippet),
+    source: result.source,
+    imageUrl: null,
+    url: result.url,
+    description: result.snippet || null,
+  }));
+}
+
+function buildSearchSources(results: WebSearchItem[]) {
+  return results.map((result) => ({
+    id: result.id,
+    title: result.title,
+    domain: result.source,
+    snippet: result.snippet || null,
+    url: result.url || null,
+  }));
+}
+
+function summarizeWebResults(
+  mode: BrowserSearchMode,
+  query: string,
+  resultCount: number,
+): string {
+  if (mode === 'shopping') {
+    return resultCount > 0
+      ? `Found ${resultCount} product results for "${query}".`
+      : `No product results found for "${query}".`;
+  }
+
+  if (mode === 'news') {
+    return resultCount > 0
+      ? `Found ${resultCount} recent news results for "${query}".`
+      : `No recent news results found for "${query}".`;
+  }
+
+  return resultCount > 0
+    ? `Found ${resultCount} search results for "${query}".`
+    : `No search results found for "${query}".`;
 }
 
 async function gmailTool(
@@ -1002,9 +1185,32 @@ async function webTool(
   const startedAt = Date.now();
   const input = asObject(call.input);
   const query = normalizeText(input.query) || extractRequestedQuery(call, context);
-  const action = normalizeText(input.action) || 'search';
+  const action = normalizeWebAction(input, query);
 
-  if (!query && action === 'search') {
+  if (action === 'status') {
+    const configured = hasBrowserSearchConfigured();
+    return buildSuccess(
+      call,
+      'web',
+      {
+        action,
+        configured,
+        provider:
+          (process.env.BROWSER_SEARCH_PROVIDER || 'serper').trim().toLowerCase(),
+        availableActions: ['search', 'research', 'shopping', 'products', 'fetch'],
+      },
+      {
+        requiresProvider: true,
+        summary: configured
+          ? 'Live browser search is configured.'
+          : 'Live browser search is not configured.',
+        confidence: configured ? TOOL_CONFIDENCE.web : 0.34,
+      },
+      startedAt,
+    );
+  }
+
+  if (!query) {
     return buildFailure(
       call,
       'web',
@@ -1014,33 +1220,112 @@ async function webTool(
     );
   }
 
-  const reasoning = [
-    'This project does not yet have a real web provider wired into tools.ts.',
-    'The Browser Search product flow exists elsewhere in the app, but the vNext web tool adapter still needs a live backend implementation.',
-  ];
-
-  return buildPlaceholderProviderResult(
-    call,
-    'web',
-    'Web retrieval adapter should be connected with source filtering and live result normalization.',
-    {
-      action,
-      query,
-      reasoning,
-      suggestedShape: {
+  if (!hasBrowserSearchConfigured()) {
+    return buildFailure(
+      call,
+      'web',
+      'Browser search provider is not configured.',
+      {
+        action,
         query,
-        results: [
-          {
-            title: 'string',
-            url: 'string',
-            snippet: 'string',
-            source: 'string',
-          },
-        ],
+        requiredEnv:
+          (process.env.BROWSER_SEARCH_PROVIDER || 'serper').trim().toLowerCase() === 'tavily'
+            ? ['TAVILY_API_KEY']
+            : ['SERPER_API_KEY'],
       },
-    },
-    startedAt,
-  );
+      startedAt,
+    );
+  }
+
+  try {
+    const inferredMode = inferBrowserSearchMode(query);
+    const mode: BrowserSearchMode =
+      action === 'shopping' || action === 'products'
+        ? 'shopping'
+        : action === 'research'
+          ? 'news'
+          : normalizeLower(input.mode) === 'shopping'
+            ? 'shopping'
+            : normalizeLower(input.mode) === 'news'
+              ? 'news'
+              : inferredMode;
+
+    const browserSearch = await runBrowserSearch({
+      query,
+      mode,
+    });
+
+    const normalizedResults = browserSearch.results
+      .map(normalizeBrowserResult)
+      .filter((result) => result.title || result.url)
+      .slice(0, 8);
+
+    const sources = buildSearchSources(normalizedResults);
+    const sourceChips = unique(
+      normalizedResults
+        .map((result) => result.source)
+        .filter((source): source is string => Boolean(source)),
+    )
+      .slice(0, 8)
+      .map((source) => ({
+        label: source,
+        href: null,
+      }));
+
+    const products = normalizeShoppingProducts(normalizedResults);
+
+    const summary = summarizeWebResults(mode, query, normalizedResults.length);
+    const responseType =
+      mode === 'shopping' ? 'shopping' : mode === 'news' ? 'search' : 'search';
+
+    const topResult = normalizedResults[0];
+
+    return buildSuccess(
+      call,
+      'web',
+      {
+        action,
+        query,
+        responseType,
+        provider: browserSearch.provider,
+        mode: browserSearch.mode,
+        summary,
+        results: normalizedResults,
+        searchResults: normalizedResults,
+        webResults: normalizedResults,
+        sources,
+        sourceChips,
+        products,
+        shoppingResults: products,
+        topResult: topResult ?? null,
+      },
+      {
+        requiresProvider: true,
+        summary,
+        nextAction:
+          normalizedResults.length > 0
+            ? mode === 'shopping'
+              ? 'Use returned products/shoppingResults to render a shopping response.'
+              : 'Use returned results/sources to render a search response.'
+            : 'No results found. Consider refining the query.',
+        confidence: normalizedResults.length
+          ? clamp01(TOOL_CONFIDENCE.web + Math.min(0.08, normalizedResults.length * 0.01))
+          : 0.46,
+      },
+      startedAt,
+    );
+  } catch (error) {
+    return buildFailure(
+      call,
+      'web',
+      `Web execution failed: ${toErrorMessage(error)}`,
+      {
+        action,
+        query,
+      },
+      startedAt,
+    );
+  }
 }
 
 async function compareTool(
@@ -1363,7 +1648,7 @@ export function describeTool(tool: AgentToolName): {
       return {
         name: 'web',
         summary: 'Live web retrieval and source-based research.',
-        commonActions: ['search', 'fetch', 'status'],
+        commonActions: ['search', 'research', 'shopping', 'products', 'fetch', 'status'],
       };
     case 'compare':
       return {
