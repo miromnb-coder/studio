@@ -1,6 +1,7 @@
 import type {
   AgentResponse,
   AgentResponseMetadata,
+  AgentStructuredData,
 } from '@/types/agent-response';
 import type { OperatorResponse } from '@/types/operator-response';
 import type { FinanceActionType } from '@/lib/finance/types';
@@ -33,6 +34,8 @@ export type Message = {
   role: MessageRole;
   content: string;
   structured?: StructuredAnswer;
+  structuredData?: AgentStructuredData | Record<string, unknown>;
+  toolResults?: Array<Record<string, unknown>>;
   createdAt: string;
   attachments?: MessageAttachment[];
   agent?: AgentName;
@@ -152,6 +155,7 @@ export type AgentStructuredDataLike = {
   evaluation?: { score?: number; passed?: boolean; issues?: string[] };
   toolResults?: Array<{ tool?: string; ok?: boolean }>;
   memory?: { items?: unknown[] };
+  responseType?: string;
 };
 
 export type ChatStreamEvent =
@@ -183,6 +187,8 @@ export type ChatStreamEvent =
       type: 'answer_completed';
       content?: string;
       structured?: StructuredAnswer;
+      structuredData?: AgentStructuredData | Record<string, unknown>;
+      toolResults?: Array<Record<string, unknown>>;
       metadata?: AgentResponseMetadata;
       operatorResponse?: OperatorResponse;
       metrics?: { ttfbMs?: number; completionMs?: number; charCount?: number };
