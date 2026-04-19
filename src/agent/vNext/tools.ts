@@ -45,12 +45,23 @@ type ExecutionMetadata = {
   requiredScopes?: string[];
   nextAction?: string;
   summary?: string;
+  confidence?: number;
 };
 
 type CompareScorecard = {
   item: string;
   scores: Record<string, number>;
   total: number;
+  reasoning: string[];
+};
+
+type PersistedFinanceProfile = {
+  active_subscriptions?: unknown[];
+  total_monthly_cost?: number | null;
+  estimated_savings?: number | null;
+  currency?: string | null;
+  memory_summary?: string | null;
+  last_analysis?: unknown;
 };
 
 const DEFAULT_EMAIL_PREFERENCES = {
@@ -59,6 +70,17 @@ const DEFAULT_EMAIL_PREFERENCES = {
   ignoreNewsletters: false,
   actionOriented: true,
 };
+
+const TOOL_CONFIDENCE = {
+  gmail: 0.88,
+  calendar: 0.88,
+  memory: 0.74,
+  compare: 0.7,
+  notes: 0.62,
+  finance: 0.58,
+  file: 0.4,
+  web: 0.4,
+} as const;
 
 function createAdminClient() {
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -76,6 +98,10 @@ function createAdminClient() {
 function normalizeText(value: unknown): string {
   if (typeof value !== 'string') return '';
   return value.replace(/\s+/g, ' ').trim();
+}
+
+function normalizeLower(value: unknown): string {
+  return normalizeText(value).toLowerCase();
 }
 
 function asObject(value: unknown): ToolInput {
@@ -114,11 +140,21 @@ function uniqueStrings(items: string[]): string[] {
   return unique(items.map((item) => normalizeText(item)).filter(Boolean));
 }
 
+function hasAnyPattern(text: string, patterns: RegExp[]): boolean {
+  return patterns.some((pattern) => pattern.test(text));
+}
+
+function clamp01(value: number): number {
+  if (Number.isNaN(value)) return 0;
+  return Math.max(0, Math.min(1, Number(value.toFixed(2))));
+}
+
 function buildSuccess(
   call: AgentToolCall,
   tool: AgentToolName,
   data: Record<string, unknown>,
   meta: ExecutionMetadata = {},
+  startedAt?: number,
 ): AgentToolResult {
   return {
     callId: call.callId,
@@ -129,6 +165,7 @@ function buildSuccess(
       ...data,
       meta,
     },
+    latencyMs: typeof startedAt === 'number' ? Date.now() - startedAt : undefined,
   };
 }
 
@@ -137,6 +174,7 @@ function buildFailure(
   tool: AgentToolName,
   error: string,
   data: Record<string, unknown> = {},
+  startedAt?: number,
 ): AgentToolResult {
   return {
     callId: call.callId,
@@ -145,6 +183,7 @@ function buildFailure(
     ok: false,
     data,
     error,
+    latencyMs: typeof startedAt === 'number' ? Date.now() - startedAt : undefined,
   };
 }
 
@@ -200,11 +239,20 @@ function getRequestText(context: AgentContext): string {
   return normalizeText(request.message || request.input || request.prompt || '');
 }
 
+function getRecentConversationSummary(context: AgentContext): string {
+  return getConversationMessages(context)
+    .slice(-6)
+    .map((message) => `${message.role || 'user'}: ${normalizeText(message.content)}`)
+    .filter(Boolean)
+    .join('\n');
+}
+
 function buildPlaceholderProviderResult(
   call: AgentToolCall,
   tool: AgentToolName,
   notes: string,
   extra: Record<string, unknown> = {},
+  startedAt?: number,
 ): AgentToolResult {
   return buildSuccess(
     call,
@@ -219,7 +267,9 @@ function buildPlaceholderProviderResult(
       requiresProvider: true,
       summary: notes,
       nextAction: 'Wire provider adapter and permission checks.',
+      confidence: TOOL_CONFIDENCE[tool],
     },
+    startedAt,
   );
 }
 
@@ -272,9 +322,20 @@ function normalizeComparisonItems(input: ToolInput): string[] {
   return uniqueStrings(items).slice(0, 6);
 }
 
-function inferComparisonCriteria(input: ToolInput): string[] {
+function inferComparisonCriteria(input: ToolInput, query: string): string[] {
   const explicit = asStringArray(input.criteria);
   if (explicit.length) return explicit;
+
+  const lowered = normalizeLower(query);
+
+  if (hasAnyPattern(lowered, [/\bbudget\b/i, /\bcheap\b/i, /\bvalue\b/i, /\bprice\b/i, /\bbudjet/i])) {
+    return ['price', 'value', 'longevity'];
+  }
+
+  if (hasAnyPattern(lowered, [/\bbest\b/i, /\brecommend\b/i, /\bwhich should i choose\b/i])) {
+    return ['overall fit', 'features', 'tradeoffs'];
+  }
+
   return ['features', 'price', 'overall fit'];
 }
 
@@ -289,15 +350,48 @@ function scoreItemAgainstCriterion(item: string, criterion: string): number {
   return 5 + (hash % 6);
 }
 
+function buildCriterionReasoning(item: string, criterion: string, score: number): string {
+  const normalizedCriterion = normalizeLower(criterion);
+
+  if (normalizedCriterion.includes('price')) {
+    return score >= 9
+      ? `${item} scores strongly on price/value.`
+      : `${item} is acceptable on price but not clearly dominant.`;
+  }
+
+  if (normalizedCriterion.includes('feature')) {
+    return score >= 9
+      ? `${item} appears strong on features relevant to the request.`
+      : `${item} appears adequate on features but not clearly ahead.`;
+  }
+
+  if (normalizedCriterion.includes('fit')) {
+    return score >= 9
+      ? `${item} looks like a strong overall fit for the stated goal.`
+      : `${item} may fit, but tradeoffs remain.`;
+  }
+
+  if (normalizedCriterion.includes('longevity')) {
+    return score >= 9
+      ? `${item} looks favorable for longer-term value.`
+      : `${item} does not clearly stand out on long-term value.`;
+  }
+
+  return `${item} received ${score}/10 on ${criterion}.`;
+}
+
 function buildCompareScorecards(
   items: string[],
   criteria: string[],
 ): CompareScorecard[] {
   return items.map((item) => {
     const scores: Record<string, number> = {};
+    const reasoning: string[] = [];
 
     for (const criterion of criteria) {
-      scores[criterion] = scoreItemAgainstCriterion(item, criterion);
+      const score = scoreItemAgainstCriterion(item, criterion);
+      scores[criterion] = score;
+      reasoning.push(buildCriterionReasoning(item, criterion, score));
     }
 
     const total = Object.values(scores).reduce((sum, value) => sum + value, 0);
@@ -306,12 +400,13 @@ function buildCompareScorecards(
       item,
       scores,
       total,
+      reasoning,
     };
   });
 }
 
 function normalizeGmailAction(input: ToolInput): string {
-  const action = normalizeText(input.action).toLowerCase();
+  const action = normalizeLower(input.action);
 
   switch (action) {
     case 'status':
@@ -331,7 +426,7 @@ function normalizeGmailAction(input: ToolInput): string {
 }
 
 function normalizeCalendarAction(input: ToolInput): string {
-  const action = normalizeText(input.action).toLowerCase();
+  const action = normalizeLower(input.action);
 
   switch (action) {
     case 'status':
@@ -347,29 +442,106 @@ function normalizeCalendarAction(input: ToolInput): string {
   }
 }
 
+async function persistFinanceLastAnalysisUpdate(params: {
+  userId: string;
+  financeProfile: PersistedFinanceProfile | null | undefined;
+  integrationKey: 'gmail_integration' | 'google_calendar_integration';
+  integrationState: Record<string, unknown>;
+}) {
+  const admin = createAdminClient();
+  const lastAnalysis = asObject(params.financeProfile?.last_analysis);
+
+  await admin.from('finance_profiles').upsert(
+    {
+      user_id: params.userId,
+      active_subscriptions: Array.isArray(params.financeProfile?.active_subscriptions)
+        ? params.financeProfile?.active_subscriptions
+        : [],
+      total_monthly_cost:
+        typeof params.financeProfile?.total_monthly_cost === 'number'
+          ? params.financeProfile.total_monthly_cost
+          : 0,
+      estimated_savings:
+        typeof params.financeProfile?.estimated_savings === 'number'
+          ? params.financeProfile.estimated_savings
+          : 0,
+      currency: params.financeProfile?.currency || 'USD',
+      memory_summary: params.financeProfile?.memory_summary || '',
+      last_analysis: {
+        ...lastAnalysis,
+        [params.integrationKey]: params.integrationState,
+      },
+      updated_at: new Date().toISOString(),
+    },
+    { onConflict: 'user_id' },
+  );
+}
+
+function buildMissingConnectionFailure(
+  call: AgentToolCall,
+  tool: AgentToolName,
+  action: string,
+  startedAt?: number,
+): AgentToolResult {
+  return buildFailure(
+    call,
+    tool,
+    `${tool} is not connected.`,
+    {
+      action,
+      canConnect: true,
+      suggestedRoute: '/chat',
+      suggestedConnector: tool === 'calendar' ? 'google-calendar' : tool,
+    },
+    startedAt,
+  );
+}
+
+function buildSearchTerms(query: string): string[] {
+  return uniqueStrings(
+    normalizeLower(query)
+      .split(/[^a-z0-9åäöéèüáíóúñç]+/i)
+      .filter((token) => token.length >= 3),
+  ).slice(0, 12);
+}
+
+function pickRelevantSentences(text: string, query: string, max = 3): string[] {
+  const sentences = text
+    .split(/(?<=[.!?])\s+/)
+    .map((sentence) => normalizeText(sentence))
+    .filter(Boolean);
+
+  if (!sentences.length) return [];
+
+  const terms = buildSearchTerms(query);
+  const ranked = [...sentences].sort((a, b) => {
+    const aScore = terms.reduce((sum, term) => sum + (a.toLowerCase().includes(term) ? 1 : 0), 0);
+    const bScore = terms.reduce((sum, term) => sum + (b.toLowerCase().includes(term) ? 1 : 0), 0);
+    return bScore - aScore;
+  });
+
+  return ranked.slice(0, max);
+}
+
 async function gmailTool(
   call: AgentToolCall,
   context: AgentContext,
 ): Promise<AgentToolResult> {
+  const startedAt = Date.now();
   const input = asObject(call.input);
   const action = normalizeGmailAction(input);
   const query = extractRequestedQuery(call, context);
   const userId = normalizeText(input.userId) || normalizeText(context.request.userId);
 
   if (!userId) {
-    return buildFailure(call, 'gmail', 'Gmail is not connected.', {
-      action,
-      canConnect: true,
-      suggestedRoute: '/chat',
-      suggestedConnector: 'gmail',
-    });
+    return buildMissingConnectionFailure(call, 'gmail', action, startedAt);
   }
 
   try {
     const admin = createAdminClient();
     const { data: financeProfile } = await admin
       .from('finance_profiles')
-      .select('last_analysis,active_subscriptions')
+      .select('last_analysis,active_subscriptions,total_monthly_cost,estimated_savings,currency,memory_summary')
       .eq('user_id', userId)
       .maybeSingle();
 
@@ -377,7 +549,20 @@ async function gmailTool(
       asObject(asObject(financeProfile?.last_analysis).gmail_integration),
     );
 
+    if (!integration.access_token_encrypted) {
+      return buildMissingConnectionFailure(call, 'gmail', action, startedAt);
+    }
+
     const tokenState = await getUsableGmailAccessToken(integration);
+
+    if (tokenState.refreshApplied) {
+      await persistFinanceLastAnalysisUpdate({
+        userId,
+        financeProfile: financeProfile ?? null,
+        integrationKey: 'gmail_integration',
+        integrationState: tokenState.nextIntegration as Record<string, unknown>,
+      });
+    }
 
     if (action === 'status') {
       return buildSuccess(
@@ -392,7 +577,9 @@ async function gmailTool(
           requiresAuth: true,
           requiredScopes: ['gmail.readonly'],
           summary: 'Gmail connection is available and operator actions are executable.',
+          confidence: TOOL_CONFIDENCE.gmail,
         },
+        startedAt,
       );
     }
 
@@ -420,8 +607,10 @@ async function gmailTool(
         },
         {
           requiresAuth: true,
-          summary: 'Fetched subscription signals directly from Gmail.',
+          summary: 'Fetched subscription and billing signals directly from Gmail.',
+          confidence: TOOL_CONFIDENCE.gmail,
         },
+        startedAt,
       );
     }
 
@@ -438,8 +627,10 @@ async function gmailTool(
         },
         {
           requiresAuth: true,
-          summary: 'Fetched finance-oriented receipt and billing messages from Gmail.',
+          summary: 'Fetched receipt and billing-like messages from Gmail.',
+          confidence: TOOL_CONFIDENCE.gmail,
         },
+        startedAt,
       );
     }
 
@@ -466,7 +657,9 @@ async function gmailTool(
         {
           requiresAuth: true,
           summary: 'Executed Gmail urgent analysis.',
+          confidence: TOOL_CONFIDENCE.gmail,
         },
+        startedAt,
       );
     }
 
@@ -504,7 +697,9 @@ async function gmailTool(
         {
           requiresAuth: true,
           summary: 'Generated Gmail digest.',
+          confidence: TOOL_CONFIDENCE.gmail,
         },
+        startedAt,
       );
     }
 
@@ -514,7 +709,7 @@ async function gmailTool(
       call,
       'gmail',
       {
-        action: 'summarize_inbox',
+        action: action === 'search' ? 'search' : 'summarize_inbox',
         connected: true,
         query,
         summary: summary.headline,
@@ -523,7 +718,9 @@ async function gmailTool(
       {
         requiresAuth: true,
         summary: summary.headline,
+        confidence: TOOL_CONFIDENCE.gmail,
       },
+      startedAt,
     );
   } catch (error) {
     return buildFailure(
@@ -531,6 +728,7 @@ async function gmailTool(
       'gmail',
       `Gmail execution failed: ${toErrorMessage(error)}`,
       { action, query },
+      startedAt,
     );
   }
 }
@@ -539,6 +737,7 @@ async function memoryTool(
   call: AgentToolCall,
   context: AgentContext,
 ): Promise<AgentToolResult> {
+  const startedAt = Date.now();
   const input = asObject(call.input);
   const action = typeof input.action === 'string' ? input.action : 'search';
   const query =
@@ -563,7 +762,9 @@ async function memoryTool(
       },
       {
         summary: `Memory context contains ${normalizedItems.length} items.`,
+        confidence: normalizedItems.length ? 0.8 : 0.55,
       },
+      startedAt,
     );
   }
 
@@ -581,7 +782,9 @@ async function memoryTool(
         summary: ranked.length
           ? 'Returned memory candidates from current context.'
           : 'No memory candidates were available from current context.',
+        confidence: ranked.length ? TOOL_CONFIDENCE.memory : 0.44,
       },
+      startedAt,
     );
   }
 
@@ -589,46 +792,61 @@ async function memoryTool(
     return buildPlaceholderProviderResult(
       call,
       'memory',
-      'Memory write path should be connected to persistent store.',
+      'Memory write path should be connected to a persistent store.',
       { action, query },
+      startedAt,
     );
   }
 
-  return buildFailure(call, 'memory', `Unsupported memory action: ${action}`, {
-    action,
-  });
+  return buildFailure(
+    call,
+    'memory',
+    `Unsupported memory action: ${action}`,
+    { action },
+    startedAt,
+  );
 }
 
 async function calendarTool(
   call: AgentToolCall,
   context: AgentContext,
 ): Promise<AgentToolResult> {
+  const startedAt = Date.now();
   const input = asObject(call.input);
   const action = normalizeCalendarAction(input);
   const query = extractRequestedQuery(call, context);
   const userId = normalizeText(input.userId) || normalizeText(context.request.userId);
 
   if (!userId) {
-    return buildFailure(call, 'calendar', 'Calendar is not connected.', {
-      action,
-      canConnect: true,
-      suggestedRoute: '/chat',
-      suggestedConnector: 'google-calendar',
-    });
+    return buildMissingConnectionFailure(call, 'calendar', action, startedAt);
   }
 
   try {
     const admin = createAdminClient();
     const { data: financeProfile } = await admin
       .from('finance_profiles')
-      .select('last_analysis')
+      .select('last_analysis,active_subscriptions,total_monthly_cost,estimated_savings,currency,memory_summary')
       .eq('user_id', userId)
       .maybeSingle();
 
     const integration = parseCalendarIntegrationState(
       asObject(asObject(financeProfile?.last_analysis).google_calendar_integration),
     );
+
+    if (!integration.access_token_encrypted) {
+      return buildMissingConnectionFailure(call, 'calendar', action, startedAt);
+    }
+
     const tokenState = await getUsableCalendarAccessToken(integration);
+
+    if (tokenState.refreshApplied) {
+      await persistFinanceLastAnalysisUpdate({
+        userId,
+        financeProfile: financeProfile ?? null,
+        integrationKey: 'google_calendar_integration',
+        integrationState: tokenState.nextIntegration as Record<string, unknown>,
+      });
+    }
 
     if (action === 'status') {
       const calendars = await listCalendars(tokenState.accessToken);
@@ -645,7 +863,9 @@ async function calendarTool(
         {
           requiresAuth: true,
           summary: 'Calendar connection is healthy and calendars are readable.',
+          confidence: TOOL_CONFIDENCE.calendar,
         },
+        startedAt,
       );
     }
 
@@ -656,7 +876,7 @@ async function calendarTool(
         call,
         'calendar',
         {
-          action: 'find_focus_time',
+          action: action === 'availability' ? 'availability' : 'find_focus_time',
           connected: true,
           query,
           summary: result.bestDeepWorkWindow
@@ -666,8 +886,10 @@ async function calendarTool(
         },
         {
           requiresAuth: true,
-          summary: 'Computed best focus windows from calendar events.',
+          summary: 'Computed focus and free-time windows from calendar events.',
+          confidence: TOOL_CONFIDENCE.calendar,
         },
+        startedAt,
       );
     }
 
@@ -689,7 +911,9 @@ async function calendarTool(
         {
           requiresAuth: true,
           summary: 'Computed busy-week and overload indicators.',
+          confidence: TOOL_CONFIDENCE.calendar,
         },
+        startedAt,
       );
     }
 
@@ -714,7 +938,9 @@ async function calendarTool(
         {
           requiresAuth: true,
           summary: 'Prepared weekly reset from upcoming calendar events.',
+          confidence: TOOL_CONFIDENCE.calendar,
         },
+        startedAt,
       );
     }
 
@@ -732,12 +958,15 @@ async function calendarTool(
         {
           requiresAuth: true,
           summary: 'Listed upcoming calendar events.',
+          confidence: TOOL_CONFIDENCE.calendar,
         },
+        startedAt,
       );
     }
 
     const events = await fetchTodayEvents(tokenState.accessToken);
     const result = buildTodayPlanner(events);
+
     return buildSuccess(
       call,
       'calendar',
@@ -751,7 +980,9 @@ async function calendarTool(
       {
         requiresAuth: true,
         summary: 'Generated today plan from calendar data.',
+        confidence: TOOL_CONFIDENCE.calendar,
       },
+      startedAt,
     );
   } catch (error) {
     return buildFailure(
@@ -759,29 +990,56 @@ async function calendarTool(
       'calendar',
       `Calendar execution failed: ${toErrorMessage(error)}`,
       { action, query },
+      startedAt,
     );
   }
 }
 
 async function webTool(
   call: AgentToolCall,
-  _context: AgentContext,
+  context: AgentContext,
 ): Promise<AgentToolResult> {
+  const startedAt = Date.now();
   const input = asObject(call.input);
-  const query = typeof input.query === 'string' ? input.query : '';
-  const action = typeof input.action === 'string' ? input.action : 'search';
+  const query = normalizeText(input.query) || extractRequestedQuery(call, context);
+  const action = normalizeText(input.action) || 'search';
 
   if (!query && action === 'search') {
-    return buildFailure(call, 'web', 'Web search requires a query.', {
-      action,
-    });
+    return buildFailure(
+      call,
+      'web',
+      'Web search requires a query.',
+      { action },
+      startedAt,
+    );
   }
+
+  const reasoning = [
+    'This project does not yet have a real web provider wired into tools.ts.',
+    'The Browser Search product flow exists elsewhere in the app, but the vNext web tool adapter still needs a live backend implementation.',
+  ];
 
   return buildPlaceholderProviderResult(
     call,
     'web',
-    'Web retrieval adapter should be connected with source filtering.',
-    { action, query },
+    'Web retrieval adapter should be connected with source filtering and live result normalization.',
+    {
+      action,
+      query,
+      reasoning,
+      suggestedShape: {
+        query,
+        results: [
+          {
+            title: 'string',
+            url: 'string',
+            snippet: 'string',
+            source: 'string',
+          },
+        ],
+      },
+    },
+    startedAt,
   );
 }
 
@@ -789,9 +1047,11 @@ async function compareTool(
   call: AgentToolCall,
   context: AgentContext,
 ): Promise<AgentToolResult> {
+  const startedAt = Date.now();
   const input = asObject(call.input);
+  const query = extractRequestedQuery(call, context);
   const items = normalizeComparisonItems(input);
-  const criteria = inferComparisonCriteria(input);
+  const criteria = inferComparisonCriteria(input, query);
 
   if (items.length < 2) {
     return buildFailure(
@@ -799,6 +1059,7 @@ async function compareTool(
       'compare',
       'Compare tool requires at least two items.',
       { itemCount: items.length, items },
+      startedAt,
     );
   }
 
@@ -809,6 +1070,22 @@ async function compareTool(
   const winner = scorecards[0];
   const runnerUp = scorecards[1];
 
+  const bestOverall = winner?.item ?? null;
+  const bestValue =
+    [...scorecards].sort((a, b) => {
+      const aValue = (a.scores.price ?? 0) + (a.scores.value ?? 0);
+      const bValue = (b.scores.price ?? 0) + (b.scores.value ?? 0);
+      return bValue - aValue;
+    })[0]?.item ?? bestOverall;
+
+  const tradeoffs = scorecards.map((card) => ({
+    item: card.item,
+    strongestCriterion:
+      Object.entries(card.scores).sort((a, b) => b[1] - a[1])[0]?.[0] ?? null,
+    weakestCriterion:
+      Object.entries(card.scores).sort((a, b) => a[1] - b[1])[0]?.[0] ?? null,
+  }));
+
   return buildSuccess(
     call,
     'compare',
@@ -816,21 +1093,25 @@ async function compareTool(
       comparedItems: items,
       criteria,
       scorecards,
-      winner: winner?.item,
+      winner: bestOverall,
       runnerUp: runnerUp?.item,
+      bestValue,
       margin:
         typeof winner?.total === 'number' && typeof runnerUp?.total === 'number'
           ? winner.total - runnerUp.total
           : undefined,
+      tradeoffs,
       deterministicFrameworkReady: true,
-      query: extractRequestedQuery(call, context),
+      query,
     },
     {
       summary: winner
         ? `Prepared a structured comparison. Current winner: ${winner.item}.`
         : 'Prepared a structured comparison.',
-      nextAction: 'Replace heuristic scoring with evidence-backed scoring.',
+      nextAction: 'Replace heuristic scoring with evidence-backed scoring from live search results.',
+      confidence: TOOL_CONFIDENCE.compare,
     },
+    startedAt,
   );
 }
 
@@ -838,15 +1119,26 @@ async function fileTool(
   call: AgentToolCall,
   context: AgentContext,
 ): Promise<AgentToolResult> {
+  const startedAt = Date.now();
   const input = asObject(call.input);
-  const action = typeof input.action === 'string' ? input.action : 'inspect';
+  const action = normalizeText(input.action) || 'inspect';
   const query = extractRequestedQuery(call, context);
 
   return buildPlaceholderProviderResult(
     call,
     'file',
     'Secure file retrieval and parsing should be wired here.',
-    { action, query },
+    {
+      action,
+      query,
+      suggestedShape: {
+        fileName: 'string',
+        mimeType: 'string',
+        summary: 'string',
+        extractedText: 'string',
+      },
+    },
+    startedAt,
   );
 }
 
@@ -854,8 +1146,9 @@ async function financeTool(
   call: AgentToolCall,
   context: AgentContext,
 ): Promise<AgentToolResult> {
+  const startedAt = Date.now();
   const input = asObject(call.input);
-  const action = typeof input.action === 'string' ? input.action : 'overview';
+  const action = normalizeText(input.action) || 'overview';
   const query = extractRequestedQuery(call, context);
 
   const ctx = context as AgentContext & {
@@ -881,7 +1174,9 @@ async function financeTool(
       },
       {
         summary: 'Finance context inspected.',
+        confidence: financeContext ? 0.74 : 0.42,
       },
+      startedAt,
     );
   }
 
@@ -897,7 +1192,9 @@ async function financeTool(
       {
         summary: 'Returned finance context from current request state.',
         nextAction: 'Replace with connector-driven financial analysis.',
+        confidence: TOOL_CONFIDENCE.finance,
       },
+      startedAt,
     );
   }
 
@@ -906,6 +1203,7 @@ async function financeTool(
     'finance',
     'Finance connectors and normalized schemas should be connected here.',
     { action, query },
+    startedAt,
   );
 }
 
@@ -913,8 +1211,9 @@ async function notesTool(
   call: AgentToolCall,
   context: AgentContext,
 ): Promise<AgentToolResult> {
+  const startedAt = Date.now();
   const input = asObject(call.input);
-  const action = typeof input.action === 'string' ? input.action : 'list';
+  const action = normalizeText(input.action) || 'list';
   const query = extractRequestedQuery(call, context);
   const notes = getContextNotes(context);
   const normalizedNotes = notes
@@ -937,22 +1236,31 @@ async function notesTool(
         summary: rankedNotes.length
           ? 'Returned notes from current context.'
           : 'No note content was available in current context.',
+        confidence: rankedNotes.length ? TOOL_CONFIDENCE.notes : 0.44,
       },
+      startedAt,
     );
   }
 
   if (action === 'create') {
+    const note = normalizeText(input.note) || query;
+
     return buildPlaceholderProviderResult(
       call,
       'notes',
       'Notes creation should be connected to persistent notes storage.',
-      { action, note: normalizeText(input.note) || query },
+      { action, note },
+      startedAt,
     );
   }
 
-  return buildFailure(call, 'notes', `Unsupported notes action: ${action}`, {
-    action,
-  });
+  return buildFailure(
+    call,
+    'notes',
+    `Unsupported notes action: ${action}`,
+    { action },
+    startedAt,
+  );
 }
 
 const registry: AgentToolRegistry = {
