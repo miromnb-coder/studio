@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
-import { usePathname, useRouter } from 'next/navigation';
+import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { AlertCircle, Paperclip, X } from 'lucide-react';
 import { useAppStore } from '@/app/store/app-store';
 import type { MessageAttachment } from '@/app/store/app-store';
@@ -60,6 +60,7 @@ const MIN_SCROLL_SAFETY_SPACE = 28;
 export function KivoChatScreen() {
   const router = useRouter();
   const pathname = usePathname();
+  const searchParams = useSearchParams();
 
   const hydrated = useAppStore((s) => s.hydrated);
   const hydrate = useAppStore((s) => s.hydrate);
@@ -455,36 +456,61 @@ export function KivoChatScreen() {
     lastMessageCountRef.current = messages.length;
   }, [isAgentResponding, isSending, lastMessageKey, messages, scrollToLatest, updateScrollState]);
 
-  useEffect(() => {
-    if (!actionSheetOpen) return;
+  const refreshIntegrationStatuses = useCallback(async () => {
+    try {
+      const [gmailResponse, calendarResponse] = await Promise.all([
+        fetch('/api/integrations/gmail/status', { cache: 'no-store' }),
+        fetch('/api/integrations/google-calendar/status', { cache: 'no-store' }),
+      ]);
 
-    const hydrateToolState = async () => {
-      try {
-        const [gmailResponse, calendarResponse] = await Promise.all([
-          fetch('/api/integrations/gmail/status', { cache: 'no-store' }),
-          fetch('/api/integrations/google-calendar/status', { cache: 'no-store' }),
-        ]);
-
-        if (gmailResponse.ok) {
-          const gmail = (await gmailResponse.json()) as { connected?: boolean };
-          setGmailConnected(gmail.connected === true);
-        }
-
-        if (calendarResponse.ok) {
-          const calendar = (await calendarResponse.json()) as { connected?: boolean };
-          setCalendarConnected(calendar.connected === true);
-        }
-      } catch {
-        // keep last known states
+      if (gmailResponse.ok) {
+        const gmail = (await gmailResponse.json()) as { connected?: boolean };
+        setGmailConnected(gmail.connected === true);
       }
-    };
 
-    void hydrateToolState();
-  }, [actionSheetOpen]);
+      if (calendarResponse.ok) {
+        const calendar = (await calendarResponse.json()) as { connected?: boolean };
+        setCalendarConnected(calendar.connected === true);
+      }
+    } catch {
+      // keep last known states
+    }
+  }, []);
 
   const showNotice = useCallback((title: string, detail: string) => {
     setNotice({ title, detail });
   }, []);
+
+  useEffect(() => {
+    if (!actionSheetOpen) return;
+    void refreshIntegrationStatuses();
+  }, [actionSheetOpen, refreshIntegrationStatuses]);
+
+  useEffect(() => {
+    const calendarParam = searchParams.get('calendar');
+    const connectedParam = searchParams.get('connected');
+    if (!calendarParam && connectedParam !== '1') return;
+
+    void refreshIntegrationStatuses();
+
+    if (calendarParam === 'connected' || connectedParam === '1') {
+      showNotice('Google Calendar connected', 'Calendar tools are now ready to use.');
+    } else if (calendarParam === 'error') {
+      const reason = searchParams.get('reason');
+      const detail = reason
+        ? `Could not connect Google Calendar (${reason}).`
+        : 'Could not connect Google Calendar.';
+      showNotice('Could not connect Google Calendar', detail);
+    }
+
+    const cleanedParams = new URLSearchParams(searchParams.toString());
+    cleanedParams.delete('calendar');
+    cleanedParams.delete('connected');
+    cleanedParams.delete('reason');
+    cleanedParams.delete('step');
+    const suffix = cleanedParams.toString();
+    router.replace(suffix ? `${pathname}?${suffix}` : pathname, { scroll: false });
+  }, [pathname, refreshIntegrationStatuses, router, searchParams, showNotice]);
 
   const cleanupAttachments = useCallback((items: MessageAttachment[]) => {
     items.forEach((attachment) => {

@@ -162,9 +162,10 @@ export async function GET(req: Request) {
   const code = requestUrl.searchParams.get('code');
   const oauthError = requestUrl.searchParams.get('error');
   const returnedState = requestUrl.searchParams.get('state');
+  const returnedFlow = requestUrl.searchParams.get('flow');
 
   const failRedirect = (reason: string, step?: string) => {
-    const target = new URL('/control', appOrigin);
+    const target = new URL('/chat', appOrigin);
     target.searchParams.set('calendar', 'error');
     target.searchParams.set('reason', reason);
     if (step) target.searchParams.set('step', step);
@@ -181,13 +182,24 @@ export async function GET(req: Request) {
 
   try {
     const cookieStore = await cookies();
-    const localState = cookieStore.get('google_calendar_oauth_state')?.value;
+    const localFlow = cookieStore.get('google_calendar_oauth_flow')?.value;
     const userId = cookieStore.get('google_calendar_oauth_user_id')?.value;
 
-    if (!localState || !userId) {
-      return failRedirect('state_mismatch');
+    if (!localFlow || !userId) {
+      console.error('GOOGLE_CALENDAR_CALLBACK_FLOW_MISSING', {
+        hasFlowCookie: Boolean(localFlow),
+        hasUserCookie: Boolean(userId),
+        returnedFlow,
+        returnedState: returnedState ? '[present]' : null,
+      });
+      return failRedirect('missing_oauth_flow');
     }
-    if (!returnedState || returnedState !== localState) {
+    if (!returnedFlow || returnedFlow !== localFlow) {
+      console.error('GOOGLE_CALENDAR_CALLBACK_FLOW_MISMATCH', {
+        expectedFlow: localFlow,
+        returnedFlow,
+        returnedState: returnedState ? '[present]' : null,
+      });
       return failRedirect('state_mismatch');
     }
 
@@ -340,13 +352,14 @@ export async function GET(req: Request) {
       return failRedirect('write_failed', 'profiles_google_calendar_connected');
     }
 
-    const successTarget = new URL('/control', appOrigin);
+    const successTarget = new URL('/chat', appOrigin);
     successTarget.searchParams.set('calendar', 'connected');
+    successTarget.searchParams.set('connected', '1');
 
     const response = NextResponse.redirect(successTarget);
 
     response.cookies.set({
-      name: 'google_calendar_oauth_state',
+      name: 'google_calendar_oauth_flow',
       value: '',
       maxAge: 0,
       path: '/',
