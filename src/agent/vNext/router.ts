@@ -3,6 +3,7 @@ import {
   resolveRequiredTools,
   resolveDefaultToolsForIntent,
 } from '@/agent/integrations/integration-router';
+import { detectToolNecessity } from '@/agent/integrations/tool-necessity';
 import type {
   AgentIntent,
   AgentRequest,
@@ -423,56 +424,6 @@ function inferIntentFromText(text: string): AgentIntent {
   return 'general';
 }
 
-function inferToolNeedsFromText(
-  text: string,
-  intent: AgentIntent,
-): AgentToolName[] {
-  const lowered = normalizeLower(text);
-  const tools = resolveDefaultToolsForIntent(intent);
-
-  if (
-    hasAnyPattern(lowered, [
-      /\bupload\b/i,
-      /\bfile\b/i,
-      /\bpdf\b/i,
-      /\bcsv\b/i,
-      /\bdocx?\b/i,
-      /\btiedosto\b/i,
-    ])
-  ) {
-    tools.push('file');
-  }
-
-  if (
-    hasAnyPattern(lowered, [
-      /\btoday\b/i,
-      /\btomorrow\b/i,
-      /\bthis week\b/i,
-      /\bnext week\b/i,
-      /\bdeadline\b/i,
-      /\btänään\b/i,
-      /\bhuomenna\b/i,
-      /\bviikko\b/i,
-    ])
-  ) {
-    tools.push('calendar');
-  }
-
-  if (
-    hasAnyPattern(lowered, [
-      /\bmy\b/i,
-      /\bfor me\b/i,
-      /\bmy preference\b/i,
-      /\bminun\b/i,
-      /\bminulle\b/i,
-    ])
-  ) {
-    tools.push('memory');
-  }
-
-  return unique(tools.filter(isToolName));
-}
-
 function inferShouldFetchMemory(intent: AgentIntent, text: string): boolean {
   if (
     intent === 'gmail' ||
@@ -530,6 +481,7 @@ function inferFallbackConfidence(
   intent: AgentIntent,
   detectedLanguageConfidence: number,
   tools: AgentToolName[],
+  toolNecessityStrong: boolean,
 ): number {
   let base =
     intent === 'general'
@@ -540,8 +492,47 @@ function inferFallbackConfidence(
 
   if (tools.length >= 2) base += 0.05;
   if (detectedLanguageConfidence >= 0.7) base += 0.04;
+  if (toolNecessityStrong) base += 0.06;
 
   return clamp01(base, 0.56);
+}
+
+function applyNecessityAwareToolPolicy(params: {
+  text: string;
+  intent: AgentIntent;
+  candidateTools: AgentToolName[];
+  metadata?: Record<string, unknown>;
+}): {
+  tools: AgentToolName[];
+  shouldFetchMemory: boolean;
+  necessityReason: string;
+} {
+  const necessity = detectToolNecessity(params.text, {
+    routeIntent: params.intent,
+    currentTools: params.candidateTools,
+    metadata: params.metadata,
+  });
+
+  const tools = resolveRequiredTools(params.text, params.candidateTools, {
+    routeIntent: params.intent,
+    currentTools: params.candidateTools,
+    metadata: params.metadata,
+  });
+
+  const shouldFetchMemory =
+    necessity.memory.required || inferShouldFetchMemory(params.intent, params.text);
+
+  const reasons = [
+    necessity.gmail.required ? `gmail: ${necessity.gmail.reason}` : null,
+    necessity.calendar.required ? `calendar: ${necessity.calendar.reason}` : null,
+    shouldFetchMemory ? `memory: ${necessity.memory.reason}` : null,
+  ].filter(Boolean);
+
+  return {
+    tools,
+    shouldFetchMemory,
+    necessityReason: reasons.join(' ') || 'No strong user-owned source requirement detected.',
+  };
 }
 
 async function routeIntentWithModel(
@@ -555,7 +546,7 @@ async function routeIntentWithModel(
   const metadata = asObject(request.metadata);
   const routerModel = normalizeText(metadata.routerModel) || ROUTER_MODEL_FALLBACK;
   const candidateEntities = unique([
-    ...asStringArray(metadata.entities),
+    ...uniqueEntities(metadata.entities),
     ...inferEntitiesFromText(text),
   ]).slice(0, 8);
 
@@ -566,6 +557,7 @@ async function routeIntentWithModel(
     'Do not rely on language-specific keyword lists.',
     'Choose tools only when they are useful.',
     'Prefer the lightest effective path.',
+    'Distinguish between a topic and a required user-owned data source.',
     '',
     'Schema:',
     '{',
@@ -579,19 +571,19 @@ async function routeIntentWithModel(
     '  "entities": ["string"],',
     '  "requiresTools": ["gmail" | "memory" | "calendar" | "web" | "compare" | "file" | "finance" | "notes"],',
     '  "shouldFetchMemory": true,',
-    '  ' + '"suggestedExecutionMode": "sync" | "stream",' ,
+    '  "suggestedExecutionMode": "sync" | "stream",',
     '  "reason": "short reason"',
     '}',
     '',
     'Tool guidelines:',
-    '- gmail: inbox, email, subscription, urgent message, draft/reply help.',
-    '- calendar: schedule, time planning, availability, focus time, week planning.',
-    '- web: current/live/external information.',
-    '- compare: structured option comparison.',
-    '- file: uploaded/referenced file inspection.',
-    '- finance: money, subscriptions, cost/savings analysis.',
-    '- notes: note/task-like internal structured material.',
-    '- memory: personal context, preferences, goals, prior facts.',
+    '- gmail only when inbox/email data is actually needed.',
+    '- calendar only when schedule/availability data is actually needed.',
+    '- web for current/live/external information.',
+    '- compare for structured option comparison.',
+    '- file for uploaded/referenced file inspection.',
+    '- finance for money, subscriptions, cost/savings analysis.',
+    '- notes for note/task-like internal structured material.',
+    '- memory when personal context, goals, or preferences matter.',
     '',
     `Requested response language: ${requestedLanguage || 'none'}`,
     `Latest user message: ${text}`,
@@ -661,9 +653,12 @@ function routeIntentFallback(request: AgentRequest, text: string): AgentRouteRes
   const detectedLanguage = detectLanguageFromScript(text);
   const intent = inferIntentFromText(text);
   const inferredEntities = inferEntitiesFromText(text);
-  const seededTools = inferToolNeedsFromText(text, intent);
-  const requiresTools = resolveRequiredTools(text, seededTools, {
-    routeIntent: intent,
+  const seededTools = resolveDefaultToolsForIntent(intent);
+
+  const necessityAware = applyNecessityAwareToolPolicy({
+    text,
+    intent,
+    candidateTools: seededTools,
     metadata: request.metadata,
   });
 
@@ -672,12 +667,13 @@ function routeIntentFallback(request: AgentRequest, text: string): AgentRouteRes
     confidence: inferFallbackConfidence(
       intent,
       detectedLanguage.languageConfidence,
-      requiresTools,
+      necessityAware.tools,
+      necessityAware.shouldFetchMemory,
     ),
-    reason: 'Fallback routing was used because model routing was unavailable.',
-    requiresTools,
-    shouldFetchMemory: inferShouldFetchMemory(intent, text),
-    suggestedExecutionMode: inferExecutionMode(intent, text, requiresTools),
+    reason: `Fallback routing was used because model routing was unavailable. ${necessityAware.necessityReason}`,
+    requiresTools: necessityAware.tools,
+    shouldFetchMemory: necessityAware.shouldFetchMemory,
+    suggestedExecutionMode: inferExecutionMode(intent, text, necessityAware.tools),
     fallbackMessage:
       intent === 'unknown'
         ? AGENT_VNEXT_FALLBACK_MESSAGES.missingContext
@@ -748,18 +744,19 @@ export async function routeIntent(request: AgentRequest): Promise<AgentRouteResu
         ? Math.max(routed.languageConfidence, detectedLanguage.languageConfidence)
         : routed.languageConfidence;
 
-    const enrichedTools = resolveRequiredTools(text, routed.requiresTools, {
-      routeIntent: routed.intent,
-      currentTools: routed.requiresTools,
+    const necessityAware = applyNecessityAwareToolPolicy({
+      text,
+      intent: routed.intent,
+      candidateTools: routed.requiresTools,
       metadata: request.metadata,
     });
 
     return {
       intent: routed.intent,
       confidence: routed.confidence,
-      reason: routed.reason,
-      requiresTools: enrichedTools,
-      shouldFetchMemory: routed.shouldFetchMemory,
+      reason: `${routed.reason} ${necessityAware.necessityReason}`.trim(),
+      requiresTools: necessityAware.tools,
+      shouldFetchMemory: routed.shouldFetchMemory || necessityAware.shouldFetchMemory,
       suggestedExecutionMode: routed.suggestedExecutionMode,
       fallbackMessage:
         routed.intent === 'unknown'
