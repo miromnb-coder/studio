@@ -87,9 +87,7 @@ function asObject(value: unknown): ToolInput {
 
 function asStringArray(value: unknown): string[] {
   if (!Array.isArray(value)) return [];
-  return value
-    .map((item) => normalizeText(item))
-    .filter(Boolean);
+  return value.map((item) => normalizeText(item)).filter(Boolean);
 }
 
 function asMessageArray(
@@ -150,33 +148,6 @@ function buildFailure(
   };
 }
 
-function hasConnectedProvider(
-  context: AgentContext,
-  provider: string,
-): boolean {
-  const ctx = context as AgentContext & {
-    connectors?: Record<string, unknown>;
-    integrations?: Record<string, unknown>;
-    user?: { integrations?: Record<string, unknown> };
-    request?: { metadata?: Record<string, unknown> };
-  };
-
-  const connectorValue = ctx.connectors?.[provider];
-  const integrationValue = ctx.integrations?.[provider];
-  const userIntegrationValue = ctx.user?.integrations?.[provider];
-  const requestIntegrationValue =
-    typeof ctx.request?.metadata?.[`${provider}Connected`] === 'boolean'
-      ? ctx.request.metadata[`${provider}Connected`]
-      : undefined;
-
-  return Boolean(
-    connectorValue ||
-      integrationValue ||
-      userIntegrationValue ||
-      requestIntegrationValue,
-  );
-}
-
 function getContextMemory(context: AgentContext): unknown[] {
   const ctx = context as AgentContext & {
     memory?: unknown[];
@@ -227,11 +198,6 @@ function getRequestText(context: AgentContext): string {
   };
 
   return normalizeText(request.message || request.input || request.prompt || '');
-}
-
-function lowerIncludesAny(text: string, patterns: string[]): boolean {
-  const lowered = text.toLowerCase();
-  return patterns.some((pattern) => lowered.includes(pattern.toLowerCase()));
 }
 
 function buildPlaceholderProviderResult(
@@ -287,40 +253,6 @@ function rankTextByQuery(items: string[], query: string): string[] {
   });
 }
 
-function inferEmailScope(text: string): string {
-  const lowered = text.toLowerCase();
-
-  if (
-    lowerIncludesAny(lowered, [
-      'receipt',
-      'invoice',
-      'kuitti',
-      'lasku',
-      'factura',
-    ])
-  ) {
-    return 'receipts';
-  }
-
-  if (
-    lowerIncludesAny(lowered, [
-      'subscription',
-      'unsubscribe',
-      'trial',
-      'tilaus',
-      'suscrip',
-    ])
-  ) {
-    return 'subscriptions';
-  }
-
-  if (lowerIncludesAny(lowered, ['reply', 'draft', 'vastaa', 'luonnos'])) {
-    return 'reply';
-  }
-
-  return 'general';
-}
-
 function extractRequestedQuery(call: AgentToolCall, context: AgentContext): string {
   const input = asObject(call.input);
   return (
@@ -340,21 +272,9 @@ function normalizeComparisonItems(input: ToolInput): string[] {
   return uniqueStrings(items).slice(0, 6);
 }
 
-function inferComparisonCriteria(input: ToolInput, requestText: string): string[] {
+function inferComparisonCriteria(input: ToolInput): string[] {
   const explicit = asStringArray(input.criteria);
   if (explicit.length) return explicit;
-
-  const lowered = requestText.toLowerCase();
-  if (lowerIncludesAny(lowered, ['budget', 'cheap', 'price', 'budjet'])) {
-    return ['price', 'value', 'longevity'];
-  }
-  if (lowerIncludesAny(lowered, ['camera', 'photo', 'video'])) {
-    return ['camera', 'video', 'overall fit'];
-  }
-  if (lowerIncludesAny(lowered, ['battery', 'power', 'charge'])) {
-    return ['battery', 'efficiency', 'overall fit'];
-  }
-
   return ['features', 'price', 'overall fit'];
 }
 
@@ -390,24 +310,57 @@ function buildCompareScorecards(
   });
 }
 
+function normalizeGmailAction(input: ToolInput): string {
+  const action = normalizeText(input.action).toLowerCase();
+
+  switch (action) {
+    case 'status':
+    case 'search':
+    case 'scan_subscriptions':
+    case 'subscriptions':
+    case 'scan_receipts':
+    case 'urgent':
+    case 'digest':
+    case 'draft_reply':
+    case 'summarize_inbox':
+    case 'inbox_summary':
+      return action;
+    default:
+      return 'summarize_inbox';
+  }
+}
+
+function normalizeCalendarAction(input: ToolInput): string {
+  const action = normalizeText(input.action).toLowerCase();
+
+  switch (action) {
+    case 'status':
+    case 'availability':
+    case 'today_plan':
+    case 'find_focus_time':
+    case 'check_busy_week':
+    case 'weekly_reset':
+    case 'list_events':
+      return action;
+    default:
+      return 'today_plan';
+  }
+}
+
 async function gmailTool(
   call: AgentToolCall,
   context: AgentContext,
 ): Promise<AgentToolResult> {
   const input = asObject(call.input);
-  const action =
-    typeof input.action === 'string' ? input.action : 'inspect';
-  const connected = hasConnectedProvider(context, 'gmail');
+  const action = normalizeGmailAction(input);
   const query = extractRequestedQuery(call, context);
-  const scope = inferEmailScope(query);
+  const userId = normalizeText(input.userId) || normalizeText(context.request.userId);
 
-  const userId = normalizeText(call.input.userId) || normalizeText(context.request.userId);
   if (!userId) {
     return buildFailure(call, 'gmail', 'Gmail is not connected.', {
       action,
-      scope,
       canConnect: true,
-      suggestedRoute: '/control',
+      suggestedRoute: '/chat',
       suggestedConnector: 'gmail',
     });
   }
@@ -433,8 +386,7 @@ async function gmailTool(
         {
           action,
           connected: true,
-          scope,
-          availableOperations: ['inbox_summary', 'urgent', 'subscriptions', 'digest'],
+          availableOperations: ['summarize_inbox', 'urgent', 'subscriptions', 'digest'],
         },
         {
           requiresAuth: true,
@@ -444,106 +396,81 @@ async function gmailTool(
       );
     }
 
-    if (action === 'scan_subscriptions') {
+    if (action === 'scan_subscriptions' || action === 'subscriptions') {
       const emails = await fetchFinancialEmails(tokenState.accessToken, 100);
       const analysis = await analyzeFinancialEmailsWithAI(emails);
       const scanner = buildSubscriptionScannerResult({
         analysis,
         emails,
-        existingSubscriptions: Array.isArray(financeProfile?.active_subscriptions) ? financeProfile.active_subscriptions : [],
+        existingSubscriptions: Array.isArray(financeProfile?.active_subscriptions)
+          ? financeProfile.active_subscriptions
+          : [],
         preferences: DEFAULT_EMAIL_PREFERENCES,
       });
 
-      return buildSuccess(call, 'gmail', {
-        action: 'subscriptions',
-        connected: true,
-        query,
-        summary: scanner.summary,
-        result: scanner,
-      }, {
-        requiresAuth: true,
-        summary: 'Fetched subscription signals directly from Gmail.',
-      });
+      return buildSuccess(
+        call,
+        'gmail',
+        {
+          action: 'subscriptions',
+          connected: true,
+          query,
+          summary: scanner.summary,
+          result: scanner,
+        },
+        {
+          requiresAuth: true,
+          summary: 'Fetched subscription signals directly from Gmail.',
+        },
+      );
     }
 
     if (action === 'scan_receipts') {
       const emails = await fetchFinancialEmails(tokenState.accessToken, 50);
-      return buildSuccess(call, 'gmail', {
-        action: 'scan_receipts',
-        connected: true,
-        query,
-        receipts: emails.slice(0, 25),
-      }, {
-        requiresAuth: true,
-        summary: 'Fetched finance-oriented receipt and billing messages from Gmail.',
-      });
+      return buildSuccess(
+        call,
+        'gmail',
+        {
+          action: 'scan_receipts',
+          connected: true,
+          query,
+          receipts: emails.slice(0, 25),
+        },
+        {
+          requiresAuth: true,
+          summary: 'Fetched finance-oriented receipt and billing messages from Gmail.',
+        },
+      );
     }
 
     const inbox = await fetchInboxMessages({
       accessToken: tokenState.accessToken,
       maxResults: 60,
-      query:
-        action === 'search'
-          ? query
-          : action === 'draft_reply'
-            ? 'newer_than:7d'
-            : action === 'summarize_inbox'
-              ? 'newer_than:10d'
-              : 'newer_than:14d',
+      query: action === 'search' ? query : 'newer_than:14d',
     });
 
     const scored = inbox.map((message) => scoreInboxMessage(message));
 
-    if (scope === 'subscriptions') {
-      const emails = await fetchFinancialEmails(tokenState.accessToken, 80);
-      const analysis = await analyzeFinancialEmailsWithAI(emails);
-      const scanner = buildSubscriptionScannerResult({
-        analysis,
-        emails,
-        existingSubscriptions: Array.isArray(financeProfile?.active_subscriptions) ? financeProfile.active_subscriptions : [],
-        preferences: DEFAULT_EMAIL_PREFERENCES,
-      });
-
-      return buildSuccess(call, 'gmail', {
-        action: 'subscriptions',
-        connected: true,
-        query,
-        summary: scanner.summary,
-        result: scanner,
-      }, {
-        requiresAuth: true,
-        summary: 'Routed to Gmail subscriptions operator automatically.',
-      });
-    }
-
-    if (scope === 'receipts') {
-      const emails = await fetchFinancialEmails(tokenState.accessToken, 50);
-      return buildSuccess(call, 'gmail', {
-        action: 'scan_receipts',
-        connected: true,
-        query,
-        receipts: emails.slice(0, 25),
-      }, {
-        requiresAuth: true,
-        summary: 'Routed to Gmail receipt scan automatically.',
-      });
-    }
-
-    if (/urgent|priority|important/i.test(query)) {
+    if (action === 'urgent') {
       const urgent = detectUrgentEmails(inbox, DEFAULT_EMAIL_PREFERENCES);
-      return buildSuccess(call, 'gmail', {
-        action: 'urgent',
-        connected: true,
-        query,
-        summary: `Detected ${urgent.totalUrgent} urgent messages.`,
-        result: urgent,
-      }, {
-        requiresAuth: true,
-        summary: 'Detected urgent-email request and executed Gmail urgent analysis.',
-      });
+      return buildSuccess(
+        call,
+        'gmail',
+        {
+          action: 'urgent',
+          connected: true,
+          query,
+          summary: `Detected ${urgent.totalUrgent} urgent messages.`,
+          result: urgent,
+        },
+        {
+          requiresAuth: true,
+          summary: 'Executed Gmail urgent analysis.',
+        },
+      );
     }
 
-    if (/what matters most|digest|weekly summary/i.test(query)) {
+    if (action === 'digest') {
       const urgent = detectUrgentEmails(inbox, DEFAULT_EMAIL_PREFERENCES);
       const inboxSummary = buildInboxSummary(scored, DEFAULT_EMAIL_PREFERENCES);
       const digest = buildWeeklyDigest({
@@ -564,29 +491,40 @@ async function gmailTool(
         },
       });
 
-      return buildSuccess(call, 'gmail', {
-        action: 'digest',
-        connected: true,
-        query,
-        summary: digest.conciseSummary,
-        result: digest,
-      }, {
-        requiresAuth: true,
-        summary: 'Generated Gmail digest for priority overview.',
-      });
+      return buildSuccess(
+        call,
+        'gmail',
+        {
+          action: 'digest',
+          connected: true,
+          query,
+          summary: digest.conciseSummary,
+          result: digest,
+        },
+        {
+          requiresAuth: true,
+          summary: 'Generated Gmail digest.',
+        },
+      );
     }
 
     const summary = buildInboxSummary(scored, DEFAULT_EMAIL_PREFERENCES);
-    return buildSuccess(call, 'gmail', {
-      action: 'inbox_summary',
-      connected: true,
-      query,
-      summary: summary.headline,
-      result: summary,
-    }, {
-      requiresAuth: true,
-      summary: summary.headline,
-    });
+
+    return buildSuccess(
+      call,
+      'gmail',
+      {
+        action: 'summarize_inbox',
+        connected: true,
+        query,
+        summary: summary.headline,
+        result: summary,
+      },
+      {
+        requiresAuth: true,
+        summary: summary.headline,
+      },
+    );
   } catch (error) {
     return buildFailure(
       call,
@@ -602,8 +540,7 @@ async function memoryTool(
   context: AgentContext,
 ): Promise<AgentToolResult> {
   const input = asObject(call.input);
-  const action =
-    typeof input.action === 'string' ? input.action : 'search';
+  const action = typeof input.action === 'string' ? input.action : 'search';
   const query =
     normalizeText(input.query) ||
     normalizeText(input.message) ||
@@ -644,7 +581,6 @@ async function memoryTool(
         summary: ranked.length
           ? 'Returned memory candidates from current context.'
           : 'No memory candidates were available from current context.',
-        nextAction: 'Replace with ranked semantic memory retrieval.',
       },
     );
   }
@@ -668,19 +604,15 @@ async function calendarTool(
   context: AgentContext,
 ): Promise<AgentToolResult> {
   const input = asObject(call.input);
-  const action =
-    typeof input.action === 'string' ? input.action : 'availability';
+  const action = normalizeCalendarAction(input);
   const query = extractRequestedQuery(call, context);
-  const connected =
-    hasConnectedProvider(context, 'calendar') ||
-    hasConnectedProvider(context, 'google-calendar');
+  const userId = normalizeText(input.userId) || normalizeText(context.request.userId);
 
-  const userId = normalizeText(call.input.userId) || normalizeText(context.request.userId);
   if (!userId) {
     return buildFailure(call, 'calendar', 'Calendar is not connected.', {
       action,
       canConnect: true,
-      suggestedRoute: '/control',
+      suggestedRoute: '/chat',
       suggestedConnector: 'google-calendar',
     });
   }
@@ -700,80 +632,127 @@ async function calendarTool(
 
     if (action === 'status') {
       const calendars = await listCalendars(tokenState.accessToken);
-      return buildSuccess(call, 'calendar', {
-        action,
-        connected: true,
-        calendarCount: calendars.length,
-        primaryCalendar: calendars.find((item) => item.primary)?.summary || calendars[0]?.summary || null,
-      }, {
-        requiresAuth: true,
-        summary: 'Calendar connection is healthy and calendars are readable.',
-      });
+      return buildSuccess(
+        call,
+        'calendar',
+        {
+          action,
+          connected: true,
+          calendarCount: calendars.length,
+          primaryCalendar:
+            calendars.find((item) => item.primary)?.summary || calendars[0]?.summary || null,
+        },
+        {
+          requiresAuth: true,
+          summary: 'Calendar connection is healthy and calendars are readable.',
+        },
+      );
     }
 
-    if (/focus time|deep work/i.test(query) || action === 'availability') {
+    if (action === 'find_focus_time' || action === 'availability') {
       const events = await fetchNext7DaysEvents(tokenState.accessToken);
       const result = buildFreeTimeIntelligence(events);
-      return buildSuccess(call, 'calendar', {
-        action: 'find_focus_time',
-        connected: true,
-        query,
-        summary: result.bestDeepWorkWindow
-          ? `Best deep-work block starts at ${result.bestDeepWorkWindow.startAt}.`
-          : 'No deep-work window found in the next 7 days.',
-        result,
-      }, {
-        requiresAuth: true,
-        summary: 'Computed best focus windows from calendar events.',
-      });
+      return buildSuccess(
+        call,
+        'calendar',
+        {
+          action: 'find_focus_time',
+          connected: true,
+          query,
+          summary: result.bestDeepWorkWindow
+            ? `Best deep-work block starts at ${result.bestDeepWorkWindow.startAt}.`
+            : 'No deep-work window found in the next 7 days.',
+          result,
+        },
+        {
+          requiresAuth: true,
+          summary: 'Computed best focus windows from calendar events.',
+        },
+      );
     }
 
-    if (/busy week|overload|overbooked/i.test(query)) {
+    if (action === 'check_busy_week') {
       const [todayEvents, weekEvents] = await Promise.all([
         fetchTodayEvents(tokenState.accessToken),
         fetchNext7DaysEvents(tokenState.accessToken),
       ]);
       const result = buildOverloadSignals(todayEvents, weekEvents);
-      return buildSuccess(call, 'calendar', {
-        action: 'check_busy_week',
-        connected: true,
-        summary: result.summary,
-        result,
-      }, {
-        requiresAuth: true,
-        summary: 'Computed busy-week and overload indicators.',
-      });
+      return buildSuccess(
+        call,
+        'calendar',
+        {
+          action: 'check_busy_week',
+          connected: true,
+          summary: result.summary,
+          result,
+        },
+        {
+          requiresAuth: true,
+          summary: 'Computed busy-week and overload indicators.',
+        },
+      );
     }
 
-    if (/weekly reset|reset my week/i.test(query)) {
+    if (action === 'weekly_reset') {
       const calendars = await listCalendars(tokenState.accessToken);
       const primary = calendars.find((calendar) => calendar.primary) || calendars[0];
-      const events = await listEvents({ accessToken: tokenState.accessToken, calendarId: primary?.id || 'primary' });
+      const events = await listEvents({
+        accessToken: tokenState.accessToken,
+        calendarId: primary?.id || 'primary',
+      });
       const result = buildWeeklyReset(events);
 
-      return buildSuccess(call, 'calendar', {
-        action: 'weekly_reset',
-        connected: true,
-        summary: `Prepared weekly reset with ${result.bestTimeBlocks.length} high-value time blocks.`,
-        result,
-      }, {
-        requiresAuth: true,
-        summary: 'Prepared weekly reset from upcoming calendar events.',
-      });
+      return buildSuccess(
+        call,
+        'calendar',
+        {
+          action: 'weekly_reset',
+          connected: true,
+          summary: `Prepared weekly reset with ${result.bestTimeBlocks.length} high-value time blocks.`,
+          result,
+        },
+        {
+          requiresAuth: true,
+          summary: 'Prepared weekly reset from upcoming calendar events.',
+        },
+      );
+    }
+
+    if (action === 'list_events') {
+      const events = await fetchNext7DaysEvents(tokenState.accessToken);
+      return buildSuccess(
+        call,
+        'calendar',
+        {
+          action: 'list_events',
+          connected: true,
+          query,
+          events,
+        },
+        {
+          requiresAuth: true,
+          summary: 'Listed upcoming calendar events.',
+        },
+      );
     }
 
     const events = await fetchTodayEvents(tokenState.accessToken);
     const result = buildTodayPlanner(events);
-    return buildSuccess(call, 'calendar', {
-      action: 'today_plan',
-      connected: true,
-      query,
-      summary: result.recommendedAction,
-      result,
-    }, {
-      requiresAuth: true,
-      summary: 'Generated today plan from calendar data.',
-    });
+    return buildSuccess(
+      call,
+      'calendar',
+      {
+        action: 'today_plan',
+        connected: true,
+        query,
+        summary: result.recommendedAction,
+        result,
+      },
+      {
+        requiresAuth: true,
+        summary: 'Generated today plan from calendar data.',
+      },
+    );
   } catch (error) {
     return buildFailure(
       call,
@@ -790,8 +769,7 @@ async function webTool(
 ): Promise<AgentToolResult> {
   const input = asObject(call.input);
   const query = typeof input.query === 'string' ? input.query : '';
-  const action =
-    typeof input.action === 'string' ? input.action : 'search';
+  const action = typeof input.action === 'string' ? input.action : 'search';
 
   if (!query && action === 'search') {
     return buildFailure(call, 'web', 'Web search requires a query.', {
@@ -812,10 +790,8 @@ async function compareTool(
   context: AgentContext,
 ): Promise<AgentToolResult> {
   const input = asObject(call.input);
-  const requestText =
-    normalizeText(input.message) || getRequestText(context);
   const items = normalizeComparisonItems(input);
-  const criteria = inferComparisonCriteria(input, requestText);
+  const criteria = inferComparisonCriteria(input);
 
   if (items.length < 2) {
     return buildFailure(
@@ -847,12 +823,13 @@ async function compareTool(
           ? winner.total - runnerUp.total
           : undefined,
       deterministicFrameworkReady: true,
+      query: extractRequestedQuery(call, context),
     },
     {
       summary: winner
         ? `Prepared a structured comparison. Current winner: ${winner.item}.`
         : 'Prepared a structured comparison.',
-      nextAction: 'Replace heuristic scoring with live product or evidence-backed scoring.',
+      nextAction: 'Replace heuristic scoring with evidence-backed scoring.',
     },
   );
 }
@@ -862,8 +839,7 @@ async function fileTool(
   context: AgentContext,
 ): Promise<AgentToolResult> {
   const input = asObject(call.input);
-  const action =
-    typeof input.action === 'string' ? input.action : 'inspect';
+  const action = typeof input.action === 'string' ? input.action : 'inspect';
   const query = extractRequestedQuery(call, context);
 
   return buildPlaceholderProviderResult(
@@ -879,8 +855,7 @@ async function financeTool(
   context: AgentContext,
 ): Promise<AgentToolResult> {
   const input = asObject(call.input);
-  const action =
-    typeof input.action === 'string' ? input.action : 'overview';
+  const action = typeof input.action === 'string' ? input.action : 'overview';
   const query = extractRequestedQuery(call, context);
 
   const ctx = context as AgentContext & {
@@ -939,8 +914,7 @@ async function notesTool(
   context: AgentContext,
 ): Promise<AgentToolResult> {
   const input = asObject(call.input);
-  const action =
-    typeof input.action === 'string' ? input.action : 'list';
+  const action = typeof input.action === 'string' ? input.action : 'list';
   const query = extractRequestedQuery(call, context);
   const notes = getContextNotes(context);
   const normalizedNotes = notes
@@ -963,7 +937,6 @@ async function notesTool(
         summary: rankedNotes.length
           ? 'Returned notes from current context.'
           : 'No note content was available in current context.',
-        nextAction: 'Replace with persistent notes provider.',
       },
     );
   }
@@ -1046,13 +1019,15 @@ export function describeTool(tool: AgentToolName): {
     case 'gmail':
       return {
         name: 'gmail',
-        summary: 'Email search, subscription scan, receipt scan, and draft workflows.',
+        summary: 'Email search, inbox summary, urgent triage, subscriptions, and digest workflows.',
         commonActions: [
           'status',
           'search',
           'scan_subscriptions',
           'scan_receipts',
           'summarize_inbox',
+          'digest',
+          'urgent',
           'draft_reply',
         ],
       };
@@ -1065,8 +1040,16 @@ export function describeTool(tool: AgentToolName): {
     case 'calendar':
       return {
         name: 'calendar',
-        summary: 'Availability, scheduling, and calendar-related actions.',
-        commonActions: ['availability', 'create_event', 'list_events', 'status'],
+        summary: 'Availability, schedule reading, and planning-related actions.',
+        commonActions: [
+          'status',
+          'today_plan',
+          'find_focus_time',
+          'check_busy_week',
+          'weekly_reset',
+          'list_events',
+          'availability',
+        ],
       };
     case 'web':
       return {
@@ -1114,24 +1097,20 @@ export function getToolDescriptions(): Array<ReturnType<typeof describeTool>> {
 export function getToolNamesForIntent(intent: string): AgentToolName[] {
   switch (intent) {
     case 'gmail':
-    case 'email':
       return ['gmail', 'memory'];
     case 'finance':
-      return ['finance', 'memory', 'notes'];
+      return ['finance', 'gmail', 'memory'];
     case 'productivity':
-    case 'execution':
-      return ['calendar', 'notes', 'memory'];
+    case 'planning':
+      return ['calendar', 'memory', 'notes'];
     case 'coding':
       return ['file', 'web', 'memory'];
     case 'shopping':
       return ['compare', 'web', 'finance', 'memory'];
     case 'research':
-      return ['web', 'compare', 'memory'];
+      return ['web', 'memory'];
     case 'memory':
       return ['memory', 'notes'];
-    case 'planning':
-    case 'scheduling':
-      return ['calendar', 'memory'];
     case 'compare':
       return ['compare', 'web', 'memory'];
     default:
@@ -1143,24 +1122,10 @@ export function getConversationContextSnapshot(context: AgentContext): {
   memoryCount: number;
   noteCount: number;
   messageCount: number;
-  connectedProviders: string[];
 } {
-  const connectedProviders = [
-    hasConnectedProvider(context, 'gmail') ? 'gmail' : null,
-    hasConnectedProvider(context, 'calendar') ||
-    hasConnectedProvider(context, 'google-calendar')
-      ? 'calendar'
-      : null,
-    hasConnectedProvider(context, 'google-drive') ? 'google-drive' : null,
-    hasConnectedProvider(context, 'github') ? 'github' : null,
-    hasConnectedProvider(context, 'outlook') ? 'outlook' : null,
-    hasConnectedProvider(context, 'browser') ? 'browser' : null,
-  ].filter(Boolean) as string[];
-
   return {
     memoryCount: getContextMemory(context).length,
     noteCount: getContextNotes(context).length,
     messageCount: getConversationMessages(context).length,
-    connectedProviders,
   };
 }
