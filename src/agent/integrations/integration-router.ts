@@ -50,6 +50,46 @@ function ensureMemoryWhenHelpful(
   return tools;
 }
 
+function enrichWithIntentTools(
+  tools: AgentToolName[],
+  routeIntent: AgentIntent | 'unknown',
+): AgentToolName[] {
+  let next = [...tools];
+
+  if (routeIntent === 'finance') {
+    next = addIfMissing(next, 'finance');
+  }
+
+  if (routeIntent === 'research') {
+    next = addIfMissing(next, 'web');
+  }
+
+  if (routeIntent === 'shopping') {
+    next = addIfMissing(next, 'web');
+    next = addIfMissing(next, 'compare');
+  }
+
+  if (routeIntent === 'compare') {
+    next = addIfMissing(next, 'compare');
+    next = addIfMissing(next, 'web');
+  }
+
+  if (routeIntent === 'coding') {
+    next = addIfMissing(next, 'file');
+    next = addIfMissing(next, 'web');
+  }
+
+  if (routeIntent === 'memory') {
+    next = addIfMissing(next, 'notes');
+  }
+
+  if (routeIntent === 'planning' || routeIntent === 'productivity') {
+    next = addIfMissing(next, 'notes');
+  }
+
+  return next;
+}
+
 export function resolveRequiredTools(
   message: string,
   currentTools: AgentToolName[],
@@ -81,33 +121,7 @@ export function resolveRequiredTools(
   }
 
   next = ensureMemoryWhenHelpful(next, routeIntent);
-
-  if (routeIntent === 'finance') {
-    next = addIfMissing(next, 'finance');
-  }
-
-  if (routeIntent === 'research') {
-    next = addIfMissing(next, 'web');
-  }
-
-  if (routeIntent === 'shopping') {
-    next = addIfMissing(next, 'web');
-    next = addIfMissing(next, 'compare');
-  }
-
-  if (routeIntent === 'compare') {
-    next = addIfMissing(next, 'compare');
-    next = addIfMissing(next, 'web');
-  }
-
-  if (routeIntent === 'coding') {
-    next = addIfMissing(next, 'file');
-    next = addIfMissing(next, 'web');
-  }
-
-  if (routeIntent === 'memory') {
-    next = addIfMissing(next, 'notes');
-  }
+  next = enrichWithIntentTools(next, routeIntent);
 
   if (
     detected.combineSources &&
