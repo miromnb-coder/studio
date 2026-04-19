@@ -53,14 +53,9 @@ type ConnectorMode = 'connect' | 'connected' | 'manage' | 'toggle';
 type AiActionId = 'summarize-day' | 'find-priorities' | 'deep-research' | 'live-search';
 type ProductivityToolId = 'gmail' | 'calendar' | 'money-saver' | 'tasks';
 
-const COMPOSER_DOCK_HEIGHT = 170;
-const ATTACHMENT_TRAY_HEIGHT = 64;
-const SAFE_BOTTOM_SPACE = 28;
-const BASE_SCROLL_BOTTOM_PADDING = COMPOSER_DOCK_HEIGHT + SAFE_BOTTOM_SPACE;
-const SCROLL_BOTTOM_PADDING_WITH_ATTACHMENTS =
-  COMPOSER_DOCK_HEIGHT + ATTACHMENT_TRAY_HEIGHT + SAFE_BOTTOM_SPACE + 18;
 const NEAR_BOTTOM_THRESHOLD = 140;
 const SCROLL_MEMORY_KEY = 'kivo-chat-scroll-memory-v1';
+const MIN_SCROLL_SAFETY_SPACE = 28;
 
 export function KivoChatScreen() {
   const router = useRouter();
@@ -103,16 +98,45 @@ export function KivoChatScreen() {
   const scrollMemoryRef = useRef<Record<string, number>>({});
   const [showScrollToLatest, setShowScrollToLatest] = useState(false);
   const [keyboardOffset, setKeyboardOffset] = useState(0);
+  const [bottomOverlayInset, setBottomOverlayInset] = useState(0);
   const scrollTickingRef = useRef(false);
+  const composerDockRef = useRef<HTMLDivElement | null>(null);
+  const attachmentTrayRef = useRef<HTMLDivElement | null>(null);
+  const viewportSyncFrameRef = useRef<number | null>(null);
 
   const hasMessages = messages.length > 0;
   const hasAttachments = attachments.length > 0;
   const canSend = draftPrompt.trim().length > 0 || hasAttachments;
   const isBusy = isSending || isAgentResponding;
 
-  const scrollBottomPadding = hasAttachments
-    ? SCROLL_BOTTOM_PADDING_WITH_ATTACHMENTS
-    : BASE_SCROLL_BOTTOM_PADDING;
+  const scrollBottomPadding = Math.max(
+    MIN_SCROLL_SAFETY_SPACE,
+    bottomOverlayInset + MIN_SCROLL_SAFETY_SPACE,
+  );
+  const lastMessageSafetySpacer = Math.max(40, Math.round(bottomOverlayInset * 0.18));
+  const latestButtonBottom = Math.max(
+    12,
+    Math.round(bottomOverlayInset + MIN_SCROLL_SAFETY_SPACE),
+  );
+
+  const measureBottomOverlayInset = useCallback(() => {
+    if (typeof window === 'undefined') return;
+
+    const viewportBottom = window.innerHeight;
+    const nodes = [composerDockRef.current, attachmentTrayRef.current].filter(
+      (node): node is HTMLElement => Boolean(node),
+    );
+
+    const nextInset = nodes.reduce((maxInset, node) => {
+      const rect = node.getBoundingClientRect();
+      if (rect.height <= 0 || rect.width <= 0) return maxInset;
+      return Math.max(maxInset, Math.max(0, viewportBottom - rect.top));
+    }, 0);
+
+    setBottomOverlayInset((current) =>
+      Math.abs(current - nextInset) < 1 ? current : nextInset,
+    );
+  }, []);
 
   const persistScrollMemory = useCallback(() => {
     if (typeof window === 'undefined') return;
@@ -211,23 +235,80 @@ export function KivoChatScreen() {
     const viewport = window.visualViewport;
 
     const syncKeyboardOffset = () => {
+      if (viewportSyncFrameRef.current !== null) {
+        window.cancelAnimationFrame(viewportSyncFrameRef.current);
+      }
+
+      viewportSyncFrameRef.current = window.requestAnimationFrame(() => {
+        viewportSyncFrameRef.current = null;
+
+        const nextOffset = Math.max(
+          0,
+          window.innerHeight - viewport.height - viewport.offsetTop,
+        );
+        setKeyboardOffset((current) =>
+          Math.abs(current - nextOffset) < 1 ? current : nextOffset,
+        );
+      });
+    };
+
+    const syncViewportLayout = () => {
       const nextOffset = Math.max(
         0,
         window.innerHeight - viewport.height - viewport.offsetTop,
       );
-      setKeyboardOffset(nextOffset);
+      setKeyboardOffset((current) =>
+        Math.abs(current - nextOffset) < 1 ? current : nextOffset,
+      );
+      measureBottomOverlayInset();
     };
 
-    syncKeyboardOffset();
+    syncViewportLayout();
+
+    const resizeObserver = new ResizeObserver(() => {
+      measureBottomOverlayInset();
+    });
+
+    if (composerDockRef.current) {
+      resizeObserver.observe(composerDockRef.current);
+    }
+    if (attachmentTrayRef.current) {
+      resizeObserver.observe(attachmentTrayRef.current);
+    }
 
     viewport.addEventListener('resize', syncKeyboardOffset);
     viewport.addEventListener('scroll', syncKeyboardOffset);
+    window.addEventListener('resize', measureBottomOverlayInset);
 
     return () => {
+      if (viewportSyncFrameRef.current !== null) {
+        window.cancelAnimationFrame(viewportSyncFrameRef.current);
+        viewportSyncFrameRef.current = null;
+      }
+      resizeObserver.disconnect();
       viewport.removeEventListener('resize', syncKeyboardOffset);
       viewport.removeEventListener('scroll', syncKeyboardOffset);
+      window.removeEventListener('resize', measureBottomOverlayInset);
     };
-  }, []);
+  }, [measureBottomOverlayInset]);
+
+  useEffect(() => {
+    measureBottomOverlayInset();
+  }, [attachments.length, draftPrompt, keyboardOffset, measureBottomOverlayInset]);
+
+  useEffect(() => {
+    if (!mainScrollRef.current) return;
+
+    if (isNearBottomRef.current) {
+      requestAnimationFrame(() => {
+        scrollToLatest('auto');
+        updateScrollState();
+      });
+      return;
+    }
+
+    updateScrollState();
+  }, [bottomOverlayInset, scrollToLatest, updateScrollState]);
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
@@ -915,6 +996,12 @@ export function KivoChatScreen() {
               </motion.div>
             )}
           </AnimatePresence>
+
+          <div
+            aria-hidden="true"
+            className="w-full shrink-0"
+            style={{ height: lastMessageSafetySpacer }}
+          />
         </main>
 
         <AnimatePresence initial={false}>
@@ -932,7 +1019,7 @@ export function KivoChatScreen() {
               }}
               className="fixed right-5 z-30 inline-flex items-center rounded-full border border-black/[0.08] bg-white/90 px-3 py-2 text-[12px] font-medium tracking-[-0.01em] text-[#495264] shadow-[0_10px_24px_rgba(15,23,42,0.09)] backdrop-blur-md transition-all duration-150 hover:bg-white"
               style={{
-                bottom: `calc(${scrollBottomPadding}px + ${Math.max(12, keyboardOffset)}px)`,
+                bottom: `${latestButtonBottom}px`,
               }}
             >
               Latest
@@ -949,6 +1036,7 @@ export function KivoChatScreen() {
               exit={{ opacity: 0, y: 8 }}
               transition={{ duration: 0.18, ease: 'easeOut' }}
               className="pointer-events-none fixed inset-x-0 z-20 mx-auto w-full max-w-[560px] px-5"
+              ref={attachmentTrayRef}
               style={{
                 bottom: `calc(138px + env(safe-area-inset-bottom, 0px) + ${Math.max(0, keyboardOffset)}px)`,
               }}
@@ -1010,6 +1098,7 @@ export function KivoChatScreen() {
           isSending={isBusy}
           placeholder={placeholder}
           keyboardOffset={keyboardOffset}
+          containerRef={composerDockRef}
         />
 
         <KivoReferralSuccessToast
