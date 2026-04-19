@@ -21,9 +21,17 @@ export type ThinkingPresentation = {
 
 const DEFAULT_THINKING_STATE: ThinkingPresentation = {
   visible: true,
-  status: 'Thinking...',
+  status: 'Analyzing your request',
   visualState: 'thinking',
 };
+
+function normalize(value?: string): string {
+  return (value ?? '').trim().toLowerCase();
+}
+
+function clean(value?: string): string {
+  return (value ?? '').trim();
+}
 
 function toTitleCase(value: string): string {
   return value
@@ -33,46 +41,57 @@ function toTitleCase(value: string): string {
     .join(' ');
 }
 
+function fromVisualState(
+  visualState: KivoThinkingVisualState,
+  status: string,
+): ThinkingPresentation {
+  return {
+    visible: true,
+    status,
+    visualState,
+  };
+}
+
 function getToolStatus(tool: string): ThinkingPresentation {
-  const normalized = tool.trim().toLowerCase();
+  const normalized = normalize(tool);
 
   if (!normalized) {
-    return {
-      visible: true,
-      status: 'Building plan...',
-      visualState: 'planning',
-    };
+    return fromVisualState('planning', 'Planning the response');
   }
 
-  if (normalized.includes('gmail') || normalized === 'email') {
-    return {
-      visible: true,
-      status: 'Checking inbox…',
-      visualState: 'gmail',
-    };
+  if (normalized.includes('gmail') || normalized.includes('email')) {
+    return fromVisualState('gmail', 'Checking inbox context');
   }
 
   if (normalized.includes('calendar') || normalized.includes('schedule')) {
-    return {
-      visible: true,
-      status: 'Reading schedule...',
-      visualState: 'calendar',
-    };
+    return fromVisualState('calendar', 'Reviewing schedule context');
   }
 
   if (normalized.includes('memory')) {
-    return {
-      visible: true,
-      status: 'Searching memory...',
-      visualState: 'memory',
-    };
+    return fromVisualState('memory', 'Checking memory');
   }
 
-  return {
-    visible: true,
-    status: `Analyzing ${toTitleCase(normalized)}…`,
-    visualState: 'planning',
-  };
+  if (
+    normalized.includes('browser') ||
+    normalized.includes('search') ||
+    normalized.includes('web') ||
+    normalized.includes('compare')
+  ) {
+    return fromVisualState('planning', 'Checking sources');
+  }
+
+  if (
+    normalized.includes('write') ||
+    normalized.includes('generate') ||
+    normalized.includes('response')
+  ) {
+    return fromVisualState('writing', 'Writing the answer');
+  }
+
+  return fromVisualState(
+    'planning',
+    `Working with ${toTitleCase(normalized)}`,
+  );
 }
 
 export function mapAgentEventToThinkingState(
@@ -86,37 +105,17 @@ export function mapAgentEventToThinkingState(
 
   switch (event) {
     case 'router_started':
-      return {
-        visible: true,
-        status: 'Thinking...',
-        visualState: 'thinking',
-      };
+      return fromVisualState('thinking', 'Analyzing your request');
     case 'memory_started':
-      return {
-        visible: true,
-        status: 'Searching memory...',
-        visualState: 'memory',
-      };
+      return fromVisualState('memory', 'Checking memory');
     case 'tool_started':
-      return getToolStatus('');
+      return fromVisualState('planning', 'Checking sources');
     case 'planning_started':
-      return {
-        visible: true,
-        status: 'Building a plan…',
-        visualState: 'planning',
-      };
+      return fromVisualState('planning', 'Planning the response');
     case 'generator_started':
-      return {
-        visible: true,
-        status: 'Writing response...',
-        visualState: 'writing',
-      };
+      return fromVisualState('writing', 'Writing the answer');
     case 'final_started':
-      return {
-        visible: true,
-        status: 'Finalizing...',
-        visualState: 'finalizing',
-      };
+      return fromVisualState('finalizing', 'Finalizing response');
     default:
       return DEFAULT_THINKING_STATE;
   }
@@ -125,27 +124,51 @@ export function mapAgentEventToThinkingState(
 function inferThinkingEventFromStep(step?: AgentResponseStep): AgentThinkingEvent {
   if (!step) return 'generator_started';
 
-  const action = String(step.action || '').toLowerCase();
-  const tool = String(step.tool || '').toLowerCase();
+  const action = normalize(step.action);
+  const tool = normalize(step.tool);
+  const summary = normalize(step.summary);
 
   if (tool) {
     return `tool_started:${tool}`;
   }
 
-  if (action.includes('router') || action.includes('analyz')) {
+  if (
+    action.includes('router') ||
+    action.includes('analyz') ||
+    summary.includes('analyz') ||
+    summary.includes('intent')
+  ) {
     return 'router_started';
   }
 
-  if (action.includes('memory')) {
+  if (action.includes('memory') || summary.includes('memory')) {
     return 'memory_started';
   }
 
-  if (action.includes('plan')) {
+  if (
+    action.includes('plan') ||
+    summary.includes('plan') ||
+    summary.includes('next step')
+  ) {
     return 'planning_started';
   }
 
-  if (action.includes('final')) {
+  if (
+    action.includes('final') ||
+    summary.includes('final') ||
+    summary.includes('polish')
+  ) {
     return 'final_started';
+  }
+
+  if (
+    action.includes('write') ||
+    action.includes('generat') ||
+    action.includes('respond') ||
+    summary.includes('writing') ||
+    summary.includes('response')
+  ) {
+    return 'generator_started';
   }
 
   if (action.includes('tool')) {
@@ -155,25 +178,59 @@ function inferThinkingEventFromStep(step?: AgentResponseStep): AgentThinkingEven
   return 'generator_started';
 }
 
+function stepPriority(step: AgentResponseStep): number {
+  const status = normalize(step.status);
+
+  if (status === 'running') return 4;
+  if (status === 'pending') return 3;
+  if (status === 'completed') return 2;
+  if (status === 'skipped') return 1;
+  return 0;
+}
+
 export function mapAgentStepsToThinkingState(args: {
   isStreaming: boolean;
   steps?: AgentResponseStep[];
 }): ThinkingPresentation | null {
   if (!args.isStreaming) {
-    return mapAgentEventToThinkingState('done');
+    return null;
   }
 
-  const runningStep = [...(args.steps ?? [])]
+  const steps = args.steps ?? [];
+
+  const activeStep = [...steps]
     .reverse()
-    .find((step) => step.status === 'running' || step.status === 'pending');
+    .sort((a, b) => stepPriority(b) - stepPriority(a))
+    .find((step) => {
+      const status = normalize(step.status);
+      return status === 'running' || status === 'pending';
+    });
 
-  const completedStepCount = (args.steps ?? []).filter(
-    (step) => step.status === 'completed' || step.status === 'skipped',
-  ).length;
+  if (activeStep) {
+    const inferred = inferThinkingEventFromStep(activeStep);
+    const mapped = mapAgentEventToThinkingState(inferred);
 
-  if (runningStep) {
-    return mapAgentEventToThinkingState(inferThinkingEventFromStep(runningStep));
+    if (!mapped) return DEFAULT_THINKING_STATE;
+
+    const directSummary = clean(activeStep.summary);
+    if (
+      directSummary &&
+      directSummary.length <= 80 &&
+      !directSummary.toLowerCase().startsWith('using ')
+    ) {
+      return {
+        ...mapped,
+        status: directSummary,
+      };
+    }
+
+    return mapped;
   }
+
+  const completedStepCount = steps.filter((step) => {
+    const status = normalize(step.status);
+    return status === 'completed' || status === 'skipped';
+  }).length;
 
   if (completedStepCount > 0) {
     return mapAgentEventToThinkingState('final_started');
