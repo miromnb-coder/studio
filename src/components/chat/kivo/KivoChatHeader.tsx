@@ -57,7 +57,7 @@ function IconButton({
   );
 }
 
-export default function KivoChatHeader({
+export function KivoChatHeader({
   title = 'Kivo',
   hasMessages = false,
   onSummarize,
@@ -71,12 +71,11 @@ export default function KivoChatHeader({
   return (
     <header className="sticky top-0 z-40 border-b border-black/5 bg-[#f5f5f3]/88 backdrop-blur-xl">
       <div className="mx-auto flex h-16 max-w-5xl items-center gap-3 px-4">
-        {/* Left */}
         <button
           type="button"
           onClick={() => router.back()}
           aria-label="Back"
-          className="flex h-10 w-10 items-center justify-center rounded-full border border-black/6 bg-white/85 text-black shadow-[0_8px_24px_rgba(0,0,0,0.05)] transition active:scale-95"
+          className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-black/6 bg-white/85 text-black shadow-[0_8px_24px_rgba(0,0,0,0.05)] transition active:scale-95"
         >
           <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none">
             <path
@@ -89,7 +88,6 @@ export default function KivoChatHeader({
           </svg>
         </button>
 
-        {/* Center */}
         <div className="flex min-w-0 flex-1 items-center justify-center gap-2">
           <div className="text-black">
             <KivoLogoMark />
@@ -100,8 +98,7 @@ export default function KivoChatHeader({
           </span>
         </div>
 
-        {/* Right */}
-        <div className="relative flex items-center gap-2">
+        <div className="relative flex shrink-0 items-center gap-2">
           {showActions ? (
             <>
               <button
@@ -112,10 +109,7 @@ export default function KivoChatHeader({
                 Summary
               </button>
 
-              <IconButton
-                onClick={onCreateTask}
-                label="Create task"
-              >
+              <IconButton onClick={onCreateTask} label="Create task">
                 <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none">
                   <path
                     d="M12 5V19M5 12H19"
@@ -137,22 +131,34 @@ export default function KivoChatHeader({
                 </svg>
               </IconButton>
 
-              {menuOpen && (
-                <div className="absolute right-0 top-12 w-44 overflow-hidden rounded-2xl border border-black/6 bg-white shadow-[0_18px_48px_rgba(0,0,0,0.10)]">
-                  <button className="w-full px-4 py-3 text-left text-sm hover:bg-black/[0.03]">
+              {menuOpen ? (
+                <div className="absolute right-0 top-12 z-50 w-44 overflow-hidden rounded-2xl border border-black/6 bg-white shadow-[0_18px_48px_rgba(0,0,0,0.10)]">
+                  <button
+                    type="button"
+                    className="w-full px-4 py-3 text-left text-sm hover:bg-black/[0.03]"
+                  >
                     Rename
                   </button>
-                  <button className="w-full px-4 py-3 text-left text-sm hover:bg-black/[0.03]">
+                  <button
+                    type="button"
+                    className="w-full px-4 py-3 text-left text-sm hover:bg-black/[0.03]"
+                  >
                     Pin chat
                   </button>
-                  <button className="w-full px-4 py-3 text-left text-sm hover:bg-black/[0.03]">
+                  <button
+                    type="button"
+                    className="w-full px-4 py-3 text-left text-sm hover:bg-black/[0.03]"
+                  >
                     Export
                   </button>
-                  <button className="w-full px-4 py-3 text-left text-sm text-red-600 hover:bg-red-50">
+                  <button
+                    type="button"
+                    className="w-full px-4 py-3 text-left text-sm text-red-600 hover:bg-red-50"
+                  >
                     Delete
                   </button>
                 </div>
-              )}
+              ) : null}
             </>
           ) : (
             <button
@@ -167,3 +173,5 @@ export default function KivoChatHeader({
     </header>
   );
 }
+
+export default KivoChatHeader;
