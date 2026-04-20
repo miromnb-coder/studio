@@ -2,7 +2,7 @@
   <rect width="1024" height="1024" fill="#E9E9E7"/>
 
   <defs>
-    <filter id="cardShadow" x="56" y="52" width="912" height="928" filterUnits="userSpaceOnUse" color-interpolation-filters="sRGB">
+    <filter id="softShadow" x="96" y="96" width="832" height="832" filterUnits="userSpaceOnUse" color-interpolation-filters="sRGB">
       <feFlood flood-opacity="0" result="BackgroundImageFix"/>
       <feColorMatrix in="SourceAlpha" type="matrix" values="0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 127 0" result="hardAlpha"/>
       <feOffset dy="18"/>
@@ -13,27 +13,27 @@
     </filter>
   </defs>
 
-  <g filter="url(#cardShadow)">
-    <rect x="112" y="104" width="800" height="816" rx="164" fill="#F5F5F3"/>
+  <g filter="url(#softShadow)">
+    <rect x="112" y="112" width="800" height="800" rx="176" fill="#F5F5F3"/>
   </g>
 
-  <g stroke="#040B18" stroke-width="38" fill="none" stroke-linejoin="round" stroke-linecap="square">
-    <rect x="294" y="294" width="124" height="124" rx="12"/>
-    <rect x="606" y="294" width="124" height="124" rx="12"/>
-    <rect x="294" y="606" width="124" height="124" rx="12"/>
-    <rect x="606" y="606" width="124" height="124" rx="12"/>
+  <path
+    d="M248 654C283 704 366 730 485 724C626 717 750 643 831 542C872 490 892 434 887 388C883 361 873 339 854 321"
+    stroke="#040B18"
+    stroke-width="42"
+    stroke-linecap="round"
+    stroke-linejoin="round"
+    fill="none"
+  />
 
-    <line x1="294" y1="512" x2="176" y2="512"/>
-    <line x1="848" y1="512" x2="730" y2="512"/>
-    <line x1="512" y1="294" x2="512" y2="176"/>
-    <line x1="512" y1="848" x2="512" y2="730"/>
+  <path
+    d="M430 501L589 362"
+    stroke="#040B18"
+    stroke-width="54"
+    stroke-linecap="round"
+    fill="none"
+  />
 
-    <line x1="418" y1="418" x2="454" y2="454"/>
-    <line x1="606" y1="418" x2="570" y2="454"/>
-    <line x1="418" y1="606" x2="454" y2="570"/>
-    <line x1="606" y1="606" x2="570" y2="570"/>
-  </g>
-
-  <circle cx="512" cy="512" r="116" fill="#F5F5F3" stroke="#040B18" stroke-width="38"/>
-  <circle cx="512" cy="512" r="52" fill="#040B18"/>
+  <circle cx="404" cy="522" r="92" fill="#040B18"/>
+  <circle cx="640" cy="334" r="150" fill="#040B18"/>
 </svg>
