@@ -1,5 +1,6 @@
 import { groq } from '@/ai/groq';
 import type { ResponseMode } from '@/agent/types/response-mode';
+import { resolveResponsePolicy } from '@/agent/response-intelligence';
 
 import type { AgentFinalAnswer, AgentStreamEvent } from './types';
 import {
@@ -30,6 +31,14 @@ import { buildCompareResponse } from './generator-compare';
 import { buildEmailResponse } from './generator-email';
 import { buildOperatorResponse } from './generator-operator';
 
+type FinalTextInput = {
+  input: GenerateFinalAnswerInput;
+  structured: NonNullable<AgentFinalAnswer['structured']>;
+  toolSummaries: ReturnType<typeof summarizeToolResults>['structured'];
+  currentText: string;
+  responseType: StructuredPayloadSchema['responseType'];
+};
+
 function getResponseMode(input: GenerateFinalAnswerInput): ResponseMode {
   const metadata = (input.request.metadata ?? {}) as Record<string, unknown>;
   const mode = metadata.responseModeHint;
@@ -45,6 +54,35 @@ function getResponseMode(input: GenerateFinalAnswerInput): ResponseMode {
   }
 
   return 'operator';
+}
+
+function resolveIntentForPolicy(
+  responseType: StructuredPayloadSchema['responseType'],
+  input: GenerateFinalAnswerInput,
+):
+  | 'plain'
+  | 'search'
+  | 'shopping'
+  | 'compare'
+  | 'email'
+  | 'calendar'
+  | 'operator' {
+  if (
+    responseType === 'search' ||
+    responseType === 'shopping' ||
+    responseType === 'compare' ||
+    responseType === 'email' ||
+    responseType === 'operator' ||
+    responseType === 'plain'
+  ) {
+    return responseType;
+  }
+
+  if (input.route.intent === 'planning' || input.route.intent === 'productivity') {
+    return 'calendar';
+  }
+
+  return 'plain';
 }
 
 function buildModeInstruction(mode: ResponseMode): string {
@@ -92,6 +130,44 @@ function buildLanguageInstruction(language: string): string {
     'Do not mix languages.',
     "If uncertain, prefer the user's detected language.",
   ].join(' ');
+}
+
+function buildLengthInstruction(length: 'short' | 'medium' | 'deep'): string {
+  switch (length) {
+    case 'short':
+      return 'Keep the visible answer short. Prefer 1-2 concise paragraphs maximum.';
+    case 'deep':
+      return 'You may give a more complete answer, but still stay structured and avoid bloated filler.';
+    case 'medium':
+    default:
+      return 'Keep the answer moderately concise and readable.';
+  }
+}
+
+function buildStyleInstruction(
+  style:
+    | 'concise'
+    | 'source_first'
+    | 'recommendation_first'
+    | 'comparison_first'
+    | 'operator'
+    | 'casual',
+) {
+  switch (style) {
+    case 'source_first':
+      return 'For search/news answers, give a short summary and let sources carry the detail.';
+    case 'recommendation_first':
+      return 'For shopping answers, lead with the best recommendation before secondary options.';
+    case 'comparison_first':
+      return 'For comparison answers, lead with the verdict and core differences.';
+    case 'operator':
+      return 'For operator answers, lead with the decision and the next action.';
+    case 'casual':
+      return 'Keep the tone natural, warm, and light.';
+    case 'concise':
+    default:
+      return 'Prefer concise, high-signal wording over long explanation.';
+  }
 }
 
 function buildStructuredData(input: {
@@ -170,22 +246,45 @@ async function generateWithModel(
   if (!process.env.GROQ_API_KEY) return null;
 
   const requestText = getRequestText(input.request);
-  const language = getLanguage(input);
+  const detectedLanguage = getLanguage(input);
   const conversation = getConversationMessages(input.request);
-  const { compactJson } = summarizeToolResults(input.toolResults);
+  const { compactJson, structured } = summarizeToolResults(input.toolResults);
   const metadata = (input.request.metadata ?? {}) as Record<string, unknown>;
   const responseMode = getResponseMode(input);
+
+  const previewResponseType = decideResponseMode({
+    input,
+    toolSummaries: structured,
+    structured: undefined,
+    confidence: input.route.confidence ?? 0.6,
+  });
+
+  const policy = resolveResponsePolicy({
+    intent: resolveIntentForPolicy(previewResponseType, input),
+    userMessage: requestText,
+    detectedLanguage,
+    explicitLanguage:
+      normalizeText(input.route.responseLanguage) ||
+      normalizeText(input.request.responseLanguage) ||
+      null,
+    responseMode,
+    hasStructuredResults: structured.some((item) => item.ok),
+    confidence: input.route.confidence ?? null,
+  });
+
   const generatorModel =
     normalizeText(metadata.generatorModel) || 'openai/gpt-oss-120b';
 
   const systemPrompt = [
     'You are the final answer generator for Kivo, a premium AI assistant.',
-    'Your job is to create a beautiful user-facing answer.',
-    'Never expose internal reasoning, planning stages, tool logs, or system pipeline labels.',
-    'Never use headings like Structured Answer, Analysis, Interpret Request, Retrieve Memory Context, or Synthesize Findings.',
+    'Your job is to create a polished user-facing answer.',
+    'Never expose internal reasoning, planning stages, tool logs, provider diagnostics, query/mode/provider metadata, or system pipeline labels.',
+    'Never write raw search-debug text such as Query, Mode, Provider, URL, Snippet, or Live browser search results.',
     'Only show what helps the user.',
     buildModeInstruction(responseMode),
-    buildLanguageInstruction(language),
+    buildLanguageInstruction(policy.language),
+    buildLengthInstruction(policy.length),
+    buildStyleInstruction(policy.style),
     'Return ONLY valid JSON with this exact schema:',
     JSON.stringify(
       {
@@ -219,6 +318,9 @@ async function generateWithModel(
     '- nextStep should be one clear action if helpful',
     '- sources only if actually used',
     '- plainText should be a safe fallback',
+    '- for search/news, keep the answer short and source-first',
+    '- for shopping, keep buying advice short and recommendation-first',
+    '- for compare, lead with the decision and major differences',
     '- no markdown',
     '- no extra keys',
   ].join('\n');
@@ -226,6 +328,10 @@ async function generateWithModel(
   const userPrompt = [
     `User request: ${requestText}`,
     `Intent: ${input.route.intent}`,
+    `Planned response type: ${previewResponseType}`,
+    `Resolved language: ${policy.language}`,
+    `Resolved style: ${policy.style}`,
+    `Resolved length: ${policy.length}`,
     `Response mode: ${responseMode}`,
     `User goal: ${
       normalizeText((input.route as { userGoal?: string }).userGoal) ||
@@ -273,20 +379,48 @@ async function generateWithModel(
   }
 }
 
-function buildSearchSafeText(params: {
+function buildPolicyAwareSearchText(params: {
   input: GenerateFinalAnswerInput;
-  language: string;
   structured: NonNullable<AgentFinalAnswer['structured']>;
   toolSummaries: ReturnType<typeof summarizeToolResults>['structured'];
   currentText: string;
+  responseType: StructuredPayloadSchema['responseType'];
 }): string {
-  return buildSearchUserFacingText({
-    language: params.language,
-    query: getRequestText(params.input.request),
-    structured: params.structured,
-    toolSummaries: params.toolSummaries,
-    currentText: params.currentText,
+  const { input, structured, toolSummaries, currentText, responseType } = params;
+
+  const requestText = getRequestText(input.request);
+  const detectedLanguage = getLanguage(input);
+
+  const policy = resolveResponsePolicy({
+    intent: resolveIntentForPolicy(responseType, input),
+    userMessage: requestText,
+    detectedLanguage,
+    explicitLanguage:
+      normalizeText(input.route.responseLanguage) ||
+      normalizeText(input.request.responseLanguage) ||
+      null,
+    responseMode: getResponseMode(input),
+    hasStructuredResults: toolSummaries.some((item) => item.ok),
+    confidence: input.route.confidence ?? null,
   });
+
+  return buildSearchUserFacingText({
+    language: policy.language,
+    query: requestText,
+    structured,
+    toolSummaries,
+    currentText,
+  });
+}
+
+function finalizeVisibleText(params: FinalTextInput): string {
+  const { responseType } = params;
+
+  if (responseType === 'search') {
+    return buildPolicyAwareSearchText(params);
+  }
+
+  return params.currentText;
 }
 
 function buildFallbackAnswer(
@@ -297,7 +431,28 @@ function buildFallbackAnswer(
   const { successful, failed, structured } = summarizeToolResults(
     input.toolResults,
   );
-  const localized = buildLocalizedFallback(language, {
+
+  const previewResponseType = decideResponseMode({
+    input,
+    toolSummaries: structured,
+    structured: undefined,
+    confidence: input.route.confidence ?? 0.6,
+  });
+
+  const policy = resolveResponsePolicy({
+    intent: resolveIntentForPolicy(previewResponseType, input),
+    userMessage: requestText,
+    detectedLanguage: language,
+    explicitLanguage:
+      normalizeText(input.route.responseLanguage) ||
+      normalizeText(input.request.responseLanguage) ||
+      null,
+    responseMode: getResponseMode(input),
+    hasStructuredResults: structured.some((item) => item.ok),
+    confidence: input.route.confidence ?? null,
+  });
+
+  const localized = buildLocalizedFallback(policy.language, {
     requestText,
     memorySummary: input.memorySummary,
     successful,
@@ -317,16 +472,13 @@ function buildFallbackAnswer(
     toolSummaries: structured,
   });
 
-  const finalText =
-    preliminaryStructuredData.responseType === 'search'
-      ? buildSearchSafeText({
-          input,
-          language,
-          structured: fallbackStructured,
-          toolSummaries: structured,
-          currentText: localized.text,
-        })
-      : localized.text;
+  const finalText = finalizeVisibleText({
+    input,
+    structured: fallbackStructured,
+    toolSummaries: structured,
+    currentText: localized.text,
+    responseType: preliminaryStructuredData.responseType,
+  });
 
   const finalStructured =
     preliminaryStructuredData.responseType === 'search'
@@ -360,7 +512,7 @@ function buildFallbackAnswer(
     followUps: [],
     metadata: buildAnswerMetadata(
       input,
-      language,
+      policy.language,
       'fallback',
       structuredData.responseType,
     ),
@@ -370,11 +522,11 @@ function buildFallbackAnswer(
 export async function generateFinalAnswer(
   input: GenerateFinalAnswerInput,
 ): Promise<AgentFinalAnswer> {
-  const language = getLanguage(input);
+  const detectedLanguage = getLanguage(input);
   const llmStructured = await generateWithModel(input);
 
   if (!llmStructured) {
-    return buildFallbackAnswer(input, language);
+    return buildFallbackAnswer(input, detectedLanguage);
   }
 
   const toolSummary = summarizeToolResults(input.toolResults);
@@ -395,16 +547,26 @@ export async function generateFinalAnswer(
     toolSummaries: toolSummary.structured,
   });
 
-  const finalText =
-    preliminaryStructuredData.responseType === 'search'
-      ? buildSearchSafeText({
-          input,
-          language,
-          structured: mappedStructured,
-          toolSummaries: toolSummary.structured,
-          currentText: preliminaryText,
-        })
-      : preliminaryText;
+  const policy = resolveResponsePolicy({
+    intent: resolveIntentForPolicy(preliminaryStructuredData.responseType, input),
+    userMessage: getRequestText(input.request),
+    detectedLanguage,
+    explicitLanguage:
+      normalizeText(input.route.responseLanguage) ||
+      normalizeText(input.request.responseLanguage) ||
+      null,
+    responseMode: getResponseMode(input),
+    hasStructuredResults: toolSummary.structured.some((item) => item.ok),
+    confidence: input.route.confidence ?? null,
+  });
+
+  const finalText = finalizeVisibleText({
+    input,
+    structured: mappedStructured,
+    toolSummaries: toolSummary.structured,
+    currentText: preliminaryText,
+    responseType: preliminaryStructuredData.responseType,
+  });
 
   const finalStructured =
     preliminaryStructuredData.responseType === 'search'
@@ -440,7 +602,7 @@ export async function generateFinalAnswer(
     followUps: [],
     metadata: buildAnswerMetadata(
       input,
-      language,
+      policy.language,
       'model',
       structuredData.responseType,
     ),
