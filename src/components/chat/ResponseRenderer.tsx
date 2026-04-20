@@ -123,10 +123,81 @@ function buildLegacyModel(
   };
 }
 
+function normalizeResponseType(value: unknown): string | null {
+  if (typeof value !== 'string') return null;
+  const normalized = value.trim().toLowerCase();
+  if (!normalized) return null;
+  return normalized;
+}
+
+function resolveExplicitView(message: Message):
+  | 'plain'
+  | 'email'
+  | 'search'
+  | 'compare'
+  | 'shopping'
+  | 'operator'
+  | null {
+  const structuredData =
+    ((message as Message & { structuredData?: Record<string, unknown> }).structuredData ??
+      null) as Record<string, unknown> | null;
+  const metadata = (message.agentMetadata ?? null) as Record<string, unknown> | null;
+
+  const responseType =
+    normalizeResponseType(structuredData?.responseType) ??
+    normalizeResponseType(structuredData?.response_type) ??
+    normalizeResponseType((metadata?.structuredData as Record<string, unknown> | undefined)?.responseType) ??
+    normalizeResponseType((metadata?.structuredData as Record<string, unknown> | undefined)?.response_type);
+
+  if (
+    responseType === 'plain' ||
+    responseType === 'email' ||
+    responseType === 'search' ||
+    responseType === 'compare' ||
+    responseType === 'shopping' ||
+    responseType === 'operator'
+  ) {
+    return responseType;
+  }
+
+  return null;
+}
+
+function hasStructuredPayload(
+  view:
+    | 'plain'
+    | 'email'
+    | 'search'
+    | 'compare'
+    | 'shopping'
+    | 'operator'
+    | 'calendar'
+    | 'casual',
+  presentation: ReturnType<typeof buildResponsePresentation>,
+): boolean {
+  if (view === 'search') return presentation.search.results.length > 0;
+  if (view === 'shopping') return presentation.shopping.products.length > 0;
+  if (view === 'compare') return presentation.compare.rows.length > 0;
+  if (view === 'email') return presentation.email.messages.length > 0;
+
+  if (view === 'operator') {
+    return Boolean(
+      presentation.operator.nextActions.length ||
+        presentation.operator.risks.length ||
+        presentation.operator.opportunities.length ||
+        presentation.summary,
+    );
+  }
+
+  return false;
+}
+
 export function ResponseRenderer({
   message,
   latestUserContent,
 }: ResponseRendererProps) {
+  const explicitView = resolveExplicitView(message);
+
   const resolution = resolveResponseView({
     text: message.content,
     structured: (message.structured ?? null) as Record<string, unknown> | null,
@@ -138,8 +209,12 @@ export function ResponseRenderer({
     isStreaming: Boolean(message.isStreaming),
   });
 
+  const selectedView = message.isStreaming
+    ? 'plain'
+    : (explicitView ?? resolution.view);
+
   const presentation = buildResponsePresentation({
-    view: message.isStreaming ? 'plain' : resolution.view,
+    view: selectedView,
     text: message.content,
     structured: (message.structured ?? null) as Record<string, unknown> | null,
     structuredData: ((message as Message & { structuredData?: Record<string, unknown> }).structuredData ??
@@ -149,30 +224,46 @@ export function ResponseRenderer({
       null) as Array<Record<string, unknown>> | null),
   });
 
-  const legacyModel = buildLegacyModel(presentation);
+  const shouldSuppressRawText =
+    !message.isStreaming &&
+    explicitView !== null &&
+    explicitView !== 'plain' &&
+    hasStructuredPayload(selectedView, presentation);
 
-  switch (presentation.view) {
+  const displayPresentation = shouldSuppressRawText
+    ? {
+        ...presentation,
+        title: null,
+        lead: null,
+        summary: null,
+        plainText: '',
+      }
+    : presentation;
+
+  const legacyModel = buildLegacyModel(displayPresentation);
+
+  switch (displayPresentation.view) {
     case 'email':
-      return <EmailResponseView presentation={presentation} />;
+      return <EmailResponseView presentation={displayPresentation} />;
 
     case 'plain':
       return (
         <PlainResponseView
-          title={presentation.title || undefined}
-          lead={presentation.lead || undefined}
-          text={presentation.plainText || presentation.summary || ''}
+          title={displayPresentation.title || undefined}
+          lead={displayPresentation.lead || undefined}
+          text={displayPresentation.plainText || displayPresentation.summary || ''}
         />
       );
 
     case 'calendar':
       return (
         <PlainResponseView
-          title={presentation.title || undefined}
-          lead={presentation.lead || undefined}
+          title={displayPresentation.title || undefined}
+          lead={displayPresentation.lead || undefined}
           text={
-            presentation.summary ||
-            presentation.plainText ||
-            presentation.calendar.events
+            displayPresentation.summary ||
+            displayPresentation.plainText ||
+            displayPresentation.calendar.events
               .map((event) =>
                 [event.title, event.time, event.subtitle].filter(Boolean).join(' — '),
               )
@@ -194,14 +285,18 @@ export function ResponseRenderer({
       return <OperatorResponseView model={legacyModel as never} />;
 
     case 'casual':
-      return <CasualResponseView text={presentation.plainText || presentation.summary || ''} />;
+      return (
+        <CasualResponseView
+          text={displayPresentation.plainText || displayPresentation.summary || ''}
+        />
+      );
 
     default:
       return (
         <PlainResponseView
-          title={presentation.title || undefined}
-          lead={presentation.lead || undefined}
-          text={presentation.plainText || presentation.summary || ''}
+          title={displayPresentation.title || undefined}
+          lead={displayPresentation.lead || undefined}
+          text={displayPresentation.plainText || displayPresentation.summary || ''}
         />
       );
   }

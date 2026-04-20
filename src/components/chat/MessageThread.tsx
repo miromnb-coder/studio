@@ -13,6 +13,63 @@ type MessageThreadProps = {
   pending: boolean;
 };
 
+function normalizeResponseType(value: unknown): string | null {
+  if (typeof value !== 'string') return null;
+  const normalized = value.trim().toLowerCase();
+  return normalized || null;
+}
+
+function hasExplicitStructuredResponseType(message: Message): boolean {
+  const structuredData = (message.structuredData ?? null) as
+    | Record<string, unknown>
+    | null;
+
+  const responseType =
+    normalizeResponseType(structuredData?.responseType) ??
+    normalizeResponseType(structuredData?.response_type) ??
+    normalizeResponseType(
+      (message.agentMetadata?.structuredData as Record<string, unknown> | undefined)
+        ?.responseType,
+    ) ??
+    normalizeResponseType(
+      (message.agentMetadata?.structuredData as Record<string, unknown> | undefined)
+        ?.response_type,
+    );
+
+  return Boolean(responseType);
+}
+
+function compactDuplicateAssistantText(messages: Message[]): Message[] {
+  if (messages.length < 2) return messages;
+
+  const visible: Message[] = [];
+
+  for (const message of messages) {
+    const previous = visible[visible.length - 1];
+    const messageText = message.content.trim();
+    const previousText = previous?.content.trim() ?? '';
+
+    const shouldReplacePreviousPlainAssistant =
+      Boolean(previous) &&
+      previous.role === 'assistant' &&
+      message.role === 'assistant' &&
+      !previous.isStreaming &&
+      !hasExplicitStructuredResponseType(previous) &&
+      hasExplicitStructuredResponseType(message) &&
+      Boolean(previousText) &&
+      previousText === messageText;
+
+    if (shouldReplacePreviousPlainAssistant) {
+      visible[visible.length - 1] = message;
+      continue;
+    }
+
+    visible.push(message);
+  }
+
+  return visible;
+}
+
 function isSameDay(a: string, b: string): boolean {
   const da = new Date(a);
   const db = new Date(b);
@@ -125,10 +182,11 @@ function getThinkingState(messages: Message[], pending: boolean) {
 }
 
 export function MessageThread({ messages, pending }: MessageThreadProps) {
-  const rows = buildThreadRows(messages);
-  const pendingMode = resolveResponseMode(messages);
-  const thinkingState = getThinkingState(messages, pending);
-  const latestAssistant = [...messages]
+  const renderedMessages = compactDuplicateAssistantText(messages);
+  const rows = buildThreadRows(renderedMessages);
+  const pendingMode = resolveResponseMode(renderedMessages);
+  const thinkingState = getThinkingState(renderedMessages, pending);
+  const latestAssistant = [...renderedMessages]
     .reverse()
     .find((message) => message.role === 'assistant');
   const assistantHasVisibleStreamContent = Boolean(
@@ -141,7 +199,7 @@ export function MessageThread({ messages, pending }: MessageThreadProps) {
     Boolean(thinkingState) &&
     !assistantHasVisibleStreamContent;
 
-  if (messages.length === 0) {
+  if (renderedMessages.length === 0) {
     return (
       <div className="flex min-h-0 flex-1 items-center justify-center px-8 pb-[188px] pt-8">
         <p
@@ -174,7 +232,7 @@ export function MessageThread({ messages, pending }: MessageThreadProps) {
           const isUser = message.role === 'user';
           const isError = Boolean(message.error);
           const latestUserContent =
-            [...messages]
+            [...renderedMessages]
               .slice(0, index)
               .reverse()
               .find((item) => item.role === 'user')?.content ?? '';
