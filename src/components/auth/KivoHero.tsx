@@ -2,12 +2,35 @@
 
 import { KivoTypeHapticText } from '@/components/ui/KivoTypeHapticText';
 
-function KivoMark() {
+function KivoLogoMark() {
   return (
-    <div className="flex items-end gap-[9px] sm:gap-[10px]">
-      <div className="h-[16px] w-[16px] rounded-full bg-black sm:h-[17px] sm:w-[17px]" />
-      <div className="h-[40px] w-[40px] rounded-full bg-black sm:h-[42px] sm:w-[42px]" />
-    </div>
+    <svg
+      width="86"
+      height="70"
+      viewBox="0 0 172 140"
+      fill="none"
+      xmlns="http://www.w3.org/2000/svg"
+      aria-hidden="true"
+      className="h-[58px] w-[72px] sm:h-[64px] sm:w-[80px]"
+    >
+      <path
+        d="M32 109C39 118 55 124 80 123C110 121 136 105 153 84C162 73 166 61 165 50C164 44 162 39 158 35"
+        stroke="black"
+        strokeWidth="8"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        fill="none"
+      />
+      <path
+        d="M71 81L105 51"
+        stroke="black"
+        strokeWidth="10"
+        strokeLinecap="round"
+        fill="none"
+      />
+      <circle cx="65" cy="85" r="18" fill="black" />
+      <circle cx="116" cy="44" r="30" fill="black" />
+    </svg>
   );
 }
 
@@ -15,7 +38,7 @@ export function KivoHero() {
   return (
     <section className="flex w-full flex-col items-center text-center">
       <div className="mb-4 sm:mb-5">
-        <KivoMark />
+        <KivoLogoMark />
       </div>
 
       <div className="mb-7 text-[14px] font-medium uppercase tracking-[0.42em] text-black/28 sm:mb-8 sm:text-[15px]">
