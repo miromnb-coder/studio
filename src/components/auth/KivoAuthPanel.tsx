@@ -1,6 +1,12 @@
 'use client';
 
 import type { ReactNode } from 'react';
+import { useMemo, useState } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
+import { createClient } from '@/lib/supabase/client';
+import { buildAuthCallbackUrl, sanitizeNextPath } from '@/lib/auth/redirects';
+
+type PendingAction = 'apple' | 'google' | 'email' | 'login' | null;
 
 function AppleIcon() {
   return (
@@ -41,18 +47,24 @@ function AuthButton({
   children,
   icon,
   dark = false,
+  onClick,
+  disabled,
 }: {
   children: ReactNode;
   icon: ReactNode;
   dark?: boolean;
+  onClick?: () => void;
+  disabled?: boolean;
 }) {
   return (
     <button
       type="button"
+      onClick={onClick}
+      disabled={disabled}
       className={[
         'flex h-[62px] w-full items-center justify-center gap-3 rounded-[22px] px-4',
         'text-[17px] font-medium tracking-[-0.03em] whitespace-nowrap',
-        'transition active:scale-[0.995]',
+        'transition active:scale-[0.995] disabled:cursor-not-allowed disabled:opacity-60',
         dark
           ? 'bg-[linear-gradient(180deg,#161616,#050505)] text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.08)]'
           : 'border border-black/[0.03] bg-white/74 text-black shadow-[inset_0_1px_0_rgba(255,255,255,0.8)]',
@@ -65,6 +77,55 @@ function AuthButton({
 }
 
 export function KivoAuthPanel() {
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  const supabase = useMemo(() => createClient(), []);
+  const [pendingAction, setPendingAction] = useState<PendingAction>(null);
+
+  const nextPath = sanitizeNextPath(searchParams.get('next'));
+  const isBusy = pendingAction !== null;
+
+  const startOAuth = async (provider: 'apple' | 'google') => {
+    if (isBusy) return;
+
+    setPendingAction(provider);
+
+    const callbackQuery = new URLSearchParams();
+    callbackQuery.set('next', nextPath);
+
+    const { error } = await supabase.auth.signInWithOAuth({
+      provider,
+      options: {
+        redirectTo: buildAuthCallbackUrl(`/auth/callback?${callbackQuery.toString()}`),
+        ...(provider === 'google'
+          ? {
+              queryParams: {
+                access_type: 'offline',
+                prompt: 'select_account',
+              },
+            }
+          : {}),
+      },
+    });
+
+    if (error) {
+      console.error(`${provider.toUpperCase()}_AUTH_START_ERROR`, error);
+      setPendingAction(null);
+    }
+  };
+
+  const goToEmail = () => {
+    if (isBusy) return;
+    setPendingAction('email');
+    router.push(`/signup?next=${encodeURIComponent(nextPath)}`);
+  };
+
+  const goToLogin = () => {
+    if (isBusy) return;
+    setPendingAction('login');
+    router.push(`/login?next=${encodeURIComponent(nextPath)}`);
+  };
+
   return (
     <section
       className="
@@ -78,23 +139,23 @@ export function KivoAuthPanel() {
       "
     >
       <div className="space-y-3">
-        <AuthButton dark icon={<AppleIcon />}>
-          Continue with Apple
+        <AuthButton dark icon={<AppleIcon />} onClick={() => void startOAuth('apple')} disabled={isBusy}>
+          {pendingAction === 'apple' ? 'Connecting to Apple...' : 'Continue with Apple'}
         </AuthButton>
 
-        <AuthButton icon={<GoogleIcon />}>
-          Continue with Google
+        <AuthButton icon={<GoogleIcon />} onClick={() => void startOAuth('google')} disabled={isBusy}>
+          {pendingAction === 'google' ? 'Connecting to Google...' : 'Continue with Google'}
         </AuthButton>
 
-        <AuthButton icon={<EmailIcon />}>
-          Continue with Email
+        <AuthButton icon={<EmailIcon />} onClick={goToEmail} disabled={isBusy}>
+          {pendingAction === 'email' ? 'Opening Email...' : 'Continue with Email'}
         </AuthButton>
       </div>
 
       <div className="pt-4 text-center text-[15px] font-normal tracking-[-0.02em] text-black/48">
         Already have an account?{' '}
-        <button type="button" className="font-semibold text-black">
-          Log in
+        <button type="button" className="font-semibold text-black disabled:opacity-60" onClick={goToLogin} disabled={isBusy}>
+          {pendingAction === 'login' ? 'Opening...' : 'Log in'}
         </button>
       </div>
     </section>
