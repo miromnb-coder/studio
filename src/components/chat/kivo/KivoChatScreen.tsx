@@ -9,7 +9,7 @@ import type { MessageAttachment } from '@/app/store/app-store';
 import { MessageThread } from '@/components/chat/MessageThread';
 import { WorkspaceSheet } from '@/components/chat/WorkspaceSheet';
 import { KivoActionSheet } from './KivoActionSheet';
-import { KivoChatHeader } from './KivoChatHeader';
+import KivoChatHeader from './KivoChatHeader';
 import { KivoComposerDock } from './KivoComposerDock';
 import { KivoReferralSuccessToast } from './KivoReferralSuccessToast';
 
@@ -723,6 +723,26 @@ export function KivoChatScreen() {
     [focusComposer, setDraftPrompt],
   );
 
+  const handleHeaderSummarize = useCallback(() => {
+    setDraftPrompt(
+      'Summarize this conversation into a concise recap with key decisions, next steps, and open questions.',
+    );
+    focusComposer();
+    closeWorkspace();
+    closeActionSheet();
+    showNotice('Summary ready', 'Review and send the summary prompt.');
+  }, [closeActionSheet, closeWorkspace, focusComposer, setDraftPrompt, showNotice]);
+
+  const handleHeaderCreateTask = useCallback(() => {
+    setDraftPrompt(
+      'Turn this conversation into an actionable task list with priorities, deadlines, and the next step I should do first.',
+    );
+    focusComposer();
+    closeWorkspace();
+    closeActionSheet();
+    showNotice('Task prompt ready', 'Review and send to generate tasks.');
+  }, [closeActionSheet, closeWorkspace, focusComposer, setDraftPrompt, showNotice]);
+
   const handleActionTool = useCallback(
     (id: ProductivityToolId) => {
       if (id === 'gmail') {
@@ -971,7 +991,12 @@ export function KivoChatScreen() {
       </div>
 
       <div className="relative mx-auto flex h-full w-full max-w-[560px] flex-col">
-        <KivoChatHeader />
+        <KivoChatHeader
+          title="Kivo"
+          hasMessages={hasMessages}
+          onSummarize={handleHeaderSummarize}
+          onCreateTask={handleHeaderCreateTask}
+        />
 
         <main
           ref={mainScrollRef}
@@ -1003,14 +1028,20 @@ export function KivoChatScreen() {
                 animate={{ opacity: 1, y: 0 }}
                 exit={{ opacity: 0, y: -10, scale: 0.985 }}
                 transition={{ duration: 0.22, ease: 'easeOut' }}
-                className="flex min-h-0 flex-1 items-start justify-center px-8 pt-[18vh]"
+                className="flex min-h-0 flex-1 items-start justify-center px-8 pt-[16vh]"
               >
-                <h2
-                  className="max-w-[340px] text-center text-[34px] font-normal leading-[1.08] tracking-[-0.05em] text-[#353b45] sm:text-[40px]"
-                  style={{ fontFamily: 'ui-serif, Georgia, Times, serif' }}
-                >
-                  What can I do for you?
-                </h2>
+                <div className="flex max-w-[360px] flex-col items-center text-center">
+                  <h2
+                    className="text-center text-[34px] font-normal leading-[1.08] tracking-[-0.05em] text-[#353b45] sm:text-[40px]"
+                    style={{ fontFamily: 'ui-serif, Georgia, Times, serif' }}
+                  >
+                    What needs your attention today?
+                  </h2>
+
+                  <p className="mt-4 max-w-[300px] text-balance text-[16px] font-normal leading-[1.5] tracking-[-0.02em] text-[#6b7280] sm:text-[17px]">
+                    Plan, decide, and move faster.
+                  </p>
+                </div>
               </motion.div>
             ) : (
               <motion.div
