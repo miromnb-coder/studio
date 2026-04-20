@@ -1,7 +1,14 @@
 'use client';
 
 import { useMemo, useState } from 'react';
-import { ChevronDown, ChevronUp, ExternalLink, Globe, Search as SearchIcon, Sparkles } from 'lucide-react';
+import {
+  ChevronDown,
+  ChevronUp,
+  ExternalLink,
+  Globe,
+  Search as SearchIcon,
+  Sparkles,
+} from 'lucide-react';
 import type { PresentationModel } from '@/lib/presentation/build-presentation-model';
 import { PlainResponseView } from './PlainResponseView';
 
@@ -9,8 +16,19 @@ type SearchResponseViewProps = {
   model: PresentationModel;
 };
 
-const INITIAL_CHIP_COUNT = 4;
-const INITIAL_SOURCE_COUNT = 3;
+const INITIAL_CHIP_COUNT = 3;
+const INITIAL_RESULT_COUNT = 3;
+
+const INTERNAL_CHIP_LABELS = new Set([
+  'search',
+  'sources',
+  'results',
+  'web',
+  'browser_search',
+  'memory',
+  'gmail',
+  'calendar',
+]);
 
 function hostnameFromUrl(url?: string | null): string {
   if (!url) return 'Source';
@@ -21,6 +39,35 @@ function hostnameFromUrl(url?: string | null): string {
   }
 }
 
+function shorten(text: string | undefined | null, maxLength: number): string {
+  const normalized = (text ?? '').replace(/\s+/g, ' ').trim();
+  if (!normalized) return '';
+  if (normalized.length <= maxLength) return normalized;
+
+  const sliced = normalized.slice(0, maxLength);
+  const lastSpace = sliced.lastIndexOf(' ');
+  return `${(lastSpace > 60 ? sliced.slice(0, lastSpace) : sliced).trim()}…`;
+}
+
+function isUsefulChip(label: string): boolean {
+  const normalized = label.trim().toLowerCase();
+  if (!normalized) return false;
+  if (INTERNAL_CHIP_LABELS.has(normalized)) return false;
+  if (normalized.length <= 2) return false;
+  return true;
+}
+
+function buildIntroText(model: PresentationModel): string {
+  const candidates = [model.summary, model.lead, model.plainText]
+    .map((item) => (item ?? '').replace(/\s+/g, ' ').trim())
+    .filter(Boolean);
+
+  const unique = [...new Set(candidates)];
+  if (!unique.length) return '';
+
+  return shorten(unique[0], 260);
+}
+
 function SourceCard({
   source,
   featured = false,
@@ -29,6 +76,8 @@ function SourceCard({
   featured?: boolean;
 }) {
   const domain = source.domain || hostnameFromUrl(source.url);
+  const snippet = shorten(source.snippet, featured ? 220 : 160);
+
   const content = (
     <>
       <div className="flex items-start justify-between gap-3">
@@ -52,9 +101,9 @@ function SourceCard({
         ) : null}
       </div>
 
-      {source.snippet ? (
+      {snippet ? (
         <p className="mt-3 text-[13.5px] leading-[1.68] text-[#5f6d80]">
-          {source.snippet}
+          {snippet}
         </p>
       ) : null}
     </>
@@ -110,12 +159,12 @@ function ToggleButton({
       onClick={onClick}
       className="inline-flex items-center gap-2 rounded-full border border-[#dde5ef] bg-white px-4 py-2 text-[13px] font-medium text-[#44566b] transition hover:border-[#cfd9e6] hover:bg-[#fbfdff]"
     >
-      <span>
-        {expanded
-          ? 'Show less'
-          : `Show more sources${hiddenCount > 0 ? ` (${hiddenCount})` : ''}`}
-      </span>
-      {expanded ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+      <span>{expanded ? 'Show less' : `Show more${hiddenCount > 0 ? ` (${hiddenCount})` : ''}`}</span>
+      {expanded ? (
+        <ChevronUp className="h-4 w-4" />
+      ) : (
+        <ChevronDown className="h-4 w-4" />
+      )}
     </button>
   );
 }
@@ -123,66 +172,73 @@ function ToggleButton({
 export function SearchResponseView({ model }: SearchResponseViewProps) {
   const [expanded, setExpanded] = useState(false);
 
+  const filteredChips = useMemo(
+    () => model.chips.filter(isUsefulChip),
+    [model.chips],
+  );
+
+  const introText = buildIntroText(model);
+
   if (!model.sources.length) {
     return (
       <PlainResponseView
         title={model.title}
         lead={model.lead}
-        text={model.plainText || model.summary}
+        text={introText || model.plainText || model.summary}
       />
     );
   }
 
   const featuredSource = model.sources[0];
-  const restSources = model.sources.slice(1);
+  const remainingSources = model.sources.slice(1);
 
   const visibleSources = expanded
-    ? restSources
-    : restSources.slice(0, Math.max(INITIAL_SOURCE_COUNT - 1, 0));
+    ? remainingSources
+    : remainingSources.slice(0, Math.max(INITIAL_RESULT_COUNT - 1, 0));
 
   const visibleChips = expanded
-    ? model.chips
-    : model.chips.slice(0, INITIAL_CHIP_COUNT);
+    ? filteredChips
+    : filteredChips.slice(0, INITIAL_CHIP_COUNT);
 
-  const hiddenSourceCount = Math.max(restSources.length - Math.max(INITIAL_SOURCE_COUNT - 1, 0), 0);
-  const hiddenChipCount = Math.max(model.chips.length - INITIAL_CHIP_COUNT, 0);
-
-  const shouldShowToggle = restSources.length > Math.max(INITIAL_SOURCE_COUNT - 1, 0);
-
-  const chipSummary = useMemo(() => {
-    if (expanded || hiddenChipCount <= 0) return null;
-    return `+${hiddenChipCount} more`;
-  }, [expanded, hiddenChipCount]);
+  const hiddenSourceCount = Math.max(
+    remainingSources.length - Math.max(INITIAL_RESULT_COUNT - 1, 0),
+    0,
+  );
+  const hiddenChipCount = Math.max(filteredChips.length - INITIAL_CHIP_COUNT, 0);
+  const shouldShowToggle =
+    remainingSources.length > Math.max(INITIAL_RESULT_COUNT - 1, 0);
 
   return (
     <div className="max-w-[900px] space-y-5">
       <PlainResponseView
         title={model.title}
         lead={model.lead}
-        text={model.summary || model.plainText}
+        text={introText || model.summary || model.plainText}
       />
 
-      <div className="flex flex-wrap items-center gap-2.5">
-        <SectionLabel
-          icon={<SearchIcon className="h-3.5 w-3.5" />}
-          label="Search"
-        />
+      {visibleChips.length ? (
+        <div className="flex flex-wrap items-center gap-2.5">
+          <SectionLabel
+            icon={<SearchIcon className="h-3.5 w-3.5" />}
+            label="Search"
+          />
 
-        {visibleChips.map((chip) => (
-          <span
-            key={chip}
-            className="inline-flex items-center rounded-full border border-[#e9eef5] bg-[#fbfdff] px-3 py-1.5 text-[12px] text-[#637489]"
-          >
-            {chip}
-          </span>
-        ))}
+          {visibleChips.map((chip) => (
+            <span
+              key={chip}
+              className="inline-flex items-center rounded-full border border-[#e9eef5] bg-[#fbfdff] px-3 py-1.5 text-[12px] text-[#637489]"
+            >
+              {chip}
+            </span>
+          ))}
 
-        {chipSummary ? (
-          <span className="inline-flex items-center rounded-full border border-[#edf2f7] bg-[#fafcff] px-3 py-1.5 text-[12px] text-[#8a97a8]">
-            {chipSummary}
-          </span>
-        ) : null}
-      </div>
+          {!expanded && hiddenChipCount > 0 ? (
+            <span className="inline-flex items-center rounded-full border border-[#edf2f7] bg-[#fafcff] px-3 py-1.5 text-[12px] text-[#8a97a8]">
+              +{hiddenChipCount} more
+            </span>
+          ) : null}
+        </div>
+      ) : null}
 
       {featuredSource ? (
         <div className="space-y-3">
