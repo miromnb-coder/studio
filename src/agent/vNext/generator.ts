@@ -21,7 +21,10 @@ import {
   trimOuterWhitespace,
 } from './generator-types';
 import { decideResponseMode } from './generator-response-mode';
-import { buildSearchResponse } from './generator-search';
+import {
+  buildSearchResponse,
+  buildSearchUserFacingText,
+} from './generator-search';
 import { buildShoppingResponse } from './generator-shopping';
 import { buildCompareResponse } from './generator-compare';
 import { buildEmailResponse } from './generator-email';
@@ -119,11 +122,44 @@ function buildStructuredData(input: {
     summary: mappedStructured.summary ?? null,
   };
 
-  if (responseType === 'search') return { ...base, ...buildSearchResponse({ structured: mappedStructured, toolSummaries }) };
-  if (responseType === 'shopping') return { ...base, ...buildShoppingResponse({ structured: mappedStructured, toolSummaries }) };
-  if (responseType === 'compare') return { ...base, ...buildCompareResponse({ structured: mappedStructured, toolSummaries }) };
-  if (responseType === 'email') return { ...base, ...buildEmailResponse({ structured: mappedStructured, toolSummaries }) };
-  if (responseType === 'operator') return { ...base, ...buildOperatorResponse({ input: generatorInput, structured: mappedStructured, toolSummaries }) };
+  if (responseType === 'search') {
+    return {
+      ...base,
+      ...buildSearchResponse({ structured: mappedStructured, toolSummaries }),
+    };
+  }
+
+  if (responseType === 'shopping') {
+    return {
+      ...base,
+      ...buildShoppingResponse({ structured: mappedStructured, toolSummaries }),
+    };
+  }
+
+  if (responseType === 'compare') {
+    return {
+      ...base,
+      ...buildCompareResponse({ structured: mappedStructured, toolSummaries }),
+    };
+  }
+
+  if (responseType === 'email') {
+    return {
+      ...base,
+      ...buildEmailResponse({ structured: mappedStructured, toolSummaries }),
+    };
+  }
+
+  if (responseType === 'operator') {
+    return {
+      ...base,
+      ...buildOperatorResponse({
+        input: generatorInput,
+        structured: mappedStructured,
+        toolSummaries,
+      }),
+    };
+  }
 
   return base;
 }
@@ -139,7 +175,8 @@ async function generateWithModel(
   const { compactJson } = summarizeToolResults(input.toolResults);
   const metadata = (input.request.metadata ?? {}) as Record<string, unknown>;
   const responseMode = getResponseMode(input);
-  const generatorModel = normalizeText(metadata.generatorModel) || 'openai/gpt-oss-120b';
+  const generatorModel =
+    normalizeText(metadata.generatorModel) || 'openai/gpt-oss-120b';
 
   const systemPrompt = [
     'You are the final answer generator for Kivo, a premium AI assistant.',
@@ -190,7 +227,10 @@ async function generateWithModel(
     `User request: ${requestText}`,
     `Intent: ${input.route.intent}`,
     `Response mode: ${responseMode}`,
-    `User goal: ${normalizeText((input.route as { userGoal?: string }).userGoal) || 'Help with the user request.'}`,
+    `User goal: ${
+      normalizeText((input.route as { userGoal?: string }).userGoal) ||
+      'Help with the user request.'
+    }`,
     `Entities: ${
       Array.isArray((input.route as { entities?: string[] }).entities)
         ? ((input.route as { entities?: string[] }).entities ?? []).join(', ')
@@ -198,7 +238,9 @@ async function generateWithModel(
     }`,
     `Memory summary: ${normalizeText(input.memorySummary) || 'none'}`,
     'Recent conversation:',
-    conversation.length ? conversation.map((item) => `${item.role}: ${item.content}`).join('\n') : 'none',
+    conversation.length
+      ? conversation.map((item) => `${item.role}: ${item.content}`).join('\n')
+      : 'none',
     'Tool results JSON:',
     compactJson,
     `Plan steps: ${input.plan.steps.map((step) => step.title).join(' -> ')}`,
@@ -216,7 +258,9 @@ async function generateWithModel(
       response_format: { type: 'json_object' },
     });
 
-    const rawOutput = trimOuterWhitespace(completion.choices?.[0]?.message?.content);
+    const rawOutput = trimOuterWhitespace(
+      completion.choices?.[0]?.message?.content,
+    );
     if (!rawOutput) return null;
 
     const jsonBlock = extractJsonBlock(rawOutput);
@@ -229,12 +273,30 @@ async function generateWithModel(
   }
 }
 
+function buildSearchSafeText(params: {
+  input: GenerateFinalAnswerInput;
+  language: string;
+  structured: NonNullable<AgentFinalAnswer['structured']>;
+  toolSummaries: ReturnType<typeof summarizeToolResults>['structured'];
+  currentText: string;
+}): string {
+  return buildSearchUserFacingText({
+    language: params.language,
+    query: getRequestText(params.input.request),
+    structured: params.structured,
+    toolSummaries: params.toolSummaries,
+    currentText: params.currentText,
+  });
+}
+
 function buildFallbackAnswer(
   input: GenerateFinalAnswerInput,
   language: string,
 ): AgentFinalAnswer {
   const requestText = getRequestText(input.request);
-  const { successful, failed, structured } = summarizeToolResults(input.toolResults);
+  const { successful, failed, structured } = summarizeToolResults(
+    input.toolResults,
+  );
   const localized = buildLocalizedFallback(language, {
     requestText,
     memorySummary: input.memorySummary,
@@ -242,22 +304,66 @@ function buildFallbackAnswer(
     failed,
   });
 
-  const fallbackStructured = buildFallbackStructuredAnswer(input, localized.text);
-  const mappedStructured = fallbackStructured ?? { plainText: localized.text };
-  const structuredData = buildStructuredData({
+  const fallbackStructured =
+    buildFallbackStructuredAnswer(input, localized.text) ?? {
+      plainText: localized.text,
+      summary: localized.text,
+    };
+
+  const preliminaryStructuredData = buildStructuredData({
     generatorInput: input,
     finalText: localized.text,
-    mappedStructured,
+    mappedStructured: fallbackStructured,
     toolSummaries: structured,
   });
 
+  const finalText =
+    preliminaryStructuredData.responseType === 'search'
+      ? buildSearchSafeText({
+          input,
+          language,
+          structured: fallbackStructured,
+          toolSummaries: structured,
+          currentText: localized.text,
+        })
+      : localized.text;
+
+  const finalStructured =
+    preliminaryStructuredData.responseType === 'search'
+      ? {
+          ...fallbackStructured,
+          plainText: finalText,
+          summary: fallbackStructured.summary || finalText,
+        }
+      : fallbackStructured;
+
+  const structuredData =
+    preliminaryStructuredData.responseType === 'search'
+      ? buildStructuredData({
+          generatorInput: input,
+          finalText,
+          mappedStructured: finalStructured,
+          toolSummaries: structured,
+        })
+      : preliminaryStructuredData;
+
   return {
-    text: localized.text,
-    structured: fallbackStructured,
+    text: finalText,
+    structured: finalStructured,
     structuredData,
-    confidence: estimateConfidence(input.route, input.toolResults, localized.text, structuredData),
+    confidence: estimateConfidence(
+      input.route,
+      input.toolResults,
+      finalText,
+      structuredData,
+    ),
     followUps: [],
-    metadata: buildAnswerMetadata(input, language, 'fallback', structuredData.responseType),
+    metadata: buildAnswerMetadata(
+      input,
+      language,
+      'fallback',
+      structuredData.responseType,
+    ),
   };
 }
 
@@ -274,7 +380,7 @@ export async function generateFinalAnswer(
   const toolSummary = summarizeToolResults(input.toolResults);
   const mappedStructured = mapLlmStructuredToAppStructured(input, llmStructured);
 
-  const finalText =
+  const preliminaryText =
     mappedStructured.plainText ||
     mappedStructured.lead ||
     mappedStructured.summary ||
@@ -282,22 +388,62 @@ export async function generateFinalAnswer(
     llmStructured.summary ||
     '';
 
-  const structuredData = buildStructuredData({
+  const preliminaryStructuredData = buildStructuredData({
     generatorInput: input,
-    finalText,
+    finalText: preliminaryText,
     mappedStructured,
     toolSummaries: toolSummary.structured,
   });
 
-  const confidence = estimateConfidence(input.route, input.toolResults, finalText, structuredData);
+  const finalText =
+    preliminaryStructuredData.responseType === 'search'
+      ? buildSearchSafeText({
+          input,
+          language,
+          structured: mappedStructured,
+          toolSummaries: toolSummary.structured,
+          currentText: preliminaryText,
+        })
+      : preliminaryText;
+
+  const finalStructured =
+    preliminaryStructuredData.responseType === 'search'
+      ? {
+          ...mappedStructured,
+          plainText: finalText,
+          summary: mappedStructured.summary || finalText,
+        }
+      : mappedStructured;
+
+  const structuredData =
+    preliminaryStructuredData.responseType === 'search'
+      ? buildStructuredData({
+          generatorInput: input,
+          finalText,
+          mappedStructured: finalStructured,
+          toolSummaries: toolSummary.structured,
+        })
+      : preliminaryStructuredData;
+
+  const confidence = estimateConfidence(
+    input.route,
+    input.toolResults,
+    finalText,
+    structuredData,
+  );
 
   return {
     text: finalText,
-    structured: mappedStructured,
+    structured: finalStructured,
     structuredData,
     confidence,
     followUps: [],
-    metadata: buildAnswerMetadata(input, language, 'model', structuredData.responseType),
+    metadata: buildAnswerMetadata(
+      input,
+      language,
+      'model',
+      structuredData.responseType,
+    ),
   };
 }
 
