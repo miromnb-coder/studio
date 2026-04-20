@@ -1,120 +1,167 @@
 'use client';
 
-import { ArrowLeft } from 'lucide-react';
+import { useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 
 type KivoChatHeaderProps = {
-  onOpenQuickSheet?: () => void;
+  title?: string;
+  hasMessages?: boolean;
+  onSummarize?: () => void;
+  onCreateTask?: () => void;
 };
 
-function KivoMark({ className = '' }: { className?: string }) {
+function KivoLogoMark() {
   return (
     <svg
-      viewBox="0 0 1024 1024"
-      fill="none"
+      viewBox="0 0 120 120"
+      className="h-7 w-7 shrink-0"
       aria-hidden="true"
-      className={className}
+      fill="none"
     >
-      <g
+      <path
+        d="M18 78C25 89 44 96 67 94C89 92 107 77 112 58C114 48 112 40 106 34"
         stroke="currentColor"
-        strokeWidth="44"
-        fill="none"
-        strokeLinejoin="round"
-        strokeLinecap="square"
-      >
-        <rect x="294" y="294" width="124" height="124" rx="10" />
-        <rect x="606" y="294" width="124" height="124" rx="10" />
-        <rect x="294" y="606" width="124" height="124" rx="10" />
-        <rect x="606" y="606" width="124" height="124" rx="10" />
-
-        <line x1="294" y1="512" x2="176" y2="512" />
-        <line x1="848" y1="512" x2="730" y2="512" />
-        <line x1="512" y1="294" x2="512" y2="176" />
-        <line x1="512" y1="848" x2="512" y2="730" />
-
-        <line x1="418" y1="418" x2="454" y2="454" />
-        <line x1="606" y1="418" x2="570" y2="454" />
-        <line x1="418" y1="606" x2="454" y2="570" />
-        <line x1="606" y1="606" x2="570" y2="570" />
-      </g>
-
-      <circle
-        cx="512"
-        cy="512"
-        r="116"
-        fill="white"
-        stroke="currentColor"
-        strokeWidth="44"
+        strokeWidth="6"
+        strokeLinecap="round"
       />
-      <circle cx="512" cy="512" r="54" fill="currentColor" />
+      <path
+        d="M42 62L72 36"
+        stroke="currentColor"
+        strokeWidth="7"
+        strokeLinecap="round"
+      />
+      <circle cx="38" cy="66" r="11" fill="currentColor" />
+      <circle cx="79" cy="30" r="18" fill="currentColor" />
     </svg>
   );
 }
 
-export function KivoChatHeader({ onOpenQuickSheet }: KivoChatHeaderProps) {
+function IconButton({
+  onClick,
+  children,
+  label,
+}: {
+  onClick?: () => void;
+  children: React.ReactNode;
+  label: string;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      aria-label={label}
+      className="flex h-10 w-10 items-center justify-center rounded-full border border-black/6 bg-white/85 text-black shadow-[0_8px_24px_rgba(0,0,0,0.06)] backdrop-blur-md transition active:scale-95"
+    >
+      {children}
+    </button>
+  );
+}
+
+export default function KivoChatHeader({
+  title = 'Kivo',
+  hasMessages = false,
+  onSummarize,
+  onCreateTask,
+}: KivoChatHeaderProps) {
   const router = useRouter();
+  const [menuOpen, setMenuOpen] = useState(false);
 
-  const handleBack = () => {
-    router.push('/home');
-  };
-
-  const handleUpgrade = () => {
-    router.push('/upgrade');
-  };
-
-  const handleTitleClick = () => {
-    onOpenQuickSheet?.();
-  };
+  const showActions = useMemo(() => hasMessages, [hasMessages]);
 
   return (
-    <header
-      className="relative z-30 border-b border-black/[0.035] bg-white/82 backdrop-blur-2xl"
-      style={{ paddingTop: 'env(safe-area-inset-top, 0px)' }}
-    >
-      <div className="mx-auto flex h-[78px] w-full max-w-[560px] items-center px-5">
-        <div className="flex w-[52px] shrink-0 justify-start">
-          <button
-            type="button"
-            onClick={handleBack}
-            aria-label="Go back"
-            className="inline-flex h-10 w-10 items-center justify-center text-[#2B313D] transition-all duration-200 ease-out hover:opacity-65 active:scale-[0.96]"
-          >
-            <ArrowLeft className="h-[21px] w-[21px]" strokeWidth={2.2} />
-          </button>
+    <header className="sticky top-0 z-40 border-b border-black/5 bg-[#f5f5f3]/88 backdrop-blur-xl">
+      <div className="mx-auto flex h-16 max-w-5xl items-center gap-3 px-4">
+        {/* Left */}
+        <button
+          type="button"
+          onClick={() => router.back()}
+          aria-label="Back"
+          className="flex h-10 w-10 items-center justify-center rounded-full border border-black/6 bg-white/85 text-black shadow-[0_8px_24px_rgba(0,0,0,0.05)] transition active:scale-95"
+        >
+          <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none">
+            <path
+              d="M14.5 5L7.5 12L14.5 19"
+              stroke="currentColor"
+              strokeWidth="2.2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            />
+          </svg>
+        </button>
+
+        {/* Center */}
+        <div className="flex min-w-0 flex-1 items-center justify-center gap-2">
+          <div className="text-black">
+            <KivoLogoMark />
+          </div>
+
+          <span className="truncate text-[28px] font-semibold tracking-[-0.04em] text-black">
+            {title}
+          </span>
         </div>
 
-        <div className="flex min-w-0 flex-1 justify-center px-3">
-          {onOpenQuickSheet ? (
+        {/* Right */}
+        <div className="relative flex items-center gap-2">
+          {showActions ? (
+            <>
+              <button
+                type="button"
+                onClick={onSummarize}
+                className="hidden h-10 rounded-full border border-black/6 bg-white/85 px-4 text-[14px] font-medium text-black shadow-[0_8px_24px_rgba(0,0,0,0.06)] backdrop-blur-md transition active:scale-95 sm:inline-flex"
+              >
+                Summary
+              </button>
+
+              <IconButton
+                onClick={onCreateTask}
+                label="Create task"
+              >
+                <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none">
+                  <path
+                    d="M12 5V19M5 12H19"
+                    stroke="currentColor"
+                    strokeWidth="2.2"
+                    strokeLinecap="round"
+                  />
+                </svg>
+              </IconButton>
+
+              <IconButton
+                onClick={() => setMenuOpen((v) => !v)}
+                label="More actions"
+              >
+                <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none">
+                  <circle cx="6" cy="12" r="1.8" fill="currentColor" />
+                  <circle cx="12" cy="12" r="1.8" fill="currentColor" />
+                  <circle cx="18" cy="12" r="1.8" fill="currentColor" />
+                </svg>
+              </IconButton>
+
+              {menuOpen && (
+                <div className="absolute right-0 top-12 w-44 overflow-hidden rounded-2xl border border-black/6 bg-white shadow-[0_18px_48px_rgba(0,0,0,0.10)]">
+                  <button className="w-full px-4 py-3 text-left text-sm hover:bg-black/[0.03]">
+                    Rename
+                  </button>
+                  <button className="w-full px-4 py-3 text-left text-sm hover:bg-black/[0.03]">
+                    Pin chat
+                  </button>
+                  <button className="w-full px-4 py-3 text-left text-sm hover:bg-black/[0.03]">
+                    Export
+                  </button>
+                  <button className="w-full px-4 py-3 text-left text-sm text-red-600 hover:bg-red-50">
+                    Delete
+                  </button>
+                </div>
+              )}
+            </>
+          ) : (
             <button
               type="button"
-              onClick={handleTitleClick}
-              aria-label="Open quick actions"
-              className="inline-flex min-w-0 items-center gap-2.5 transition-all duration-200 ease-out hover:opacity-80 active:scale-[0.985]"
+              className="inline-flex h-10 items-center rounded-full bg-black px-4 text-sm font-medium text-white shadow-[0_12px_30px_rgba(0,0,0,0.14)] transition active:scale-95"
             >
-              <KivoMark className="h-[17px] w-[17px] shrink-0 text-[#111318]" />
-              <span className="truncate text-[21px] font-semibold tracking-[-0.045em] text-[#202734]">
-                Kivo
-              </span>
+              Kivo Plus
             </button>
-          ) : (
-            <div className="inline-flex min-w-0 items-center gap-2.5">
-              <KivoMark className="h-[17px] w-[17px] shrink-0 text-[#111318]" />
-              <span className="truncate text-[21px] font-semibold tracking-[-0.045em] text-[#202734]">
-                Kivo
-              </span>
-            </div>
           )}
-        </div>
-
-        <div className="flex w-[108px] shrink-0 justify-end">
-          <button
-            type="button"
-            onClick={handleUpgrade}
-            aria-label="Upgrade to Kivo Plus"
-            className="inline-flex h-10 items-center justify-center rounded-full bg-[linear-gradient(180deg,#111318_0%,#050608_100%)] px-5 text-[13px] font-semibold tracking-[-0.015em] text-white shadow-[0_10px_24px_rgba(0,0,0,0.14)] transition-all duration-200 ease-out hover:-translate-y-[1px] hover:shadow-[0_14px_28px_rgba(0,0,0,0.18)] active:translate-y-0 active:scale-[0.985]"
-          >
-            Kivo Plus
-          </button>
         </div>
       </div>
     </header>
