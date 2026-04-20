@@ -12,14 +12,22 @@ type KivoTypeHapticTextProps = {
   loop?: boolean;
   cursor?: boolean;
   hapticsEveryNthChar?: number;
+  hapticsEnabled?: boolean;
 };
 
 type Phase = 'typing' | 'holding_full' | 'deleting' | 'holding_empty';
 
-function vibrateLight(): void {
-  if (typeof window === 'undefined') return;
+const MIN_HAPTIC_INTERVAL_MS = 32;
 
-  if (typeof navigator !== 'undefined' && 'vibrate' in navigator) {
+function canUseNavigatorVibrate(): boolean {
+  return (
+    typeof navigator !== 'undefined' &&
+    typeof navigator.vibrate === 'function'
+  );
+}
+
+function triggerWebHaptic(): void {
+  if (canUseNavigatorVibrate()) {
     navigator.vibrate(8);
   }
 }
@@ -34,6 +42,7 @@ export function KivoTypeHapticText({
   loop = true,
   cursor = true,
   hapticsEveryNthChar = 1,
+  hapticsEnabled = true,
 }: KivoTypeHapticTextProps) {
   const safePhrases = useMemo(
     () => phrases.map((item) => item.trim()).filter(Boolean),
@@ -43,7 +52,24 @@ export function KivoTypeHapticText({
   const [phraseIndex, setPhraseIndex] = useState(0);
   const [visibleText, setVisibleText] = useState('');
   const [phase, setPhase] = useState<Phase>('typing');
+
   const stepRef = useRef(0);
+  const lastHapticAtRef = useRef(0);
+
+  const maybeTriggerHaptic = () => {
+    if (!hapticsEnabled) return;
+    if (hapticsEveryNthChar <= 0) return;
+
+    stepRef.current += 1;
+
+    if (stepRef.current % hapticsEveryNthChar !== 0) return;
+
+    const now = Date.now();
+    if (now - lastHapticAtRef.current < MIN_HAPTIC_INTERVAL_MS) return;
+
+    lastHapticAtRef.current = now;
+    triggerWebHaptic();
+  };
 
   useEffect(() => {
     if (safePhrases.length === 0) return;
@@ -56,14 +82,10 @@ export function KivoTypeHapticText({
         timeoutId = window.setTimeout(() => {
           const nextLength = visibleText.length + 1;
           const nextText = currentPhrase.slice(0, nextLength);
-          setVisibleText(nextText);
 
-          stepRef.current += 1;
-          if (
-            hapticsEveryNthChar > 0 &&
-            stepRef.current % hapticsEveryNthChar === 0
-          ) {
-            vibrateLight();
+          if (nextText !== visibleText) {
+            setVisibleText(nextText);
+            maybeTriggerHaptic();
           }
 
           if (nextLength >= currentPhrase.length) {
@@ -73,26 +95,18 @@ export function KivoTypeHapticText({
       } else {
         setPhase('holding_full');
       }
-    }
-
-    if (phase === 'holding_full') {
+    } else if (phase === 'holding_full') {
       timeoutId = window.setTimeout(() => {
         setPhase('deleting');
       }, holdFullTextMs);
-    }
-
-    if (phase === 'deleting') {
+    } else if (phase === 'deleting') {
       if (visibleText.length > 0) {
         timeoutId = window.setTimeout(() => {
           const nextText = visibleText.slice(0, -1);
-          setVisibleText(nextText);
 
-          stepRef.current += 1;
-          if (
-            hapticsEveryNthChar > 0 &&
-            stepRef.current % hapticsEveryNthChar === 0
-          ) {
-            vibrateLight();
+          if (nextText !== visibleText) {
+            setVisibleText(nextText);
+            maybeTriggerHaptic();
           }
 
           if (nextText.length === 0) {
@@ -102,39 +116,36 @@ export function KivoTypeHapticText({
       } else {
         setPhase('holding_empty');
       }
-    }
-
-    if (phase === 'holding_empty') {
+    } else if (phase === 'holding_empty') {
       timeoutId = window.setTimeout(() => {
         const isLast = phraseIndex >= safePhrases.length - 1;
 
         if (isLast && !loop) {
-          setPhase('holding_empty');
           return;
         }
 
-        setPhraseIndex((prev) => {
-          if (prev >= safePhrases.length - 1) return 0;
-          return prev + 1;
-        });
+        setPhraseIndex((prev) =>
+          prev >= safePhrases.length - 1 ? 0 : prev + 1,
+        );
         setPhase('typing');
       }, holdEmptyMs);
     }
 
     return () => {
-      if (timeoutId) window.clearTimeout(timeoutId);
+      if (timeoutId) {
+        window.clearTimeout(timeoutId);
+      }
     };
   }, [
-    visibleText,
+    deletingSpeedMs,
+    holdEmptyMs,
+    holdFullTextMs,
+    loop,
     phase,
     phraseIndex,
     safePhrases,
     typingSpeedMs,
-    deletingSpeedMs,
-    holdFullTextMs,
-    holdEmptyMs,
-    loop,
-    hapticsEveryNthChar,
+    visibleText,
   ]);
 
   if (safePhrases.length === 0) return null;
