@@ -1,24 +1,15 @@
 import crypto from 'node:crypto';
-import { NextResponse } from 'next/server';
-import { runAgentVNext } from '@/agent/vNext/orchestrator';
 import type { AgentResponse } from '@/types/agent-response';
-import type {
-  OperatorAction,
-  OperatorActionKind,
-  OperatorResponse,
-} from '@/types/operator-response';
 import {
   normalizeFinanceAnalysis,
   runFinanceAction,
   safeFinanceActionFallback,
 } from '@/lib/finance/normalize';
-import type { FinanceActionType } from '@/lib/finance/types';
 import { createClient as createSupabaseServerClient } from '@/lib/supabase/server';
 import {
   getUserProfileIntelligence,
   updateUserProfileIntelligence,
 } from '@/lib/operator/personalization';
-import type { OperatorAlertType } from '@/lib/operator/alerts';
 import { fetchRelevantUserMemory } from '@/agent/memory-store';
 import {
   extractMemoryCandidates,
@@ -26,7 +17,6 @@ import {
   persistPersonalMemoryCandidates,
 } from '@/lib/memory/personal-memory';
 import { resolveResponseMode } from '@/agent/mode/resolve-response-mode';
-import type { ResponseMode } from '@/agent/types/response-mode';
 import { fetchRecentRecommendationOutcomes } from '@/lib/operator/outcomes';
 import {
   getUserPlanAndUsage,
@@ -43,711 +33,146 @@ import {
   hasBrowserSearchConfigured,
   inferBrowserSearchMode,
   runBrowserSearch,
-  shouldUseBrowserSearch,
-  type BrowserSearchResult,
-  type BrowserSearchMode,
 } from '@/lib/browser-search/search';
+import { loadUserIntelligence } from '@/agent/user-intelligence/storage/load-user-intelligence';
+import { saveUserIntelligence } from '@/agent/user-intelligence/storage/save-user-intelligence';
+import { buildUserIntelligenceSummary } from '@/agent/user-intelligence/summarize/build-user-intelligence-summary';
+import { runNewAgent } from './run-new-agent';
+import {
+  applyConversationLearningIfNeeded,
+} from './user-intelligence-learning';
+import {
+  SAFE_AGENT_FALLBACK,
+  asArrayOfObjects,
+  asObject,
+  buildBrowserSuggestedActions,
+  buildOperatorResponse,
+  inferMemorySummaryType,
+  normalizeAttachments,
+  parseActionType,
+  resolveCalendarConnected,
+  resolveGmailConnected,
+  safeJsonResponse,
+  shouldRunBrowserTool,
+  shouldUseOperatorAlertsContext,
+  type BrowserSearchContext,
+  type OperatorAlertContextRow,
+} from './route-helpers';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
 
-const SAFE_AGENT_FALLBACK: AgentResponse = {
-  reply: 'I ran into an issue, but here’s what I could analyze so far.',
-  metadata: {
-    intent: 'general',
-    mode: 'general',
-    responseMode: 'fallback',
-    plan: 'Partial fallback',
-    steps: [],
-    structuredData: null,
-    operatorResponse: {
-      answer: 'I ran into an issue, but here’s what I could analyze so far.',
-      nextStep: 'Retry your request in one clear sentence.',
-    },
-    suggestedActions: [],
-    memoryUsed: false,
-    verificationPassed: false,
-    iterationCount: 0,
-  },
-  operatorResponse: {
-    answer: 'I ran into an issue, but here’s what I could analyze so far.',
-    nextStep: 'Retry your request in one clear sentence.',
-  },
+type ParsedRequest = {
+  attachments: ReturnType<typeof normalizeAttachments>;
+  actionType: ReturnType<typeof parseActionType>;
+  safeHistory: Array<{ role: string; content: string }>;
+  safeInput: string | null;
+  imageUri: unknown;
+  requestedUserId: unknown;
 };
 
-type IncomingAttachment = {
-  id?: string;
-  name?: string;
-  kind?: 'image' | 'file';
-  mimeType?: string;
-  size?: number;
-};
+function parseRequestBody(body: Record<string, unknown>): ParsedRequest {
+  const input = body.input;
+  const history = Array.isArray(body.history) ? body.history : [];
+  const imageUri = body.imageUri;
 
-type NormalizedAttachment = {
-  id: string;
-  name: string;
-  kind: 'image' | 'file';
-  mimeType?: string;
-  size?: number;
-};
+  const attachments = normalizeAttachments(body.attachments);
+  const actionType = parseActionType(body.actionType);
 
-type AgentRouteInput = {
-  input: string;
-  userId: string;
-  history: Array<{ role: string; content: string }>;
-  memory?: Record<string, unknown> | null;
-  operatorAlerts?: unknown[];
-  outcomes?: unknown[];
-  userProfileIntelligence?: Record<string, unknown> | null;
-  productState?: Record<string, unknown>;
-  attachments?: NormalizedAttachment[];
-};
+  const safeHistory = history
+    .filter(
+      (m: unknown): m is { role?: string; content?: string } =>
+        Boolean(
+          m &&
+            typeof m === 'object' &&
+            typeof (m as { content?: unknown }).content === 'string' &&
+            ((m as { content?: string }).content || '').trim().length > 0,
+        ),
+    )
+    .map((m) => ({
+      role: m.role || 'user',
+      content: (m.content || '').trim(),
+    }));
 
-type BrowserSearchContext = {
-  enabled: boolean;
-  used: boolean;
-  mode: BrowserSearchMode | null;
-  provider: string | null;
-  query: string | null;
-  results: BrowserSearchResult[];
-  error: string | null;
-};
+  const safeInput =
+    typeof input === 'string' && input.trim().length > 0
+      ? input.trim()
+      : imageUri
+        ? '[Analyze visual data]'
+        : attachments.length > 0
+          ? '[Analyze attachments]'
+          : null;
 
-type CompatibleAgentResponse = {
-  reply: string;
-  metadata?: Record<string, any>;
-  operatorResponse?: OperatorResponse;
-};
-
-function safeJsonResponse(payload: unknown, status = 200) {
-  return NextResponse.json(payload, { status });
+  return {
+    attachments,
+    actionType,
+    safeHistory,
+    safeInput,
+    imageUri,
+    requestedUserId: body.userId,
+  };
 }
 
-function parseActionType(raw: unknown): FinanceActionType | null {
-  if (
-    raw === 'create_savings_plan' ||
-    raw === 'find_alternatives' ||
-    raw === 'draft_cancellation'
-  ) {
-    return raw;
+async function resolveAuthContext(requestId: string) {
+  const supabase = await createSupabaseServerClient().catch((error) => {
+    console.error('SUPABASE_SERVER_CLIENT_ERROR:', error);
+    return null;
+  });
+
+  if (!supabase) {
+    return { errorResponse: safeJsonResponse(SAFE_AGENT_FALLBACK), supabase: null, userId: null };
   }
-  return null;
-}
 
-function normalizeAttachments(raw: unknown): NormalizedAttachment[] {
-  if (!Array.isArray(raw)) return [];
+  const {
+    data: { user: authUser },
+    error: authError,
+  } = await supabase.auth.getUser();
 
-  return raw
-    .filter((item): item is IncomingAttachment => {
-      return Boolean(item && typeof item === 'object');
-    })
-    .map((item, index) => {
-      const kind = item.kind === 'image' ? 'image' : 'file';
-
-      return {
-        id:
-          typeof item.id === 'string' && item.id.trim().length > 0
-            ? item.id
-            : `attachment-${index + 1}`,
-        name:
-          typeof item.name === 'string' && item.name.trim().length > 0
-            ? item.name
-            : kind === 'image'
-              ? `image-${index + 1}`
-              : `file-${index + 1}`,
-        kind,
-        mimeType:
-          typeof item.mimeType === 'string' ? item.mimeType : undefined,
-        size:
-          typeof item.size === 'number' && Number.isFinite(item.size)
-            ? item.size
-            : undefined,
-      };
+  if (authError) {
+    console.error('AGENT_ROUTE_AUTH_ERROR', {
+      requestId,
+      error: authError,
     });
-}
-
-function shouldUseOperatorAlertsContext(input: string): boolean {
-  const normalized = input.toLowerCase();
-  const explicitPhrases = [
-    'what should i do next',
-    'any issues',
-    'anything important',
-    'how can i save',
-    'what looks risky',
-    'what changed',
-    'what should i cancel',
-    'deserves attention',
-    'mitä minun pitäisi tehdä seuraavaksi',
-    'mita minun pitaisi tehda seuraavaksi',
-    'onko jotain tärkeää',
-    'onko jotain tarkeaa',
-    'miten voin säästää',
-    'miten voin saastaa',
-    'mikä näyttää riskiltä',
-    'mika nayttaa riskilta',
-    'mitä minun kannattaa peruuttaa',
-    'mita minun kannattaa peruuttaa',
-    'mitä minun pitäisi priorisoida',
-    'mita minun pitaisi priorisoida',
-    'onko riskejä',
-    'onko riskeja',
-    'what should i prioritize',
-    'do i have any risks',
-  ];
-  const semanticSignals =
-    /\b(subscription|billing|spend|finance|save|cancel|risk|priority|attention|raha|sääst|saast|tilaus|lasku|kulu|talous|priorisoi|riski)\b/i;
-  return (
-    explicitPhrases.some((phrase) => normalized.includes(phrase)) ||
-    semanticSignals.test(normalized)
-  );
-}
-
-type OperatorAlertContextRow = {
-  id: string;
-  user_id: string;
-  type: OperatorAlertType;
-  severity: 'low' | 'medium' | 'high';
-  status: 'active' | 'dismissed' | 'completed';
-  title: string;
-  summary: string;
-  suggested_action: string;
-  source: string;
-  dedupe_key: string;
-  metadata: Record<string, unknown>;
-  created_at: string;
-  updated_at: string;
-};
-
-function resolveGmailConnected(params: {
-  userProfile?: Record<string, unknown> | null;
-}): boolean {
-  return Boolean(params.userProfile?.gmail_connected);
-}
-
-function resolveCalendarConnected(params: {
-  userProfile?: Record<string, unknown> | null;
-}): boolean {
-  return Boolean(params.userProfile?.google_calendar_connected);
-}
-
-function asObject(value: unknown): Record<string, unknown> {
-  return value && typeof value === 'object'
-    ? (value as Record<string, unknown>)
-    : {};
-}
-
-function asArrayOfObjects(value: unknown): Array<Record<string, unknown>> {
-  return Array.isArray(value)
-    ? value.filter(
-        (item): item is Record<string, unknown> =>
-          !!item && typeof item === 'object',
-      )
-    : [];
-}
-
-function toOperatorActionKind(value: unknown): OperatorActionKind {
-  if (
-    value === 'finance' ||
-    value === 'general' ||
-    value === 'planning' ||
-    value === 'prioritization' ||
-    value === 'comparison' ||
-    value === 'execution' ||
-    value === 'productivity' ||
-    value === 'gmail' ||
-    value === 'premium'
-  ) {
-    return value === 'gmail' ? 'message' : value;
-  }
-  return 'follow_up';
-}
-
-function pickFirstString(...values: unknown[]): string | undefined {
-  for (const value of values) {
-    if (typeof value === 'string' && value.trim().length > 0) {
-      return value.trim();
-    }
-  }
-  return undefined;
-}
-
-function buildDefaultActions(params: {
-  intent?: unknown;
-  answer: string;
-  nextStep?: string;
-  opportunity?: string;
-}): OperatorAction[] {
-  const intent = typeof params.intent === 'string' ? params.intent : 'general';
-  const continuation = [params.nextStep, params.opportunity, params.answer]
-    .filter((item): item is string => Boolean(item && item.trim().length > 0))
-    .join(' ')
-    .slice(0, 220);
-  const withContext = (label: string) =>
-    continuation
-      ? `Continue from this context: "${continuation}". ${label}`
-      : label;
-
-  if (intent === 'finance') {
-    return [
-      {
-        id: 'build-savings-plan',
-        label: 'Build savings plan',
-        kind: 'finance',
-        behavior: 'enqueue_prompt',
-        prompt: withContext(
-          'Build a concrete 30-day savings plan with weekly targets and exact amounts.',
-        ),
-      },
-      {
-        id: 'analyze-subscriptions',
-        label: 'Analyze subscriptions',
-        kind: 'comparison',
-        behavior: 'navigate',
-        route: '/money-saver',
-        prompt: withContext(
-          'Analyze subscription leaks and rank what to cancel, downgrade, or keep.',
-        ),
-      },
-      {
-        id: 'compare-alternatives',
-        label: 'Compare alternatives',
-        kind: 'comparison',
-        behavior: 'enqueue_prompt',
-        prompt: withContext(
-          'Compare lower-cost alternatives and recommend the highest-value switch.',
-        ),
-      },
-    ];
-  }
-
-  if (intent === 'planning' || intent === 'productivity') {
-    return [
-      {
-        id: 'build-weekly-plan',
-        label: 'Build weekly plan',
-        kind: 'planning',
-        behavior: 'enqueue_prompt',
-        prompt: withContext(
-          'Turn this into a realistic weekly plan with daily focus blocks.',
-        ),
-      },
-      {
-        id: 'prioritize-tasks',
-        label: 'Prioritize tasks',
-        kind: 'prioritization',
-        behavior: 'enqueue_prompt',
-        prompt: withContext(
-          'Prioritize this into must-do, should-do, and can-wait with reasoning.',
-        ),
-      },
-      {
-        id: 'turn-into-checklist',
-        label: 'Turn into checklist',
-        kind: 'execution',
-        behavior: 'enqueue_prompt',
-        prompt: withContext(
-          'Convert this into an execution checklist with the first task to start now.',
-        ),
-      },
-    ];
-  }
-
-  if (intent === 'compare' || intent === 'decision') {
-    return [
-      {
-        id: 'compare-options',
-        label: 'Compare options',
-        kind: 'comparison',
-        behavior: 'enqueue_prompt',
-        prompt: withContext(
-          'Compare the best options side by side by impact, cost, and effort.',
-        ),
-      },
-      {
-        id: 'list-risks',
-        label: 'List risks',
-        kind: 'decision',
-        behavior: 'enqueue_prompt',
-        prompt: withContext(
-          'List key risks and mitigation steps before making the decision.',
-        ),
-      },
-      {
-        id: 'recommend-best-choice',
-        label: 'Recommend best choice',
-        kind: 'decision',
-        behavior: 'enqueue_prompt',
-        prompt: withContext(
-          'Recommend the best option and explain why it wins right now.',
-        ),
-      },
-    ];
-  }
-
-  return [
-    {
-      id: 'next-best-move',
-      label: 'Next best move',
-      kind: 'execution',
-      behavior: 'enqueue_prompt',
-      prompt: withContext(
-        'Give me the single best next move and how to execute it immediately.',
-      ),
-    },
-    {
-      id: 'make-it-actionable',
-      label: 'Make it actionable',
-      kind: 'execution',
-      behavior: 'enqueue_prompt',
-      prompt: withContext(
-        'Turn this into concise steps I can execute in the next 15 minutes.',
-      ),
-    },
-  ];
-}
-
-function buildOperatorResponse(params: {
-  answer: string;
-  metadata?: Record<string, unknown>;
-  structuredData?: Record<string, unknown>;
-  responseMode?: ResponseMode;
-}): OperatorResponse {
-  if (params.responseMode === 'casual' || params.responseMode === 'fast') {
     return {
-      answer: params.answer,
+      errorResponse: safeJsonResponse(
+        {
+          error: 'AUTH_REQUIRED',
+          message: 'Please sign in to use chat.',
+        },
+        401,
+      ),
+      supabase,
+      userId: null,
     };
   }
 
-  const metadata = params.metadata || {};
-  const structuredData = params.structuredData || {};
-  const suggestedActions = Array.isArray(metadata.suggestedActions)
-    ? metadata.suggestedActions
-    : [];
-  const actions: OperatorAction[] = [];
-  for (const [index, item] of suggestedActions.entries()) {
-    if (!item || typeof item !== 'object') continue;
-    const record = item as Record<string, unknown>;
-    const label = pickFirstString(record.label, record.title);
-    if (!label) continue;
-
-    actions.push({
-      id: pickFirstString(record.id) || `operator-action-${index + 1}`,
-      label,
-      kind: toOperatorActionKind(record.kind),
-      behavior: pickFirstString(record.behavior) as
-        | 'enqueue_prompt'
-        | 'navigate'
-        | 'open_flow'
-        | undefined,
-      prompt: pickFirstString(record.prompt),
-      route: pickFirstString(record.route),
-      payload:
-        record.payload && typeof record.payload === 'object'
-          ? (record.payload as Record<string, unknown>)
-          : undefined,
-    });
+  const userId = authUser?.id;
+  if (!userId || userId === 'system_anonymous') {
+    return {
+      errorResponse: safeJsonResponse(
+        {
+          error: 'AUTH_REQUIRED',
+          message: 'Please sign in to use chat.',
+        },
+        401,
+      ),
+      supabase,
+      userId: null,
+    };
   }
 
-  const operatorAlerts = Array.isArray(structuredData.operator_alerts)
-    ? structuredData.operator_alerts.filter(
-        (item): item is Record<string, unknown> =>
-          Boolean(item && typeof item === 'object'),
-      )
-    : [];
-  const highestPriorityAlert = operatorAlerts[0];
-
-  const financeData =
-    structuredData.finance && typeof structuredData.finance === 'object'
-      ? (structuredData.finance as Record<string, unknown>)
-      : null;
-
-  const nextStep = pickFirstString(
-    actions[0]?.label,
-    highestPriorityAlert?.suggestedAction,
-    metadata.recommendedNextStep,
-    structuredData.next_step,
-  );
-
-  const decisionBrief = pickFirstString(
-    structuredData.decision_brief,
-    highestPriorityAlert?.title,
-    highestPriorityAlert?.summary,
-  );
-
-  const opportunity = pickFirstString(
-    structuredData.opportunity,
-    financeData?.top_recommendation,
-    financeData?.savings_summary,
-    financeData?.quick_win,
-  );
-  const intent = pickFirstString(metadata.intent, structuredData.intent);
-  const resolvedActions =
-    actions.length > 0
-      ? actions.slice(0, 3)
-      : buildDefaultActions({
-          intent,
-          answer: params.answer,
-          nextStep,
-          opportunity,
-        }).slice(0, 3);
-
-  return {
-    answer: params.answer,
-    nextStep,
-    actions: resolvedActions.length ? resolvedActions : undefined,
-    decisionBrief,
-    risk: pickFirstString(
-      highestPriorityAlert?.summary,
-      highestPriorityAlert?.title,
-      structuredData.risk,
-    ),
-    opportunity,
-    savingsOpportunity: pickFirstString(
-      financeData?.top_recommendation,
-      financeData?.savings_summary,
-    ),
-    timeOpportunity: pickFirstString(financeData?.quick_win),
-  };
+  return { errorResponse: null, supabase, userId };
 }
 
-async function runNewAgent(
-  input: AgentRouteInput,
-): Promise<CompatibleAgentResponse | null> {
-  const responseModeHint =
-    typeof input.productState?.responseModeHint === 'string'
-      ? (input.productState.responseModeHint as ResponseMode)
-      : 'operator';
-
-  const result = await runAgentVNext({
-    requestId: crypto.randomUUID(),
-    userId: input.userId,
-    message: input.input,
-    conversation: (input.history || [])
-      .filter(
-        (
-          message,
-        ): message is { role: 'system' | 'user' | 'assistant'; content: string } =>
-          !!message &&
-          typeof message === 'object' &&
-          (message as { role?: unknown }).role !== undefined &&
-          ((message as { role?: unknown }).role === 'system' ||
-            (message as { role?: unknown }).role === 'user' ||
-            (message as { role?: unknown }).role === 'assistant') &&
-          typeof (message as { content?: unknown }).content === 'string',
-      )
-      .map((message, index) => ({
-        id: `history-${index}`,
-        role: message.role,
-        content: message.content,
-      })),
-    metadata: {
-      productState: input.productState,
-      gmailConnected: Boolean(input.productState?.gmailConnected),
-      calendarConnected: Boolean(input.productState?.calendarConnected),
-      memory: input.memory || null,
-      operatorAlerts: input.operatorAlerts || [],
-      outcomes: input.outcomes || [],
-      userProfileIntelligence: input.userProfileIntelligence || null,
-      attachments: input.attachments || [],
-      attachmentCount: input.attachments?.length || 0,
-      responseModeHint,
-    },
-  });
-
-  if (!result.ok || !result.response) {
+async function maybeLoadUserIntelligence(userId: string) {
+  return loadUserIntelligence(userId, { createIfMissing: true }).catch((error) => {
+    console.error('USER_INTELLIGENCE_LOAD_ERROR', { userId, error });
     return null;
-  }
-
-  const response = result.response;
-  const answer = response.answer;
-  const route = response.route;
-  const plan = response.plan;
-  const evaluation = response.evaluation;
-  const memory = response.memory;
-  const toolResults = Array.isArray(response.toolResults) ? response.toolResults : [];
-
-  const mergedStructuredData = {
-    ...(answer.structuredData && typeof answer.structuredData === 'object'
-      ? answer.structuredData
-      : {}),
-    route: route,
-    toolResults,
-    evaluation: evaluation || null,
-    memory: memory || null,
-    attachments: input.attachments || [],
-    structuredAnswer: answer.structured,
-  };
-
-  return {
-    reply: answer.text,
-    metadata: {
-      intent: route.intent || 'general',
-      subtype: route.intent || 'none',
-      mode:
-        route.intent === 'finance'
-          ? 'finance'
-          : route.intent === 'gmail'
-            ? 'gmail'
-            : route.intent === 'productivity' || route.intent === 'planning'
-              ? 'productivity'
-              : route.intent === 'coding'
-                ? 'coding'
-                : route.intent === 'memory'
-                  ? 'memory'
-                  : 'general',
-      responseMode:
-        (answer.metadata?.responseMode as ResponseMode | undefined) ||
-        (answer.metadata?.mode as ResponseMode | undefined) ||
-        responseModeHint,
-      goal: {
-        explicitRequest: input.input,
-        hiddenRequest: '',
-        inferredGoal:
-          route.userGoal ||
-          route.reason ||
-          'Provide a helpful response.',
-        interpretationConfidence:
-          typeof route.confidence === 'number' && route.confidence >= 0.8
-            ? 'high'
-            : typeof route.confidence === 'number' && route.confidence >= 0.55
-              ? 'medium'
-              : 'low',
-        urgency: 'medium',
-        complexityLevel:
-          plan.steps.length >= 6 ? 'high' : plan.steps.length >= 3 ? 'medium' : 'low',
-        blockerLevel: 'none',
-        riskLevel: 'low',
-        effortTolerance: 'medium',
-        speedVsDepth:
-          route.suggestedExecutionMode === 'stream' ? 'depth' : 'balanced',
-        decisionType:
-          route.intent === 'compare' || route.intent === 'shopping'
-            ? 'decision'
-            : 'informational',
-        requestKind:
-          route.intent === 'shopping'
-            ? 'recommendation'
-            : route.intent === 'compare'
-              ? 'comparison'
-              : route.intent === 'planning' || route.intent === 'productivity'
-                ? 'planning'
-                : 'advice',
-        userConfidenceLevel: 'medium',
-        horizon: 'short_term',
-        preferredStyle:
-          responseModeHint === 'casual'
-            ? 'simple'
-            : responseModeHint === 'fast'
-              ? 'concise'
-              : 'structured',
-        category: route.intent || 'general',
-        hiddenOpportunities: [],
-        clarificationNeeded: false,
-        wantsImmediateNextStep: true,
-        emotionalTone: 'neutral',
-        inputLanguage: route.inputLanguage || 'unknown',
-        responseLanguage: route.responseLanguage || route.inputLanguage || 'en',
-      },
-      plan: plan.summary,
-      planModes: [route.suggestedExecutionMode === 'stream' ? 'deep' : 'recommend'],
-      steps: plan.steps.map((step) => ({
-        stepId: step.id,
-        title: step.title,
-        action: step.title,
-        tool: step.requiredTool,
-        status:
-          step.status === 'failed'
-            ? 'failed'
-            : step.status === 'skipped'
-              ? 'skipped'
-              : step.status === 'running'
-                ? 'running'
-                : 'completed',
-        summary: step.description,
-        input: step.input || {},
-        output: {},
-      })),
-      structuredData: mergedStructuredData,
-      suggestedActions: Array.isArray(answer.followUps)
-        ? answer.followUps.map((item, index) => ({
-            id: `followup-${index + 1}`,
-            label: String(item),
-            kind: 'general',
-          }))
-        : [],
-      memoryUsed: Array.isArray(memory.items) ? memory.items.length > 0 : false,
-      verificationPassed: evaluation?.passed ?? true,
-      critic: {
-        criticScore: evaluation?.score ?? 80,
-        passed: evaluation?.passed ?? true,
-        needsRewrite: false,
-        qualityNotes: response.warnings || [],
-      },
-      state: 'responding',
-    },
-    operatorResponse: {
-      answer: answer.text,
-      nextStep: answer.structured?.nextStep || plan.steps[0]?.title,
-      decisionBrief: plan.summary,
-      opportunity:
-        typeof mergedStructuredData.opportunity === 'string'
-          ? mergedStructuredData.opportunity
-          : undefined,
-      risk:
-        typeof mergedStructuredData.risk === 'string'
-          ? mergedStructuredData.risk
-          : undefined,
-    },
-  };
-}
-
-function inferMemorySummaryType(input: string): 'finance' | 'general' {
-  return /\b(save|saving|budget|subscription|bill|expense|debt|money|finance|monthly|cost|raha|sääst|saast|budjet|tilaus|lasku|kulu|talous|ahorro|dinero|gasto|suscrip|factura|sijoit|krypt|osake)\b/i.test(
-    input,
-  )
-    ? 'finance'
-    : 'general';
-}
-
-function shouldRunBrowserTool(params: {
-  input: string;
-  attachments: NormalizedAttachment[];
-  actionType: FinanceActionType | null;
-  responseMode: ResponseMode;
-}) {
-  if (params.attachments.length > 0) return false;
-  if (params.actionType) return false;
-
-  return (
-    (params.responseMode === 'operator' ||
-      params.responseMode === 'tool' ||
-      params.responseMode === 'fast') &&
-    shouldUseBrowserSearch(params.input)
-  );
-}
-
-function buildBrowserSuggestedActions(input: string) {
-  return [
-    {
-      id: 'browser-search-follow-up',
-      label: 'Refine browser search',
-      kind: 'comparison',
-      behavior: 'navigate',
-      route: `/tools?tool=browser-search&q=${encodeURIComponent(input)}`,
-    },
-    {
-      id: 'browser-search-deeper',
-      label: 'Search deeper',
-      kind: 'follow_up',
-      behavior: 'enqueue_prompt',
-      prompt: `Use browser search to go deeper on this: ${input}`,
-    },
-  ];
+  });
 }
 
 export async function POST(req: Request) {
-  const requestId =
-    req.headers.get('x-kivo-request-id') || crypto.randomUUID();
+  const requestId = req.headers.get('x-kivo-request-id') || crypto.randomUUID();
   const startedAt = Date.now();
 
   try {
@@ -756,76 +181,35 @@ export async function POST(req: Request) {
     console.info('AGENT_ROUTE_PARSE_DONE', { requestId });
 
     const {
-      input,
-      history,
+      attachments,
+      actionType,
+      safeHistory,
+      safeInput,
       imageUri,
-      userId: requestedUserId,
-    } = body ?? {};
-    const attachments = normalizeAttachments(body?.attachments);
-    const actionType = parseActionType(body?.actionType);
-
-    const safeHistory = (history || [])
-      .filter(
-        (m: any) =>
-          m && typeof m.content === 'string' && m.content.trim().length > 0,
-      )
-      .map((m: any) => ({
-        role: m.role || 'user',
-        content: m.content.trim(),
-      }));
-
-    const safeInput =
-      typeof input === 'string' && input.trim().length > 0
-        ? input.trim()
-        : imageUri
-          ? '[Analyze visual data]'
-          : attachments.length > 0
-            ? '[Analyze attachments]'
-            : null;
+      requestedUserId,
+    } = parseRequestBody((body ?? {}) as Record<string, unknown>);
 
     if (!safeInput && safeHistory.length === 0 && attachments.length === 0) {
       return safeJsonResponse({ error: 'No valid content provided.' }, 400);
     }
 
-    const supabase = await createSupabaseServerClient().catch((error) => {
-      console.error('SUPABASE_SERVER_CLIENT_ERROR:', error);
-      return null;
-    });
-
-    if (!supabase) {
-      console.error('SUPABASE_UNAVAILABLE', { requestId });
-      return safeJsonResponse(SAFE_AGENT_FALLBACK);
+    const authContext = await resolveAuthContext(requestId);
+    if (authContext.errorResponse || !authContext.supabase || !authContext.userId) {
+      return authContext.errorResponse ?? safeJsonResponse(SAFE_AGENT_FALLBACK);
     }
 
-    const {
-      data: { user: authUser },
-      error: authError,
-    } = await supabase.auth.getUser();
+    const { supabase, userId } = authContext;
 
-    if (authError) {
-      console.error('AGENT_ROUTE_AUTH_ERROR', {
+    if (requestedUserId && requestedUserId !== userId) {
+      console.warn('AGENT_ROUTE_USER_ID_MISMATCH', {
         requestId,
-        error: authError,
+        requestedUserId,
+        sessionUserId: userId,
       });
-      return safeJsonResponse(
-        {
-          error: 'AUTH_REQUIRED',
-          message: 'Please sign in to use chat.',
-        },
-        401,
-      );
     }
 
-    const userId = authUser?.id;
-    if (!userId || userId === 'system_anonymous') {
-      return safeJsonResponse(
-        {
-          error: 'AUTH_REQUIRED',
-          message: 'Please sign in to use chat.',
-        },
-        401,
-      );
-    }
+    const userIntelligenceProfile = await maybeLoadUserIntelligence(userId);
+    const userIntelligenceSummary = buildUserIntelligenceSummary(userIntelligenceProfile);
 
     let operatorAlertsContext: OperatorAlertContextRow[] = [];
     if (shouldUseOperatorAlertsContext(String(safeInput || ''))) {
@@ -851,18 +235,7 @@ export async function POST(req: Request) {
       }
     }
 
-    if (requestedUserId && requestedUserId !== userId) {
-      console.warn('AGENT_ROUTE_USER_ID_MISMATCH', {
-        requestId,
-        requestedUserId,
-        sessionUserId: userId,
-      });
-    }
-
-    const { plan, usage, email } = await getUserPlanAndUsage(
-      supabase,
-      userId,
-    );
+    const { plan, usage, email } = await getUserPlanAndUsage(supabase, userId);
     const bonusAgentRuns = await getUserBonusAgentRuns(supabase, userId);
 
     const { data: userProfile } = await supabase
@@ -1081,7 +454,7 @@ export async function POST(req: Request) {
       ? [browserSystemMessage, ...safeHistory]
       : safeHistory;
 
-    const agentInput = {
+    const agentResult = await runNewAgent({
       input: safeInput || 'Continue',
       userId,
       history: enrichedHistory,
@@ -1089,6 +462,7 @@ export async function POST(req: Request) {
       operatorAlerts: operatorAlertsContext,
       outcomes: recommendationOutcomes,
       userProfileIntelligence,
+      userIntelligenceSummary,
       attachments,
       productState: {
         plan,
@@ -1111,9 +485,7 @@ export async function POST(req: Request) {
         attachmentCount: attachments.length,
         responseModeHint: responseMode,
       },
-    };
-
-    const agentResult = await runNewAgent(agentInput);
+    });
 
     if (!agentResult) {
       console.error('AGENT_VNEXT_EXECUTION_ERROR:', { requestId });
@@ -1186,6 +558,25 @@ export async function POST(req: Request) {
       }).catch((error) => {
         console.error('USER_PROFILE_INTELLIGENCE_UPDATE_ERROR:', error);
       });
+
+      if (userIntelligenceProfile) {
+        const learned = applyConversationLearningIfNeeded({
+          profile: userIntelligenceProfile,
+          userId,
+          userInput: safeInput || '',
+          reply: actionResult.summary,
+          intent: 'finance',
+          responseLanguage: 'en',
+          responseMode: 'tool',
+          isError: actionResult.type === 'error',
+        });
+
+        if (learned.shouldLearn) {
+          await saveUserIntelligence(learned.updatedProfile).catch((error) => {
+            console.error('USER_INTELLIGENCE_SAVE_ERROR', { userId, error });
+          });
+        }
+      }
 
       const usageAfterRun = toUsageEnvelope({
         plan,
@@ -1293,6 +684,24 @@ export async function POST(req: Request) {
     }).catch((error) => {
       console.error('USER_PROFILE_INTELLIGENCE_UPDATE_ERROR:', error);
     });
+
+    if (userIntelligenceProfile) {
+      const learned = applyConversationLearningIfNeeded({
+        profile: userIntelligenceProfile,
+        userId,
+        userInput: safeInput || '',
+        reply,
+        intent: String(agentResult.metadata?.intent || 'general'),
+        responseLanguage: String(agentResult.metadata?.goal?.responseLanguage || 'en'),
+        responseMode,
+      });
+
+      if (learned.shouldLearn) {
+        await saveUserIntelligence(learned.updatedProfile).catch((error) => {
+          console.error('USER_INTELLIGENCE_SAVE_ERROR', { userId, error });
+        });
+      }
+    }
 
     const storedMemoryCount = await persistPersonalMemoryCandidates({
       supabase,
