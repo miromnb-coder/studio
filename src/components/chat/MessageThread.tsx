@@ -19,12 +19,12 @@ function normalizeResponseType(value: unknown): string | null {
   return normalized || null;
 }
 
-function hasExplicitStructuredResponseType(message: Message): boolean {
+function getExplicitStructuredResponseType(message: Message): string | null {
   const structuredData = (message.structuredData ?? null) as
     | Record<string, unknown>
     | null;
 
-  const responseType =
+  return (
     normalizeResponseType(structuredData?.responseType) ??
     normalizeResponseType(structuredData?.response_type) ??
     normalizeResponseType(
@@ -34,33 +34,81 @@ function hasExplicitStructuredResponseType(message: Message): boolean {
     normalizeResponseType(
       (message.agentMetadata?.structuredData as Record<string, unknown> | undefined)
         ?.response_type,
-    );
-
-  return Boolean(responseType);
+    )
+  );
 }
 
-function compactDuplicateAssistantText(messages: Message[]): Message[] {
+function hasExplicitStructuredResponseType(message: Message): boolean {
+  return Boolean(getExplicitStructuredResponseType(message));
+}
+
+function normalizeComparableText(text: string): string {
+  return text
+    .replace(/\s+/g, ' ')
+    .trim()
+    .toLowerCase();
+}
+
+function isNearDuplicateAssistantContent(a: string, b: string): boolean {
+  const left = normalizeComparableText(a);
+  const right = normalizeComparableText(b);
+
+  if (!left || !right) return false;
+  if (left === right) return true;
+
+  const shorter = left.length <= right.length ? left : right;
+  const longer = left.length > right.length ? left : right;
+
+  if (shorter.length >= 32 && longer.includes(shorter)) return true;
+
+  const overlapRatio = shorter.length / longer.length;
+  if (overlapRatio >= 0.82) {
+    const prefixLength = Math.min(shorter.length, 220);
+    if (longer.slice(0, prefixLength) === shorter.slice(0, prefixLength)) {
+      return true;
+    }
+  }
+
+  return false;
+}
+
+function compactDuplicateAssistantMessages(messages: Message[]): Message[] {
   if (messages.length < 2) return messages;
 
   const visible: Message[] = [];
 
   for (const message of messages) {
     const previous = visible[visible.length - 1];
-    const messageText = message.content.trim();
-    const previousText = previous?.content.trim() ?? '';
+
+    if (!previous) {
+      visible.push(message);
+      continue;
+    }
 
     const shouldReplacePreviousPlainAssistant =
-      Boolean(previous) &&
       previous.role === 'assistant' &&
       message.role === 'assistant' &&
       !previous.isStreaming &&
+      !message.isStreaming &&
       !hasExplicitStructuredResponseType(previous) &&
       hasExplicitStructuredResponseType(message) &&
-      Boolean(previousText) &&
-      previousText === messageText;
+      isNearDuplicateAssistantContent(previous.content, message.content);
 
     if (shouldReplacePreviousPlainAssistant) {
       visible[visible.length - 1] = message;
+      continue;
+    }
+
+    const shouldDropLaterPlainDuplicate =
+      previous.role === 'assistant' &&
+      message.role === 'assistant' &&
+      hasExplicitStructuredResponseType(previous) &&
+      !hasExplicitStructuredResponseType(message) &&
+      !previous.isStreaming &&
+      !message.isStreaming &&
+      isNearDuplicateAssistantContent(previous.content, message.content);
+
+    if (shouldDropLaterPlainDuplicate) {
       continue;
     }
 
@@ -182,13 +230,14 @@ function getThinkingState(messages: Message[], pending: boolean) {
 }
 
 export function MessageThread({ messages, pending }: MessageThreadProps) {
-  const renderedMessages = compactDuplicateAssistantText(messages);
+  const renderedMessages = compactDuplicateAssistantMessages(messages);
   const rows = buildThreadRows(renderedMessages);
   const pendingMode = resolveResponseMode(renderedMessages);
   const thinkingState = getThinkingState(renderedMessages, pending);
   const latestAssistant = [...renderedMessages]
     .reverse()
     .find((message) => message.role === 'assistant');
+
   const assistantHasVisibleStreamContent = Boolean(
     latestAssistant?.isStreaming && latestAssistant.content.trim().length > 0,
   );
@@ -240,15 +289,11 @@ export function MessageThread({ messages, pending }: MessageThreadProps) {
           return (
             <div
               key={row.id}
-              className={`message-appear flex ${
-                isUser ? 'justify-end' : 'justify-start'
-              }`}
+              className={`message-appear flex ${isUser ? 'justify-end' : 'justify-start'}`}
             >
               <article
                 className={`w-full ${
-                  isUser
-                    ? 'max-w-[82%] sm:max-w-[70%]'
-                    : 'max-w-full'
+                  isUser ? 'max-w-[82%] sm:max-w-[70%]' : 'max-w-full'
                 }`}
               >
                 {isUser ? (
