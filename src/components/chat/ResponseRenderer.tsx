@@ -105,18 +105,14 @@ function normalizeResponseType(value: unknown): StructuredRenderableView | null 
   return null;
 }
 
-function getStructuredData(
-  message: Message,
-): Record<string, unknown> | null {
+function getStructuredData(message: Message): Record<string, unknown> | null {
   return asRecord(
     (message as Message & { structuredData?: Record<string, unknown> }).structuredData ??
       null,
   );
 }
 
-function getToolResults(
-  message: Message,
-): Array<Record<string, unknown>> | null {
+function getToolResults(message: Message): Array<Record<string, unknown>> | null {
   const toolResults = (message as Message & {
     toolResults?: Array<Record<string, unknown>>;
   }).toolResults;
@@ -124,9 +120,7 @@ function getToolResults(
   return Array.isArray(toolResults) ? toolResults : null;
 }
 
-function getMetadata(
-  message: Message,
-): Record<string, unknown> | null {
+function getMetadata(message: Message): Record<string, unknown> | null {
   return asRecord(message.agentMetadata ?? null);
 }
 
@@ -254,9 +248,20 @@ function stripRawIntro(
   };
 }
 
-export function ResponseRenderer({
-  message,
-}: ResponseRendererProps) {
+function buildCalendarText(
+  presentation: ReturnType<typeof buildResponsePresentation>,
+): string {
+  if (presentation.summary?.trim()) return presentation.summary;
+  if (presentation.plainText?.trim()) return presentation.plainText;
+
+  return presentation.calendar.events
+    .map((event) =>
+      [event.title, event.time, event.subtitle].filter(Boolean).join(' — '),
+    )
+    .join('\n');
+}
+
+export function ResponseRenderer({ message }: ResponseRendererProps) {
   const explicitView = resolveExplicitView(message);
 
   const resolution = resolveResponseView({
@@ -293,54 +298,70 @@ export function ResponseRenderer({
 
   switch (selectedView) {
     case 'email':
-      return <EmailResponseView presentation={finalPresentation} />;
+      return (
+        <div className="max-w-[760px]">
+          <EmailResponseView presentation={finalPresentation} />
+        </div>
+      );
 
     case 'search':
-      return <SearchResponseView model={legacyModel as never} />;
+      return (
+        <div className="max-w-[760px]">
+          <SearchResponseView model={legacyModel as never} />
+        </div>
+      );
 
     case 'compare':
-      return <CompareResponseView model={legacyModel as never} />;
+      return (
+        <div className="max-w-[760px]">
+          <CompareResponseView model={legacyModel as never} />
+        </div>
+      );
 
     case 'shopping':
-      return <ShoppingResponseView model={legacyModel as never} />;
+      return (
+        <div className="max-w-[760px]">
+          <ShoppingResponseView model={legacyModel as never} />
+        </div>
+      );
 
     case 'operator':
-      return <OperatorResponseView model={legacyModel as never} />;
+      return (
+        <div className="max-w-[760px]">
+          <OperatorResponseView model={legacyModel as never} />
+        </div>
+      );
 
     case 'calendar':
       return (
-        <PlainResponseView
-          title={finalPresentation.title || undefined}
-          lead={finalPresentation.lead || undefined}
-          text={
-            finalPresentation.summary ||
-            finalPresentation.plainText ||
-            finalPresentation.calendar.events
-              .map((event) =>
-                [event.title, event.time, event.subtitle]
-                  .filter(Boolean)
-                  .join(' — '),
-              )
-              .join('\n')
-          }
-        />
+        <div className="max-w-[760px]">
+          <PlainResponseView
+            title={finalPresentation.title || undefined}
+            lead={finalPresentation.lead || undefined}
+            text={buildCalendarText(finalPresentation)}
+          />
+        </div>
       );
 
     case 'casual':
       return (
-        <CasualResponseView
-          text={finalPresentation.plainText || finalPresentation.summary || ''}
-        />
+        <div className="max-w-[760px]">
+          <CasualResponseView
+            text={finalPresentation.plainText || finalPresentation.summary || ''}
+          />
+        </div>
       );
 
     case 'plain':
     default:
       return (
-        <PlainResponseView
-          title={finalPresentation.title || undefined}
-          lead={finalPresentation.lead || undefined}
-          text={finalPresentation.plainText || finalPresentation.summary || ''}
-        />
+        <div className="max-w-[760px]">
+          <PlainResponseView
+            title={finalPresentation.title || undefined}
+            lead={finalPresentation.lead || undefined}
+            text={finalPresentation.plainText || finalPresentation.summary || ''}
+          />
+        </div>
       );
   }
 }
