@@ -337,6 +337,15 @@ export async function streamAssistantResponse({
         buildSafeToolResults(event.toolResults) ??
         buildSafeToolResults(structuredData?.toolResults);
 
+      const execution =
+        (typeof event.metadata?.execution === 'object' &&
+        event.metadata?.execution
+          ? (event.metadata.execution as Record<string, unknown>)
+          : undefined) ??
+        (typeof structuredData?.execution === 'object' && structuredData.execution
+          ? (structuredData.execution as Record<string, unknown>)
+          : undefined);
+
       return {
         ...prev,
         activeAgent: DEFAULT_ACTIVE_AGENT,
@@ -357,12 +366,16 @@ export async function streamAssistantResponse({
                   agentMetadata: structuredData
                     ? {
                         ...normalizedMetadata,
+                        execution,
                         structuredData: {
                           ...(normalizedMetadata.structuredData ?? {}),
                           ...structuredData,
                         },
                       }
-                    : normalizedMetadata,
+                    : {
+                        ...normalizedMetadata,
+                        execution,
+                      },
                 }
               : message,
           ),

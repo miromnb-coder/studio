@@ -66,6 +66,7 @@ export type OperatorModule = {
 };
 
 export type AgentStructuredData = {
+  execution?: AgentExecutionPayload;
   finance?: FinanceAnalysis;
   actionResult?: FinanceActionResult;
   route?: {
@@ -113,10 +114,22 @@ export type AgentStructuredData = {
   [key: string]: unknown;
 } | null;
 
+export type AgentExecutionPayload = {
+  intent: 'email' | 'calendar' | 'browser' | 'memory' | 'files' | 'general';
+  forceMode: 'thinking' | 'status' | 'execution' | 'text_only';
+  introText?: string;
+  statusText?: string;
+  activeStepId?: string;
+  doneStepIds?: string[];
+  errorStepIds?: string[];
+  toolCount?: number;
+};
+
 export type AgentResponseMetadata = {
   intent: AgentIntent;
   mode?: AgentMode;
   responseMode?: ResponseMode;
+  execution?: AgentExecutionPayload;
   plan: string;
   steps: AgentResponseStep[];
   structuredData?: AgentStructuredData;
