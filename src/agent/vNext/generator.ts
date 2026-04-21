@@ -191,11 +191,93 @@ function buildStructuredData(input: {
     confidence,
   });
 
+  const resolveExecutionIntent = (tool: string):
+    | 'email'
+    | 'calendar'
+    | 'browser'
+    | 'memory'
+    | 'files'
+    | 'general' => {
+    if (tool === 'gmail') return 'email';
+    if (tool === 'calendar') return 'calendar';
+    if (tool === 'web' || tool === 'compare' || tool === 'finance') return 'browser';
+    if (tool === 'memory') return 'memory';
+    if (tool === 'file' || tool === 'notes') return 'files';
+    return 'general';
+  };
+
+  const buildExecutionData = () => {
+    const requestedTools = Array.isArray(generatorInput.route.requiresTools)
+      ? generatorInput.route.requiresTools
+      : [];
+    const usedTools = generatorInput.toolResults.map((item) => item.tool);
+    const toolSet = [...new Set([...requestedTools, ...usedTools])];
+
+    if (toolSet.length === 0) return undefined;
+
+    const firstIntent = resolveExecutionIntent(toolSet[0] ?? '');
+    const intent =
+      toolSet.some((tool) => tool === 'gmail')
+        ? 'email'
+        : toolSet.some((tool) => tool === 'calendar')
+          ? 'calendar'
+          : toolSet.some((tool) => tool === 'web' || tool === 'compare' || tool === 'finance')
+            ? 'browser'
+            : toolSet.some((tool) => tool === 'memory')
+              ? 'memory'
+              : toolSet.some((tool) => tool === 'file' || tool === 'notes')
+                ? 'files'
+                : firstIntent;
+
+    const hasFailures = generatorInput.toolResults.some((item) => !item.ok);
+    const hasResults = generatorInput.toolResults.length > 0;
+    const forceMode =
+      responseType === 'plain' && !hasResults
+        ? 'status'
+        : responseType === 'operator' || responseType === 'email' || toolSet.length > 0
+          ? 'execution'
+          : 'status';
+
+    return {
+      intent,
+      forceMode,
+      introText:
+        intent === 'email'
+          ? 'Sure — checking your email now.'
+          : intent === 'calendar'
+            ? 'Got it — reviewing your calendar now.'
+            : intent === 'browser'
+              ? 'On it — researching this now.'
+              : intent === 'memory'
+                ? 'Let me check your saved context.'
+                : intent === 'files'
+                  ? 'Reviewing your files now.'
+                  : undefined,
+      statusText:
+        intent === 'email'
+          ? 'Reviewing recent messages...'
+          : intent === 'calendar'
+            ? 'Reviewing upcoming events...'
+            : intent === 'browser'
+              ? 'Checking relevant sources...'
+              : intent === 'memory'
+                ? 'Searching memory...'
+                : intent === 'files'
+                  ? 'Analyzing attached files...'
+                  : 'Working on it...',
+      activeStepId: hasFailures ? 'summary' : hasResults ? 'summary' : 'process',
+      doneStepIds: hasResults ? ['connect', 'fetch', 'review'] : [],
+      errorStepIds: hasFailures ? ['summary'] : [],
+      toolCount: toolSet.length,
+    } as StructuredPayloadSchema['execution'];
+  };
+
   const base: StructuredPayloadSchema = {
     responseType,
     title: mappedStructured.title ?? null,
     lead: mappedStructured.lead ?? null,
     summary: mappedStructured.summary ?? null,
+    execution: buildExecutionData(),
   };
 
   if (responseType === 'search') {

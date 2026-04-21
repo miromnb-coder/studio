@@ -89,6 +89,16 @@ export type StructuredPayloadSchema = {
   nextActions?: string[];
   risks?: string[];
   opportunities?: string[];
+  execution?: {
+    intent: 'email' | 'calendar' | 'browser' | 'memory' | 'files' | 'general';
+    forceMode: 'thinking' | 'status' | 'execution' | 'text_only';
+    introText?: string;
+    statusText?: string;
+    activeStepId?: string;
+    doneStepIds?: string[];
+    errorStepIds?: string[];
+    toolCount?: number;
+  };
 };
 
 export type ToolSummaryItem = {

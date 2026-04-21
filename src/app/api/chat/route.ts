@@ -712,6 +712,11 @@ export async function POST(request: NextRequest) {
         metadata: {
           ...(unified.metadata || {}),
           responseMode,
+          execution:
+            typeof structuredData.execution === 'object' &&
+            structuredData.execution
+              ? (structuredData.execution as Record<string, unknown>)
+              : undefined,
           operatorResponse,
           structuredData: {
             ...structuredData,
