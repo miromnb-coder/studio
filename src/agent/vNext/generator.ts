@@ -33,6 +33,7 @@ import { buildEmailResponse } from './generator-email';
 import { buildOperatorResponse } from './generator-operator';
 
 const DEFAULT_OPENAI_GENERATOR_MODEL = 'gpt-5-mini';
+const DEFAULT_GROQ_GENERATOR_MODEL = 'openai/gpt-oss-120b';
 
 type FinalTextInput = {
   input: GenerateFinalAnswerInput;
@@ -41,6 +42,20 @@ type FinalTextInput = {
   currentText: string;
   responseType: StructuredPayloadSchema['responseType'];
 };
+
+type ToolLike =
+  | 'gmail'
+  | 'calendar'
+  | 'web'
+  | 'compare'
+  | 'finance'
+  | 'memory'
+  | 'file'
+  | 'files'
+  | 'notes'
+  | 'browser_search'
+  | 'browser'
+  | string;
 
 function getResponseMode(input: GenerateFinalAnswerInput): ResponseMode {
   const metadata = (input.request.metadata ?? {}) as Record<string, unknown>;
@@ -95,19 +110,19 @@ function buildModeInstruction(mode: ResponseMode): string {
         'Mode: casual.',
         'Reply directly and naturally as in normal conversation.',
         'Keep the structure minimal unless it clearly improves readability.',
-        'No robotic phrasing, no process narration, no workflow theater.',
+        'No robotic phrasing, no workflow theater, no internal narration.',
       ].join(' ');
     case 'fast':
       return [
         'Mode: fast.',
-        'Be concise and immediately useful.',
-        'Keep the answer compact and decisive.',
+        'Be concise, decisive, and immediately useful.',
+        'Prefer compact wording with high signal.',
       ].join(' ');
     case 'tool':
       return [
         'Mode: tool.',
         'Ground the answer in available tool context.',
-        'Do not pretend missing tools were used.',
+        'Never pretend missing tools were used.',
       ].join(' ');
     case 'fallback':
       return [
@@ -173,6 +188,128 @@ function buildStyleInstruction(
   }
 }
 
+function resolveExecutionIntentFromTool(
+  tool: ToolLike,
+): 'email' | 'calendar' | 'browser' | 'memory' | 'files' | 'general' {
+  if (tool === 'gmail') return 'email';
+  if (tool === 'calendar') return 'calendar';
+  if (
+    tool === 'web' ||
+    tool === 'compare' ||
+    tool === 'finance' ||
+    tool === 'browser_search' ||
+    tool === 'browser'
+  ) {
+    return 'browser';
+  }
+  if (tool === 'memory') return 'memory';
+  if (tool === 'file' || tool === 'files' || tool === 'notes') return 'files';
+  return 'general';
+}
+
+function pickExecutionIntent(tools: string[]) {
+  if (tools.some((tool) => tool === 'gmail')) return 'email' as const;
+  if (tools.some((tool) => tool === 'calendar')) return 'calendar' as const;
+  if (
+    tools.some(
+      (tool) =>
+        tool === 'web' ||
+        tool === 'compare' ||
+        tool === 'finance' ||
+        tool === 'browser_search' ||
+        tool === 'browser',
+    )
+  ) {
+    return 'browser' as const;
+  }
+  if (tools.some((tool) => tool === 'memory')) return 'memory' as const;
+  if (tools.some((tool) => tool === 'file' || tool === 'files' || tool === 'notes')) {
+    return 'files' as const;
+  }
+  return resolveExecutionIntentFromTool(tools[0] ?? '');
+}
+
+function buildExecutionIntro(
+  intent: 'email' | 'calendar' | 'browser' | 'memory' | 'files' | 'general',
+): string | undefined {
+  switch (intent) {
+    case 'email':
+      return 'Sure — checking your email now.';
+    case 'calendar':
+      return 'Got it — reviewing your calendar now.';
+    case 'browser':
+      return 'On it — researching this now.';
+    case 'memory':
+      return 'Let me check your saved context.';
+    case 'files':
+      return 'Reviewing your files now.';
+    default:
+      return undefined;
+  }
+}
+
+function buildExecutionStatus(
+  intent: 'email' | 'calendar' | 'browser' | 'memory' | 'files' | 'general',
+): string {
+  switch (intent) {
+    case 'email':
+      return 'Reviewing recent messages...';
+    case 'calendar':
+      return 'Reviewing upcoming events...';
+    case 'browser':
+      return 'Checking relevant sources...';
+    case 'memory':
+      return 'Searching memory...';
+    case 'files':
+      return 'Analyzing attached files...';
+    default:
+      return 'Working on it...';
+  }
+}
+
+function buildExecutionData(input: {
+  generatorInput: GenerateFinalAnswerInput;
+  responseType: StructuredPayloadSchema['responseType'];
+}): StructuredPayloadSchema['execution'] | undefined {
+  const { generatorInput, responseType } = input;
+
+  const requestedTools = Array.isArray(generatorInput.route.requiresTools)
+    ? generatorInput.route.requiresTools.filter(
+        (item): item is string => typeof item === 'string' && item.trim().length > 0,
+      )
+    : [];
+
+  const usedTools = generatorInput.toolResults
+    .map((item) => item.tool)
+    .filter((item): item is string => typeof item === 'string' && item.trim().length > 0);
+
+  const toolSet = [...new Set([...requestedTools, ...usedTools])];
+
+  if (toolSet.length === 0) return undefined;
+
+  const intent = pickExecutionIntent(toolSet);
+  const hasFailures = generatorInput.toolResults.some((item) => !item.ok);
+  const hasResults = generatorInput.toolResults.length > 0;
+
+  const forceMode: StructuredPayloadSchema['execution']['forceMode'] =
+    hasFailures || hasResults
+      ? 'execution'
+      : responseType === 'plain'
+        ? 'thinking'
+        : 'status';
+
+  return {
+    intent,
+    forceMode,
+    introText: buildExecutionIntro(intent),
+    statusText: buildExecutionStatus(intent),
+    activeStepId: hasFailures ? 'summary' : hasResults ? 'summary' : 'process',
+    doneStepIds: hasResults ? ['connect', 'fetch', 'review'] : [],
+    errorStepIds: hasFailures ? ['summary'] : [],
+    toolCount: toolSet.length,
+  };
+}
+
 function buildStructuredData(input: {
   generatorInput: GenerateFinalAnswerInput;
   finalText: string;
@@ -194,93 +331,15 @@ function buildStructuredData(input: {
     confidence,
   });
 
-  const resolveExecutionIntent = (tool: string):
-    | 'email'
-    | 'calendar'
-    | 'browser'
-    | 'memory'
-    | 'files'
-    | 'general' => {
-    if (tool === 'gmail') return 'email';
-    if (tool === 'calendar') return 'calendar';
-    if (tool === 'web' || tool === 'compare' || tool === 'finance') return 'browser';
-    if (tool === 'memory') return 'memory';
-    if (tool === 'file' || tool === 'notes') return 'files';
-    return 'general';
-  };
-
-  const buildExecutionData = () => {
-    const requestedTools = Array.isArray(generatorInput.route.requiresTools)
-      ? generatorInput.route.requiresTools
-      : [];
-    const usedTools = generatorInput.toolResults.map((item) => item.tool);
-    const toolSet = [...new Set([...requestedTools, ...usedTools])];
-
-    if (toolSet.length === 0) return undefined;
-
-    const firstIntent = resolveExecutionIntent(toolSet[0] ?? '');
-    const intent =
-      toolSet.some((tool) => tool === 'gmail')
-        ? 'email'
-        : toolSet.some((tool) => tool === 'calendar')
-          ? 'calendar'
-          : toolSet.some((tool) => tool === 'web' || tool === 'compare' || tool === 'finance')
-            ? 'browser'
-            : toolSet.some((tool) => tool === 'memory')
-              ? 'memory'
-              : toolSet.some((tool) => tool === 'file' || tool === 'notes')
-                ? 'files'
-                : firstIntent;
-
-    const hasFailures = generatorInput.toolResults.some((item) => !item.ok);
-    const hasResults = generatorInput.toolResults.length > 0;
-    const forceMode =
-      responseType === 'plain' && !hasResults
-        ? 'status'
-        : responseType === 'operator' || responseType === 'email' || toolSet.length > 0
-          ? 'execution'
-          : 'status';
-
-    return {
-      intent,
-      forceMode,
-      introText:
-        intent === 'email'
-          ? 'Sure — checking your email now.'
-          : intent === 'calendar'
-            ? 'Got it — reviewing your calendar now.'
-            : intent === 'browser'
-              ? 'On it — researching this now.'
-              : intent === 'memory'
-                ? 'Let me check your saved context.'
-                : intent === 'files'
-                  ? 'Reviewing your files now.'
-                  : undefined,
-      statusText:
-        intent === 'email'
-          ? 'Reviewing recent messages...'
-          : intent === 'calendar'
-            ? 'Reviewing upcoming events...'
-            : intent === 'browser'
-              ? 'Checking relevant sources...'
-              : intent === 'memory'
-                ? 'Searching memory...'
-                : intent === 'files'
-                  ? 'Analyzing attached files...'
-                  : 'Working on it...',
-      activeStepId: hasFailures ? 'summary' : hasResults ? 'summary' : 'process',
-      doneStepIds: hasResults ? ['connect', 'fetch', 'review'] : [],
-      errorStepIds: hasFailures ? ['summary'] : [],
-      toolCount: toolSet.length,
-    } as StructuredPayloadSchema['execution'];
-  };
-
   const base: StructuredPayloadSchema = {
     responseType,
     title: mappedStructured.title ?? null,
     lead: mappedStructured.lead ?? null,
     summary: mappedStructured.summary ?? null,
-    execution: buildExecutionData(),
+    execution: buildExecutionData({
+      generatorInput,
+      responseType,
+    }),
   };
 
   if (responseType === 'search') {
@@ -325,6 +384,67 @@ function buildStructuredData(input: {
   return base;
 }
 
+function parseStructuredPayload(
+  content: string | null | undefined,
+): LlmStructuredAnswerSchema | null {
+  const rawOutput = trimOuterWhitespace(content);
+  if (!rawOutput) return null;
+
+  const jsonBlock = extractJsonBlock(rawOutput);
+  if (!jsonBlock) return null;
+
+  const parsed = JSON.parse(jsonBlock) as Partial<LlmStructuredAnswerSchema>;
+  return normalizeStructuredPayload(parsed);
+}
+
+async function tryOpenAiGeneration(params: {
+  model: string;
+  systemPrompt: string;
+  userPrompt: string;
+}): Promise<LlmStructuredAnswerSchema | null> {
+  if (!process.env.OPENAI_API_KEY) return null;
+
+  try {
+    const completion = await openai.chat.completions.create({
+      model: params.model,
+      temperature: 0.3,
+      messages: [
+        { role: 'system', content: params.systemPrompt },
+        { role: 'user', content: params.userPrompt },
+      ],
+      response_format: { type: 'json_object' },
+    });
+
+    return parseStructuredPayload(completion.choices?.[0]?.message?.content);
+  } catch {
+    return null;
+  }
+}
+
+async function tryGroqGeneration(params: {
+  model: string;
+  systemPrompt: string;
+  userPrompt: string;
+}): Promise<LlmStructuredAnswerSchema | null> {
+  if (!process.env.GROQ_API_KEY) return null;
+
+  try {
+    const completion = await groq.chat.completions.create({
+      model: params.model,
+      temperature: 0.3,
+      messages: [
+        { role: 'system', content: params.systemPrompt },
+        { role: 'user', content: params.userPrompt },
+      ],
+      response_format: { type: 'json_object' },
+    });
+
+    return parseStructuredPayload(completion.choices?.[0]?.message?.content);
+  } catch {
+    return null;
+  }
+}
+
 async function generateWithModel(
   input: GenerateFinalAnswerInput,
 ): Promise<LlmStructuredAnswerSchema | null> {
@@ -357,9 +477,14 @@ async function generateWithModel(
     confidence: input.route.confidence ?? null,
   });
 
-  const generatorModel =
-    normalizeText(metadata.generatorModel) || 'openai/gpt-oss-120b';
+  const groqGeneratorModel =
+    normalizeText(metadata.groqGeneratorModel) ||
+    normalizeText(metadata.generatorModel) ||
+    process.env.GROQ_MODEL ||
+    DEFAULT_GROQ_GENERATOR_MODEL;
+
   const openaiGeneratorModel =
+    normalizeText(metadata.openaiGeneratorModel) ||
     normalizeText(metadata.generatorModel) ||
     process.env.OPENAI_MODEL ||
     process.env.AI_MODEL ||
@@ -410,7 +535,7 @@ async function generateWithModel(
     '- plainText should be a safe fallback',
     '- for search/news, keep the answer short and source-first',
     '- for shopping, keep buying advice short and recommendation-first',
-    '- for compare, lead with the decision and major differences',
+    '- for compare, lead with the verdict and major differences',
     '- no markdown',
     '- no extra keys',
   ].join('\n');
@@ -425,6 +550,7 @@ async function generateWithModel(
     `Response mode: ${responseMode}`,
     `User goal: ${
       normalizeText((input.route as { userGoal?: string }).userGoal) ||
+      normalizeText(input.route.reason) ||
       'Help with the user request.'
     }`,
     `Entities: ${
@@ -443,57 +569,18 @@ async function generateWithModel(
     'Now produce the best possible structured answer for the user.',
   ].join('\n\n');
 
-  const parseStructuredPayload = (
-    content: string | null | undefined,
-  ): LlmStructuredAnswerSchema | null => {
-    const rawOutput = trimOuterWhitespace(content);
-    if (!rawOutput) return null;
+  const openAiResult = await tryOpenAiGeneration({
+    model: openaiGeneratorModel,
+    systemPrompt,
+    userPrompt,
+  });
+  if (openAiResult) return openAiResult;
 
-    const jsonBlock = extractJsonBlock(rawOutput);
-    if (!jsonBlock) return null;
-
-    const parsed = JSON.parse(jsonBlock) as Partial<LlmStructuredAnswerSchema>;
-    return normalizeStructuredPayload(parsed);
-  };
-
-  if (process.env.OPENAI_API_KEY) {
-    try {
-      const completion = await openai.chat.completions.create({
-        model: openaiGeneratorModel,
-        temperature: 0.3,
-        messages: [
-          { role: 'system', content: systemPrompt },
-          { role: 'user', content: userPrompt },
-        ],
-        response_format: { type: 'json_object' },
-      });
-
-      const parsed = parseStructuredPayload(
-        completion.choices?.[0]?.message?.content,
-      );
-      if (parsed) return parsed;
-    } catch {
-      // fall through to Groq fallback
-    }
-  }
-
-  if (!process.env.GROQ_API_KEY) return null;
-
-  try {
-    const completion = await groq.chat.completions.create({
-      model: generatorModel,
-      temperature: 0.3,
-      messages: [
-        { role: 'system', content: systemPrompt },
-        { role: 'user', content: userPrompt },
-      ],
-      response_format: { type: 'json_object' },
-    });
-
-    return parseStructuredPayload(completion.choices?.[0]?.message?.content);
-  } catch {
-    return null;
-  }
+  return tryGroqGeneration({
+    model: groqGeneratorModel,
+    systemPrompt,
+    userPrompt,
+  });
 }
 
 function buildPolicyAwareSearchText(params: {
@@ -726,8 +813,8 @@ export async function generateFinalAnswer(
   };
 }
 
-function chunkText(text: string, chunkSize = 110): string[] {
-  const normalized = normalizeText(text);
+function chunkText(text: string, chunkSize = 90): string[] {
+  const normalized = trimOuterWhitespace(text);
   if (!normalized) return [];
 
   const chunks: string[] = [];
