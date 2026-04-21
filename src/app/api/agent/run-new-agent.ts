@@ -1,7 +1,41 @@
 import crypto from 'node:crypto';
 import { runAgentVNext } from '@/agent/vNext/orchestrator';
 import type { ResponseMode } from '@/agent/types/response-mode';
+import type { AgentExecutionPayload } from '@/types/agent-response';
 import type { AgentRouteInput, CompatibleAgentResponse } from './route-helpers';
+
+function toExecutionIntent(intent: string | undefined): AgentExecutionPayload['intent'] {
+  if (intent === 'gmail') return 'email';
+  if (intent === 'memory') return 'memory';
+  if (intent === 'compare' || intent === 'shopping' || intent === 'research') return 'browser';
+  return 'general';
+}
+
+function buildExecutionMetadata(params: {
+  intent: string | undefined;
+  planSummary: string;
+  toolResults: unknown[];
+  steps: Array<{ id: string; title: string; status: string }>;
+}): AgentExecutionPayload {
+  const failedStepIds = params.steps
+    .filter((step) => step.status === 'failed')
+    .map((step) => step.id);
+  const doneStepIds = params.steps
+    .filter((step) => step.status === 'completed' || step.status === 'skipped')
+    .map((step) => step.id);
+  const activeStep = params.steps.find((step) => step.status === 'running');
+
+  return {
+    intent: toExecutionIntent(params.intent),
+    forceMode:
+      params.toolResults.length > 0 || params.steps.length > 0 ? 'execution' : 'status',
+    statusText: params.planSummary || 'Planning response',
+    activeStepId: activeStep?.id,
+    doneStepIds,
+    errorStepIds: failedStepIds,
+    toolCount: params.toolResults.length,
+  };
+}
 
 export async function runNewAgent(
   input: AgentRouteInput,
@@ -11,42 +45,51 @@ export async function runNewAgent(
       ? (input.productState.responseModeHint as ResponseMode)
       : 'operator';
 
-  const result = await runAgentVNext({
-    requestId: crypto.randomUUID(),
-    userId: input.userId,
-    message: input.input,
-    conversation: (input.history || [])
-      .filter(
-        (
-          message,
-        ): message is { role: 'system' | 'user' | 'assistant'; content: string } =>
-          !!message &&
-          typeof message === 'object' &&
-          (message as { role?: unknown }).role !== undefined &&
-          ((message as { role?: unknown }).role === 'system' ||
-            (message as { role?: unknown }).role === 'user' ||
-            (message as { role?: unknown }).role === 'assistant') &&
-          typeof (message as { content?: unknown }).content === 'string',
-      )
-      .map((message, index) => ({
-        id: `history-${index}`,
-        role: message.role,
-        content: message.content,
-      })),
-    metadata: {
-      productState: input.productState,
-      gmailConnected: Boolean(input.productState?.gmailConnected),
-      calendarConnected: Boolean(input.productState?.calendarConnected),
-      memory: input.memory || null,
-      operatorAlerts: input.operatorAlerts || [],
-      outcomes: input.outcomes || [],
-      userProfileIntelligence: input.userProfileIntelligence || null,
-      userIntelligenceSummary: input.userIntelligenceSummary || '',
-      attachments: input.attachments || [],
-      attachmentCount: input.attachments?.length || 0,
-      responseModeHint,
-    },
-  });
+  let result;
+  try {
+    result = await runAgentVNext({
+      requestId: crypto.randomUUID(),
+      userId: input.userId,
+      message: input.input,
+      conversation: (input.history || [])
+        .filter(
+          (
+            message,
+          ): message is { role: 'system' | 'user' | 'assistant'; content: string } =>
+            !!message &&
+            typeof message === 'object' &&
+            (message as { role?: unknown }).role !== undefined &&
+            ((message as { role?: unknown }).role === 'system' ||
+              (message as { role?: unknown }).role === 'user' ||
+              (message as { role?: unknown }).role === 'assistant') &&
+            typeof (message as { content?: unknown }).content === 'string',
+        )
+        .map((message, index) => ({
+          id: `history-${index}`,
+          role: message.role,
+          content: message.content,
+        })),
+      metadata: {
+        productState: input.productState,
+        gmailConnected: Boolean(input.productState?.gmailConnected),
+        calendarConnected: Boolean(input.productState?.calendarConnected),
+        memory: input.memory || null,
+        operatorAlerts: input.operatorAlerts || [],
+        outcomes: input.outcomes || [],
+        userProfileIntelligence: input.userProfileIntelligence || null,
+        userIntelligenceSummary: input.userIntelligenceSummary || '',
+        attachments: input.attachments || [],
+        attachmentCount: input.attachments?.length || 0,
+        responseModeHint,
+      },
+    });
+  } catch (error) {
+    console.error('RUN_NEW_AGENT_VNEXT_THROW', {
+      userId: input.userId,
+      error,
+    });
+    return null;
+  }
 
   if (!result.ok || !result.response) {
     return null;
@@ -59,6 +102,12 @@ export async function runNewAgent(
   const evaluation = response.evaluation;
   const memory = response.memory;
   const toolResults = Array.isArray(response.toolResults) ? response.toolResults : [];
+  const execution = buildExecutionMetadata({
+    intent: route.intent,
+    planSummary: plan.summary,
+    toolResults,
+    steps: plan.steps,
+  });
 
   const mergedStructuredData = {
     ...(answer.structuredData && typeof answer.structuredData === 'object'
@@ -70,6 +119,7 @@ export async function runNewAgent(
     memory: memory || null,
     attachments: input.attachments || [],
     structuredAnswer: answer.structured,
+    execution,
   };
 
   return {
@@ -162,6 +212,7 @@ export async function runNewAgent(
         output: {},
       })),
       structuredData: mergedStructuredData,
+      execution,
       suggestedActions: Array.isArray(answer.followUps)
         ? answer.followUps.map((item, index) => ({
             id: `followup-${index + 1}`,
