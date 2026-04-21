@@ -6,7 +6,7 @@ import type { ResponseMode } from '@/agent/types/response-mode';
 import { mapAgentStepsToThinkingState } from '@/lib/mapAgentEventToThinkingState';
 import { AttachmentPreview } from './AttachmentPreview';
 import { KivoThinkingState } from './KivoThinkingState';
-import { ResponseRenderer } from './ResponseRenderer';
+import { KivoAssistantMessage } from './kivo/KivoAssistantMessage';
 
 type MessageThreadProps = {
   messages: Message[];
@@ -338,7 +338,7 @@ export function MessageThread({ messages, pending }: MessageThreadProps) {
                       transition={{ duration: 0.22, ease: 'easeOut' }}
                       className="w-full max-w-[840px]"
                     >
-                      <ResponseRenderer
+                      <KivoAssistantMessage
                         message={message}
                         latestUserContent={latestUserContent}
                       />
