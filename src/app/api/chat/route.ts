@@ -1,5 +1,9 @@
+import crypto from 'node:crypto';
 import { NextRequest } from 'next/server';
-import type { AgentResponse as LegacyAgentResponse, AgentResponseMetadata } from '@/types/agent-response';
+import type {
+  AgentResponse as LegacyAgentResponse,
+  AgentResponseMetadata,
+} from '@/types/agent-response';
 import type { OperatorResponse } from '@/types/operator-response';
 import type { ResponseMode } from '@/agent/types/response-mode';
 import type {
@@ -75,10 +79,6 @@ function asObject(value: unknown): Record<string, unknown> {
   return value && typeof value === 'object' && !Array.isArray(value)
     ? (value as Record<string, unknown>)
     : {};
-}
-
-function asArray(value: unknown): unknown[] {
-  return Array.isArray(value) ? value : [];
 }
 
 function normalizeAttachments(raw: unknown): NormalizedAttachment[] {
@@ -420,8 +420,45 @@ function normalizeUnifiedResult(raw: unknown): UnifiedResult | null {
   return null;
 }
 
+function splitLongChunk(chunk: string): string[] {
+  if (chunk.length <= 42) return [chunk];
+
+  const words = chunk.split(/(\s+)/).filter(Boolean);
+  const pieces: string[] = [];
+  let current = '';
+
+  for (const word of words) {
+    if ((current + word).length > 32 && current) {
+      pieces.push(current);
+      current = word;
+    } else {
+      current += word;
+    }
+  }
+
+  if (current) pieces.push(current);
+  return pieces;
+}
+
 function tokenChunks(text: string): string[] {
-  return text.split(/(\s+)/).filter(Boolean);
+  const normalized = text.replace(/\r\n/g, '\n');
+  const sentenceLikeChunks =
+    normalized.match(/[^.!?\n]+[.!?]?|\n+/g)?.filter(Boolean) ?? [normalized];
+
+  return sentenceLikeChunks
+    .flatMap((chunk) => splitLongChunk(chunk))
+    .filter((chunk) => chunk.length > 0);
+}
+
+function getChunkDelay(chunk: string, index: number): number {
+  const trimmed = chunk.trim();
+
+  if (!trimmed) return 8;
+  if (index === 0) return 90;
+  if (/[.!?]$/.test(trimmed)) return 70;
+  if (trimmed.length <= 8) return 24;
+  if (trimmed.length <= 20) return 32;
+  return 42;
 }
 
 function getResponseMode(result: UnifiedResult | null): ResponseMode {
@@ -612,7 +649,7 @@ export async function POST(request: NextRequest) {
           requestId,
         });
 
-        await delay(40);
+        await delay(120);
         send({
           type: 'router_completed',
           stepId: 'router',
@@ -622,7 +659,7 @@ export async function POST(request: NextRequest) {
       }
 
       if (shouldEmitWorkflow) {
-        await delay(40);
+        await delay(90);
         send({
           type: 'planning_started',
           stepId: 'planning',
@@ -630,7 +667,7 @@ export async function POST(request: NextRequest) {
           requestId,
         });
 
-        await delay(40);
+        await delay(120);
         send({
           type: 'planning_completed',
           stepId: 'planning',
@@ -638,7 +675,7 @@ export async function POST(request: NextRequest) {
           requestId,
         });
 
-        await delay(40);
+        await delay(90);
         send({
           type: 'memory_started',
           stepId: 'memory',
@@ -646,7 +683,7 @@ export async function POST(request: NextRequest) {
           requestId,
         });
 
-        await delay(40);
+        await delay(120);
         send({
           type: 'memory_completed',
           stepId: 'memory',
@@ -661,7 +698,7 @@ export async function POST(request: NextRequest) {
 
       if (responseMode === 'tool' || (responseMode === 'operator' && toolSteps.length > 0)) {
         for (const step of toolSteps) {
-          await delay(45);
+          await delay(110);
           send({
             type: 'tool_started',
             stepId: step.stepId,
@@ -671,7 +708,7 @@ export async function POST(request: NextRequest) {
             requestId,
           });
 
-          await delay(45);
+          await delay(140);
           send({
             type: 'tool_completed',
             stepId: step.stepId,
@@ -688,8 +725,11 @@ export async function POST(request: NextRequest) {
       const firstTokenAt = Date.now();
       let emittedChars = 0;
 
-      for (const token of tokens) {
-        await delay(token.trim().length > 0 ? 10 : 5);
+      await delay(120);
+
+      for (let index = 0; index < tokens.length; index += 1) {
+        const token = tokens[index];
+        await delay(getChunkDelay(token, index));
         emittedChars += token.length;
 
         send({
