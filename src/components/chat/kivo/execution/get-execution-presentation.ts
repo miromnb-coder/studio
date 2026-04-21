@@ -19,32 +19,38 @@ function resolveStepState(
   return 'pending';
 }
 
-function buildSteps(input: KivoExecutionInput, presetSteps: KivoExecutionStep[]): KivoExecutionStep[] {
+function buildSteps(
+  input: KivoExecutionInput,
+  presetSteps: KivoExecutionStep[],
+): KivoExecutionStep[] {
   return presetSteps.map((step) => ({
     ...step,
-    state: resolveStepState(step.id, input.activeStepId, input.doneStepIds, input.errorStepIds),
+    state: resolveStepState(
+      step.id,
+      input.activeStepId,
+      input.doneStepIds,
+      input.errorStepIds,
+    ),
   }));
 }
 
-function countActiveTools(tools: KivoExecutionTool[] | undefined, toolCount?: number): number {
+function countActiveTools(
+  tools: KivoExecutionTool[] | undefined,
+  toolCount?: number,
+): number {
   if (typeof toolCount === 'number' && Number.isFinite(toolCount)) {
     return Math.max(0, toolCount);
   }
   return tools?.length ?? 0;
 }
 
-function hasMeaningfulExecution(
-  steps: KivoExecutionStep[],
-  tools: KivoExecutionTool[] | undefined,
-  toolCount?: number,
-  forceMode?: KivoExecutionInput['forceMode'],
-): boolean {
-  if (forceMode === 'execution') return true;
-  if (countActiveTools(tools, toolCount) > 0) return true;
-  if (steps.some((step) => step.state === 'active' || step.state === 'done' || step.state === 'error')) {
-    return true;
-  }
-  return false;
+function countVisibleProgress(steps: KivoExecutionStep[]): number {
+  return steps.filter(
+    (step) =>
+      step.state === 'active' ||
+      step.state === 'done' ||
+      step.state === 'error',
+  ).length;
 }
 
 function resolveStatusText(
@@ -52,7 +58,9 @@ function resolveStatusText(
   steps: KivoExecutionStep[],
   fallbackTitle: string,
 ): string {
-  if (input.statusText) return input.statusText;
+  if (typeof input.statusText === 'string' && input.statusText.trim().length > 0) {
+    return input.statusText.trim();
+  }
 
   const errored = steps.find((step) => step.state === 'error');
   if (errored?.description) return errored.description;
@@ -60,12 +68,84 @@ function resolveStatusText(
   const active = steps.find((step) => step.state === 'active');
   if (active?.description) return active.description;
 
-  const completedCount = steps.filter((step) => step.state === 'done').length;
-  if (completedCount > 0 && completedCount === steps.length && steps.length > 0) {
+  const doneCount = steps.filter((step) => step.state === 'done').length;
+  if (doneCount > 0 && doneCount === steps.length && steps.length > 0) {
     return 'Completed';
   }
 
   return fallbackTitle;
+}
+
+function resolveIntroText(
+  input: KivoExecutionInput,
+  fallbackTitle: string,
+): string | undefined {
+  if (typeof input.introText === 'string' && input.introText.trim().length > 0) {
+    return input.introText.trim();
+  }
+
+  switch (input.intent) {
+    case 'email':
+      return 'Okay — I’ll check this and put together the right response.';
+    case 'calendar':
+      return 'Okay — I’ll review this and organize the next step.';
+    case 'browser':
+      return 'Okay — I’ll look into this and prepare the best answer.';
+    case 'memory':
+      return 'Okay — I’ll pull the relevant context and use it here.';
+    case 'files':
+      return 'Okay — I’ll review the material and summarize what matters.';
+    default:
+      return fallbackTitle ? undefined : 'Okay — I’ll think this through.';
+  }
+}
+
+function shouldShowThinking(params: {
+  input: KivoExecutionInput;
+  progressCount: number;
+  toolCount: number;
+}): boolean {
+  const { input, progressCount, toolCount } = params;
+
+  if (input.forceMode === 'thinking') return true;
+  if (input.forceMode === 'status') return false;
+  if (input.forceMode === 'execution') return false;
+
+  if (toolCount > 0) return false;
+  if (input.activeStepId) return true;
+  if (progressCount > 0) return true;
+
+  return true;
+}
+
+function shouldShowExecution(params: {
+  input: KivoExecutionInput;
+  progressCount: number;
+  toolCount: number;
+  hasErrors: boolean;
+}): boolean {
+  const { input, progressCount, toolCount, hasErrors } = params;
+
+  if (input.forceMode === 'execution') return true;
+  if (input.forceMode === 'thinking') return false;
+  if (input.forceMode === 'text_only') return false;
+
+  if (hasErrors) return true;
+  if (toolCount > 0) return true;
+  if (progressCount >= 2) return true;
+
+  return false;
+}
+
+function filterVisibleSteps(steps: KivoExecutionStep[]): KivoExecutionStep[] {
+  const visible = steps.filter(
+    (step) =>
+      step.state === 'active' ||
+      step.state === 'done' ||
+      step.state === 'error',
+  );
+
+  return visible.length > 0 ? visible : steps.slice(0, 3);
 }
 
 export function getExecutionPresentation(
@@ -83,42 +163,59 @@ export function getExecutionPresentation(
   if (input.forceMode === 'text_only') {
     return {
       mode: 'text_only',
-      introText: input.introText,
+      introText: resolveIntroText(input, preset.title),
       intent,
     };
   }
 
-  if (input.forceMode === 'thinking') {
+  const allSteps = buildSteps(input, preset.steps);
+  const visibleSteps = filterVisibleSteps(allSteps);
+  const toolCount = countActiveTools(preset.tools, input.toolCount);
+  const progressCount = countVisibleProgress(allSteps);
+  const hasErrors = allSteps.some((step) => step.state === 'error');
+  const statusText = resolveStatusText(input, allSteps, preset.title);
+  const introText = resolveIntroText(input, preset.title);
+
+  if (
+    shouldShowThinking({
+      input,
+      progressCount,
+      toolCount,
+    })
+  ) {
     return {
       mode: 'thinking',
-      introText: input.introText,
       intent,
-      statusText: input.statusText ?? 'Thinking...',
+      introText,
+      statusText,
+      tools: toolCount > 0 ? preset.tools : undefined,
     };
   }
 
-  const steps = buildSteps(input, preset.steps);
-  const tools = preset.tools;
-  const statusText = resolveStatusText(input, steps, preset.title);
-  const visibleExecution = hasMeaningfulExecution(steps, tools, input.toolCount, input.forceMode);
-
-  if (!visibleExecution) {
+  if (
+    shouldShowExecution({
+      input,
+      progressCount,
+      toolCount,
+      hasErrors,
+    })
+  ) {
     return {
-      mode: 'status',
+      mode: 'execution',
       intent,
-      introText: input.introText,
+      title: preset.title,
+      introText,
       statusText,
-      tools,
+      tools: toolCount > 0 ? preset.tools : undefined,
+      steps: visibleSteps,
     };
   }
 
   return {
-    mode: 'execution',
+    mode: 'status',
     intent,
-    title: preset.title,
-    introText: input.introText,
+    introText,
     statusText,
-    tools,
-    steps,
+    tools: toolCount > 0 ? preset.tools : undefined,
   };
 }
