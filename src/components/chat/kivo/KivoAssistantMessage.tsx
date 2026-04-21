@@ -43,6 +43,48 @@ function inferExecutionInput(message: Message): KivoExecutionInput | undefined {
   };
 }
 
+function KivoBrandHeader() {
+  return (
+    <div className="mb-3 flex items-center gap-2.5">
+      <div className="flex items-center gap-2.5">
+        <span className="inline-flex h-8 w-8 items-center justify-center">
+          <svg
+            viewBox="0 0 24 24"
+            aria-hidden="true"
+            className="h-7 w-7 text-[#171717]"
+            fill="none"
+          >
+            <circle cx="16.5" cy="7.5" r="2.1" fill="currentColor" />
+            <path
+              d="M6.5 15.2c1.3-3.8 4.2-6.1 7.9-6.1 2.6 0 4.2.8 5.8 2.5"
+              stroke="currentColor"
+              strokeWidth="1.9"
+              strokeLinecap="round"
+            />
+            <path
+              d="M4.6 12.7c1.1 5 4.7 7.7 9.4 7.7 3.1 0 5.3-1 7.2-3"
+              stroke="currentColor"
+              strokeWidth="1.9"
+              strokeLinecap="round"
+            />
+          </svg>
+        </span>
+
+        <span
+          className="text-[26px] font-semibold tracking-[-0.03em] text-[#171717]"
+          style={{ fontFamily: 'ui-serif, Georgia, Times, serif' }}
+        >
+          Kivo
+        </span>
+
+        <span className="inline-flex items-center rounded-[10px] border border-black/[0.08] bg-white px-2 py-0.5 text-[13px] font-medium text-[#8e8e93] shadow-[0_1px_2px_rgba(0,0,0,0.03)]">
+          Lite
+        </span>
+      </div>
+    </div>
+  );
+}
+
 export function KivoAssistantMessage({
   message,
   latestUserContent,
@@ -59,30 +101,34 @@ export function KivoAssistantMessage({
 
   return (
     <div className="w-full max-w-[840px]">
+      <KivoBrandHeader />
+
       {presentation.introText ? (
-        <div className="mb-3 rounded-[24px] border border-black/[0.06] bg-white px-4 py-3 text-[15px] leading-7 tracking-[-0.015em] text-[#141419] shadow-[0_10px_24px_rgba(0,0,0,0.035)]">
+        <div className="mb-3 max-w-[680px] text-[18px] leading-[1.28] tracking-[-0.025em] text-[#1b1b1f] sm:text-[20px]">
           {presentation.introText}
         </div>
       ) : null}
 
       {hasThinkingChip ? (
-        <div className="mb-3">
+        <div className="mb-4 pl-[2px]">
           <KivoExecutionThinkingState
-            text={presentation.statusText ?? 'Thinking...'}
+            text={presentation.statusText ?? 'Thinking'}
           />
         </div>
       ) : null}
 
       {hasExecutionCard ? (
-        <div className="mb-3">
+        <div className="mb-4">
           <KivoExecutionCard presentation={presentation} />
         </div>
       ) : null}
 
-      <ResponseRenderer
-        message={message}
-        latestUserContent={latestUserContent}
-      />
+      <div className="max-w-[760px] text-[#1b1b1f]">
+        <ResponseRenderer
+          message={message}
+          latestUserContent={latestUserContent}
+        />
+      </div>
     </div>
   );
 }
