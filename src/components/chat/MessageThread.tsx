@@ -287,13 +287,6 @@ export function MessageThread({ messages }: MessageThreadProps) {
                     transition={{ duration: 0.2, ease: 'easeOut' }}
                     className="w-full px-1 py-1"
                   >
-                    <div className="mb-3 flex items-center gap-2">
-                      <div className="h-1.5 w-1.5 rounded-full bg-[rgba(126,136,153,0.72)]" />
-                      <span className="text-[11px] font-medium uppercase tracking-[0.16em] text-[#8f98a8]">
-                        Kivo
-                      </span>
-                    </div>
-
                     <motion.div
                       layout
                       transition={{ duration: 0.22, ease: 'easeOut' }}
@@ -311,10 +304,7 @@ export function MessageThread({ messages }: MessageThreadProps) {
                       </div>
                     ) : null}
 
-                    <div className="mt-4 flex items-center justify-between gap-3 px-1">
-                      <div className="text-[11px] font-medium tracking-[0.01em] text-[#a0a8b5]">
-                        Assistant
-                      </div>
+                    <div className="mt-4 flex items-center justify-end px-1">
                       <span className="text-[11px] font-medium tracking-[0.01em] text-[#98a1af]">
                         {formatMessageTime(message.createdAt)}
                       </span>
