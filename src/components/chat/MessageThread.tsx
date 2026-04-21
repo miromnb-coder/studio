@@ -10,33 +10,52 @@ type MessageThreadProps = {
   pending: boolean;
 };
 
+type ThreadRow =
+  | { type: 'divider'; id: string; label: string }
+  | { type: 'message'; id: string; message: Message; index: number };
+
 function normalizeResponseType(value: unknown): string | null {
   if (typeof value !== 'string') return null;
   const normalized = value.trim().toLowerCase();
   return normalized || null;
 }
 
+function getStructuredDataRecord(
+  value: unknown,
+): Record<string, unknown> | null {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
+  return value as Record<string, unknown>;
+}
+
 function getExplicitStructuredResponseType(message: Message): string | null {
-  const structuredData = (message.structuredData ?? null) as
-    | Record<string, unknown>
-    | null;
+  const structuredData = getStructuredDataRecord(message.structuredData);
+  const metadata = getStructuredDataRecord(message.agentMetadata);
+  const metadataStructuredData = getStructuredDataRecord(metadata?.structuredData);
 
   return (
     normalizeResponseType(structuredData?.responseType) ??
     normalizeResponseType(structuredData?.response_type) ??
-    normalizeResponseType(
-      (message.agentMetadata?.structuredData as Record<string, unknown> | undefined)
-        ?.responseType,
-    ) ??
-    normalizeResponseType(
-      (message.agentMetadata?.structuredData as Record<string, unknown> | undefined)
-        ?.response_type,
-    )
+    normalizeResponseType(metadataStructuredData?.responseType) ??
+    normalizeResponseType(metadataStructuredData?.response_type)
   );
 }
 
 function hasExplicitStructuredResponseType(message: Message): boolean {
   return Boolean(getExplicitStructuredResponseType(message));
+}
+
+function hasExecutionPayload(message: Message): boolean {
+  const structuredData = getStructuredDataRecord(message.structuredData);
+  const metadata = getStructuredDataRecord(message.agentMetadata);
+
+  const structuredExecution = getStructuredDataRecord(structuredData?.execution);
+  const metadataExecution = getStructuredDataRecord(metadata?.execution);
+
+  return Boolean(structuredExecution || metadataExecution);
+}
+
+function isRichAssistantMessage(message: Message): boolean {
+  return hasExplicitStructuredResponseType(message) || hasExecutionPayload(message);
 }
 
 function normalizeComparableText(text: string): string {
@@ -84,8 +103,8 @@ function compactDuplicateAssistantMessages(messages: Message[]): Message[] {
       message.role === 'assistant' &&
       !previous.isStreaming &&
       !message.isStreaming &&
-      !hasExplicitStructuredResponseType(previous) &&
-      hasExplicitStructuredResponseType(message) &&
+      !isRichAssistantMessage(previous) &&
+      isRichAssistantMessage(message) &&
       isNearDuplicateAssistantContent(previous.content, message.content);
 
     if (shouldReplacePreviousPlainAssistant) {
@@ -96,8 +115,8 @@ function compactDuplicateAssistantMessages(messages: Message[]): Message[] {
     const shouldDropLaterPlainDuplicate =
       previous.role === 'assistant' &&
       message.role === 'assistant' &&
-      hasExplicitStructuredResponseType(previous) &&
-      !hasExplicitStructuredResponseType(message) &&
+      isRichAssistantMessage(previous) &&
+      !isRichAssistantMessage(message) &&
       !previous.isStreaming &&
       !message.isStreaming &&
       isNearDuplicateAssistantContent(previous.content, message.content);
@@ -148,11 +167,8 @@ function formatMessageTime(iso: string): string {
   });
 }
 
-function buildThreadRows(messages: Message[]) {
-  const rows: Array<
-    | { type: 'divider'; id: string; label: string }
-    | { type: 'message'; id: string; message: Message; index: number }
-  > = [];
+function buildThreadRows(messages: Message[]): ThreadRow[] {
+  const rows: ThreadRow[] = [];
 
   messages.forEach((message, index) => {
     const previous = messages[index - 1];
@@ -176,6 +192,18 @@ function buildThreadRows(messages: Message[]) {
   });
 
   return rows;
+}
+
+function getLatestUserContentBeforeIndex(
+  messages: Message[],
+  index: number,
+): string {
+  for (let i = index - 1; i >= 0; i -= 1) {
+    if (messages[i]?.role === 'user') {
+      return messages[i]?.content ?? '';
+    }
+  }
+  return '';
 }
 
 export function MessageThread({ messages }: MessageThreadProps) {
@@ -214,11 +242,10 @@ export function MessageThread({ messages }: MessageThreadProps) {
           const { message, index } = row;
           const isUser = message.role === 'user';
           const isError = Boolean(message.error);
-          const latestUserContent =
-            [...renderedMessages]
-              .slice(0, index)
-              .reverse()
-              .find((item) => item.role === 'user')?.content ?? '';
+          const latestUserContent = getLatestUserContentBeforeIndex(
+            renderedMessages,
+            index,
+          );
 
           return (
             <div
