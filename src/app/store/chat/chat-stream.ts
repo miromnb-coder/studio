@@ -1,7 +1,7 @@
 'use client';
 
 import { trackEvent } from '@/app/lib/analytics-client';
-import type { AgentResponseMetadata } from '@/types/agent-response';
+import type { AgentExecutionPayload, AgentResponseMetadata } from '@/types/agent-response';
 import type {
   AgentName,
   AppState,
@@ -84,12 +84,188 @@ function fallbackStepLabel(event: {
     if (tool === 'browser_search' || tool === 'browser') return 'Searching the web';
     if (tool === 'compare') return 'Comparing options';
     if (tool === 'finance') return 'Reviewing finances';
-    if (tool === 'file' || tool === 'notes') return 'Reviewing files';
+    if (tool === 'file' || tool === 'files' || tool === 'notes') return 'Reviewing files';
 
     return tool ? `Using ${tool}` : 'Using tools';
   }
 
   return 'Processing request';
+}
+
+function toExecutionIntent(intent?: string): AgentExecutionPayload['intent'] {
+  switch ((intent || '').toLowerCase()) {
+    case 'gmail':
+    case 'email':
+      return 'email';
+    case 'calendar':
+    case 'planning':
+    case 'productivity':
+      return 'calendar';
+    case 'browser':
+    case 'browser_search':
+    case 'web':
+    case 'search':
+    case 'research':
+    case 'shopping':
+    case 'compare':
+      return 'browser';
+    case 'memory':
+      return 'memory';
+    case 'files':
+    case 'file':
+    case 'notes':
+      return 'files';
+    default:
+      return 'general';
+  }
+}
+
+function inferExecutionIntentFromStepTool(steps: Array<{ tool?: string; action?: string; title?: string }>): AgentExecutionPayload['intent'] {
+  for (const step of steps) {
+    const tool = String(step.tool || '').toLowerCase();
+    if (tool) return toExecutionIntent(tool);
+
+    const action = String(step.action || step.title || '').toLowerCase();
+    if (action.includes('gmail') || action.includes('email')) return 'email';
+    if (action.includes('calendar')) return 'calendar';
+    if (action.includes('browser') || action.includes('search') || action.includes('research')) {
+      return 'browser';
+    }
+    if (action.includes('memory')) return 'memory';
+    if (action.includes('file') || action.includes('note')) return 'files';
+  }
+
+  return 'general';
+}
+
+function buildExecutionFromLiveState(params: {
+  metadata?: AgentResponseMetadata | null;
+  existingMessage?: Message;
+  steps: Array<{
+    stepId?: string;
+    id?: string;
+    title?: string;
+    action?: string;
+    tool?: string;
+    status?: string;
+    summary?: string;
+  }>;
+  streamedText: string;
+}): AgentExecutionPayload {
+  const metadataExecution =
+    params.metadata && typeof params.metadata.execution === 'object' && params.metadata.execution
+      ? (params.metadata.execution as Partial<AgentExecutionPayload>)
+      : undefined;
+
+  const structuredExecution =
+    params.metadata &&
+    params.metadata.structuredData &&
+    typeof params.metadata.structuredData === 'object' &&
+    typeof (params.metadata.structuredData as Record<string, unknown>).execution === 'object' &&
+    (params.metadata.structuredData as Record<string, unknown>).execution
+      ? ((params.metadata.structuredData as Record<string, unknown>).execution as Partial<AgentExecutionPayload>)
+      : undefined;
+
+  const existingExecution =
+    params.existingMessage?.structuredData &&
+    typeof params.existingMessage.structuredData === 'object' &&
+    typeof (params.existingMessage.structuredData as Record<string, unknown>).execution === 'object'
+      ? ((params.existingMessage.structuredData as Record<string, unknown>).execution as Partial<AgentExecutionPayload>)
+      : params.existingMessage?.agentMetadata &&
+          typeof params.existingMessage.agentMetadata === 'object' &&
+          typeof (params.existingMessage.agentMetadata as Record<string, unknown>).execution === 'object'
+        ? ((params.existingMessage.agentMetadata as Record<string, unknown>).execution as Partial<AgentExecutionPayload>)
+        : undefined;
+
+  const executionSeed = metadataExecution ?? structuredExecution ?? existingExecution;
+
+  const failedStepIds = params.steps
+    .filter((step) => step.status === 'failed')
+    .map((step) => String(step.stepId || step.id || ''));
+
+  const doneStepIds = params.steps
+    .filter((step) => step.status === 'completed' || step.status === 'skipped')
+    .map((step) => String(step.stepId || step.id || ''));
+
+  const activeStep = params.steps.find((step) => step.status === 'running');
+  const hasActiveStep = Boolean(activeStep);
+  const hasFailedStep = failedStepIds.length > 0;
+  const hasCompletedStep = doneStepIds.length > 0;
+  const hasVisibleText = params.streamedText.trim().length > 0;
+
+  const inferredIntent =
+    executionSeed?.intent ||
+    toExecutionIntent(params.metadata?.intent) ||
+    inferExecutionIntentFromStepTool(params.steps);
+
+  let statusText =
+    executionSeed?.statusText ||
+    activeStep?.summary ||
+    activeStep?.title ||
+    activeStep?.action ||
+    undefined;
+
+  if (!statusText) {
+    if (hasFailedStep) {
+      statusText = 'Something went wrong while working on this.';
+    } else if (hasActiveStep) {
+      statusText = 'Working on it';
+    } else if (hasCompletedStep && !hasVisibleText) {
+      statusText = 'Preparing answer';
+    } else if (hasVisibleText) {
+      statusText = 'Preparing answer';
+    } else {
+      statusText = 'Thinking';
+    }
+  }
+
+  let forceMode: AgentExecutionPayload['forceMode'] = 'thinking';
+
+  if (hasFailedStep) {
+    forceMode = 'execution';
+  } else if (hasActiveStep) {
+    forceMode = 'thinking';
+  } else if (hasCompletedStep && !hasVisibleText) {
+    forceMode = 'execution';
+  } else if (hasVisibleText) {
+    forceMode = 'status';
+  }
+
+  return {
+    intent: inferredIntent,
+    introText: executionSeed?.introText,
+    forceMode,
+    statusText,
+    activeStepId: activeStep ? String(activeStep.stepId || activeStep.id || '') : undefined,
+    doneStepIds: doneStepIds.filter(Boolean),
+    errorStepIds: failedStepIds.filter(Boolean),
+    toolCount:
+      typeof executionSeed?.toolCount === 'number'
+        ? executionSeed.toolCount
+        : params.steps.filter((step) => String(step.tool || '').trim().length > 0).length,
+  };
+}
+
+function mergeStructuredDataWithExecution(params: {
+  currentStructuredData?: Record<string, unknown>;
+  incomingStructuredData?: Record<string, unknown>;
+  execution: AgentExecutionPayload;
+}): Record<string, unknown> {
+  return {
+    ...(params.currentStructuredData ?? {}),
+    ...(params.incomingStructuredData ?? {}),
+    execution: params.execution,
+  };
+}
+
+function updateAssistantMessage(
+  messages: Message[],
+  assistantMessageId: string,
+  updater: (message: Message) => Message,
+): Message[] {
+  return messages.map((message) =>
+    message.id === assistantMessageId ? updater(message) : message,
+  );
 }
 
 export async function streamAssistantResponse({
@@ -106,6 +282,53 @@ export async function streamAssistantResponse({
     conversationMessages,
     currentState.user?.id,
   );
+
+  setState((prev) => {
+    const messages = prev.messageState[conversationId] ?? [];
+
+    return {
+      ...prev,
+      activeAgent: DEFAULT_ACTIVE_AGENT,
+      messageState: {
+        ...prev.messageState,
+        [conversationId]: updateAssistantMessage(messages, assistantMessageId, (message) => {
+          const execution: AgentExecutionPayload = {
+            intent: 'general',
+            forceMode: 'thinking',
+            statusText: 'Thinking',
+            toolCount: 0,
+          };
+
+          const structuredData = mergeStructuredDataWithExecution({
+            currentStructuredData:
+              message.structuredData && typeof message.structuredData === 'object'
+                ? (message.structuredData as Record<string, unknown>)
+                : undefined,
+            execution,
+          });
+
+          return {
+            ...message,
+            isStreaming: true,
+            content: message.content || '',
+            structuredData,
+            agentMetadata: {
+              ...mergeAgentMetadata(message.agentMetadata),
+              execution,
+              structuredData,
+            },
+          };
+        }),
+      },
+      agents: {
+        ...prev.agents,
+        [DEFAULT_ACTIVE_AGENT]: {
+          ...prev.agents[DEFAULT_ACTIVE_AGENT as AgentName],
+          status: 'running',
+        },
+      },
+    };
+  });
 
   const response = await fetch('/api/chat', {
     method: 'POST',
@@ -180,19 +403,74 @@ export async function streamAssistantResponse({
 
     setState((prev) => {
       const messages = prev.messageState[conversationId] ?? [];
+      const currentAssistantMessage = messages.find(
+        (message) => message.id === assistantMessageId,
+      );
+
+      const existingMetadata = mergeAgentMetadata(
+        currentAssistantMessage?.agentMetadata,
+      );
+      const currentSteps = Array.isArray(existingMetadata.steps)
+        ? existingMetadata.steps
+        : [];
+
+      const execution = buildExecutionFromLiveState({
+        metadata: existingMetadata,
+        existingMessage: currentAssistantMessage,
+        steps: currentSteps,
+        streamedText: streamedText + delta,
+      });
 
       return {
         ...prev,
+        activeSteps: deriveActiveStepsFromMetadata(
+          {
+            ...existingMetadata,
+            execution,
+            structuredData: mergeStructuredDataWithExecution({
+              currentStructuredData:
+                currentAssistantMessage?.structuredData &&
+                typeof currentAssistantMessage.structuredData === 'object'
+                  ? (currentAssistantMessage.structuredData as Record<string, unknown>)
+                  : undefined,
+              incomingStructuredData:
+                existingMetadata.structuredData &&
+                typeof existingMetadata.structuredData === 'object'
+                  ? (existingMetadata.structuredData as Record<string, unknown>)
+                  : undefined,
+              execution,
+            }),
+          },
+          prev.activeSteps,
+        ),
         messageState: {
           ...prev.messageState,
-          [conversationId]: messages.map((message) =>
-            message.id === assistantMessageId
-              ? {
-                  ...message,
-                  content: (message.content || '') + delta,
-                }
-              : message,
-          ),
+          [conversationId]: updateAssistantMessage(messages, assistantMessageId, (message) => {
+            const structuredData = mergeStructuredDataWithExecution({
+              currentStructuredData:
+                message.structuredData && typeof message.structuredData === 'object'
+                  ? (message.structuredData as Record<string, unknown>)
+                  : undefined,
+              incomingStructuredData:
+                existingMetadata.structuredData &&
+                typeof existingMetadata.structuredData === 'object'
+                  ? (existingMetadata.structuredData as Record<string, unknown>)
+                  : undefined,
+              execution,
+            });
+
+            return {
+              ...message,
+              content: (message.content || '') + delta,
+              isStreaming: true,
+              structuredData,
+              agentMetadata: {
+                ...existingMetadata,
+                execution,
+                structuredData,
+              },
+            };
+          }),
         },
       };
     });
@@ -234,31 +512,70 @@ export async function streamAssistantResponse({
       const assistantMessage = messages.find(
         (message) => message.id === assistantMessageId,
       );
-      const existingMetadata = assistantMessage?.agentMetadata;
-      const existingSteps = Array.isArray(existingMetadata?.steps)
+      const existingMetadata = mergeAgentMetadata(assistantMessage?.agentMetadata);
+      const existingSteps = Array.isArray(existingMetadata.steps)
         ? existingMetadata.steps
         : [];
       const nextSteps = upsertLiveStep(existingSteps, normalizedEvent);
 
+      const execution = buildExecutionFromLiveState({
+        metadata: existingMetadata,
+        existingMessage: assistantMessage,
+        steps: nextSteps,
+        streamedText,
+      });
+
       return {
         ...prev,
         activeSteps: deriveActiveStepsFromMetadata(
-          { ...(existingMetadata ?? mergeAgentMetadata()), steps: nextSteps },
+          {
+            ...existingMetadata,
+            steps: nextSteps,
+            execution,
+            structuredData: mergeStructuredDataWithExecution({
+              currentStructuredData:
+                assistantMessage?.structuredData &&
+                typeof assistantMessage.structuredData === 'object'
+                  ? (assistantMessage.structuredData as Record<string, unknown>)
+                  : undefined,
+              incomingStructuredData:
+                existingMetadata.structuredData &&
+                typeof existingMetadata.structuredData === 'object'
+                  ? (existingMetadata.structuredData as Record<string, unknown>)
+                  : undefined,
+              execution,
+            }),
+          },
           prev.activeSteps,
         ),
         messageState: {
           ...prev.messageState,
-          [conversationId]: messages.map((message) =>
-            message.id === assistantMessageId
-              ? {
-                  ...message,
-                  agentMetadata: {
-                    ...mergeAgentMetadata(message.agentMetadata),
-                    steps: nextSteps,
-                  },
-                }
-              : message,
-          ),
+          [conversationId]: updateAssistantMessage(messages, assistantMessageId, (message) => {
+            const structuredData = mergeStructuredDataWithExecution({
+              currentStructuredData:
+                message.structuredData && typeof message.structuredData === 'object'
+                  ? (message.structuredData as Record<string, unknown>)
+                  : undefined,
+              incomingStructuredData:
+                existingMetadata.structuredData &&
+                typeof existingMetadata.structuredData === 'object'
+                  ? (existingMetadata.structuredData as Record<string, unknown>)
+                  : undefined,
+              execution,
+            });
+
+            return {
+              ...message,
+              isStreaming: true,
+              structuredData,
+              agentMetadata: {
+                ...existingMetadata,
+                steps: nextSteps,
+                execution,
+                structuredData,
+              },
+            };
+          }),
         },
       };
     });
@@ -329,56 +646,67 @@ export async function streamAssistantResponse({
             steps: [],
           };
 
-      const structuredData =
+      const safeStructuredData =
         buildSafeStructuredData(event.structuredData) ??
         buildSafeStructuredData(normalizedMetadata.structuredData);
 
-      const toolResults =
+      const safeToolResults =
         buildSafeToolResults(event.toolResults) ??
-        buildSafeToolResults(structuredData?.toolResults);
+        buildSafeToolResults(safeStructuredData?.toolResults);
 
-      const execution =
-        (typeof event.metadata?.execution === 'object' &&
-        event.metadata?.execution
-          ? (event.metadata.execution as Record<string, unknown>)
-          : undefined) ??
-        (typeof structuredData?.execution === 'object' && structuredData.execution
-          ? (structuredData.execution as Record<string, unknown>)
-          : undefined);
+      const execution = buildExecutionFromLiveState({
+        metadata: normalizedMetadata,
+        existingMessage: currentAssistantMessage,
+        steps: Array.isArray(normalizedMetadata.steps)
+          ? normalizedMetadata.steps.map((step) => ({
+              stepId: step.stepId,
+              id: step.stepId,
+              title: step.title,
+              action: step.action,
+              tool: step.tool,
+              status: step.status,
+              summary: step.summary,
+            }))
+          : [],
+        streamedText: content,
+      });
+
+      const structuredData = mergeStructuredDataWithExecution({
+        currentStructuredData:
+          currentAssistantMessage?.structuredData &&
+          typeof currentAssistantMessage.structuredData === 'object'
+            ? (currentAssistantMessage.structuredData as Record<string, unknown>)
+            : undefined,
+        incomingStructuredData: safeStructuredData,
+        execution,
+      });
 
       return {
         ...prev,
         activeAgent: DEFAULT_ACTIVE_AGENT,
         activeSteps: deriveActiveStepsFromMetadata(
-          normalizedMetadata,
+          {
+            ...normalizedMetadata,
+            execution,
+            structuredData,
+          },
           prev.activeSteps,
         ),
         messageState: {
           ...prev.messageState,
-          [conversationId]: messages.map((message) =>
-            message.id === assistantMessageId
-              ? {
-                  ...message,
-                  content,
-                  structured: event.structured,
-                  structuredData,
-                  toolResults,
-                  agentMetadata: structuredData
-                    ? {
-                        ...normalizedMetadata,
-                        execution,
-                        structuredData: {
-                          ...(normalizedMetadata.structuredData ?? {}),
-                          ...structuredData,
-                        },
-                      }
-                    : {
-                        ...normalizedMetadata,
-                        execution,
-                      },
-                }
-              : message,
-          ),
+          [conversationId]: updateAssistantMessage(messages, assistantMessageId, (message) => ({
+            ...message,
+            content,
+            isStreaming: false,
+            structured: event.structured,
+            structuredData,
+            toolResults: safeToolResults,
+            agentMetadata: {
+              ...normalizedMetadata,
+              execution,
+              structuredData,
+            },
+          })),
         },
       };
     });
