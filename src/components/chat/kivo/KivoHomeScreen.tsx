@@ -1,4 +1,4 @@
-  const focusTitle = useMemo(() => {
+  import { useEffect, useMemo, useState } from 'react';
     if (unfinishedRows[0]?.title) {
       return `Resume ${unfinishedRows[0].title}`;
     }
