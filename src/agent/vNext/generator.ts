@@ -1,4 +1,5 @@
 import { groq } from '@/ai/groq';
+import { openai } from '@/ai/openai';
 import type { ResponseMode } from '@/agent/types/response-mode';
 import { resolveResponsePolicy } from '@/agent/response-intelligence';
 
@@ -30,6 +31,8 @@ import { buildShoppingResponse } from './generator-shopping';
 import { buildCompareResponse } from './generator-compare';
 import { buildEmailResponse } from './generator-email';
 import { buildOperatorResponse } from './generator-operator';
+
+const DEFAULT_OPENAI_GENERATOR_MODEL = 'gpt-5-mini';
 
 type FinalTextInput = {
   input: GenerateFinalAnswerInput;
@@ -325,7 +328,7 @@ function buildStructuredData(input: {
 async function generateWithModel(
   input: GenerateFinalAnswerInput,
 ): Promise<LlmStructuredAnswerSchema | null> {
-  if (!process.env.GROQ_API_KEY) return null;
+  if (!process.env.OPENAI_API_KEY && !process.env.GROQ_API_KEY) return null;
 
   const requestText = getRequestText(input.request);
   const detectedLanguage = getLanguage(input);
@@ -356,6 +359,11 @@ async function generateWithModel(
 
   const generatorModel =
     normalizeText(metadata.generatorModel) || 'openai/gpt-oss-120b';
+  const openaiGeneratorModel =
+    normalizeText(metadata.generatorModel) ||
+    process.env.OPENAI_MODEL ||
+    process.env.AI_MODEL ||
+    DEFAULT_OPENAI_GENERATOR_MODEL;
 
   const systemPrompt = [
     'You are the final answer generator for Kivo, a premium AI assistant.',
@@ -435,6 +443,42 @@ async function generateWithModel(
     'Now produce the best possible structured answer for the user.',
   ].join('\n\n');
 
+  const parseStructuredPayload = (
+    content: string | null | undefined,
+  ): LlmStructuredAnswerSchema | null => {
+    const rawOutput = trimOuterWhitespace(content);
+    if (!rawOutput) return null;
+
+    const jsonBlock = extractJsonBlock(rawOutput);
+    if (!jsonBlock) return null;
+
+    const parsed = JSON.parse(jsonBlock) as Partial<LlmStructuredAnswerSchema>;
+    return normalizeStructuredPayload(parsed);
+  };
+
+  if (process.env.OPENAI_API_KEY) {
+    try {
+      const completion = await openai.chat.completions.create({
+        model: openaiGeneratorModel,
+        temperature: 0.3,
+        messages: [
+          { role: 'system', content: systemPrompt },
+          { role: 'user', content: userPrompt },
+        ],
+        response_format: { type: 'json_object' },
+      });
+
+      const parsed = parseStructuredPayload(
+        completion.choices?.[0]?.message?.content,
+      );
+      if (parsed) return parsed;
+    } catch {
+      // fall through to Groq fallback
+    }
+  }
+
+  if (!process.env.GROQ_API_KEY) return null;
+
   try {
     const completion = await groq.chat.completions.create({
       model: generatorModel,
@@ -446,16 +490,7 @@ async function generateWithModel(
       response_format: { type: 'json_object' },
     });
 
-    const rawOutput = trimOuterWhitespace(
-      completion.choices?.[0]?.message?.content,
-    );
-    if (!rawOutput) return null;
-
-    const jsonBlock = extractJsonBlock(rawOutput);
-    if (!jsonBlock) return null;
-
-    const parsed = JSON.parse(jsonBlock) as Partial<LlmStructuredAnswerSchema>;
-    return normalizeStructuredPayload(parsed);
+    return parseStructuredPayload(completion.choices?.[0]?.message?.content);
   } catch {
     return null;
   }
