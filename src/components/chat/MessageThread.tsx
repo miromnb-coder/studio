@@ -1,11 +1,8 @@
 'use client';
 
-import { AnimatePresence, motion } from 'framer-motion';
+import { motion } from 'framer-motion';
 import type { Message } from '@/app/store/app-store';
-import type { ResponseMode } from '@/agent/types/response-mode';
-import { mapAgentStepsToThinkingState } from '@/lib/mapAgentEventToThinkingState';
 import { AttachmentPreview } from './AttachmentPreview';
-import { KivoThinkingState } from './KivoThinkingState';
 import { KivoAssistantMessage } from './kivo/KivoAssistantMessage';
 
 type MessageThreadProps = {
@@ -43,10 +40,7 @@ function hasExplicitStructuredResponseType(message: Message): boolean {
 }
 
 function normalizeComparableText(text: string): string {
-  return text
-    .replace(/\s+/g, ' ')
-    .trim()
-    .toLowerCase();
+  return text.replace(/\s+/g, ' ').trim().toLowerCase();
 }
 
 function isNearDuplicateAssistantContent(a: string, b: string): boolean {
@@ -184,69 +178,9 @@ function buildThreadRows(messages: Message[]) {
   return rows;
 }
 
-function resolveResponseMode(messages: Message[]): ResponseMode {
-  const streamingAssistant = [...messages]
-    .reverse()
-    .find((message) => message.role === 'assistant' && message.isStreaming);
-  const metadata = streamingAssistant?.agentMetadata;
-
-  if (
-    metadata?.responseMode === 'casual' ||
-    metadata?.responseMode === 'fast' ||
-    metadata?.responseMode === 'operator' ||
-    metadata?.responseMode === 'tool' ||
-    metadata?.responseMode === 'fallback'
-  ) {
-    return metadata.responseMode;
-  }
-
-  const structuredMode =
-    metadata?.structuredData && typeof metadata.structuredData === 'object'
-      ? (metadata.structuredData.response_mode as string | undefined)
-      : undefined;
-
-  if (
-    structuredMode === 'casual' ||
-    structuredMode === 'fast' ||
-    structuredMode === 'operator' ||
-    structuredMode === 'tool' ||
-    structuredMode === 'fallback'
-  ) {
-    return structuredMode;
-  }
-
-  return 'fallback';
-}
-
-function getThinkingState(messages: Message[], pending: boolean) {
-  const latestAssistant = [...messages]
-    .reverse()
-    .find((message) => message.role === 'assistant');
-
-  return mapAgentStepsToThinkingState({
-    isStreaming: pending || Boolean(latestAssistant?.isStreaming),
-    steps: latestAssistant?.agentMetadata?.steps,
-  });
-}
-
-export function MessageThread({ messages, pending }: MessageThreadProps) {
+export function MessageThread({ messages }: MessageThreadProps) {
   const renderedMessages = compactDuplicateAssistantMessages(messages);
   const rows = buildThreadRows(renderedMessages);
-  const pendingMode = resolveResponseMode(renderedMessages);
-  const thinkingState = getThinkingState(renderedMessages, pending);
-  const latestAssistant = [...renderedMessages]
-    .reverse()
-    .find((message) => message.role === 'assistant');
-
-  const assistantHasVisibleStreamContent = Boolean(
-    latestAssistant?.isStreaming && latestAssistant.content.trim().length > 0,
-  );
-
-  const showThinkingState =
-    pending &&
-    pendingMode !== 'casual' &&
-    Boolean(thinkingState) &&
-    !assistantHasVisibleStreamContent;
 
   if (renderedMessages.length === 0) {
     return (
@@ -370,25 +304,6 @@ export function MessageThread({ messages, pending }: MessageThreadProps) {
             </div>
           );
         })}
-
-        <AnimatePresence initial={false} mode="wait">
-          {showThinkingState && thinkingState ? (
-            <motion.div
-              key="kivo-thinking"
-              initial={{ opacity: 0, y: 8 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -10 }}
-              transition={{ duration: 0.22, ease: 'easeOut' }}
-              className="flex justify-start"
-            >
-              <KivoThinkingState
-                status={thinkingState.status}
-                visualState={thinkingState.visualState}
-                className="max-w-[760px]"
-              />
-            </motion.div>
-          ) : null}
-        </AnimatePresence>
       </div>
     </div>
   );
