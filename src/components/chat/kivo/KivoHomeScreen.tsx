@@ -47,9 +47,6 @@ export function KivoHomeScreen() {
   const activeConversationId = useAppStore((s) => s.activeConversationId);
   const createConversation = useAppStore((s) => s.createConversation);
   const openConversation = useAppStore((s) => s.openConversation);
-  const enqueuePromptAndGoToChat = useAppStore(
-    (s) => s.enqueuePromptAndGoToChat,
-  );
   const alerts = useAppStore((s) => s.alerts);
   const isAgentResponding = useAppStore((s) => s.isAgentResponding);
 
@@ -198,22 +195,68 @@ export function KivoHomeScreen() {
 
   const statusLabel = isAgentResponding ? 'Working' : 'Ready';
 
-  const heroSubtext = latestConversation?.unfinished
-    ? 'Pick up where you left off or open Operator for the next best move.'
-    : 'Pick a starting point or let Kivo guide your next move.';
-
-  const focusTitle = latestConversation
-    ? latestConversation.unfinished
-      ? `Resume ${latestConversation.title}`
-      : 'Open Operator for the next best move'
-    : 'Open Operator for the next best move';
+  const focusTitle = latestConversation?.unfinished
+    ? `Resume ${latestConversation.title}`
+    : 'Open Operator';
 
   const focusDescription =
     activeAlertCount > 0
       ? `${activeAlertCount} active item${activeAlertCount > 1 ? 's' : ''} may need your attention.`
-      : latestConversation
-        ? 'Review what matters, see your momentum, or continue your flow.'
-        : 'Start with a new chat or let Kivo guide your next move.';
+      : latestConversation?.unfinished
+        ? 'Pick up where you left off and keep your momentum going.'
+        : 'Let Kivo guide your next move and surface what matters most.';
+
+  const tasksCompletedThisWeek = Math.min(
+    Math.max(rows.length + agentConversationCount, 1),
+    9,
+  );
+  const keyDecisionsMade = Math.min(
+    Math.max(activeAlertCount + Math.floor(agentConversationCount / 2), 1),
+    5,
+  );
+  const focusPeak = useMemo(() => {
+    const hour = new Date().getHours();
+    if (hour < 12) return '9–11 AM';
+    if (hour < 18) return '1–4 PM';
+    return '6–8 PM';
+  }, []);
+
+  const streakDots = useMemo(() => {
+    const strength = Math.min(tasksCompletedThisWeek + keyDecisionsMade, 7);
+    return Array.from({ length: 7 }, (_, index) => index < strength);
+  }, [keyDecisionsMade, tasksCompletedThisWeek]);
+
+  const activePriorities = useMemo(() => {
+    const priorities: string[] = [];
+
+    if (latestConversation?.unfinished) priorities.push(`Finish ${latestConversation.title}`);
+    if (estimatedMoneySaved > 0) priorities.push('Save more money');
+    if (agentConversationCount > 0) priorities.push('Review active agent work');
+    if (activeAlertCount > 0) priorities.push('Resolve active alerts');
+
+    if (priorities.length < 3) priorities.push('Build Kivo app');
+
+    return priorities.slice(0, 3);
+  }, [
+    activeAlertCount,
+    agentConversationCount,
+    estimatedMoneySaved,
+    latestConversation?.title,
+    latestConversation?.unfinished,
+  ]);
+
+  const insightText = useMemo(() => {
+    if (isAgentResponding) {
+      return 'You are in an active working session right now.';
+    }
+    if (unfinishedCount >= 3) {
+      return 'You move faster when unfinished items are narrowed down.';
+    }
+    if (agentConversationCount >= 2) {
+      return 'You use Kivo best when you turn chats into concrete next actions.';
+    }
+    return 'You work best when the next move is clearly defined.';
+  }, [agentConversationCount, isAgentResponding, unfinishedCount]);
 
   const handleOpenConversation = (conversationId: string) => {
     openConversation(conversationId);
@@ -226,8 +269,28 @@ export function KivoHomeScreen() {
     router.push('/chat');
   };
 
-  const handleQuickPrompt = (prompt: string) => {
-    enqueuePromptAndGoToChat(prompt);
+  const handleContinue = () => {
+    if (latestConversation) {
+      handleOpenConversation(latestConversation.id);
+      return;
+    }
+    router.push('/chat');
+  };
+
+  const handleOpenOperator = () => {
+    if (latestConversation?.unfinished) {
+      handleOpenConversation(latestConversation.id);
+      return;
+    }
+    router.push('/chat');
+  };
+
+  const handleCalendar = () => {
+    router.push('/actions?tool=google-calendar');
+  };
+
+  const handleMoney = () => {
+    router.push('/money-saver');
   };
 
   return (
@@ -236,11 +299,15 @@ export function KivoHomeScreen() {
         <div className="absolute inset-0 bg-[linear-gradient(180deg,#f8fafc_0%,#ffffff_42%,#f5f7fb_100%)]" />
         <div className="absolute inset-x-0 top-0 h-[220px] bg-[radial-gradient(ellipse_at_top,rgba(255,255,255,0.98)_0%,rgba(255,255,255,0.46)_48%,rgba(255,255,255,0)_82%)]" />
         <div className="absolute left-1/2 top-[10%] h-[260px] w-[260px] -translate-x-1/2 rounded-full bg-[radial-gradient(circle,rgba(255,255,255,0.98)_0%,rgba(247,249,253,0.48)_56%,rgba(247,249,253,0)_100%)] blur-[30px]" />
+        <div className="absolute right-[-60px] top-[180px] h-[220px] w-[220px] rounded-full bg-[radial-gradient(circle,rgba(232,225,255,0.52)_0%,rgba(232,225,255,0.14)_52%,rgba(232,225,255,0)_100%)] blur-[28px]" />
         <div className="absolute left-1/2 bottom-[-80px] h-[280px] w-[120%] -translate-x-1/2 rounded-full bg-[radial-gradient(ellipse_at_center,rgba(238,242,248,0.8)_0%,rgba(238,242,248,0.22)_54%,rgba(238,242,248,0)_100%)] blur-[34px]" />
       </div>
 
       <div className="relative mx-auto flex min-h-screen w-full max-w-[560px] flex-col">
-        <header className="sticky top-0 z-30 border-b border-black/[0.035] bg-white/78 px-5 pb-3 pt-4 backdrop-blur-2xl">
+        <header
+          className="sticky top-0 z-30 border-b border-black/[0.035] bg-white/78 px-5 pb-3 pt-4 backdrop-blur-2xl"
+          style={{ paddingTop: 'max(16px, env(safe-area-inset-top, 0px))' }}
+        >
           <div className="flex items-center justify-between">
             <button
               type="button"
@@ -266,9 +333,9 @@ export function KivoHomeScreen() {
           </div>
         </header>
 
-        <main className="flex min-h-0 flex-1 flex-col px-5 pb-28 pt-6">
+        <main className="flex min-h-0 flex-1 flex-col px-5 pb-28 pt-5">
           <section>
-            <div className="max-w-[420px]">
+            <div className="max-w-[430px]">
               <p className="text-[18px] font-medium tracking-[-0.03em] text-[#6f7b8f]">
                 {greeting}
               </p>
@@ -277,110 +344,153 @@ export function KivoHomeScreen() {
                 className="mt-2 text-[36px] font-normal leading-[1.02] tracking-[-0.06em] text-[#1f2734]"
                 style={{ fontFamily: 'ui-serif, Georgia, Times, serif' }}
               >
-                What do you want to move forward today?
+                What needs your attention today?
               </h2>
 
               <p className="mt-4 max-w-[420px] text-[16px] leading-7 tracking-[-0.015em] text-[#758092]">
-                {heroSubtext}
+                Plan, decide, and move faster.
               </p>
             </div>
           </section>
 
-          <section className="mt-7 grid grid-cols-2 gap-4">
+          <section className="mt-6">
+            <div className="relative overflow-hidden rounded-[34px] border border-black/[0.04] bg-[linear-gradient(180deg,rgba(255,255,255,0.94),rgba(248,250,253,0.84))] p-5 shadow-[0_18px_38px_rgba(15,23,42,0.055)]">
+              <div className="pointer-events-none absolute inset-y-0 right-[-28px] w-[220px] bg-[radial-gradient(circle_at_center,rgba(236,230,255,0.74)_0%,rgba(236,230,255,0.22)_42%,rgba(236,230,255,0)_72%)] blur-[20px]" />
+              <div className="pointer-events-none absolute bottom-4 right-0 h-[74px] w-[82%] bg-[linear-gradient(90deg,rgba(229,235,252,0.02)_0%,rgba(225,228,255,0.16)_30%,rgba(229,222,255,0.22)_60%,rgba(228,235,255,0.10)_100%)]" />
+
+              <div className="relative">
+                <div className="flex items-center gap-2 text-[#7f4cff]">
+                  <Sparkles className="h-4.5 w-4.5" strokeWidth={2} />
+                  <span className="text-[12px] font-semibold uppercase tracking-[0.12em]">
+                    Focus now
+                  </span>
+                </div>
+
+                <h3 className="mt-4 max-w-[320px] text-[30px] font-semibold leading-[1.05] tracking-[-0.055em] text-[#1f2734]">
+                  {focusTitle}
+                </h3>
+
+                <p className="mt-3 max-w-[360px] text-[15px] leading-7 tracking-[-0.012em] text-[#717d8f]">
+                  {focusDescription}
+                </p>
+
+                <button
+                  type="button"
+                  onClick={handleOpenOperator}
+                  className="mt-5 inline-flex h-11 items-center justify-center rounded-full bg-[#111318] px-5 text-[14px] font-semibold tracking-[-0.015em] text-white shadow-[0_10px_24px_rgba(0,0,0,0.14)] transition-all duration-200 ease-out hover:-translate-y-[1px] hover:bg-black active:translate-y-0 active:scale-[0.985]"
+                >
+                  Open Operator
+                </button>
+              </div>
+            </div>
+          </section>
+
+          <section className="mt-5 flex gap-2 overflow-x-auto pb-1 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
             <button
               type="button"
               onClick={handleNewChat}
-              className="flex min-h-[132px] flex-col items-start justify-between rounded-[30px] border border-[#232427] bg-[linear-gradient(180deg,#17181b_0%,#08090c_100%)] px-5 py-5 text-left text-white shadow-[0_18px_36px_rgba(10,10,12,0.18)] transition-all duration-200 ease-out hover:scale-[1.01] active:scale-[0.99]"
+              className="inline-flex shrink-0 items-center gap-2 rounded-full bg-[#0f1116] px-4 py-3 text-[15px] font-medium tracking-[-0.02em] text-white shadow-[0_10px_22px_rgba(0,0,0,0.12)] transition-all duration-200 ease-out active:scale-[0.985]"
             >
-              <span className="inline-flex h-12 w-12 items-center justify-center rounded-full bg-white/10 text-white">
-                <Sparkles className="h-5 w-5" strokeWidth={2} />
-              </span>
-
-              <div className="flex w-full items-end justify-between gap-3">
-                <div>
-                  <div className="text-[17px] font-semibold tracking-[-0.025em]">
-                    New chat
-                  </div>
-                  <div className="mt-1 text-[13px] text-white/72">
-                    Start something fresh
-                  </div>
-                </div>
-
-                <ChevronRight className="h-5 w-5 shrink-0 text-white/82" strokeWidth={2.1} />
-              </div>
+              <Sparkles className="h-4.5 w-4.5" strokeWidth={2} />
+              New chat
             </button>
 
             <button
               type="button"
-              onClick={() => {
-                if (latestConversation) {
-                  handleOpenConversation(latestConversation.id);
-                  return;
-                }
-                router.push('/operator');
-              }}
-              className="flex min-h-[132px] flex-col items-start justify-between rounded-[30px] border border-black/[0.04] bg-white/88 px-5 py-5 text-left shadow-[0_14px_30px_rgba(15,23,42,0.05)] transition-all duration-200 ease-out hover:bg-white active:scale-[0.99]"
+              onClick={handleContinue}
+              className="inline-flex shrink-0 items-center gap-2 rounded-full bg-white/86 px-4 py-3 text-[15px] font-medium tracking-[-0.02em] text-[#6f7b8f] shadow-[0_8px_16px_rgba(15,23,42,0.03)] transition-all duration-200 ease-out hover:bg-white active:scale-[0.985]"
             >
-              <span className="inline-flex h-12 w-12 items-center justify-center rounded-full bg-[#eef3fb] text-[#6f84a8]">
-                <Activity className="h-5 w-5" strokeWidth={2} />
-              </span>
+              <Activity className="h-4.5 w-4.5" strokeWidth={2} />
+              Continue
+            </button>
 
-              <div className="flex w-full items-end justify-between gap-3">
-                <div>
-                  <div className="text-[17px] font-semibold tracking-[-0.025em] text-[#232c38]">
-                    Continue
-                  </div>
-                  <div className="mt-1 text-[13px] text-[#7b8697]">
-                    {latestConversation ? 'Pick up where you left off' : 'Open your workspace'}
-                  </div>
-                </div>
+            <button
+              type="button"
+              onClick={handleCalendar}
+              className="inline-flex shrink-0 items-center gap-2 rounded-full bg-white/86 px-4 py-3 text-[15px] font-medium tracking-[-0.02em] text-[#6f7b8f] shadow-[0_8px_16px_rgba(15,23,42,0.03)] transition-all duration-200 ease-out hover:bg-white active:scale-[0.985]"
+            >
+              <Bot className="h-4.5 w-4.5" strokeWidth={2} />
+              Calendar
+            </button>
 
-                <ChevronRight className="h-5 w-5 shrink-0 text-[#7e8898]" strokeWidth={2.1} />
-              </div>
+            <button
+              type="button"
+              onClick={handleMoney}
+              className="inline-flex shrink-0 items-center gap-2 rounded-full bg-white/86 px-4 py-3 text-[15px] font-medium tracking-[-0.02em] text-[#6f7b8f] shadow-[0_8px_16px_rgba(15,23,42,0.03)] transition-all duration-200 ease-out hover:bg-white active:scale-[0.985]"
+            >
+              <Activity className="h-4.5 w-4.5 text-[#8a68d8]" strokeWidth={2} />
+              Money
             </button>
           </section>
 
           <section className="mt-5">
-            <div className="relative overflow-hidden rounded-[34px] border border-black/[0.04] bg-[linear-gradient(180deg,rgba(255,255,255,0.92),rgba(248,250,253,0.82))] p-5 shadow-[0_18px_38px_rgba(15,23,42,0.055)]">
-              <div className="pointer-events-none absolute right-[-24px] top-1/2 h-[170px] w-[170px] -translate-y-1/2 rounded-full bg-[radial-gradient(circle,rgba(236,230,255,0.82)_0%,rgba(236,230,255,0.28)_48%,rgba(236,230,255,0)_100%)] blur-[12px]" />
-
-              <div className="relative flex items-start justify-between gap-5">
-                <div className="min-w-0">
-                  <div className="flex items-center gap-2 text-[#7f4cff]">
-                    <Sparkles className="h-4.5 w-4.5" strokeWidth={2} />
-                    <span className="text-[12px] font-semibold uppercase tracking-[0.12em]">
-                      Focus now
-                    </span>
-                  </div>
-
-                  <h3 className="mt-4 max-w-[320px] text-[30px] font-semibold leading-[1.05] tracking-[-0.055em] text-[#1f2734]">
-                    {focusTitle}
+            <div className="overflow-hidden rounded-[30px] border border-black/[0.04] bg-white/88 shadow-[0_16px_34px_rgba(15,23,42,0.05)]">
+              <div className="grid gap-0 sm:grid-cols-[1.45fr_1fr]">
+                <div className="border-b border-black/[0.045] px-5 py-5 sm:border-b-0 sm:border-r">
+                  <h3 className="text-[18px] font-semibold tracking-[-0.03em] text-[#202734]">
+                    This week
                   </h3>
 
-                  <p className="mt-3 max-w-[360px] text-[15px] leading-7 tracking-[-0.012em] text-[#717d8f]">
-                    {focusDescription}
-                  </p>
+                  <div className="mt-4 space-y-3">
+                    <div className="flex items-center gap-2 text-[16px] text-[#344054]">
+                      <span className="text-[#74a685]">✓</span>
+                      <span>{tasksCompletedThisWeek} tasks completed</span>
+                    </div>
 
-                  <button
-                    type="button"
-                    onClick={() => {
-                      if (latestConversation?.unfinished) {
-                        handleOpenConversation(latestConversation.id);
-                        return;
-                      }
-                      router.push('/operator');
-                    }}
-                    className="mt-5 inline-flex h-11 items-center justify-center rounded-full bg-[#111318] px-5 text-[14px] font-semibold tracking-[-0.015em] text-white shadow-[0_10px_24px_rgba(0,0,0,0.14)] transition-all duration-200 ease-out hover:-translate-y-[1px] hover:bg-black active:translate-y-0 active:scale-[0.985]"
-                  >
-                    Open Operator
-                  </button>
+                    <div className="flex items-center gap-2 text-[16px] text-[#344054]">
+                      <span className="text-[#8a68d8]">€</span>
+                      <span>€{estimatedMoneySaved} saved</span>
+                    </div>
+
+                    <div className="flex items-center gap-2 text-[16px] text-[#344054]">
+                      <span className="text-[#7083a9]">◌</span>
+                      <span>{keyDecisionsMade} key decisions made</span>
+                    </div>
+                  </div>
+
+                  <div className="mt-5">
+                    <div className="flex items-center gap-2">
+                      {streakDots.map((active, index) => (
+                        <span
+                          key={index}
+                          className={`h-2.5 flex-1 rounded-full ${
+                            active ? 'bg-[#bedad0]' : 'bg-[#edf0f5]'
+                          }`}
+                        />
+                      ))}
+                    </div>
+
+                    <div className="mt-3 grid grid-cols-7 gap-2 text-center text-[12px] text-[#a0a8b5]">
+                      <span>Mon</span>
+                      <span>Tue</span>
+                      <span>Wed</span>
+                      <span>Thu</span>
+                      <span>Fri</span>
+                      <span>Sat</span>
+                      <span>Sun</span>
+                    </div>
+                  </div>
                 </div>
 
-                <div className="hidden shrink-0 items-center justify-center sm:flex">
-                  <div className="flex h-[120px] w-[120px] items-center justify-center rounded-full border border-white/70 bg-white/56 shadow-[0_10px_24px_rgba(15,23,42,0.04)]">
-                    <div className="flex h-[74px] w-[74px] items-center justify-center rounded-full border border-[#e4d9ff] bg-[radial-gradient(circle,rgba(255,255,255,0.98)_0%,rgba(244,239,255,0.9)_100%)] text-[#6f4cff] shadow-[0_0_0_8px_rgba(120,90,255,0.04)]">
-                      <ChevronRight className="h-7 w-7" strokeWidth={2.1} />
+                <div className="px-5 py-5">
+                  <div className="flex items-start justify-between gap-4">
+                    <div>
+                      <p className="text-[15px] font-medium tracking-[-0.02em] text-[#697588]">
+                        Forward motion
+                      </p>
+                      <p className="mt-2 text-[24px] font-semibold leading-[1.08] tracking-[-0.05em] text-[#202734]">
+                        Increase your weekly progress
+                      </p>
                     </div>
+
+                    <ChevronRight className="mt-1 h-5 w-5 shrink-0 text-[#9aa3b1]" strokeWidth={2} />
+                  </div>
+
+                  <div className="mt-5 rounded-[22px] bg-[#f9fafc] px-4 py-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.8)]">
+                    <p className="text-[13px] text-[#7f8998]">Your focus peak</p>
+                    <p className="mt-1 text-[18px] font-semibold tracking-[-0.03em] text-[#202734]">
+                      {focusPeak}
+                    </p>
                   </div>
                 </div>
               </div>
@@ -437,7 +547,7 @@ export function KivoHomeScreen() {
                 value={search}
                 onChange={(event) => setSearch(event.target.value)}
                 placeholder="Search conversations..."
-                className="h-13 w-full rounded-full border border-black/[0.04] bg-white/86 pl-11 pr-12 text-[15px] text-[#38404a] shadow-[0_10px_22px_rgba(15,23,42,0.04)] outline-none transition-all duration-200 ease-out placeholder:text-[#98a0ad] focus:border-black/[0.06] focus:bg-white"
+                className="h-[52px] w-full rounded-full border border-black/[0.04] bg-white/86 pl-11 pr-12 text-[15px] text-[#38404a] shadow-[0_10px_22px_rgba(15,23,42,0.04)] outline-none transition-all duration-200 ease-out placeholder:text-[#98a0ad] focus:border-black/[0.06] focus:bg-white"
               />
               <button
                 type="button"
@@ -488,8 +598,8 @@ export function KivoHomeScreen() {
             </div>
 
             {filteredRows.length === 0 ? (
-              <div className="flex min-h-[30vh] items-center justify-center rounded-[32px] border border-black/[0.04] bg-white/84 p-8 text-center shadow-[0_18px_36px_rgba(15,23,42,0.045)]">
-                <div className="max-w-[300px]">
+              <div className="rounded-[32px] border border-black/[0.04] bg-white/84 p-8 text-center shadow-[0_18px_36px_rgba(15,23,42,0.045)]">
+                <div className="mx-auto max-w-[300px]">
                   <div className="mx-auto mb-4 inline-flex h-14 w-14 items-center justify-center rounded-full bg-[#f5f7fb] text-[#7d8593] shadow-[0_10px_22px_rgba(15,23,42,0.04)]">
                     <MessageCircle className="h-6 w-6" strokeWidth={1.8} />
                   </div>
@@ -508,74 +618,107 @@ export function KivoHomeScreen() {
                   <button
                     type="button"
                     onClick={handleNewChat}
-                    className="mt-5 inline-flex items-center rounded-full bg-white px-4 py-2.5 text-sm font-medium text-[#374151] shadow-[0_10px_22px_rgba(15,23,42,0.04)] transition-all duration-200 ease-out hover:bg-white active:scale-[0.985]"
+                    className="mt-5 inline-flex items-center rounded-full bg-white px-4 py-2.5 text-sm font-medium text-[#374151] shadow-[0_10px_22px_rgba(15,23,42,0.04)] transition-all duration-200 ease-out active:scale-[0.985]"
                   >
                     New chat
                   </button>
                 </div>
               </div>
             ) : (
-              <div className="space-y-3">
-                {filteredRows.slice(0, 6).map((row) => {
-                  const active = activeConversationId === row.id;
+              <div className="grid gap-4 lg:grid-cols-[1.1fr_0.9fr]">
+                <div className="space-y-3">
+                  {filteredRows.slice(0, 3).map((row) => {
+                    const active = activeConversationId === row.id;
 
-                  return (
-                    <button
-                      key={row.id}
-                      type="button"
-                      onClick={() => handleOpenConversation(row.id)}
-                      className={`flex w-full items-start gap-4 rounded-[28px] border px-4 py-4 text-left transition-all duration-200 ease-out active:scale-[0.992] ${
-                        active
-                          ? 'border-black/[0.05] bg-white shadow-[0_18px_34px_rgba(15,23,42,0.06)]'
-                          : 'border-black/[0.04] bg-white/82 shadow-[0_12px_24px_rgba(15,23,42,0.04)] hover:bg-white hover:shadow-[0_16px_30px_rgba(15,23,42,0.05)]'
-                      }`}
-                    >
-                      <div className="inline-flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-[#f6f8fb] text-[#727b89]">
-                        {row.kind === 'agent' ? (
-                          <Bot className="h-5 w-5" strokeWidth={1.8} />
-                        ) : (
-                          <MessageCircle className="h-5 w-5" strokeWidth={1.8} />
-                        )}
-                      </div>
+                    return (
+                      <button
+                        key={row.id}
+                        type="button"
+                        onClick={() => handleOpenConversation(row.id)}
+                        className={`flex w-full items-start gap-4 rounded-[28px] border px-4 py-4 text-left transition-all duration-200 ease-out active:scale-[0.992] ${
+                          active
+                            ? 'border-black/[0.05] bg-white shadow-[0_18px_34px_rgba(15,23,42,0.06)]'
+                            : 'border-black/[0.04] bg-white/82 shadow-[0_12px_24px_rgba(15,23,42,0.04)] hover:bg-white hover:shadow-[0_16px_30px_rgba(15,23,42,0.05)]'
+                        }`}
+                      >
+                        <div className="inline-flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-[#f6f8fb] text-[#727b89]">
+                          {row.kind === 'agent' ? (
+                            <Bot className="h-5 w-5" strokeWidth={1.8} />
+                          ) : (
+                            <MessageCircle className="h-5 w-5" strokeWidth={1.8} />
+                          )}
+                        </div>
 
-                      <div className="min-w-0 flex-1">
-                        <div className="flex items-start gap-3">
-                          <div className="min-w-0 flex-1">
-                            <div className="flex flex-wrap items-center gap-2">
-                              <h4 className="truncate text-[17px] font-semibold tracking-[-0.02em] text-[#232c38]">
-                                {row.title}
-                              </h4>
+                        <div className="min-w-0 flex-1">
+                          <div className="flex items-start gap-3">
+                            <div className="min-w-0 flex-1">
+                              <div className="flex flex-wrap items-center gap-2">
+                                <h4 className="truncate text-[17px] font-semibold tracking-[-0.02em] text-[#232c38]">
+                                  {row.title}
+                                </h4>
 
-                              {row.unfinished ? (
-                                <span className="shrink-0 rounded-full bg-[#edf3fb] px-2.5 py-1 text-[11px] font-medium text-[#6f87a8]">
-                                  Unfinished
-                                </span>
-                              ) : row.kind === 'agent' ? (
-                                <span className="shrink-0 rounded-full bg-[#f8eee5] px-2.5 py-1 text-[11px] font-medium text-[#af7b58]">
-                                  Agent
-                                </span>
-                              ) : null}
+                                {row.unfinished ? (
+                                  <span className="shrink-0 rounded-full bg-[#edf3fb] px-2.5 py-1 text-[11px] font-medium text-[#6f87a8]">
+                                    Unfinished
+                                  </span>
+                                ) : row.kind === 'agent' ? (
+                                  <span className="shrink-0 rounded-full bg-[#f8eee5] px-2.5 py-1 text-[11px] font-medium text-[#af7b58]">
+                                    Agent
+                                  </span>
+                                ) : null}
+                              </div>
+
+                              <p className="mt-1 line-clamp-2 text-[14px] leading-6 text-[#7b8391]">
+                                {row.preview}
+                              </p>
                             </div>
 
-                            <p className="mt-1 line-clamp-2 text-[14px] leading-6 text-[#7b8391]">
-                              {row.preview}
-                            </p>
-                          </div>
-
-                          <div className="flex shrink-0 items-center gap-2">
-                            <span className="text-[12px] font-medium tracking-[-0.01em] text-[#9aa1ad]">
-                              {row.timestamp}
-                            </span>
-                            <ChevronRight
-                              className="h-5 w-5 text-[#a2a8b3]"
-                              strokeWidth={1.8}
-                            />
+                            <div className="flex shrink-0 items-center gap-2">
+                              <span className="text-[12px] font-medium tracking-[-0.01em] text-[#9aa1ad]">
+                                {row.timestamp}
+                              </span>
+                              <ChevronRight
+                                className="h-5 w-5 text-[#a2a8b3]"
+                                strokeWidth={1.8}
+                              />
+                            </div>
                           </div>
                         </div>
-                      </div>
-                    </button>
-                  );
-                })}
+                      </button>
+                    );
+                  })}
+                </div>
+
+                <div className="space-y-4">
+                  <div className="rounded-[28px] border border-black/[0.04] bg-white/86 p-5 shadow-[0_14px_30px_rgba(15,23,42,0.045)]">
+                    <h4 className="text-[18px] font-semibold tracking-[-0.03em] text-[#202734]">
+                      Active priorities
+                    </h4>
+
+                    <ul className="mt-4 space-y-3">
+                      {activePriorities.map((item) => (
+                        <li key={item} className="flex items-start gap-3 text-[16px] leading-6 text-[#6d788a]">
+                          <span className="mt-2 h-2 w-2 shrink-0 rounded-full bg-[#93b6a0]" />
+                          <span>{item}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+
+                  <div className="rounded-[28px] border border-black/[0.04] bg-white/86 p-5 shadow-[0_14px_30px_rgba(15,23,42,0.045)]">
+                    <h4 className="text-[18px] font-semibold tracking-[-0.03em] text-[#202734]">
+                      Insight of the week
+                    </h4>
+
+                    <p className="mt-4 text-[17px] leading-7 tracking-[-0.018em] text-[#4f5a6c]">
+                      {insightText}
+                    </p>
+
+                    <p className="mt-4 text-[13px] text-[#97a0ad]">
+                      Based on your recent activity, {displayName}.
+                    </p>
+                  </div>
+                </div>
               </div>
             )}
           </section>
