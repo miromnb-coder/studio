@@ -19,10 +19,22 @@ function AppleIcon() {
 function GoogleIcon() {
   return (
     <svg viewBox="0 0 24 24" className="h-5 w-5" aria-hidden="true">
-      <path fill="#EA4335" d="M12.24 10.29v3.89h5.41c-.22 1.25-.94 2.31-2.02 3.02l3.27 2.54c1.91-1.76 3.01-4.36 3.01-7.44 0-.72-.06-1.42-.18-2.1h-9.49Z" />
-      <path fill="#34A853" d="M12 22c2.73 0 5.02-.9 6.7-2.44l-3.27-2.54c-.9.6-2.06.96-3.43.96-2.64 0-4.88-1.78-5.68-4.18H2.94v2.62A10 10 0 0 0 12 22Z" />
-      <path fill="#4A90E2" d="M6.32 13.8A5.96 5.96 0 0 1 6 12c0-.63.11-1.24.32-1.8V7.58H2.94A10 10 0 0 0 2 12c0 1.61.38 3.14.94 4.42l3.38-2.62Z" />
-      <path fill="#FBBC05" d="M12 6.02c1.49 0 2.83.51 3.89 1.5l2.92-2.92C17.01 2.92 14.72 2 12 2a10 10 0 0 0-9.06 5.58l3.38 2.62c.8-2.4 3.04-4.18 5.68-4.18Z" />
+      <path
+        fill="#EA4335"
+        d="M12.24 10.29v3.89h5.41c-.22 1.25-.94 2.31-2.02 3.02l3.27 2.54c1.91-1.76 3.01-4.36 3.01-7.44 0-.72-.06-1.42-.18-2.1h-9.49Z"
+      />
+      <path
+        fill="#34A853"
+        d="M12 22c2.73 0 5.02-.9 6.7-2.44l-3.27-2.54c-.9.6-2.06.96-3.43.96-2.64 0-4.88-1.78-5.68-4.18H2.94v2.62A10 10 0 0 0 12 22Z"
+      />
+      <path
+        fill="#4A90E2"
+        d="M6.32 13.8A5.96 5.96 0 0 1 6 12c0-.63.11-1.24.32-1.8V7.58H2.94A10 10 0 0 0 2 12c0 1.61.38 3.14.94 4.42l3.38-2.62Z"
+      />
+      <path
+        fill="#FBBC05"
+        d="M12 6.02c1.49 0 2.83.51 3.89 1.5l2.92-2.92C17.01 2.92 14.72 2 12 2a10 10 0 0 0-9.06 5.58l3.38 2.62c.8-2.4 3.04-4.18 5.68-4.18Z"
+      />
     </svg>
   );
 }
@@ -62,16 +74,33 @@ function AuthButton({
       onClick={onClick}
       disabled={disabled}
       className={[
-        'flex h-[62px] w-full items-center justify-center gap-3 rounded-[22px] px-4',
+        'group relative flex h-[64px] w-full items-center justify-center gap-3 overflow-hidden rounded-[24px] px-4',
         'text-[17px] font-medium tracking-[-0.03em] whitespace-nowrap',
-        'transition active:scale-[0.995] disabled:cursor-not-allowed disabled:opacity-60',
+        'transition-transform duration-200 active:scale-[0.992] disabled:cursor-not-allowed disabled:opacity-60',
         dark
-          ? 'bg-[linear-gradient(180deg,#161616,#050505)] text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.08)]'
-          : 'border border-black/[0.03] bg-white/74 text-black shadow-[inset_0_1px_0_rgba(255,255,255,0.8)]',
+          ? [
+              'bg-[linear-gradient(180deg,rgba(17,17,17,0.98)_0%,rgba(0,0,0,0.96)_100%)]',
+              'text-white',
+              'shadow-[inset_0_1px_0_rgba(255,255,255,0.10),0_10px_30px_rgba(0,0,0,0.18)]',
+            ].join(' ')
+          : [
+              'border border-white/55',
+              'bg-white/58',
+              'text-black',
+              'backdrop-blur-md',
+              'shadow-[inset_0_1px_0_rgba(255,255,255,0.92),0_10px_24px_rgba(15,23,42,0.06)]',
+            ].join(' '),
       ].join(' ')}
     >
-      <span className={dark ? 'text-white' : 'text-black/70'}>{icon}</span>
-      <span>{children}</span>
+      {!dark && (
+        <>
+          <div className="pointer-events-none absolute inset-0 bg-[linear-gradient(180deg,rgba(255,255,255,0.42)_0%,rgba(255,255,255,0.16)_100%)]" />
+          <div className="pointer-events-none absolute inset-x-6 bottom-0 h-8 rounded-full bg-white/35 blur-2xl" />
+        </>
+      )}
+
+      <span className={['relative z-10', dark ? 'text-white' : 'text-black/72'].join(' ')}>{icon}</span>
+      <span className="relative z-10">{children}</span>
     </button>
   );
 }
@@ -129,16 +158,25 @@ export function KivoAuthPanel() {
   return (
     <section
       className="
-        relative mx-auto w-full
-        rounded-[30px]
-        border border-white/80
-        bg-white/24
+        relative mx-auto w-full overflow-hidden
+        rounded-[32px]
+        border border-white/60
+        bg-white/38
         px-4 pb-5 pt-4
-        shadow-[0_18px_60px_rgba(0,0,0,0.08),inset_0_1px_0_rgba(255,255,255,0.75)]
-        backdrop-blur-[18px]
+        backdrop-blur-[28px] backdrop-saturate-150
+        shadow-[inset_0_1px_0_rgba(255,255,255,0.78),0_24px_80px_rgba(15,23,42,0.12),0_10px_30px_rgba(255,255,255,0.16)]
+        supports-[backdrop-filter]:bg-white/34
       "
+      style={{
+        WebkitBackdropFilter: 'blur(28px) saturate(1.5)',
+      }}
     >
-      <div className="space-y-3">
+      <div className="pointer-events-none absolute inset-0 rounded-[32px] bg-[linear-gradient(180deg,rgba(255,255,255,0.42)_0%,rgba(255,255,255,0.18)_42%,rgba(244,247,255,0.14)_100%)]" />
+      <div className="pointer-events-none absolute inset-x-0 top-0 h-px bg-white/80" />
+      <div className="pointer-events-none absolute inset-[1px] rounded-[31px] border border-white/30" />
+      <div className="pointer-events-none absolute -bottom-6 left-1/2 h-20 w-[72%] -translate-x-1/2 rounded-full bg-white/30 blur-3xl" />
+
+      <div className="relative z-10 space-y-3">
         <AuthButton dark icon={<AppleIcon />} onClick={() => void startOAuth('apple')} disabled={isBusy}>
           {pendingAction === 'apple' ? 'Connecting to Apple...' : 'Continue with Apple'}
         </AuthButton>
@@ -152,9 +190,14 @@ export function KivoAuthPanel() {
         </AuthButton>
       </div>
 
-      <div className="pt-4 text-center text-[15px] font-normal tracking-[-0.02em] text-black/48">
+      <div className="relative z-10 pt-5 text-center text-[15px] font-normal tracking-[-0.02em] text-black/52">
         Already have an account?{' '}
-        <button type="button" className="font-semibold text-black disabled:opacity-60" onClick={goToLogin} disabled={isBusy}>
+        <button
+          type="button"
+          className="font-semibold text-black transition-opacity disabled:opacity-60"
+          onClick={goToLogin}
+          disabled={isBusy}
+        >
           {pendingAction === 'login' ? 'Opening...' : 'Log in'}
         </button>
       </div>
