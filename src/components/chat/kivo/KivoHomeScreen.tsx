@@ -26,6 +26,15 @@ type HomeRow = {
   rawUpdatedAt: string;
   kind: 'agent' | 'manual';
   unfinished: boolean;
+  lastRole?: 'user' | 'assistant' | 'system';
+  messageCount: number;
+};
+
+type QuickAction = {
+  id: 'new' | 'continue' | 'calendar' | 'money';
+  label: string;
+  primary?: boolean;
+  onClick: () => void;
 };
 
 const HOME_TABS: Array<{ id: HomeTab; label: string }> = [
@@ -34,6 +43,34 @@ const HOME_TABS: Array<{ id: HomeTab; label: string }> = [
   { id: 'unfinished', label: 'Unfinished' },
   { id: 'today', label: 'Today' },
 ];
+
+const FALLBACK_INSIGHTS = [
+  'You work best when the next move is clearly defined.',
+  'You move faster when unfinished work is narrowed down.',
+  'You use Kivo best when chats become concrete next actions.',
+  'You keep momentum better when one priority is made obvious.',
+];
+
+function GhostHeaderButton({
+  onClick,
+  children,
+  label,
+}: {
+  onClick: () => void;
+  children: React.ReactNode;
+  label: string;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      aria-label={label}
+      className="inline-flex h-11 items-center justify-center px-1 text-[#2A2A31] transition-all duration-200 ease-out hover:opacity-65 active:scale-[0.985]"
+    >
+      {children}
+    </button>
+  );
+}
 
 export function KivoHomeScreen() {
   const router = useRouter();
@@ -51,6 +88,7 @@ export function KivoHomeScreen() {
   const isAgentResponding = useAppStore((s) => s.isAgentResponding);
 
   const [search, setSearch] = useState('');
+  const [searchValue, setSearchValue] = useState('');
   const [tab, setTab] = useState<HomeTab>('all');
 
   const [referralToastOpen, setReferralToastOpen] = useState(false);
@@ -60,6 +98,14 @@ export function KivoHomeScreen() {
   useEffect(() => {
     if (!hydrated) hydrate();
   }, [hydrate, hydrated]);
+
+  useEffect(() => {
+    const timeout = window.setTimeout(() => {
+      setSearch(searchValue.trim());
+    }, 120);
+
+    return () => window.clearTimeout(timeout);
+  }, [searchValue]);
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
@@ -139,6 +185,8 @@ export function KivoHomeScreen() {
           rawUpdatedAt: conversation.updatedAt,
           kind: hasAgent ? 'agent' : 'manual',
           unfinished,
+          lastRole: lastMessage?.role,
+          messageCount: threadMessages.length,
         };
       })
       .sort(
@@ -148,36 +196,40 @@ export function KivoHomeScreen() {
       );
   }, [conversationList, draftState, messageState]);
 
+  const todayRows = useMemo(() => {
+    const now = new Date();
+    return rows.filter((row) => {
+      const updatedAt = new Date(row.rawUpdatedAt);
+      return (
+        updatedAt.getFullYear() === now.getFullYear() &&
+        updatedAt.getMonth() === now.getMonth() &&
+        updatedAt.getDate() === now.getDate()
+      );
+    });
+  }, [rows]);
+
   const filteredRows = useMemo(() => {
     let next = rows;
 
     if (tab === 'agents') next = next.filter((row) => row.kind === 'agent');
     if (tab === 'unfinished') next = next.filter((row) => row.unfinished);
-    if (tab === 'today') {
-      next = next.filter((row) => {
-        const updatedAt = new Date(row.rawUpdatedAt);
-        const now = new Date();
-        return (
-          updatedAt.getFullYear() === now.getFullYear() &&
-          updatedAt.getMonth() === now.getMonth() &&
-          updatedAt.getDate() === now.getDate()
-        );
-      });
-    }
+    if (tab === 'today') next = todayRows;
 
-    const q = search.trim().toLowerCase();
-    if (!q) return next;
+    if (!search) return next;
 
+    const q = search.toLowerCase();
     return next.filter((row) =>
       `${row.title} ${row.preview}`.toLowerCase().includes(q),
     );
-  }, [rows, search, tab]);
+  }, [rows, search, tab, todayRows]);
 
   const latestConversation = rows[0] ?? null;
-  const unfinishedCount = rows.filter((row) => row.unfinished).length;
+  const unfinishedRows = rows.filter((row) => row.unfinished);
+  const unfinishedCount = unfinishedRows.length;
   const agentConversationCount = rows.filter((row) => row.kind === 'agent').length;
   const activeAlertCount = alerts.filter((alert) => !alert.resolved).length;
   const estimatedMoneySaved = 84;
+  const totalMessages = rows.reduce((sum, row) => sum + row.messageCount, 0);
 
   const displayName =
     (user as { displayName?: string; name?: string; email?: string } | null)
@@ -195,25 +247,20 @@ export function KivoHomeScreen() {
 
   const statusLabel = isAgentResponding ? 'Working' : 'Ready';
 
-  const focusTitle = latestConversation?.unfinished
-    ? `Resume ${latestConversation.title}`
-    : 'Open Operator';
+  const tasksCompletedThisWeek = useMemo(() => {
+    const completedSignals = rows.filter(
+      (row) => !row.unfinished && row.messageCount > 0,
+    ).length;
+    return Math.min(Math.max(completedSignals + Math.floor(totalMessages / 8), 1), 12);
+  }, [rows, totalMessages]);
 
-  const focusDescription =
-    activeAlertCount > 0
-      ? `${activeAlertCount} active item${activeAlertCount > 1 ? 's' : ''} may need your attention.`
-      : latestConversation?.unfinished
-        ? 'Pick up where you left off and keep your momentum going.'
-        : 'Let Kivo guide your next move and surface what matters most.';
+  const keyDecisionsMade = useMemo(() => {
+    return Math.min(
+      Math.max(agentConversationCount + Math.floor(activeAlertCount / 2) + Math.floor(totalMessages / 12), 1),
+      7,
+    );
+  }, [activeAlertCount, agentConversationCount, totalMessages]);
 
-  const tasksCompletedThisWeek = Math.min(
-    Math.max(rows.length + agentConversationCount, 1),
-    9,
-  );
-  const keyDecisionsMade = Math.min(
-    Math.max(activeAlertCount + Math.floor(agentConversationCount / 2), 1),
-    5,
-  );
   const focusPeak = useMemo(() => {
     const hour = new Date().getHours();
     if (hour < 12) return '9–11 AM';
@@ -229,38 +276,46 @@ export function KivoHomeScreen() {
   const activePriorities = useMemo(() => {
     const priorities: string[] = [];
 
-    if (latestConversation?.unfinished) priorities.push(`Finish ${latestConversation.title}`);
-    if (estimatedMoneySaved > 0) priorities.push('Save more money');
-    if (agentConversationCount > 0) priorities.push('Review active agent work');
-    if (activeAlertCount > 0) priorities.push('Resolve active alerts');
+    if (unfinishedRows[0]?.title) priorities.push(`Finish ${unfinishedRows[0].title}`);
+    if (activeAlertCount > 0) priorities.push(`Resolve ${activeAlertCount} active alert${activeAlertCount > 1 ? 's' : ''}`);
+    if (estimatedMoneySaved > 0) priorities.push('Review savings opportunities');
+    if (agentConversationCount > 0) priorities.push('Check active agent work');
 
-    if (priorities.length < 3) priorities.push('Build Kivo app');
+    if (priorities.length < 3 && latestConversation?.title) {
+      priorities.push(`Continue ${latestConversation.title}`);
+    }
+    if (priorities.length < 3) priorities.push('Start one important task');
 
     return priorities.slice(0, 3);
-  }, [
-    activeAlertCount,
-    agentConversationCount,
-    estimatedMoneySaved,
-    latestConversation?.title,
-    latestConversation?.unfinished,
-  ]);
+  }, [activeAlertCount, agentConversationCount, estimatedMoneySaved, latestConversation?.title, unfinishedRows]);
 
   const insightText = useMemo(() => {
     if (isAgentResponding) {
-      return 'You are in an active working session right now.';
+      return 'You are already in a live working session. Keep the next step clear.';
     }
     if (unfinishedCount >= 3) {
-      return 'You move faster when unfinished items are narrowed down.';
+      return 'You move faster when unfinished work is narrowed down to one clear next action.';
     }
     if (agentConversationCount >= 2) {
-      return 'You use Kivo best when you turn chats into concrete next actions.';
+      return 'You use Kivo best when agent conversations are turned into concrete follow-through.';
     }
-    return 'You work best when the next move is clearly defined.';
-  }, [agentConversationCount, isAgentResponding, unfinishedCount]);
+    if (todayRows.length >= 2) {
+      return 'You are building momentum today. Keep the next move small and specific.';
+    }
+    return FALLBACK_INSIGHTS[Math.min(rows.length, FALLBACK_INSIGHTS.length - 1)];
+  }, [agentConversationCount, isAgentResponding, rows.length, todayRows.length, unfinishedCount]);
 
-  const handleOpenConversation = (conversationId: string) => {
+  const hasRelevantContinue = Boolean(latestConversation);
+  const showCalendarAction = true;
+  const showMoneyAction = estimatedMoneySaved > 0 || activeAlertCount > 0;
+
+  const openConversationAndGo = (conversationId: string) => {
     openConversation(conversationId);
     router.push('/chat');
+  };
+
+  const handleOpenConversation = (conversationId: string) => {
+    openConversationAndGo(conversationId);
   };
 
   const handleNewChat = () => {
@@ -271,18 +326,21 @@ export function KivoHomeScreen() {
 
   const handleContinue = () => {
     if (latestConversation) {
-      handleOpenConversation(latestConversation.id);
+      openConversationAndGo(latestConversation.id);
       return;
     }
-    router.push('/chat');
+    handleNewChat();
   };
 
   const handleOpenOperator = () => {
-    if (latestConversation?.unfinished) {
-      handleOpenConversation(latestConversation.id);
+    const highestPriorityTarget = unfinishedRows[0] ?? latestConversation;
+
+    if (highestPriorityTarget) {
+      openConversationAndGo(highestPriorityTarget.id);
       return;
     }
-    router.push('/chat');
+
+    handleNewChat();
   };
 
   const handleCalendar = () => {
@@ -292,6 +350,43 @@ export function KivoHomeScreen() {
   const handleMoney = () => {
     router.push('/money-saver');
   };
+
+  const quickActions = useMemo<QuickAction[]>(() => {
+    const items: QuickAction[] = [
+      {
+        id: 'new',
+        label: 'New chat',
+        primary: true,
+        onClick: handleNewChat,
+      },
+    ];
+
+    if (hasRelevantContinue) {
+      items.push({
+        id: 'continue',
+        label: 'Continue',
+        onClick: handleContinue,
+      });
+    }
+
+    if (showCalendarAction) {
+      items.push({
+        id: 'calendar',
+        label: 'Calendar',
+        onClick: handleCalendar,
+      });
+    }
+
+    if (showMoneyAction) {
+      items.push({
+        id: 'money',
+        label: 'Money',
+        onClick: handleMoney,
+      });
+    }
+
+    return items;
+  }, [hasRelevantContinue, showCalendarAction, showMoneyAction]);
 
   return (
     <div className="min-h-screen overflow-hidden bg-[#F6F6F7] text-[#141419]">
@@ -308,31 +403,27 @@ export function KivoHomeScreen() {
           style={{ paddingTop: 'max(16px, env(safe-area-inset-top, 0px))' }}
         >
           <div className="flex items-center justify-between">
-            <button
-              type="button"
+            <GhostHeaderButton
               onClick={() => router.push('/settings')}
-              aria-label="Open settings"
-              className="inline-flex h-11 w-11 items-center justify-center rounded-full border border-black/[0.05] bg-white text-[#2A2A31] shadow-[0_8px_20px_rgba(0,0,0,0.035)] transition-all duration-200 ease-out hover:bg-[#FCFCFD] active:scale-[0.985]"
+              label="Open settings"
             >
               <User className="h-5 w-5" strokeWidth={1.9} />
-            </button>
+            </GhostHeaderButton>
 
             <h1 className="text-[21px] font-semibold tracking-[-0.045em] text-[#141419]">
               Workspace
             </h1>
 
-            <button
-              type="button"
+            <GhostHeaderButton
               onClick={() => router.push('/history')}
-              aria-label="Open search"
-              className="inline-flex h-11 w-11 items-center justify-center rounded-full border border-black/[0.05] bg-white text-[#2A2A31] shadow-[0_8px_20px_rgba(0,0,0,0.035)] transition-all duration-200 ease-out hover:bg-[#FCFCFD] active:scale-[0.985]"
+              label="Open search"
             >
               <Search className="h-5 w-5" strokeWidth={1.9} />
-            </button>
+            </GhostHeaderButton>
           </div>
         </header>
 
-        <main className="flex min-h-0 flex-1 flex-col px-5 pb-32 pt-5">
+        <main className="flex min-h-0 flex-1 flex-col px-5 pb-32 pt-4">
           <section>
             <div className="max-w-[430px]">
               <p className="text-[18px] font-medium tracking-[-0.03em] text-[#7B7B84]">
@@ -340,22 +431,21 @@ export function KivoHomeScreen() {
               </p>
 
               <h2
-                className="mt-2 text-[36px] font-normal leading-[1.02] tracking-[-0.06em] text-[#141419]"
+                className="mt-1.5 text-[34px] font-normal leading-[1.02] tracking-[-0.06em] text-[#141419]"
                 style={{ fontFamily: 'ui-serif, Georgia, Times, serif' }}
               >
                 What needs your attention today?
               </h2>
 
-              <p className="mt-4 max-w-[420px] text-[16px] leading-7 tracking-[-0.015em] text-[#7B7B84]">
+              <p className="mt-3 max-w-[420px] text-[15px] leading-6 tracking-[-0.015em] text-[#7B7B84]">
                 Plan, decide, and move faster.
               </p>
             </div>
           </section>
 
-          <section className="mt-6">
+          <section className="mt-5">
             <div className="relative overflow-hidden rounded-[34px] border border-black/[0.06] bg-white p-5 shadow-[0_16px_34px_rgba(0,0,0,0.04)]">
               <div className="pointer-events-none absolute right-[-30px] top-1/2 h-[180px] w-[180px] -translate-y-1/2 rounded-full bg-[radial-gradient(circle,rgba(0,0,0,0.04)_0%,rgba(0,0,0,0.02)_36%,rgba(0,0,0,0)_72%)] blur-[20px]" />
-              <div className="pointer-events-none absolute bottom-5 right-4 h-[86px] w-[60%] rounded-full bg-[radial-gradient(ellipse_at_center,rgba(0,0,0,0.03)_0%,rgba(0,0,0,0.015)_42%,rgba(0,0,0,0)_72%)] blur-[18px]" />
 
               <div className="relative">
                 <div className="flex items-center gap-2 text-[#141419]">
@@ -384,53 +474,41 @@ export function KivoHomeScreen() {
             </div>
           </section>
 
-          <section className="mt-5 flex gap-2 overflow-x-auto pb-1 pr-24 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-            <button
-              type="button"
-              onClick={handleNewChat}
-              className="inline-flex shrink-0 items-center gap-2 rounded-full bg-[#0B0B0F] px-4 py-3 text-[15px] font-medium tracking-[-0.02em] text-white shadow-[0_10px_22px_rgba(0,0,0,0.12)] transition-all duration-200 ease-out active:scale-[0.985]"
-            >
-              <Sparkles className="h-4.5 w-4.5" strokeWidth={2} />
-              New chat
-            </button>
-
-            <button
-              type="button"
-              onClick={handleContinue}
-              className="inline-flex shrink-0 items-center gap-2 rounded-full border border-black/[0.05] bg-white px-4 py-3 text-[15px] font-medium tracking-[-0.02em] text-[#7B7B84] shadow-[0_8px_16px_rgba(0,0,0,0.03)] transition-all duration-200 ease-out hover:bg-[#FCFCFD] active:scale-[0.985]"
-            >
-              <Activity className="h-4.5 w-4.5" strokeWidth={2} />
-              Continue
-            </button>
-
-            <button
-              type="button"
-              onClick={handleCalendar}
-              className="inline-flex shrink-0 items-center gap-2 rounded-full border border-black/[0.05] bg-white px-4 py-3 text-[15px] font-medium tracking-[-0.02em] text-[#7B7B84] shadow-[0_8px_16px_rgba(0,0,0,0.03)] transition-all duration-200 ease-out hover:bg-[#FCFCFD] active:scale-[0.985]"
-            >
-              <Bot className="h-4.5 w-4.5" strokeWidth={2} />
-              Calendar
-            </button>
-
-            <button
-              type="button"
-              onClick={handleMoney}
-              className="inline-flex shrink-0 items-center gap-2 rounded-full border border-black/[0.05] bg-white px-4 py-3 text-[15px] font-medium tracking-[-0.02em] text-[#7B7B84] shadow-[0_8px_16px_rgba(0,0,0,0.03)] transition-all duration-200 ease-out hover:bg-[#FCFCFD] active:scale-[0.985]"
-            >
-              <Activity className="h-4.5 w-4.5" strokeWidth={2} />
-              Money
-            </button>
+          <section className="mt-4 flex gap-2 overflow-x-auto pb-1 pr-24 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+            {quickActions.map((action) => (
+              <button
+                key={action.id}
+                type="button"
+                onClick={action.onClick}
+                className={`inline-flex shrink-0 items-center gap-2 rounded-full px-4 py-3 text-[15px] font-medium tracking-[-0.02em] transition-all duration-200 ease-out active:scale-[0.985] ${
+                  action.primary
+                    ? 'bg-[#0B0B0F] text-white shadow-[0_10px_22px_rgba(0,0,0,0.12)]'
+                    : 'border border-black/[0.05] bg-white text-[#7B7B84] shadow-[0_8px_16px_rgba(0,0,0,0.03)] hover:bg-[#FCFCFD]'
+                }`}
+              >
+                {action.id === 'new' ? (
+                  <Sparkles className="h-4.5 w-4.5" strokeWidth={2} />
+                ) : action.id === 'continue' ? (
+                  <Activity className="h-4.5 w-4.5" strokeWidth={2} />
+                ) : action.id === 'calendar' ? (
+                  <Bot className="h-4.5 w-4.5" strokeWidth={2} />
+                ) : (
+                  <Activity className="h-4.5 w-4.5" strokeWidth={2} />
+                )}
+                {action.label}
+              </button>
+            ))}
           </section>
 
-          <section className="mt-5">
+          <section className="mt-4">
             <div className="overflow-hidden rounded-[30px] border border-black/[0.06] bg-white shadow-[0_16px_34px_rgba(0,0,0,0.04)]">
               <div className="grid gap-0 sm:grid-cols-[1.45fr_1fr]">
-                <div className="border-b border-black/[0.05] px-5 py-5 sm:border-b-0 sm:border-r">
+                <div className="border-b border-black/[0.05] px-5 py-4 sm:border-b-0 sm:border-r">
                   <h3 className="text-[18px] font-semibold tracking-[-0.03em] text-[#141419]">
                     This week
                   </h3>
 
-                  <div className="mt-4 space-y-3">
+                  <div className="mt-3.5 space-y-2.5">
                     <div className="flex items-center gap-2 text-[16px] text-[#2B2B31]">
                       <span className="text-[#141419]">✓</span>
                       <span>{tasksCompletedThisWeek} tasks completed</span>
@@ -447,7 +525,7 @@ export function KivoHomeScreen() {
                     </div>
                   </div>
 
-                  <div className="mt-5">
+                  <div className="mt-4">
                     <div className="flex items-center gap-2">
                       {streakDots.map((active, index) => (
                         <span
@@ -459,7 +537,7 @@ export function KivoHomeScreen() {
                       ))}
                     </div>
 
-                    <div className="mt-3 grid grid-cols-7 gap-2 text-center text-[12px] text-[#9A9AA3]">
+                    <div className="mt-2.5 grid grid-cols-7 gap-2 text-center text-[12px] text-[#9A9AA3]">
                       <span>Mon</span>
                       <span>Tue</span>
                       <span>Wed</span>
@@ -471,13 +549,13 @@ export function KivoHomeScreen() {
                   </div>
                 </div>
 
-                <div className="px-5 py-5">
+                <div className="px-5 py-4">
                   <div className="flex items-start justify-between gap-4">
                     <div>
                       <p className="text-[15px] font-medium tracking-[-0.02em] text-[#7B7B84]">
                         Forward motion
                       </p>
-                      <p className="mt-2 text-[24px] font-semibold leading-[1.08] tracking-[-0.05em] text-[#141419]">
+                      <p className="mt-1.5 text-[22px] font-semibold leading-[1.08] tracking-[-0.05em] text-[#141419]">
                         Increase your weekly progress
                       </p>
                     </div>
@@ -488,7 +566,7 @@ export function KivoHomeScreen() {
                     />
                   </div>
 
-                  <div className="mt-5 rounded-[22px] border border-black/[0.04] bg-[#FAFAFB] px-4 py-3">
+                  <div className="mt-4 rounded-[22px] border border-black/[0.04] bg-[#FAFAFB] px-4 py-3">
                     <p className="text-[13px] text-[#7B7B84]">Your focus peak</p>
                     <p className="mt-1 text-[18px] font-semibold tracking-[-0.03em] text-[#141419]">
                       {focusPeak}
@@ -499,7 +577,7 @@ export function KivoHomeScreen() {
             </div>
           </section>
 
-          <section className="mt-5">
+          <section className="mt-4">
             <div className="grid grid-cols-3 gap-3 rounded-[28px] border border-black/[0.06] bg-white px-4 py-4 shadow-[0_14px_30px_rgba(0,0,0,0.035)]">
               <div className="flex items-center gap-3">
                 <span className="inline-flex h-10 w-10 items-center justify-center rounded-full bg-[#F4F4F6] text-[#141419]">
@@ -539,15 +617,15 @@ export function KivoHomeScreen() {
             </div>
           </section>
 
-          <section className="mt-5">
+          <section className="mt-4">
             <div className="relative">
               <Search
                 className="pointer-events-none absolute left-4 top-1/2 h-4.5 w-4.5 -translate-y-1/2 text-[#9A9AA3]"
                 strokeWidth={1.9}
               />
               <input
-                value={search}
-                onChange={(event) => setSearch(event.target.value)}
+                value={searchValue}
+                onChange={(event) => setSearchValue(event.target.value)}
                 placeholder="Search conversations..."
                 className="h-[52px] w-full rounded-full border border-black/[0.06] bg-white pl-11 pr-12 text-[15px] text-[#141419] shadow-[0_10px_22px_rgba(0,0,0,0.03)] outline-none transition-all duration-200 ease-out placeholder:text-[#9A9AA3] focus:border-black/[0.08]"
               />
@@ -561,7 +639,7 @@ export function KivoHomeScreen() {
               </button>
             </div>
 
-            <div className="mt-4 flex gap-2 overflow-x-auto pb-1 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+            <div className="mt-3.5 flex gap-2 overflow-x-auto pb-1 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
               {HOME_TABS.map((item) => {
                 const active = item.id === tab;
 
@@ -583,8 +661,8 @@ export function KivoHomeScreen() {
             </div>
           </section>
 
-          <section className="mt-7 min-h-0 flex-1">
-            <div className="mb-4 flex items-center justify-between">
+          <section className="mt-5 min-h-0 flex-1">
+            <div className="mb-3.5 flex items-center justify-between">
               <h3 className="text-[28px] font-semibold tracking-[-0.05em] text-[#141419]">
                 Recent chats
               </h3>
