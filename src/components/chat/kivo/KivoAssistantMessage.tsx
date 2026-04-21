@@ -2,10 +2,21 @@
 
 import type { Message } from '@/app/store/app-store';
 import { ResponseRenderer } from '@/components/chat/ResponseRenderer';
+
 import { getExecutionPresentation } from './execution/get-execution-presentation';
 import { KivoExecutionCard } from './execution/KivoExecutionCard';
 import { KivoThinkingState as KivoExecutionThinkingState } from './execution/KivoThinkingState';
 import type { KivoExecutionInput } from './execution/types';
+
+function readString(value: unknown): string | undefined {
+  return typeof value === 'string' && value.trim().length > 0 ? value : undefined;
+}
+
+function readStringArray(value: unknown): string[] | undefined {
+  if (!Array.isArray(value)) return undefined;
+  const filtered = value.filter((item): item is string => typeof item === 'string' && item.trim().length > 0);
+  return filtered.length ? filtered : undefined;
+}
 
 function inferExecutionInput(message: Message): KivoExecutionInput | undefined {
   const metadata = message.agentMetadata as Record<string, unknown> | undefined;
@@ -18,28 +29,14 @@ function inferExecutionInput(message: Message): KivoExecutionInput | undefined {
   if (!source) return undefined;
 
   return {
-    intent:
-      typeof source.intent === 'string'
-        ? (source.intent as KivoExecutionInput['intent'])
-        : undefined,
-    introText:
-      typeof source.introText === 'string' ? source.introText : undefined,
-    statusText:
-      typeof source.statusText === 'string' ? source.statusText : undefined,
-    activeStepId:
-      typeof source.activeStepId === 'string' ? source.activeStepId : undefined,
-    doneStepIds: Array.isArray(source.doneStepIds)
-      ? source.doneStepIds.filter((item): item is string => typeof item === 'string')
-      : undefined,
-    errorStepIds: Array.isArray(source.errorStepIds)
-      ? source.errorStepIds.filter((item): item is string => typeof item === 'string')
-      : undefined,
-    forceMode:
-      typeof source.forceMode === 'string'
-        ? (source.forceMode as KivoExecutionInput['forceMode'])
-        : undefined,
-    toolCount:
-      typeof source.toolCount === 'number' ? source.toolCount : undefined,
+    intent: readString(source.intent) as KivoExecutionInput['intent'] | undefined,
+    introText: readString(source.introText),
+    statusText: readString(source.statusText),
+    activeStepId: readString(source.activeStepId),
+    doneStepIds: readStringArray(source.doneStepIds),
+    errorStepIds: readStringArray(source.errorStepIds),
+    forceMode: readString(source.forceMode) as KivoExecutionInput['forceMode'] | undefined,
+    toolCount: typeof source.toolCount === 'number' ? source.toolCount : undefined,
   };
 }
 
@@ -53,36 +50,38 @@ export function KivoAssistantMessage({
   const executionInput = inferExecutionInput(message);
   const presentation = getExecutionPresentation(executionInput);
 
+  const hasThinkingChip = presentation.mode === 'thinking' || presentation.mode === 'status';
   const hasExecutionCard = presentation.mode === 'execution';
-  const hasThinkingChip =
-    presentation.mode === 'thinking' || presentation.mode === 'status';
 
   return (
-    <div className="w-full max-w-[840px]">
+    <div className="space-y-3 sm:space-y-4">
       {presentation.introText ? (
-        <div className="mb-3 rounded-[24px] border border-black/[0.06] bg-white px-4 py-3 text-[15px] leading-7 tracking-[-0.015em] text-[#141419] shadow-[0_10px_24px_rgba(0,0,0,0.035)]">
+        <div className="max-w-[42rem] text-[15px] leading-6 text-neutral-700 sm:text-base">
           {presentation.introText}
         </div>
       ) : null}
 
       {hasThinkingChip ? (
-        <div className="mb-3">
+        <div className="max-w-[42rem]">
           <KivoExecutionThinkingState
-            text={presentation.statusText ?? 'Thinking...'}
+            text={presentation.statusText ?? 'Working on it...'}
           />
         </div>
       ) : null}
 
       {hasExecutionCard ? (
-        <div className="mb-3">
+        <div className="max-w-[42rem]">
           <KivoExecutionCard presentation={presentation} />
         </div>
       ) : null}
 
-      <ResponseRenderer
-        message={message}
-        latestUserContent={latestUserContent}
-      />
+      <div className="max-w-[42rem]">
+        <ResponseRenderer
+          content={message.content}
+          structuredData={message.structuredData}
+          latestUserContent={latestUserContent}
+        />
+      </div>
     </div>
   );
 }
