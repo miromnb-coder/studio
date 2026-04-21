@@ -8,7 +8,26 @@ function toExecutionIntent(intent: string | undefined): AgentExecutionPayload['i
   if (intent === 'gmail') return 'email';
   if (intent === 'memory') return 'memory';
   if (intent === 'compare' || intent === 'shopping' || intent === 'research') return 'browser';
+  if (intent === 'calendar' || intent === 'planning' || intent === 'productivity') return 'calendar';
+  if (intent === 'files') return 'files';
   return 'general';
+}
+
+function hasMeaningfulToolResult(toolResults: unknown[]): boolean {
+  return toolResults.some((result) => {
+    if (!result) return false;
+    if (typeof result !== 'object') return true;
+
+    const record = result as Record<string, unknown>;
+
+    if (typeof record.ok === 'boolean') return record.ok;
+    if (typeof record.success === 'boolean') return record.success;
+    if (typeof record.error === 'string' && record.error.trim().length > 0) return true;
+    if (Array.isArray(record.results) && record.results.length > 0) return true;
+    if (Array.isArray(record.items) && record.items.length > 0) return true;
+
+    return Object.keys(record).length > 0;
+  });
 }
 
 function buildExecutionMetadata(params: {
@@ -20,20 +39,38 @@ function buildExecutionMetadata(params: {
   const failedStepIds = params.steps
     .filter((step) => step.status === 'failed')
     .map((step) => step.id);
+
   const doneStepIds = params.steps
     .filter((step) => step.status === 'completed' || step.status === 'skipped')
     .map((step) => step.id);
+
   const activeStep = params.steps.find((step) => step.status === 'running');
+  const hasToolResults = hasMeaningfulToolResult(params.toolResults);
+  const hasFailedSteps = failedStepIds.length > 0;
+  const hasCompletedSteps = doneStepIds.length > 0;
+  const hasAnySteps = params.steps.length > 0;
+
+  let forceMode: AgentExecutionPayload['forceMode'] = 'status';
+
+  if (hasToolResults || hasFailedSteps) {
+    forceMode = 'execution';
+  } else if (activeStep || hasAnySteps) {
+    forceMode = 'thinking';
+  } else {
+    forceMode = 'status';
+  }
 
   return {
     intent: toExecutionIntent(params.intent),
-    forceMode:
-      params.toolResults.length > 0 || params.steps.length > 0 ? 'execution' : 'status',
-    statusText: params.planSummary || 'Planning response',
+    forceMode,
+    statusText:
+      activeStep?.title ||
+      params.planSummary ||
+      (hasCompletedSteps ? 'Completed' : 'Thinking...'),
     activeStepId: activeStep?.id,
     doneStepIds,
     errorStepIds: failedStepIds,
-    toolCount: params.toolResults.length,
+    toolCount: hasToolResults ? params.toolResults.length : 0,
   };
 }
 
@@ -102,6 +139,7 @@ export async function runNewAgent(
   const evaluation = response.evaluation;
   const memory = response.memory;
   const toolResults = Array.isArray(response.toolResults) ? response.toolResults : [];
+
   const execution = buildExecutionMetadata({
     intent: route.intent,
     planSummary: plan.summary,
@@ -220,7 +258,7 @@ export async function runNewAgent(
             kind: 'general',
           }))
         : [],
-      memoryUsed: Array.isArray(memory.items) ? memory.items.length > 0 : false,
+      memoryUsed: Array.isArray(memory?.items) ? memory.items.length > 0 : false,
       verificationPassed: evaluation?.passed ?? true,
       critic: {
         criticScore: evaluation?.score ?? 80,
