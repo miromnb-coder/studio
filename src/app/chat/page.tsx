@@ -8,7 +8,8 @@ import { KivoAgentMessageV4 } from "@/components/chat/kivo/KivoAgentMessageV4";
 export default function ChatPage() {
   const [input, setInput] = useState("");
 
-  const { messages, status, isLoading, sendMessage } = useKernelChat();
+  const { messages, status, isLoading, streamingText, sendMessage } =
+    useKernelChat();
 
   const scrollRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -25,7 +26,7 @@ export default function ChatPage() {
       top: el.scrollHeight,
       behavior: "smooth",
     });
-  }, [messages, status, isLoading]);
+  }, [messages, status, isLoading, streamingText]);
 
   useEffect(() => {
     const el = textareaRef.current;
@@ -83,7 +84,7 @@ export default function ChatPage() {
 
           {isLoading && (
             <KivoAgentMessageV4
-              content="Kivo is actively working on your request..."
+              content={streamingText || "Kivo is actively working..."}
               status={status}
               streaming
             />
