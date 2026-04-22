@@ -5,6 +5,8 @@ export {
   createErrorEvent,
   createLogEvent,
   createStatusEvent,
+  createToolCallEvent,
+  createToolResultEvent,
   serializeKernelStreamEvent,
   serializeKernelStreamEvents,
 } from "./stream";
@@ -18,6 +20,7 @@ export type {
   KernelRuntimeOptions,
   KernelStatus,
   KernelStreamEvent,
+  KernelToolEvent,
   KernelUsage,
   RunKernelOptions,
   RunKernelStreamOptions,
