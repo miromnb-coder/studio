@@ -2,46 +2,6 @@
 
 import type { Message } from '@/app/store/app-store';
 import { ResponseRenderer } from '@/components/chat/ResponseRenderer';
-import { getExecutionPresentation } from './execution/get-execution-presentation';
-import { KivoExecutionCard } from './execution/KivoExecutionCard';
-import { KivoThinkingState as KivoExecutionThinkingState } from './execution/KivoThinkingState';
-import type { KivoExecutionInput } from './execution/types';
-
-function inferExecutionInput(message: Message): KivoExecutionInput | undefined {
-  const metadata = message.agentMetadata as Record<string, unknown> | undefined;
-  const structured = message.structuredData as Record<string, unknown> | undefined;
-
-  const source =
-    (structured?.execution as Record<string, unknown> | undefined) ??
-    (metadata?.execution as Record<string, unknown> | undefined);
-
-  if (!source) return undefined;
-
-  return {
-    intent:
-      typeof source.intent === 'string'
-        ? (source.intent as KivoExecutionInput['intent'])
-        : undefined,
-    introText:
-      typeof source.introText === 'string' ? source.introText : undefined,
-    statusText:
-      typeof source.statusText === 'string' ? source.statusText : undefined,
-    activeStepId:
-      typeof source.activeStepId === 'string' ? source.activeStepId : undefined,
-    doneStepIds: Array.isArray(source.doneStepIds)
-      ? source.doneStepIds.filter((item): item is string => typeof item === 'string')
-      : undefined,
-    errorStepIds: Array.isArray(source.errorStepIds)
-      ? source.errorStepIds.filter((item): item is string => typeof item === 'string')
-      : undefined,
-    forceMode:
-      typeof source.forceMode === 'string'
-        ? (source.forceMode as KivoExecutionInput['forceMode'])
-        : undefined,
-    toolCount:
-      typeof source.toolCount === 'number' ? source.toolCount : undefined,
-  };
-}
 
 function KivoBrandHeader() {
   return (
@@ -85,6 +45,19 @@ function KivoBrandHeader() {
   );
 }
 
+function StreamingPulse() {
+  return (
+    <div className="mb-2 flex items-center gap-2.5 pl-[2px]">
+      <span className="relative flex h-2.5 w-2.5 shrink-0">
+        <span className="absolute inline-flex h-full w-full rounded-full bg-[#4f7cff]/25 animate-ping" />
+        <span className="relative inline-flex h-2 w-2 rounded-full bg-[#4f7cff]" />
+      </span>
+
+      <span className="text-[15px] tracking-[-0.01em] text-[#8e8e93]">...</span>
+    </div>
+  );
+}
+
 export function KivoAssistantMessage({
   message,
   latestUserContent,
@@ -92,36 +65,13 @@ export function KivoAssistantMessage({
   message: Message;
   latestUserContent: string;
 }) {
-  const executionInput = inferExecutionInput(message);
-  const presentation = getExecutionPresentation(executionInput);
-
-  const hasExecutionCard = presentation.mode === 'execution';
-  const hasThinkingChip =
-    presentation.mode === 'thinking' || presentation.mode === 'status';
+  const showStreamingPulse = Boolean(message.isStreaming && !message.content.trim());
 
   return (
     <div className="w-full max-w-[840px]">
       <KivoBrandHeader />
 
-      {presentation.introText ? (
-        <div className="mb-3 max-w-[680px] text-[18px] leading-[1.28] tracking-[-0.025em] text-[#1b1b1f] sm:text-[20px]">
-          {presentation.introText}
-        </div>
-      ) : null}
-
-      {hasThinkingChip ? (
-        <div className="mb-4 pl-[2px]">
-          <KivoExecutionThinkingState
-            text={presentation.statusText ?? 'Thinking'}
-          />
-        </div>
-      ) : null}
-
-      {hasExecutionCard ? (
-        <div className="mb-4">
-          <KivoExecutionCard presentation={presentation} />
-        </div>
-      ) : null}
+      {showStreamingPulse ? <StreamingPulse /> : null}
 
       <div className="max-w-[760px] text-[#1b1b1f]">
         <ResponseRenderer
