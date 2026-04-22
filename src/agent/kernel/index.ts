@@ -1,5 +1,6 @@
 export { buildKernelSystemPrompt } from "./system";
 export {
+  createAnswerCompletedEvent,
   createDeltaEvent,
   createDoneEvent,
   createErrorEvent,
@@ -14,11 +15,9 @@ export { runKernel, runKernelStream } from "./orchestrator";
 
 export type {
   KernelDependencies,
-  KernelExecutionMode,
   KernelRequest,
   KernelResponse,
   KernelRuntimeOptions,
-  KernelStatus,
   KernelStreamEvent,
   KernelToolEvent,
   KernelUsage,
