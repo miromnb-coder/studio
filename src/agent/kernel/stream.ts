@@ -2,6 +2,7 @@ import type {
   KernelResponse,
   KernelStatus,
   KernelStreamEvent,
+  KernelToolEvent,
 } from "./types";
 
 function now(): string {
@@ -28,6 +29,24 @@ export function createLogEvent(message: string): KernelStreamEvent {
   return {
     type: "log",
     message,
+    at: now(),
+  };
+}
+
+export function createToolCallEvent(toolCall: KernelToolEvent): KernelStreamEvent {
+  return {
+    type: "tool_call",
+    toolCall,
+    at: now(),
+  };
+}
+
+export function createToolResultEvent(
+  toolResult: KernelToolEvent & { output?: string },
+): KernelStreamEvent {
+  return {
+    type: "tool_result",
+    toolResult,
     at: now(),
   };
 }
