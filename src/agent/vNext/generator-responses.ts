@@ -50,6 +50,17 @@ export type ResponsesFinalAnswerResult = {
   rawOutputText: string;
 };
 
+function resolveOpenAiResponsesModel(input: GenerateFinalAnswerInput): string {
+  const metadata = (input.request.metadata ?? {}) as Record<string, unknown>;
+
+  return (
+    normalizeText(metadata.openaiResponsesModel) ||
+    process.env.OPENAI_RESPONSES_MODEL ||
+    process.env.OPENAI_MODEL ||
+    DEFAULT_OPENAI_RESPONSES_MODEL
+  );
+}
+
 function buildSystemPrompt(language: string): string {
   return [
     'You are the final answer generator for Kivo, a premium AI assistant.',
@@ -211,12 +222,11 @@ export async function generateFinalAnswerWithResponses(
   if (!process.env.OPENAI_API_KEY) return null;
 
   const language = getLanguage(input);
+  const model = resolveOpenAiResponsesModel(input);
 
   try {
     const response = await openai.responses.create({
-      model:
-        normalizeText((input.request.metadata as Record<string, unknown> | undefined)?.generatorModel) ||
-        DEFAULT_OPENAI_RESPONSES_MODEL,
+      model,
       temperature: 0.2,
       input: [
         {
@@ -238,7 +248,12 @@ export async function generateFinalAnswerWithResponses(
       rawText: rawOutputText,
       parsed: parseEnvelope(rawOutputText),
     });
-  } catch {
+  } catch (error) {
+    console.error('VNEXT_RESPONSES_FINAL_ANSWER_ERROR', {
+      requestId: input.request.requestId,
+      model,
+      error,
+    });
     return null;
   }
 }

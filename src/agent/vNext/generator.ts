@@ -31,6 +31,7 @@ import { buildShoppingResponse } from './generator-shopping';
 import { buildCompareResponse } from './generator-compare';
 import { buildEmailResponse } from './generator-email';
 import { buildOperatorResponse } from './generator-operator';
+import { generateFinalAnswerWithResponses } from './generator-responses';
 
 const DEFAULT_OPENAI_GENERATOR_MODEL = 'gpt-5-mini';
 const DEFAULT_GROQ_GENERATOR_MODEL = 'openai/gpt-oss-120b';
@@ -727,22 +728,42 @@ export async function generateFinalAnswer(
   input: GenerateFinalAnswerInput,
 ): Promise<AgentFinalAnswer> {
   const detectedLanguage = getLanguage(input);
-  const llmStructured = await generateWithModel(input);
+  const toolSummary = summarizeToolResults(input.toolResults);
 
-  if (!llmStructured) {
-    return buildFallbackAnswer(input, detectedLanguage);
+  const responsesResult = await generateFinalAnswerWithResponses(input);
+
+  let mappedStructured: NonNullable<AgentFinalAnswer['structured']> | null = null;
+  let preliminaryText = '';
+
+  if (responsesResult?.structured) {
+    mappedStructured = responsesResult.structured;
+    preliminaryText =
+      responsesResult.text ||
+      responsesResult.structured.plainText ||
+      responsesResult.structured.lead ||
+      responsesResult.structured.summary ||
+      responsesResult.rawOutputText ||
+      '';
+  } else {
+    const llmStructured = await generateWithModel(input);
+
+    if (!llmStructured) {
+      return buildFallbackAnswer(input, detectedLanguage);
+    }
+
+    mappedStructured = mapLlmStructuredToAppStructured(input, llmStructured);
+    preliminaryText =
+      mappedStructured.plainText ||
+      mappedStructured.lead ||
+      mappedStructured.summary ||
+      llmStructured.lead ||
+      llmStructured.summary ||
+      '';
   }
 
-  const toolSummary = summarizeToolResults(input.toolResults);
-  const mappedStructured = mapLlmStructuredToAppStructured(input, llmStructured);
-
-  const preliminaryText =
-    mappedStructured.plainText ||
-    mappedStructured.lead ||
-    mappedStructured.summary ||
-    llmStructured.lead ||
-    llmStructured.summary ||
-    '';
+  if (!mappedStructured) {
+    return buildFallbackAnswer(input, detectedLanguage);
+  }
 
   const preliminaryStructuredData = buildStructuredData({
     generatorInput: input,
