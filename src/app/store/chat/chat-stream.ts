@@ -23,7 +23,6 @@ import {
   deriveActiveStepsFromMetadata,
   mergeAgentMetadata,
   STREAM_STEP_EVENT_TYPES,
-  upsertLiveStep,
 } from './chat-steps';
 
 type SetState = (updater: (prev: AppState) => AppState) => void;
@@ -80,11 +79,13 @@ function safeArray(value: unknown): Array<Record<string, unknown>> | undefined {
 
 function fallbackStepLabel(event: any) {
   if (event?.label) return String(event.label);
-
   if (event?.title) return String(event.title);
 
   if (event?.tool) {
-    return `Using ${String(event.tool)}`;
+    const tool = String(event.tool);
+    if (tool === 'web_search') return 'Searching web';
+    if (tool === 'response_generator') return 'Generating response';
+    return `Using ${tool}`;
   }
 
   switch (event?.type) {
@@ -96,6 +97,8 @@ function fallbackStepLabel(event: any) {
       return 'Tool failed';
     case 'thinking':
       return 'Thinking';
+    case 'status':
+      return String(event?.status || 'Processing');
     default:
       return 'Processing';
   }
@@ -272,11 +275,15 @@ export async function streamAssistantResponse({
 
     if (
       STREAM_STEP_EVENT_TYPES.has(type) ||
+      type === 'status' ||
+      type === 'log' ||
       type === 'tool_started' ||
       type === 'tool_completed' ||
       type === 'tool_failed'
     ) {
-      handleStepEvent(event);
+      if (type !== 'log') {
+        handleStepEvent(event);
+      }
       return;
     }
 
@@ -305,12 +312,7 @@ export async function streamAssistantResponse({
         },
       } as AgentResponseMetadata;
 
-      applyState(
-        content,
-        'Completed',
-        mergedMetadata,
-        toolResults,
-      );
+      applyState(content, 'Completed', mergedMetadata, toolResults);
 
       trackEvent('chat_stream_completed', {
         conversationId,
@@ -328,6 +330,10 @@ export async function streamAssistantResponse({
         },
       });
 
+      return;
+    }
+
+    if (type === 'done') {
       return;
     }
 
@@ -355,6 +361,15 @@ export async function streamAssistantResponse({
       } catch {
         // ignore malformed line
       }
+    }
+  }
+
+  if (buffer.trim()) {
+    try {
+      const parsed = JSON.parse(buffer) as ChatStreamEvent;
+      handleEvent(parsed);
+    } catch {
+      // ignore malformed trailing line
     }
   }
 
