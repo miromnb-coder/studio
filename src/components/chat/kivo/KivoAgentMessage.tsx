@@ -1,42 +1,55 @@
 "use client";
 
-import { motion } from "framer-motion";
+import { KivoResponseCard } from "./KivoResponseCard";
+import { KivoExpandableBlock } from "./KivoExpandableBlock";
+import { KivoStatusTimeline } from "./KivoStatusTimeline";
 
 type Props = {
   content: string;
   status?: string;
 };
 
-function formatStatus(status?: string) {
-  if (!status) return "";
+function splitContent(text: string) {
+  const parts = text.split("\n\n");
 
-  return status
-    .replaceAll("_", " ")
-    .toUpperCase();
+  return {
+    main: parts[0] || "",
+    extra:
+      parts.slice(1).join("\n\n") || "",
+  };
 }
 
 export function KivoAgentMessage({
   content,
   status,
 }: Props) {
+  const sections =
+    splitContent(content);
+
   return (
-    <motion.div
-      initial={{ opacity: 0, y: 12 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.28 }}
-      className="w-full"
-    >
-      <div className="rounded-3xl border border-white/10 bg-white/5 backdrop-blur-xl p-4 shadow-[0_8px_30px_rgba(0,0,0,0.12)]">
-        {status && (
-          <div className="mb-3 text-[10px] tracking-[0.25em] text-cyan-300/80">
-            {formatStatus(status)}
-          </div>
+    <div className="space-y-3">
+      {status &&
+        status !== "completed" && (
+          <KivoStatusTimeline
+            current={status}
+          />
         )}
 
-        <div className="whitespace-pre-wrap text-sm leading-7 text-white/90">
-          {content}
+      <KivoResponseCard title="Main Answer">
+        <div className="whitespace-pre-wrap">
+          {sections.main ||
+            "Working..."}
         </div>
-      </div>
-    </motion.div>
+      </KivoResponseCard>
+
+      {sections.extra && (
+        <KivoExpandableBlock
+          title="More Details"
+          content={
+            sections.extra
+          }
+        />
+      )}
+    </div>
   );
 }
