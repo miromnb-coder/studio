@@ -19,6 +19,7 @@ export function useKernelChat() {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [status, setStatus] = useState<string>("");
   const [isLoading, setIsLoading] = useState(false);
+  const [streamingText, setStreamingText] = useState("");
 
   async function sendMessage(input: string) {
     const text = input.trim();
@@ -33,26 +34,31 @@ export function useKernelChat() {
     setMessages((prev) => [...prev, userMessage]);
     setIsLoading(true);
     setStatus("starting");
+    setStreamingText("");
 
     try {
-      await callKernelAgent(text, {
+      const result = await callKernelAgent(text, {
         mode: "agent",
         onEvent(event) {
           if (event.type === "status") {
             setStatus(event.value);
           }
 
+          if (event.type === "delta") {
+            setStreamingText((prev) => prev + event.text);
+          }
+
           if (event.type === "done") {
+            const finalAnswer = event.result.answer || "";
+
             const assistantMessage: ChatMessage = {
               id: uid(),
               role: "assistant",
-              content: event.result.answer,
+              content: finalAnswer,
             };
 
-            setMessages((prev) => [
-              ...prev,
-              assistantMessage,
-            ]);
+            setMessages((prev) => [...prev, assistantMessage]);
+            setStreamingText("");
           }
 
           if (event.type === "error") {
@@ -60,19 +66,19 @@ export function useKernelChat() {
           }
         },
       });
-    } catch (error) {
+
+      if (result.answer && !messages.some((m) => m.content === result.answer)) {
+        setStreamingText("");
+      }
+    } catch {
       const failMessage: ChatMessage = {
         id: uid(),
         role: "assistant",
-        content:
-          "Something went wrong while running Kivo Kernel.",
+        content: "Something went wrong while running Kivo Kernel.",
       };
 
-      setMessages((prev) => [
-        ...prev,
-        failMessage,
-      ]);
-
+      setMessages((prev) => [...prev, failMessage]);
+      setStreamingText("");
       setStatus("failed");
     } finally {
       setIsLoading(false);
@@ -87,6 +93,7 @@ export function useKernelChat() {
     messages,
     status,
     isLoading,
+    streamingText,
     sendMessage,
   };
 }
