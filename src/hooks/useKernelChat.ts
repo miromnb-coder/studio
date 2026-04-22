@@ -1,7 +1,10 @@
 "use client";
 
 import { useState } from "react";
-import { callKernelAgent } from "@/lib/call-kernel-agent";
+import {
+  callKernelAgent,
+  type KernelClientToolEvent,
+} from "@/lib/call-kernel-agent";
 
 export type ChatRole = "user" | "assistant";
 
@@ -20,6 +23,21 @@ export function useKernelChat() {
   const [status, setStatus] = useState<string>("");
   const [isLoading, setIsLoading] = useState(false);
   const [streamingText, setStreamingText] = useState("");
+  const [toolEvents, setToolEvents] = useState<KernelClientToolEvent[]>([]);
+
+  function upsertToolEvent(next: KernelClientToolEvent) {
+    setToolEvents((prev) => {
+      const index = prev.findIndex((item) => item.id === next.id);
+
+      if (index === -1) {
+        return [...prev, next];
+      }
+
+      const clone = [...prev];
+      clone[index] = next;
+      return clone;
+    });
+  }
 
   async function sendMessage(input: string) {
     const text = input.trim();
@@ -35,9 +53,10 @@ export function useKernelChat() {
     setIsLoading(true);
     setStatus("starting");
     setStreamingText("");
+    setToolEvents([]);
 
     try {
-      const result = await callKernelAgent(text, {
+      await callKernelAgent(text, {
         mode: "agent",
         onEvent(event) {
           if (event.type === "status") {
@@ -46,6 +65,14 @@ export function useKernelChat() {
 
           if (event.type === "delta") {
             setStreamingText((prev) => prev + event.text);
+          }
+
+          if (event.type === "tool_call") {
+            upsertToolEvent(event.toolCall);
+          }
+
+          if (event.type === "tool_result") {
+            upsertToolEvent(event.toolResult);
           }
 
           if (event.type === "done") {
@@ -66,10 +93,6 @@ export function useKernelChat() {
           }
         },
       });
-
-      if (result.answer && !messages.some((m) => m.content === result.answer)) {
-        setStreamingText("");
-      }
     } catch {
       const failMessage: ChatMessage = {
         id: uid(),
@@ -94,6 +117,7 @@ export function useKernelChat() {
     status,
     isLoading,
     streamingText,
+    toolEvents,
     sendMessage,
   };
 }
