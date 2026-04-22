@@ -1,5 +1,6 @@
 'use client';
 
+import { motion, AnimatePresence } from 'framer-motion';
 import type { Message } from '@/app/store/app-store';
 import { ResponseRenderer } from '@/components/chat/ResponseRenderer';
 
@@ -38,24 +39,86 @@ function KivoBrandHeader() {
         </span>
 
         <span className="inline-flex items-center rounded-[10px] border border-black/[0.08] bg-white px-2 py-0.5 text-[13px] font-medium text-[#8e8e93] shadow-[0_1px_2px_rgba(0,0,0,0.03)]">
-          Lite
+          Premium
         </span>
       </div>
     </div>
   );
 }
 
-function StreamingPulse() {
+function StreamingState() {
   return (
-    <div className="mb-2 flex items-center gap-2.5 pl-[2px]">
+    <div className="mb-4 flex items-center gap-2.5">
       <span className="relative flex h-2.5 w-2.5 shrink-0">
-        <span className="absolute inline-flex h-full w-full rounded-full bg-[#4f7cff]/25 animate-ping" />
-        <span className="relative inline-flex h-2 w-2 rounded-full bg-[#4f7cff]" />
+        <span className="absolute inset-0 rounded-full bg-[#4f7cff]/25 animate-ping" />
+        <span className="relative h-2.5 w-2.5 rounded-full bg-[#4f7cff]" />
       </span>
 
-      <span className="text-[15px] tracking-[-0.01em] text-[#8e8e93]">...</span>
+      <span className="text-[14px] tracking-[-0.01em] text-[#7b8494]">
+        Thinking...
+      </span>
     </div>
   );
+}
+
+function ToolCard({
+  title,
+  subtitle,
+}: {
+  title: string;
+  subtitle: string;
+}) {
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 6 }}
+      animate={{ opacity: 1, y: 0 }}
+      className="rounded-2xl border border-black/[0.06] bg-white/72 px-4 py-3 shadow-[0_8px_24px_rgba(15,23,42,0.04)] backdrop-blur-xl"
+    >
+      <div className="text-[11px] uppercase tracking-[0.18em] text-[#8a94a6]">
+        Tool Activity
+      </div>
+
+      <div className="mt-1 text-[14px] font-medium text-[#2d3440]">
+        {title}
+      </div>
+
+      <div className="mt-1 text-[12px] text-[#7a8493]">
+        {subtitle}
+      </div>
+    </motion.div>
+  );
+}
+
+function getToolCards(message: Message) {
+  const metadata = message.agentMetadata as any;
+  const execution = metadata?.execution;
+
+  if (!execution) return [];
+
+  const cards = [];
+
+  if (execution.usedMemory) {
+    cards.push({
+      title: 'Memory Retrieved',
+      subtitle: 'Used previous context to improve answer',
+    });
+  }
+
+  if (execution.usedTools) {
+    cards.push({
+      title: 'Tools Used',
+      subtitle: 'External capabilities were used during generation',
+    });
+  }
+
+  if (execution.verified) {
+    cards.push({
+      title: 'Verified Output',
+      subtitle: 'Response was checked before delivery',
+    });
+  }
+
+  return cards;
 }
 
 export function KivoAssistantMessage({
@@ -65,21 +128,51 @@ export function KivoAssistantMessage({
   message: Message;
   latestUserContent: string;
 }) {
-  const showStreamingPulse = Boolean(message.isStreaming && !message.content.trim());
+  const isStreaming = Boolean(message.isStreaming);
+  const showStreamingOnly =
+    isStreaming && !message.content.trim();
+
+  const toolCards = getToolCards(message);
 
   return (
-    <div className="w-full max-w-[840px]">
+    <motion.div
+      initial={{ opacity: 0, y: 12 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.24, ease: 'easeOut' }}
+      className="w-full max-w-[840px]"
+    >
       <KivoBrandHeader />
 
-      {showStreamingPulse ? <StreamingPulse /> : null}
+      <AnimatePresence initial={false}>
+        {isStreaming ? <StreamingState /> : null}
+      </AnimatePresence>
 
-      <div className="max-w-[760px] text-[#1b1b1f]">
-        <ResponseRenderer
-          message={message}
-          latestUserContent={latestUserContent}
-        />
-      </div>
-    </div>
+      {toolCards.length > 0 ? (
+        <div className="mb-4 space-y-3">
+          {toolCards.map((card, index) => (
+            <ToolCard
+              key={`${card.title}-${index}`}
+              title={card.title}
+              subtitle={card.subtitle}
+            />
+          ))}
+        </div>
+      ) : null}
+
+      {!showStreamingOnly ? (
+        <motion.div
+          layout
+          className="max-w-[760px] rounded-[28px] border border-black/[0.05] bg-white/70 px-5 py-4 shadow-[0_10px_30px_rgba(15,23,42,0.04)] backdrop-blur-xl"
+        >
+          <div className="text-[#1b1b1f]">
+            <ResponseRenderer
+              message={message}
+              latestUserContent={latestUserContent}
+            />
+          </div>
+        </motion.div>
+      ) : null}
+    </motion.div>
   );
 }
 
