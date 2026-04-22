@@ -1,6 +1,9 @@
 import { NextRequest } from "next/server";
-import { runKernelStream } from "@/agent/kernel";
-import { serializeKernelStreamEvent } from "@/agent/kernel";
+import {
+  runKernelStream,
+  serializeKernelStreamEvent,
+  createErrorEvent,
+} from "@/agent/kernel";
 
 export const dynamic = "force-dynamic";
 
@@ -18,18 +21,34 @@ export async function POST(req: NextRequest) {
       async start(controller) {
         const encoder = new TextEncoder();
 
-        for await (const event of runKernelStream({
-          message,
-          mode,
-        })) {
+        try {
+          for await (const event of runKernelStream({
+            message,
+            mode,
+          })) {
+            controller.enqueue(
+              encoder.encode(
+                serializeKernelStreamEvent(event)
+              )
+            );
+          }
+        } catch (error) {
+          console.error("AGENT STREAM ERROR:", error);
+
           controller.enqueue(
             encoder.encode(
-              serializeKernelStreamEvent(event)
+              serializeKernelStreamEvent(
+                createErrorEvent(
+                  error instanceof Error
+                    ? error.message
+                    : "Unknown stream error"
+                )
+              )
             )
           );
+        } finally {
+          controller.close();
         }
-
-        controller.close();
       },
     });
 
@@ -41,9 +60,14 @@ export async function POST(req: NextRequest) {
       },
     });
   } catch (error) {
+    console.error("AGENT ROUTE ERROR:", error);
+
     return Response.json(
       {
-        error: "Kernel route failed.",
+        error:
+          error instanceof Error
+            ? error.message
+            : "Kernel route failed.",
       },
       { status: 500 }
     );
