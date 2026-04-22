@@ -1,13 +1,5 @@
 export type KernelExecutionMode = "fast" | "agent";
 
-export type KernelStatus =
-  | "starting"
-  | "building_context"
-  | "calling_model"
-  | "finalizing"
-  | "completed"
-  | "failed";
-
 export type KernelRequest = {
   message: string;
   userId?: string;
@@ -40,17 +32,13 @@ export type KernelToolEvent = {
   title: string;
   subtitle?: string;
   status: "running" | "completed" | "failed";
+  output?: string;
 };
 
 export type KernelStreamEvent =
   | {
       type: "status";
-      value: KernelStatus;
-      at: string;
-    }
-  | {
-      type: "delta";
-      text: string;
+      status: string;
       at: string;
     }
   | {
@@ -59,14 +47,36 @@ export type KernelStreamEvent =
       at: string;
     }
   | {
-      type: "tool_call";
-      toolCall: KernelToolEvent;
+      type: "tool_started";
+      id: string;
+      tool: string;
+      title: string;
+      subtitle?: string;
       at: string;
     }
   | {
-      type: "tool_result";
-      toolResult: KernelToolEvent & {
-        output?: string;
+      type: "tool_completed" | "tool_failed";
+      id: string;
+      tool: string;
+      title: string;
+      subtitle?: string;
+      output?: string;
+      at: string;
+    }
+  | {
+      type: "answer_delta";
+      delta: string;
+      at: string;
+    }
+  | {
+      type: "answer_completed";
+      content: string;
+      metadata?: Record<string, unknown>;
+      structuredData?: Record<string, unknown>;
+      toolResults?: Array<Record<string, unknown>>;
+      metrics?: {
+        charCount?: number;
+        completionMs?: number;
       };
       at: string;
     }
@@ -77,7 +87,7 @@ export type KernelStreamEvent =
     }
   | {
       type: "error";
-      message: string;
+      error: string;
       at: string;
     };
 
