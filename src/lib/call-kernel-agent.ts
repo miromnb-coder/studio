@@ -50,11 +50,7 @@ export async function callKernelAgent(
   message: string,
   options: CallKernelAgentOptions = {},
 ) {
-  const {
-    mode = "agent",
-    signal,
-    onEvent,
-  } = options;
+  const { mode = "agent", signal, onEvent } = options;
 
   const res = await fetch("/api/agent", {
     method: "POST",
@@ -69,9 +65,7 @@ export async function callKernelAgent(
   });
 
   if (!res.ok) {
-    throw new Error(
-      `Kernel request failed (${res.status})`,
-    );
+    throw new Error(`Kernel request failed (${res.status})`);
   }
 
   if (!res.body) {
@@ -82,62 +76,60 @@ export async function callKernelAgent(
   const decoder = new TextDecoder();
 
   let buffer = "";
-  let finalResult: string | null = null;
+  let answer = "";
 
   while (true) {
-    const { done, value } =
-      await reader.read();
+    const { done, value } = await reader.read();
 
     if (done) break;
 
-    buffer += decoder.decode(value, {
-      stream: true,
-    });
+    buffer += decoder.decode(value, { stream: true });
 
     const lines = buffer.split("\n");
     buffer = lines.pop() ?? "";
 
     for (const line of lines) {
       const trimmed = line.trim();
-
       if (!trimmed) continue;
 
-      const parsed =
-        safeParse(trimmed) as KernelClientEvent | null;
-
+      const parsed = safeParse(trimmed) as KernelClientEvent | null;
       if (!parsed) continue;
 
-      onEvent?.(parsed);
+      if (parsed.type === "delta") {
+        answer += parsed.text ?? "";
+      }
 
-      if (parsed.type === "done") {
-        finalResult =
-          parsed.result.answer ?? "";
+      if (parsed.type === "done" && parsed.result?.answer) {
+        answer = parsed.result.answer;
       }
 
       if (parsed.type === "error") {
-        throw new Error(
-          parsed.message ||
-            "Kernel stream error.",
-        );
+        throw new Error(parsed.message || "Kernel stream error.");
       }
+
+      onEvent?.(parsed);
     }
   }
 
   if (buffer.trim()) {
-    const parsed =
-      safeParse(buffer.trim()) as KernelClientEvent | null;
+    const parsed = safeParse(buffer.trim()) as KernelClientEvent | null;
 
     if (parsed) {
-      onEvent?.(parsed);
-
-      if (parsed.type === "done") {
-        finalResult =
-          parsed.result.answer ?? "";
+      if (parsed.type === "delta") {
+        answer += parsed.text ?? "";
       }
+
+      if (parsed.type === "done" && parsed.result?.answer) {
+        answer = parsed.result.answer;
+      }
+
+      if (parsed.type === "error") {
+        throw new Error(parsed.message || "Kernel stream error.");
+      }
+
+      onEvent?.(parsed);
     }
   }
 
-  return {
-    answer: finalResult ?? "",
-  };
+  return { answer };
 }
