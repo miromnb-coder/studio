@@ -168,6 +168,35 @@ function extractWebSources(response: any): Array<{
   return sources;
 }
 
+function extractTextFromResponse(response: any): string {
+  if (typeof response?.output_text === "string" && response.output_text.trim()) {
+    return response.output_text.trim();
+  }
+
+  const output = Array.isArray(response?.output) ? response.output : [];
+  const parts: string[] = [];
+
+  for (const item of output) {
+    if (item?.type !== "message") continue;
+
+    const content = Array.isArray(item?.content) ? item.content : [];
+    for (const block of content) {
+      const text =
+        typeof block?.text === "string"
+          ? block.text
+          : typeof block?.content === "string"
+            ? block.content
+            : "";
+
+      if (text.trim()) {
+        parts.push(text.trim());
+      }
+    }
+  }
+
+  return parts.join("\n\n").trim();
+}
+
 export async function runKernel(
   request: KernelRequest,
   deps: KernelDependencies = {},
@@ -202,9 +231,7 @@ export async function runKernel(
         userInput,
         buildToolContextBlock(toolResults),
       ),
-      tools: plan.useBuiltInWebSearch
-        ? [getWebSearchTool()]
-        : undefined,
+      tools: plan.useBuiltInWebSearch ? [getWebSearchTool()] : undefined,
       tool_choice: plan.useBuiltInWebSearch ? "auto" : undefined,
       include: plan.useBuiltInWebSearch
         ? ["web_search_call.action.sources"]
@@ -215,10 +242,7 @@ export async function runKernel(
     },
   );
 
-  const answer =
-    typeof response.output_text === "string"
-      ? response.output_text.trim()
-      : "";
+  const answer = extractTextFromResponse(response);
 
   return {
     id: response.id,
@@ -260,6 +284,7 @@ export async function* runKernelStream(
   let finalId = crypto.randomUUID();
   let finalUsage: KernelUsage | undefined;
   let finalResponse: any = null;
+  const startedAt = Date.now();
 
   try {
     yield createStatusEvent("starting");
@@ -322,9 +347,13 @@ export async function* runKernelStream(
       subtitle: "Streaming model output",
     });
 
-    const stream = await client.responses.stream(
+    yield createStatusEvent("calling_model");
+    yield createToolCallEvent(generationTool);
+
+    const stream = await client.responses.create(
       {
         model,
+        stream: true,
         reasoning: {
           effort: getReasoningEffort(deps.runtime),
         },
@@ -334,9 +363,7 @@ export async function* runKernelStream(
           userInput,
           buildToolContextBlock(customToolResults),
         ),
-        tools: plan.useBuiltInWebSearch
-          ? [getWebSearchTool()]
-          : undefined,
+        tools: plan.useBuiltInWebSearch ? [getWebSearchTool()] : undefined,
         tool_choice: plan.useBuiltInWebSearch ? "auto" : undefined,
         include: plan.useBuiltInWebSearch
           ? ["web_search_call.action.sources"]
@@ -347,27 +374,34 @@ export async function* runKernelStream(
       },
     );
 
-    yield createStatusEvent("calling_model");
-    yield createToolCallEvent(generationTool);
+    for await (const event of stream as any) {
+      if (event?.type === "response.output_text.delta") {
+        const delta =
+          typeof event?.delta === "string"
+            ? event.delta
+            : typeof event?.text === "string"
+              ? event.text
+              : "";
 
-    for await (const event of stream) {
-      if (event.type === "response.output_text.delta") {
-        const delta = event.delta ?? "";
         if (!delta) continue;
 
         finalText += delta;
         yield createDeltaEvent(delta);
+        continue;
       }
 
-      if (event.type === "response.completed") {
+      if (event?.type === "response.completed") {
         finalResponse = event.response;
         finalId = event.response?.id ?? finalId;
         finalUsage = extractUsage(event.response);
+        continue;
       }
 
-      if (event.type === "error") {
+      if (event?.type === "error") {
         const msg =
-          event.error?.message || "OpenAI stream error.";
+          event?.error?.message ||
+          event?.message ||
+          "OpenAI stream error.";
 
         yield createToolResultEvent({
           ...generationTool,
@@ -404,12 +438,17 @@ export async function* runKernelStream(
       });
     }
 
-    const content = finalText.trim();
+    const content =
+      finalText.trim() ||
+      extractTextFromResponse(finalResponse) ||
+      "";
 
     yield createToolResultEvent({
       ...generationTool,
-      status: "completed",
-      output: `Generated ${content.length} chars`,
+      status: content ? "completed" : "failed",
+      output: content
+        ? `Generated ${content.length} chars`
+        : "No response text was produced by the model.",
     });
 
     yield createAnswerCompletedEvent({
@@ -470,6 +509,7 @@ export async function* runKernelStream(
       ],
       metrics: {
         charCount: content.length,
+        completionMs: Date.now() - startedAt,
       },
     });
 
