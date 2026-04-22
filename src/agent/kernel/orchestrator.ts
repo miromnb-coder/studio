@@ -86,16 +86,18 @@ function buildToolEvent(
   };
 }
 
-function buildToolContextBlock(toolResults: Array<{
-  tool: string;
-  ok: boolean;
-  summary: string;
-  data?: Record<string, unknown>;
-}>): string {
+function buildToolContextBlock(
+  toolResults: Array<{
+    tool: string;
+    ok: boolean;
+    summary: string;
+    data?: Record<string, unknown>;
+  }>,
+): string {
   if (!toolResults.length) return "";
 
   return [
-    "Tool results:",
+    "Custom tool results:",
     ...toolResults.map((result, index) =>
       [
         `${index + 1}. ${result.tool}`,
@@ -126,6 +128,46 @@ function inputPayload(
       content: userContent,
     },
   ];
+}
+
+function getWebSearchTool(userTimezone?: string) {
+  return {
+    type: "web_search" as const,
+    user_location: userTimezone
+      ? {
+          type: "approximate" as const,
+          timezone: userTimezone,
+        }
+      : undefined,
+  };
+}
+
+function countWebSearchCalls(response: any): number {
+  const output = Array.isArray(response?.output) ? response.output : [];
+  return output.filter((item: any) => item?.type === "web_search_call").length;
+}
+
+function extractWebSources(response: any): Array<{
+  url?: string;
+  title?: string;
+}> {
+  const output = Array.isArray(response?.output) ? response.output : [];
+  const sources: Array<{ url?: string; title?: string }> = [];
+
+  for (const item of output) {
+    const actionSources = item?.action?.sources;
+    if (!Array.isArray(actionSources)) continue;
+
+    for (const source of actionSources) {
+      if (!source || typeof source !== "object") continue;
+      sources.push({
+        url: typeof source.url === "string" ? source.url : undefined,
+        title: typeof source.title === "string" ? source.title : undefined,
+      });
+    }
+  }
+
+  return sources;
 }
 
 export async function runKernel(
@@ -162,6 +204,13 @@ export async function runKernel(
         userInput,
         buildToolContextBlock(toolResults),
       ),
+      tools: plan.useBuiltInWebSearch
+        ? [getWebSearchTool()]
+        : undefined,
+      tool_choice: plan.useBuiltInWebSearch ? "auto" : undefined,
+      include: plan.useBuiltInWebSearch
+        ? ["web_search_call.action.sources"]
+        : undefined,
     },
     {
       signal: options.signal,
@@ -187,6 +236,8 @@ export async function runKernel(
       userId: request.userId,
       toolsUsed: plan.tools,
       toolResults,
+      webSearchUsed: countWebSearchCalls(response) > 0,
+      webSources: extractWebSources(response),
     },
   };
 }
@@ -210,6 +261,7 @@ export async function* runKernelStream(
   let finalText = "";
   let finalId = crypto.randomUUID();
   let finalUsage: KernelUsage | undefined;
+  let finalResponse: any = null;
 
   try {
     yield createStatusEvent("starting");
@@ -218,9 +270,11 @@ export async function* runKernelStream(
     const plan = buildExecutionPlan(request);
 
     yield createStatusEvent("building_context");
-    yield createLogEvent(`Planned ${plan.tools.length} tools.`);
+    yield createLogEvent(
+      `Planned ${plan.tools.length} custom tools. Built-in web search: ${plan.useBuiltInWebSearch ? "on" : "off"}.`,
+    );
 
-    const toolResults = [];
+    const customToolResults = [];
 
     for (const toolName of plan.tools) {
       const toolEvent = buildToolEvent({
@@ -236,13 +290,25 @@ export async function* runKernelStream(
         conversationId: request.conversationId,
       });
 
-      toolResults.push(result);
+      customToolResults.push(result);
 
       yield createToolResultEvent({
         ...toolEvent,
         status: result.ok ? "completed" : "failed",
         output: result.summary,
       });
+    }
+
+    const webSearchEvent = plan.useBuiltInWebSearch
+      ? buildToolEvent({
+          tool: "web_search",
+          title: "Searching web",
+          subtitle: "Using OpenAI built-in web search",
+        })
+      : null;
+
+    if (webSearchEvent) {
+      yield createToolCallEvent(webSearchEvent);
     }
 
     const generationTool = buildToolEvent({
@@ -261,8 +327,15 @@ export async function* runKernelStream(
         input: inputPayload(
           systemPrompt,
           userInput,
-          buildToolContextBlock(toolResults),
+          buildToolContextBlock(customToolResults),
         ),
+        tools: plan.useBuiltInWebSearch
+          ? [getWebSearchTool()]
+          : undefined,
+        tool_choice: plan.useBuiltInWebSearch ? "auto" : undefined,
+        include: plan.useBuiltInWebSearch
+          ? ["web_search_call.action.sources"]
+          : undefined,
       },
       {
         signal: options.signal,
@@ -285,6 +358,7 @@ export async function* runKernelStream(
       }
 
       if (event.type === "response.completed") {
+        finalResponse = event.response;
         finalId = event.response?.id ?? finalId;
         finalUsage = extractUsage(event.response);
       }
@@ -299,9 +373,31 @@ export async function* runKernelStream(
           output: msg,
         });
 
+        if (webSearchEvent) {
+          yield createToolResultEvent({
+            ...webSearchEvent,
+            status: "failed",
+            output: "Web search did not complete.",
+          });
+        }
+
         yield createErrorEvent(msg);
         return;
       }
+    }
+
+    const webSearchCount = countWebSearchCalls(finalResponse);
+    const webSources = extractWebSources(finalResponse);
+
+    if (webSearchEvent) {
+      yield createToolResultEvent({
+        ...webSearchEvent,
+        status: webSearchCount > 0 ? "completed" : "completed",
+        output:
+          webSearchCount > 0
+            ? `Searched the web and consulted ${webSources.length || webSearchCount} sources.`
+            : "Web search was available but not needed for the final answer.",
+      });
     }
 
     const content = finalText.trim();
@@ -320,24 +416,53 @@ export async function* runKernelStream(
         responseMode: "tool",
         execution: {
           intent: "general",
-          forceMode: plan.tools.length ? "execution" : "status",
-          statusText: plan.tools.length
-            ? "Completed with tools"
-            : "Completed",
-          toolCount: plan.tools.length,
+          forceMode:
+            plan.tools.length || plan.useBuiltInWebSearch
+              ? "execution"
+              : "status",
+          statusText:
+            plan.tools.length || plan.useBuiltInWebSearch
+              ? "Completed with tools"
+              : "Completed",
+          toolCount:
+            plan.tools.length + (plan.useBuiltInWebSearch ? 1 : 0),
         },
         structuredData: {
           execution: {
             intent: "general",
-            forceMode: plan.tools.length ? "execution" : "status",
-            statusText: plan.tools.length
-              ? "Completed with tools"
-              : "Completed",
-            toolCount: plan.tools.length,
+            forceMode:
+              plan.tools.length || plan.useBuiltInWebSearch
+                ? "execution"
+                : "status",
+            statusText:
+              plan.tools.length || plan.useBuiltInWebSearch
+                ? "Completed with tools"
+                : "Completed",
+            toolCount:
+              plan.tools.length + (plan.useBuiltInWebSearch ? 1 : 0),
           },
+          webSources,
         },
       },
-      toolResults,
+      toolResults: [
+        ...customToolResults,
+        ...(plan.useBuiltInWebSearch
+          ? [
+              {
+                tool: "web_search",
+                ok: true,
+                summary:
+                  webSearchCount > 0
+                    ? `Web search used with ${webSources.length || webSearchCount} consulted sources.`
+                    : "Web search available but not used by the model.",
+                data: {
+                  callCount: webSearchCount,
+                  sources: webSources,
+                },
+              },
+            ]
+          : []),
+      ],
       metrics: {
         charCount: content.length,
       },
@@ -357,7 +482,9 @@ export async function* runKernelStream(
         conversationId: request.conversationId,
         userId: request.userId,
         toolsUsed: plan.tools,
-        toolResults,
+        toolResults: customToolResults,
+        webSearchUsed: webSearchCount > 0,
+        webSources,
       },
     };
 
