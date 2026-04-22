@@ -48,9 +48,7 @@ function updateAssistantMessage(
 }
 
 function latestUserMessage(messages: Message[]) {
-  return (
-    [...messages].reverse().find((msg) => msg.role === 'user')?.content ?? ''
-  );
+  return [...messages].reverse().find((msg) => msg.role === 'user')?.content ?? '';
 }
 
 function buildStreamPayload(messages: Message[], userId?: string) {
@@ -62,9 +60,7 @@ function buildStreamPayload(messages: Message[], userId?: string) {
   };
 }
 
-function safeObject(
-  value: unknown,
-): Record<string, unknown> | undefined {
+function safeObject(value: unknown): Record<string, unknown> | undefined {
   if (!value || typeof value !== 'object' || Array.isArray(value)) {
     return undefined;
   }
@@ -72,9 +68,7 @@ function safeObject(
   return value as Record<string, unknown>;
 }
 
-function safeArray(
-  value: unknown,
-): Array<Record<string, unknown>> | undefined {
+function safeArray(value: unknown): Array<Record<string, unknown>> | undefined {
   if (!Array.isArray(value)) return undefined;
 
   const items = value.filter(
@@ -87,15 +81,19 @@ function safeArray(
 function fallbackStepLabel(event: any) {
   if (event?.label) return String(event.label);
 
+  if (event?.title) return String(event.title);
+
   if (event?.tool) {
     return `Using ${String(event.tool)}`;
   }
 
   switch (event?.type) {
-    case 'tool_call':
+    case 'tool_started':
       return 'Using tool';
-    case 'tool_result':
+    case 'tool_completed':
       return 'Tool completed';
+    case 'tool_failed':
+      return 'Tool failed';
     case 'thinking':
       return 'Thinking';
     default:
@@ -124,8 +122,7 @@ export async function streamAssistantResponse({
   getState,
 }: StreamAssistantResponseArgs) {
   const currentState = getState();
-  const conversationMessages =
-    currentState.messageState[conversationId] ?? [];
+  const conversationMessages = currentState.messageState[conversationId] ?? [];
 
   const payload = buildStreamPayload(
     conversationMessages,
@@ -134,7 +131,6 @@ export async function streamAssistantResponse({
 
   setState((prev) => {
     const messages = prev.messageState[conversationId] ?? [];
-
     const execution = buildExecution('Thinking', '', 0);
 
     return {
@@ -210,11 +206,7 @@ export async function streamAssistantResponse({
   ) => {
     setState((prev) => {
       const messages = prev.messageState[conversationId] ?? [];
-      const execution = buildExecution(
-        statusText,
-        content,
-        toolCount,
-      );
+      const execution = buildExecution(statusText, content, toolCount);
 
       const structuredData = {
         ...(safeObject(metadata?.structuredData) ?? {}),
@@ -255,35 +247,41 @@ export async function streamAssistantResponse({
     });
   };
 
-  const handleEvent = (event: ChatStreamEvent) => {
-    const type = (event as any).type;
+  const handleStepEvent = (event: any) => {
+    const label = fallbackStepLabel(event);
+
+    if (event?.type === 'tool_started') {
+      toolCount += 1;
+    }
+
+    trackEvent('chat_phase_transition', {
+      conversationId,
+      messageId: assistantMessageId,
+      requestId,
+      properties: {
+        phase: event?.type,
+        label,
+      },
+    });
+
+    applyState(streamedText, label);
+  };
+
+  const handleEvent = (event: ChatStreamEvent | any) => {
+    const type = event?.type;
 
     if (
       STREAM_STEP_EVENT_TYPES.has(type) ||
-      type === 'tool_call' ||
-      type === 'tool_result'
+      type === 'tool_started' ||
+      type === 'tool_completed' ||
+      type === 'tool_failed'
     ) {
-      if (type === 'tool_call') toolCount += 1;
-
-      const label = fallbackStepLabel(event);
-
-      trackEvent('chat_phase_transition', {
-        conversationId,
-        messageId: assistantMessageId,
-        requestId,
-        properties: { phase: type, label },
-      });
-
-      applyState(streamedText, label);
+      handleStepEvent(event);
       return;
     }
 
     if (type === 'answer_delta' || type === 'delta') {
-      const delta =
-        (event as any).delta ||
-        (event as any).content ||
-        '';
-
+      const delta = event?.delta || event?.content || '';
       if (!delta) return;
 
       streamedText += delta;
@@ -291,29 +289,26 @@ export async function streamAssistantResponse({
       return;
     }
 
-    if (
-      type === 'answer_completed' ||
-      type === 'completed'
-    ) {
+    if (type === 'answer_completed' || type === 'completed') {
       streamComplete = true;
 
-      const content =
-        (event as any).content ||
-        streamedText ||
-        'No response generated.';
+      const content = event?.content || streamedText || 'No response generated.';
+      const metadataBase = (event?.metadata || {}) as AgentResponseMetadata;
+      const eventStructuredData = safeObject(event?.structuredData);
+      const toolResults = safeArray(event?.toolResults);
 
-      const metadata =
-        ((event as any).metadata ||
-          {}) as AgentResponseMetadata;
-
-      const toolResults = safeArray(
-        (event as any).toolResults,
-      );
+      const mergedMetadata = {
+        ...metadataBase,
+        structuredData: {
+          ...(safeObject(metadataBase?.structuredData) ?? {}),
+          ...(eventStructuredData ?? {}),
+        },
+      } as AgentResponseMetadata;
 
       applyState(
         content,
         'Completed',
-        metadata,
+        mergedMetadata,
         toolResults,
       );
 
@@ -322,8 +317,14 @@ export async function streamAssistantResponse({
         messageId: assistantMessageId,
         requestId,
         properties: {
-          ms: Date.now() - startedAt,
-          chars: content.length,
+          ms:
+            typeof event?.metrics?.completionMs === 'number'
+              ? event.metrics.completionMs
+              : Date.now() - startedAt,
+          chars:
+            typeof event?.metrics?.charCount === 'number'
+              ? event.metrics.charCount
+              : content.length,
         },
       });
 
@@ -331,9 +332,7 @@ export async function streamAssistantResponse({
     }
 
     if (type === 'error') {
-      throw new Error(
-        (event as any).message || 'Streaming failed.',
-      );
+      throw new Error(event?.error || event?.message || 'Streaming failed.');
     }
   };
 
@@ -360,9 +359,7 @@ export async function streamAssistantResponse({
   }
 
   if (!streamComplete) {
-    throw new Error(
-      'Streaming interrupted before completion.',
-    );
+    throw new Error('Streaming interrupted before completion.');
   }
 
   setState((prev) => {
@@ -376,8 +373,7 @@ export async function streamAssistantResponse({
             ? {
                 ...conversation,
                 updatedAt: nowIso(),
-                lastMessagePreview:
-                  summarizePreview(messages),
+                lastMessagePreview: summarizePreview(messages),
                 messageCount: messages.length,
               }
             : conversation,
@@ -386,9 +382,7 @@ export async function streamAssistantResponse({
       agents: {
         ...prev.agents,
         [DEFAULT_ACTIVE_AGENT as AgentName]: {
-          ...prev.agents[
-            DEFAULT_ACTIVE_AGENT as AgentName
-          ],
+          ...prev.agents[DEFAULT_ACTIVE_AGENT as AgentName],
           status: 'completed',
           lastRun: nowIso(),
         },
