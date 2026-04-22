@@ -2,6 +2,8 @@ import OpenAI from "openai";
 
 import { buildKernelSystemPrompt } from "./system";
 import {
+  createAnswerCompletedEvent,
+  createDeltaEvent,
   createDoneEvent,
   createErrorEvent,
   createLogEvent,
@@ -83,6 +85,7 @@ function buildToolEvent(
     title: partial.title,
     subtitle: partial.subtitle,
     status: partial.status ?? "running",
+    output: partial.output,
   };
 }
 
@@ -130,15 +133,9 @@ function inputPayload(
   ];
 }
 
-function getWebSearchTool(userTimezone?: string) {
+function getWebSearchTool() {
   return {
     type: "web_search" as const,
-    user_location: userTimezone
-      ? {
-          type: "approximate" as const,
-          timezone: userTimezone,
-        }
-      : undefined,
   };
 }
 
@@ -160,6 +157,7 @@ function extractWebSources(response: any): Array<{
 
     for (const source of actionSources) {
       if (!source || typeof source !== "object") continue;
+
       sources.push({
         url: typeof source.url === "string" ? source.url : undefined,
         title: typeof source.title === "string" ? source.title : undefined,
@@ -271,10 +269,17 @@ export async function* runKernelStream(
 
     yield createStatusEvent("building_context");
     yield createLogEvent(
-      `Planned ${plan.tools.length} custom tools. Built-in web search: ${plan.useBuiltInWebSearch ? "on" : "off"}.`,
+      `Planned ${plan.tools.length} custom tools. Built-in web search: ${
+        plan.useBuiltInWebSearch ? "on" : "off"
+      }.`,
     );
 
-    const customToolResults = [];
+    const customToolResults: Array<{
+      tool: string;
+      ok: boolean;
+      summary: string;
+      data?: Record<string, unknown>;
+    }> = [];
 
     for (const toolName of plan.tools) {
       const toolEvent = buildToolEvent({
@@ -348,13 +353,10 @@ export async function* runKernelStream(
     for await (const event of stream) {
       if (event.type === "response.output_text.delta") {
         const delta = event.delta ?? "";
-        finalText += delta;
+        if (!delta) continue;
 
-        yield {
-          type: "answer_delta",
-          delta,
-          at: new Date().toISOString(),
-        };
+        finalText += delta;
+        yield createDeltaEvent(delta);
       }
 
       if (event.type === "response.completed") {
@@ -392,10 +394,12 @@ export async function* runKernelStream(
     if (webSearchEvent) {
       yield createToolResultEvent({
         ...webSearchEvent,
-        status: webSearchCount > 0 ? "completed" : "completed",
+        status: "completed",
         output:
           webSearchCount > 0
-            ? `Searched the web and consulted ${webSources.length || webSearchCount} sources.`
+            ? `Searched the web and consulted ${
+                webSources.length || webSearchCount
+              } sources.`
             : "Web search was available but not needed for the final answer.",
       });
     }
@@ -408,8 +412,7 @@ export async function* runKernelStream(
       output: `Generated ${content.length} chars`,
     });
 
-    yield {
-      type: "answer_completed",
+    yield createAnswerCompletedEvent({
       content,
       metadata: {
         intent: mode,
@@ -427,22 +430,22 @@ export async function* runKernelStream(
           toolCount:
             plan.tools.length + (plan.useBuiltInWebSearch ? 1 : 0),
         },
-        structuredData: {
-          execution: {
-            intent: "general",
-            forceMode:
-              plan.tools.length || plan.useBuiltInWebSearch
-                ? "execution"
-                : "status",
-            statusText:
-              plan.tools.length || plan.useBuiltInWebSearch
-                ? "Completed with tools"
-                : "Completed",
-            toolCount:
-              plan.tools.length + (plan.useBuiltInWebSearch ? 1 : 0),
-          },
-          webSources,
+      },
+      structuredData: {
+        execution: {
+          intent: "general",
+          forceMode:
+            plan.tools.length || plan.useBuiltInWebSearch
+              ? "execution"
+              : "status",
+          statusText:
+            plan.tools.length || plan.useBuiltInWebSearch
+              ? "Completed with tools"
+              : "Completed",
+          toolCount:
+            plan.tools.length + (plan.useBuiltInWebSearch ? 1 : 0),
         },
+        webSources,
       },
       toolResults: [
         ...customToolResults,
@@ -453,7 +456,9 @@ export async function* runKernelStream(
                 ok: true,
                 summary:
                   webSearchCount > 0
-                    ? `Web search used with ${webSources.length || webSearchCount} consulted sources.`
+                    ? `Web search used with ${
+                        webSources.length || webSearchCount
+                      } consulted sources.`
                     : "Web search available but not used by the model.",
                 data: {
                   callCount: webSearchCount,
@@ -466,8 +471,7 @@ export async function* runKernelStream(
       metrics: {
         charCount: content.length,
       },
-      at: new Date().toISOString(),
-    };
+    });
 
     const result: KernelResponse = {
       id: finalId,
