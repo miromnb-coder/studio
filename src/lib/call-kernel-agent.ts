@@ -1,3 +1,12 @@
+export type KernelClientToolEvent = {
+  id: string;
+  tool: string;
+  title: string;
+  subtitle?: string;
+  status: "running" | "completed" | "failed";
+  output?: string;
+};
+
 export type KernelClientEvent =
   | {
       type: "status";
@@ -12,6 +21,16 @@ export type KernelClientEvent =
   | {
       type: "log";
       message: string;
+      at?: string;
+    }
+  | {
+      type: "tool_call";
+      toolCall: KernelClientToolEvent;
+      at?: string;
+    }
+  | {
+      type: "tool_result";
+      toolResult: KernelClientToolEvent;
       at?: string;
     }
   | {
@@ -80,7 +99,6 @@ export async function callKernelAgent(
 
   while (true) {
     const { done, value } = await reader.read();
-
     if (done) break;
 
     buffer += decoder.decode(value, { stream: true });
