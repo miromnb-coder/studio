@@ -34,6 +34,14 @@ export type KernelResponse = {
   metadata?: Record<string, unknown>;
 };
 
+export type KernelToolEvent = {
+  id: string;
+  tool: string;
+  title: string;
+  subtitle?: string;
+  status: "running" | "completed" | "failed";
+};
+
 export type KernelStreamEvent =
   | {
       type: "status";
@@ -48,6 +56,18 @@ export type KernelStreamEvent =
   | {
       type: "log";
       message: string;
+      at: string;
+    }
+  | {
+      type: "tool_call";
+      toolCall: KernelToolEvent;
+      at: string;
+    }
+  | {
+      type: "tool_result";
+      toolResult: KernelToolEvent & {
+        output?: string;
+      };
       at: string;
     }
   | {
