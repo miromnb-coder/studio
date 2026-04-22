@@ -12,6 +12,10 @@ export function serializeKernelStreamEvent(event: unknown): string {
   return `${JSON.stringify(event)}\n`;
 }
 
+export function serializeKernelStreamEvents(events: unknown[]): string {
+  return events.map(serializeKernelStreamEvent).join("");
+}
+
 export function createStatusEvent(status: string): KernelStreamEvent {
   return {
     type: "status",
