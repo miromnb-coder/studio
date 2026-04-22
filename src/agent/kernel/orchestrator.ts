@@ -23,13 +23,11 @@ function getClient(apiKey?: string): OpenAI {
     throw new Error("OPENAI_API_KEY is missing.");
   }
 
-  return new OpenAI({
-    apiKey: resolvedApiKey,
-  });
+  return new OpenAI({ apiKey: resolvedApiKey });
 }
 
 function getModel(runtime?: KernelDependencies["runtime"]): string {
-  return runtime?.model ?? process.env.OPENAI_MODEL ?? "gpt-5.4";
+  return runtime?.model ?? process.env.OPENAI_MODEL ?? "gpt-5.4-mini";
 }
 
 function getReasoningEffort(runtime?: KernelDependencies["runtime"]) {
@@ -42,32 +40,6 @@ function getMaxOutputTokens(runtime?: KernelDependencies["runtime"]): number {
 
 function coerceMode(mode?: KernelRequest["mode"]): "fast" | "agent" {
   return mode === "agent" ? "agent" : "fast";
-}
-
-function extractOutputText(response: any): string {
-  if (typeof response?.output_text === "string" && response.output_text.trim()) {
-    return response.output_text.trim();
-  }
-
-  const output = response?.output;
-  if (!Array.isArray(output)) {
-    return "";
-  }
-
-  const chunks: string[] = [];
-
-  for (const item of output) {
-    const content = item?.content;
-    if (!Array.isArray(content)) continue;
-
-    for (const block of content) {
-      if (block?.type === "output_text" && typeof block?.text === "string") {
-        chunks.push(block.text);
-      }
-    }
-  }
-
-  return chunks.join("\n").trim();
 }
 
 function extractUsage(response: any): KernelUsage | undefined {
@@ -139,7 +111,8 @@ export async function runKernel(
     },
   );
 
-  const answer = extractOutputText(response);
+  const answer =
+    typeof response.output_text === "string" ? response.output_text.trim() : "";
 
   return {
     id: response.id,
@@ -162,20 +135,108 @@ export async function* runKernelStream(
   deps: KernelDependencies = {},
   options: RunKernelStreamOptions = {},
 ) {
+  const mode = coerceMode(request.mode);
+  const client = getClient(deps.apiKey);
+  const model = getModel(deps.runtime);
+
+  const systemPrompt = buildKernelSystemPrompt({ mode });
+  const userInput = buildInputMessage(request.message);
+
+  if (!userInput) {
+    throw new Error("KernelRequest.message cannot be empty.");
+  }
+
+  let finalText = "";
+  let finalResponseId = "";
+  let finalUsage: KernelUsage | undefined;
+
   try {
     yield createStatusEvent("starting");
     yield createLogEvent("Kernel execution started.");
 
     yield createStatusEvent("building_context");
     yield createLogEvent(
-      `Preparing ${request.mode === "agent" ? "agent" : "fast"} mode context.`,
+      `Preparing ${mode === "agent" ? "agent" : "fast"} mode context.`,
+    );
+
+    const stream = await client.responses.create(
+      {
+        model,
+        stream: true,
+        reasoning: {
+          effort: getReasoningEffort(deps.runtime),
+        },
+        max_output_tokens: getMaxOutputTokens(deps.runtime),
+        input: [
+          {
+            role: "system",
+            content: [{ type: "input_text", text: systemPrompt }],
+          },
+          {
+            role: "user",
+            content: [{ type: "input_text", text: userInput }],
+          },
+        ],
+      },
+      {
+        signal: options.signal,
+      },
     );
 
     yield createStatusEvent("calling_model");
 
-    const result = await runKernel(request, deps, options);
+    for await (const event of stream) {
+      switch (event.type) {
+        case "response.created": {
+          finalResponseId = event.response?.id ?? finalResponseId;
+          break;
+        }
 
-    yield createStatusEvent("finalizing");
+        case "response.output_text.delta": {
+          finalText += event.delta ?? "";
+          yield {
+            type: "delta",
+            text: event.delta ?? "",
+            at: new Date().toISOString(),
+          };
+          break;
+        }
+
+        case "response.completed": {
+          finalResponseId = event.response?.id ?? finalResponseId;
+          finalUsage = extractUsage(event.response);
+          yield createStatusEvent("finalizing");
+          break;
+        }
+
+        case "error": {
+          const message =
+            event.error?.message || "OpenAI streaming error.";
+          yield createStatusEvent("failed");
+          yield createErrorEvent(message);
+          return;
+        }
+
+        default:
+          break;
+      }
+    }
+
+    const result: KernelResponse = {
+      id: finalResponseId || crypto.randomUUID(),
+      mode,
+      answer: finalText.trim(),
+      summary: finalText.trim().slice(0, 200),
+      status: "completed",
+      model,
+      createdAt: new Date().toISOString(),
+      usage: finalUsage,
+      metadata: {
+        conversationId: request.conversationId,
+        userId: request.userId,
+      },
+    };
+
     yield createDoneEvent(result);
     yield createStatusEvent("completed");
   } catch (error) {
