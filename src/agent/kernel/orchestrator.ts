@@ -20,18 +20,16 @@ import type {
 } from "./types";
 
 function getClient(apiKey?: string): OpenAI {
-  const resolvedApiKey = apiKey ?? process.env.OPENAI_API_KEY;
+  const key = apiKey ?? process.env.OPENAI_API_KEY;
 
-  if (!resolvedApiKey) {
+  if (!key) {
     throw new Error("OPENAI_API_KEY is missing.");
   }
 
-  return new OpenAI({
-    apiKey: resolvedApiKey,
-  });
+  return new OpenAI({ apiKey: key });
 }
 
-function getModel(runtime?: KernelDependencies["runtime"]): string {
+function getModel(runtime?: KernelDependencies["runtime"]) {
   return runtime?.model ?? process.env.OPENAI_MODEL ?? "gpt-5.4-mini";
 }
 
@@ -39,11 +37,13 @@ function getReasoningEffort(runtime?: KernelDependencies["runtime"]) {
   return runtime?.reasoningEffort ?? "medium";
 }
 
-function getMaxOutputTokens(runtime?: KernelDependencies["runtime"]): number {
+function getMaxOutputTokens(runtime?: KernelDependencies["runtime"]) {
   return runtime?.maxOutputTokens ?? 1600;
 }
 
-function coerceMode(mode?: KernelRequest["mode"]): "fast" | "agent" {
+function coerceMode(
+  mode?: KernelRequest["mode"],
+): "fast" | "agent" {
   return mode === "agent" ? "agent" : "fast";
 }
 
@@ -51,34 +51,29 @@ function extractUsage(response: any): KernelUsage | undefined {
   const usage = response?.usage;
   if (!usage) return undefined;
 
-  const inputTokens =
-    typeof usage?.input_tokens === "number" ? usage.input_tokens : undefined;
-  const outputTokens =
-    typeof usage?.output_tokens === "number" ? usage.output_tokens : undefined;
-  const totalTokens =
-    typeof usage?.total_tokens === "number" ? usage.total_tokens : undefined;
-
-  if (
-    inputTokens === undefined &&
-    outputTokens === undefined &&
-    totalTokens === undefined
-  ) {
-    return undefined;
-  }
-
   return {
-    inputTokens,
-    outputTokens,
-    totalTokens,
+    inputTokens:
+      typeof usage.input_tokens === "number"
+        ? usage.input_tokens
+        : undefined,
+    outputTokens:
+      typeof usage.output_tokens === "number"
+        ? usage.output_tokens
+        : undefined,
+    totalTokens:
+      typeof usage.total_tokens === "number"
+        ? usage.total_tokens
+        : undefined,
   };
 }
 
-function buildInputMessage(message: string): string {
+function buildInputMessage(message: string) {
   return message.trim();
 }
 
 function buildToolEvent(
-  partial: Partial<KernelToolEvent> & Pick<KernelToolEvent, "tool" | "title">,
+  partial: Partial<KernelToolEvent> &
+    Pick<KernelToolEvent, "tool" | "title">,
 ): KernelToolEvent {
   return {
     id: crypto.randomUUID(),
@@ -87,6 +82,19 @@ function buildToolEvent(
     subtitle: partial.subtitle,
     status: partial.status ?? "running",
   };
+}
+
+function inputPayload(systemPrompt: string, userInput: string) {
+  return [
+    {
+      role: "system",
+      content: systemPrompt,
+    },
+    {
+      role: "user",
+      content: userInput,
+    },
+  ];
 }
 
 export async function runKernel(
@@ -102,7 +110,9 @@ export async function runKernel(
   const userInput = buildInputMessage(request.message);
 
   if (!userInput) {
-    throw new Error("KernelRequest.message cannot be empty.");
+    throw new Error(
+      "KernelRequest.message cannot be empty.",
+    );
   }
 
   const response = await client.responses.create(
@@ -111,17 +121,10 @@ export async function runKernel(
       reasoning: {
         effort: getReasoningEffort(deps.runtime),
       },
-      max_output_tokens: getMaxOutputTokens(deps.runtime),
-      input: [
-        {
-          role: "system",
-          content: [{ type: "input_text", text: systemPrompt }],
-        },
-        {
-          role: "user",
-          content: [{ type: "input_text", text: userInput }],
-        },
-      ],
+      max_output_tokens: getMaxOutputTokens(
+        deps.runtime,
+      ),
+      input: inputPayload(systemPrompt, userInput),
     },
     {
       signal: options.signal,
@@ -129,7 +132,9 @@ export async function runKernel(
   );
 
   const answer =
-    typeof response.output_text === "string" ? response.output_text.trim() : "";
+    typeof response.output_text === "string"
+      ? response.output_text.trim()
+      : "";
 
   return {
     id: response.id,
@@ -160,134 +165,128 @@ export async function* runKernelStream(
   const userInput = buildInputMessage(request.message);
 
   if (!userInput) {
-    throw new Error("KernelRequest.message cannot be empty.");
+    throw new Error(
+      "KernelRequest.message cannot be empty.",
+    );
   }
 
   let finalText = "";
-  let finalResponseId = "";
+  let finalId = crypto.randomUUID();
   let finalUsage: KernelUsage | undefined;
 
   const contextTool = buildToolEvent({
     tool: "context_builder",
     title: "Building context",
-    subtitle: "Preparing request context for Kivo Kernel",
+    subtitle: "Preparing request",
   });
 
   const generationTool = buildToolEvent({
     tool: "response_generator",
     title: "Generating response",
-    subtitle: "Streaming answer from the model",
-  });
-
-  const finalizeTool = buildToolEvent({
-    tool: "response_finalizer",
-    title: "Finalizing output",
-    subtitle: "Preparing final assistant message",
+    subtitle: "Streaming model output",
   });
 
   try {
     yield createStatusEvent("starting");
-    yield createLogEvent("Kernel execution started.");
+    yield createLogEvent("Kernel stream started.");
 
-    yield createStatusEvent("building_context");
     yield createToolCallEvent(contextTool);
-
     yield createToolResultEvent({
       ...contextTool,
       status: "completed",
-      output: `Mode: ${mode}. Input length: ${userInput.length} characters.`,
+      output: `Mode: ${mode}`,
     });
 
-    const stream = await client.responses.create(
-      {
-        model,
-        stream: true,
-        reasoning: {
-          effort: getReasoningEffort(deps.runtime),
+    const stream =
+      await client.responses.stream(
+        {
+          model,
+          reasoning: {
+            effort: getReasoningEffort(
+              deps.runtime,
+            ),
+          },
+          max_output_tokens:
+            getMaxOutputTokens(deps.runtime),
+          input: inputPayload(
+            systemPrompt,
+            userInput,
+          ),
         },
-        max_output_tokens: getMaxOutputTokens(deps.runtime),
-        input: [
-          {
-            role: "system",
-            content: [{ type: "input_text", text: systemPrompt }],
-          },
-          {
-            role: "user",
-            content: [{ type: "input_text", text: userInput }],
-          },
-        ],
-      },
-      {
-        signal: options.signal,
-      },
-    );
+        {
+          signal: options.signal,
+        },
+      );
 
-    yield createStatusEvent("calling_model");
     yield createToolCallEvent(generationTool);
 
     for await (const event of stream) {
-      switch (event.type) {
-        case "response.created": {
-          finalResponseId = event.response?.id ?? finalResponseId;
-          break;
-        }
+      if (
+        event.type ===
+        "response.output_text.delta"
+      ) {
+        const delta = event.delta ?? "";
+        finalText += delta;
 
-        case "response.output_text.delta": {
-          finalText += event.delta ?? "";
+        yield {
+          type: "answer_delta",
+          delta,
+          at: new Date().toISOString(),
+        };
+      }
 
-          yield {
-            type: "delta",
-            text: event.delta ?? "",
-            at: new Date().toISOString(),
-          };
-          break;
-        }
+      if (
+        event.type === "response.completed"
+      ) {
+        finalId =
+          event.response?.id ?? finalId;
+        finalUsage = extractUsage(
+          event.response,
+        );
+      }
 
-        case "response.completed": {
-          finalResponseId = event.response?.id ?? finalResponseId;
-          finalUsage = extractUsage(event.response);
+      if (event.type === "error") {
+        const msg =
+          event.error?.message ||
+          "OpenAI stream error.";
 
-          yield createToolResultEvent({
-            ...generationTool,
-            status: "completed",
-            output: `Generated ${finalText.length} characters of response text.`,
-          });
+        yield createToolResultEvent({
+          ...generationTool,
+          status: "failed",
+          output: msg,
+        });
 
-          yield createStatusEvent("finalizing");
-          yield createToolCallEvent(finalizeTool);
-
-          yield createToolResultEvent({
-            ...finalizeTool,
-            status: "completed",
-            output: "Final response packaged for chat UI.",
-          });
-          break;
-        }
-
-        case "error": {
-          yield createToolResultEvent({
-            ...generationTool,
-            status: "failed",
-            output: event.error?.message || "OpenAI streaming error.",
-          });
-
-          yield createStatusEvent("failed");
-          yield createErrorEvent(
-            event.error?.message || "OpenAI streaming error.",
-          );
-          return;
-        }
-
-        default:
-          break;
+        yield createErrorEvent(msg);
+        return;
       }
     }
 
+    const content = finalText.trim();
+
+    yield createToolResultEvent({
+      ...generationTool,
+      status: "completed",
+      output: `Generated ${content.length} chars`,
+    });
+
+    yield {
+      type: "answer_completed",
+      content,
+      metadata: {
+        intent: mode,
+        responseMode: "chat",
+      },
+      metrics: {
+        charCount: content.length,
+      },
+      at: new Date().toISOString(),
+    };
+
     const result: KernelResponse = {
-      id: finalResponseId || crypto.randomUUID(),
+      id: finalId,
       mode,
-      answer: finalText.trim(),
-      summary: finalText.trim().slice(0, 200),
+      answer: content,
+      summary: content.slice(0, 200),
       status: "completed",
       model,
       createdAt: new Date().toISOString(),
@@ -302,9 +301,10 @@ export async function* runKernelStream(
     yield createStatusEvent("completed");
   } catch (error) {
     const message =
-      error instanceof Error ? error.message : "Unknown kernel error.";
+      error instanceof Error
+        ? error.message
+        : "Unknown kernel error.";
 
-    yield createStatusEvent("failed");
     yield createErrorEvent(message);
   }
 }
