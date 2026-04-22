@@ -9,6 +9,8 @@ import {
   createToolCallEvent,
   createToolResultEvent,
 } from "./stream";
+import { buildExecutionPlan } from "./planner";
+import { executeKernelTools } from "./tool-executor";
 import type {
   KernelDependencies,
   KernelRequest,
@@ -84,7 +86,36 @@ function buildToolEvent(
   };
 }
 
-function inputPayload(systemPrompt: string, userInput: string) {
+function buildToolContextBlock(toolResults: Array<{
+  tool: string;
+  ok: boolean;
+  summary: string;
+  data?: Record<string, unknown>;
+}>): string {
+  if (!toolResults.length) return "";
+
+  return [
+    "Tool results:",
+    ...toolResults.map((result, index) =>
+      [
+        `${index + 1}. ${result.tool}`,
+        `ok: ${String(result.ok)}`,
+        `summary: ${result.summary}`,
+        `data: ${JSON.stringify(result.data ?? {})}`,
+      ].join("\n"),
+    ),
+  ].join("\n\n");
+}
+
+function inputPayload(
+  systemPrompt: string,
+  userInput: string,
+  toolContext: string,
+) {
+  const userContent = toolContext
+    ? `${userInput}\n\n${toolContext}`
+    : userInput;
+
   return [
     {
       role: "system",
@@ -92,7 +123,7 @@ function inputPayload(systemPrompt: string, userInput: string) {
     },
     {
       role: "user",
-      content: userInput,
+      content: userContent,
     },
   ];
 }
@@ -110,10 +141,14 @@ export async function runKernel(
   const userInput = buildInputMessage(request.message);
 
   if (!userInput) {
-    throw new Error(
-      "KernelRequest.message cannot be empty.",
-    );
+    throw new Error("KernelRequest.message cannot be empty.");
   }
+
+  const plan = buildExecutionPlan(request);
+  const toolResults = await executeKernelTools(plan.tools, request, {
+    userId: request.userId,
+    conversationId: request.conversationId,
+  });
 
   const response = await client.responses.create(
     {
@@ -121,10 +156,12 @@ export async function runKernel(
       reasoning: {
         effort: getReasoningEffort(deps.runtime),
       },
-      max_output_tokens: getMaxOutputTokens(
-        deps.runtime,
+      max_output_tokens: getMaxOutputTokens(deps.runtime),
+      input: inputPayload(
+        systemPrompt,
+        userInput,
+        buildToolContextBlock(toolResults),
       ),
-      input: inputPayload(systemPrompt, userInput),
     },
     {
       signal: options.signal,
@@ -148,6 +185,8 @@ export async function runKernel(
     metadata: {
       conversationId: request.conversationId,
       userId: request.userId,
+      toolsUsed: plan.tools,
+      toolResults,
     },
   };
 }
@@ -165,66 +204,76 @@ export async function* runKernelStream(
   const userInput = buildInputMessage(request.message);
 
   if (!userInput) {
-    throw new Error(
-      "KernelRequest.message cannot be empty.",
-    );
+    throw new Error("KernelRequest.message cannot be empty.");
   }
 
   let finalText = "";
   let finalId = crypto.randomUUID();
   let finalUsage: KernelUsage | undefined;
 
-  const contextTool = buildToolEvent({
-    tool: "context_builder",
-    title: "Building context",
-    subtitle: "Preparing request",
-  });
-
-  const generationTool = buildToolEvent({
-    tool: "response_generator",
-    title: "Generating response",
-    subtitle: "Streaming model output",
-  });
-
   try {
     yield createStatusEvent("starting");
     yield createLogEvent("Kernel stream started.");
 
-    yield createToolCallEvent(contextTool);
-    yield createToolResultEvent({
-      ...contextTool,
-      status: "completed",
-      output: `Mode: ${mode}`,
+    const plan = buildExecutionPlan(request);
+
+    yield createStatusEvent("building_context");
+    yield createLogEvent(`Planned ${plan.tools.length} tools.`);
+
+    const toolResults = [];
+
+    for (const toolName of plan.tools) {
+      const toolEvent = buildToolEvent({
+        tool: toolName,
+        title: toolName,
+        subtitle: "Executing Kivo tool",
+      });
+
+      yield createToolCallEvent(toolEvent);
+
+      const [result] = await executeKernelTools([toolName], request, {
+        userId: request.userId,
+        conversationId: request.conversationId,
+      });
+
+      toolResults.push(result);
+
+      yield createToolResultEvent({
+        ...toolEvent,
+        status: result.ok ? "completed" : "failed",
+        output: result.summary,
+      });
+    }
+
+    const generationTool = buildToolEvent({
+      tool: "response_generator",
+      title: "Generating response",
+      subtitle: "Streaming model output",
     });
 
-    const stream =
-      await client.responses.stream(
-        {
-          model,
-          reasoning: {
-            effort: getReasoningEffort(
-              deps.runtime,
-            ),
-          },
-          max_output_tokens:
-            getMaxOutputTokens(deps.runtime),
-          input: inputPayload(
-            systemPrompt,
-            userInput,
-          ),
+    const stream = await client.responses.stream(
+      {
+        model,
+        reasoning: {
+          effort: getReasoningEffort(deps.runtime),
         },
-        {
-          signal: options.signal,
-        },
-      );
+        max_output_tokens: getMaxOutputTokens(deps.runtime),
+        input: inputPayload(
+          systemPrompt,
+          userInput,
+          buildToolContextBlock(toolResults),
+        ),
+      },
+      {
+        signal: options.signal,
+      },
+    );
 
+    yield createStatusEvent("calling_model");
     yield createToolCallEvent(generationTool);
 
     for await (const event of stream) {
-      if (
-        event.type ===
-        "response.output_text.delta"
-      ) {
+      if (event.type === "response.output_text.delta") {
         const delta = event.delta ?? "";
         finalText += delta;
 
@@ -235,20 +284,14 @@ export async function* runKernelStream(
         };
       }
 
-      if (
-        event.type === "response.completed"
-      ) {
-        finalId =
-          event.response?.id ?? finalId;
-        finalUsage = extractUsage(
-          event.response,
-        );
+      if (event.type === "response.completed") {
+        finalId = event.response?.id ?? finalId;
+        finalUsage = extractUsage(event.response);
       }
 
       if (event.type === "error") {
         const msg =
-          event.error?.message ||
-          "OpenAI stream error.";
+          event.error?.message || "OpenAI stream error.";
 
         yield createToolResultEvent({
           ...generationTool,
@@ -274,8 +317,27 @@ export async function* runKernelStream(
       content,
       metadata: {
         intent: mode,
-        responseMode: "chat",
+        responseMode: "tool",
+        execution: {
+          intent: "general",
+          forceMode: plan.tools.length ? "execution" : "status",
+          statusText: plan.tools.length
+            ? "Completed with tools"
+            : "Completed",
+          toolCount: plan.tools.length,
+        },
+        structuredData: {
+          execution: {
+            intent: "general",
+            forceMode: plan.tools.length ? "execution" : "status",
+            statusText: plan.tools.length
+              ? "Completed with tools"
+              : "Completed",
+            toolCount: plan.tools.length,
+          },
+        },
       },
+      toolResults,
       metrics: {
         charCount: content.length,
       },
@@ -294,6 +356,8 @@ export async function* runKernelStream(
       metadata: {
         conversationId: request.conversationId,
         userId: request.userId,
+        toolsUsed: plan.tools,
+        toolResults,
       },
     };
 
