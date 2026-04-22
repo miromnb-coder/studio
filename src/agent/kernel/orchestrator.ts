@@ -6,11 +6,14 @@ import {
   createErrorEvent,
   createLogEvent,
   createStatusEvent,
+  createToolCallEvent,
+  createToolResultEvent,
 } from "./stream";
 import type {
   KernelDependencies,
   KernelRequest,
   KernelResponse,
+  KernelToolEvent,
   KernelUsage,
   RunKernelOptions,
   RunKernelStreamOptions,
@@ -23,7 +26,9 @@ function getClient(apiKey?: string): OpenAI {
     throw new Error("OPENAI_API_KEY is missing.");
   }
 
-  return new OpenAI({ apiKey: resolvedApiKey });
+  return new OpenAI({
+    apiKey: resolvedApiKey,
+  });
 }
 
 function getModel(runtime?: KernelDependencies["runtime"]): string {
@@ -70,6 +75,18 @@ function extractUsage(response: any): KernelUsage | undefined {
 
 function buildInputMessage(message: string): string {
   return message.trim();
+}
+
+function buildToolEvent(
+  partial: Partial<KernelToolEvent> & Pick<KernelToolEvent, "tool" | "title">,
+): KernelToolEvent {
+  return {
+    id: crypto.randomUUID(),
+    tool: partial.tool,
+    title: partial.title,
+    subtitle: partial.subtitle,
+    status: partial.status ?? "running",
+  };
 }
 
 export async function runKernel(
@@ -150,14 +167,36 @@ export async function* runKernelStream(
   let finalResponseId = "";
   let finalUsage: KernelUsage | undefined;
 
+  const contextTool = buildToolEvent({
+    tool: "context_builder",
+    title: "Building context",
+    subtitle: "Preparing request context for Kivo Kernel",
+  });
+
+  const generationTool = buildToolEvent({
+    tool: "response_generator",
+    title: "Generating response",
+    subtitle: "Streaming answer from the model",
+  });
+
+  const finalizeTool = buildToolEvent({
+    tool: "response_finalizer",
+    title: "Finalizing output",
+    subtitle: "Preparing final assistant message",
+  });
+
   try {
     yield createStatusEvent("starting");
     yield createLogEvent("Kernel execution started.");
 
     yield createStatusEvent("building_context");
-    yield createLogEvent(
-      `Preparing ${mode === "agent" ? "agent" : "fast"} mode context.`,
-    );
+    yield createToolCallEvent(contextTool);
+
+    yield createToolResultEvent({
+      ...contextTool,
+      status: "completed",
+      output: `Mode: ${mode}. Input length: ${userInput.length} characters.`,
+    });
 
     const stream = await client.responses.create(
       {
@@ -184,6 +223,7 @@ export async function* runKernelStream(
     );
 
     yield createStatusEvent("calling_model");
+    yield createToolCallEvent(generationTool);
 
     for await (const event of stream) {
       switch (event.type) {
@@ -194,6 +234,7 @@ export async function* runKernelStream(
 
         case "response.output_text.delta": {
           finalText += event.delta ?? "";
+
           yield {
             type: "delta",
             text: event.delta ?? "",
@@ -205,15 +246,35 @@ export async function* runKernelStream(
         case "response.completed": {
           finalResponseId = event.response?.id ?? finalResponseId;
           finalUsage = extractUsage(event.response);
+
+          yield createToolResultEvent({
+            ...generationTool,
+            status: "completed",
+            output: `Generated ${finalText.length} characters of response text.`,
+          });
+
           yield createStatusEvent("finalizing");
+          yield createToolCallEvent(finalizeTool);
+
+          yield createToolResultEvent({
+            ...finalizeTool,
+            status: "completed",
+            output: "Final response packaged for chat UI.",
+          });
           break;
         }
 
         case "error": {
-          const message =
-            event.error?.message || "OpenAI streaming error.";
+          yield createToolResultEvent({
+            ...generationTool,
+            status: "failed",
+            output: event.error?.message || "OpenAI streaming error.",
+          });
+
           yield createStatusEvent("failed");
-          yield createErrorEvent(message);
+          yield createErrorEvent(
+            event.error?.message || "OpenAI streaming error.",
+          );
           return;
         }
 
