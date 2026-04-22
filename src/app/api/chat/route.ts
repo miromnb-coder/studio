@@ -66,6 +66,15 @@ type UnifiedResult = {
   suggestedActions: string[];
 };
 
+type StreamToolStep = {
+  stepId: string;
+  label: string;
+  status?: string;
+  summary?: string;
+  error?: string;
+  tool?: string;
+};
+
 function streamLine(payload: Record<string, unknown>) {
   return encoder.encode(`${JSON.stringify(payload)}\n`);
 }
@@ -240,7 +249,8 @@ function normalizeUnifiedResult(raw: unknown): UnifiedResult | null {
       evaluation: {
         passed:
           typeof evaluation.passed === 'boolean' ? evaluation.passed : undefined,
-        score: typeof evaluation.score === 'number' ? evaluation.score : undefined,
+        score:
+          typeof evaluation.score === 'number' ? evaluation.score : undefined,
         issues: Array.isArray(evaluation.issues) ? evaluation.issues : [],
         suggestedActions: Array.isArray(evaluation.suggestedActions)
           ? evaluation.suggestedActions
@@ -277,7 +287,9 @@ function normalizeUnifiedResult(raw: unknown): UnifiedResult | null {
           (asObject(answer.metadata).responseMode as ResponseMode) ||
           'operator',
         plan:
-          typeof raw.plan.summary === 'string' ? raw.plan.summary : 'Generated plan',
+          typeof raw.plan.summary === 'string'
+            ? raw.plan.summary
+            : 'Generated plan',
         steps: Array.isArray(raw.plan.steps)
           ? raw.plan.steps.map((step) => ({
               action:
@@ -488,6 +500,95 @@ function getResponseMode(result: UnifiedResult | null): ResponseMode {
   return 'operator';
 }
 
+function buildNormalizedToolSteps(
+  steps: AgentStep[],
+  tools: string[],
+): StreamToolStep[] {
+  const normalizedSteps = steps.slice(0, 8).map((step, index) => ({
+    stepId: `tool-${index + 1}`,
+    label:
+      step.action?.trim() ||
+      step.tool?.trim() ||
+      `Tool step ${index + 1}`,
+    status: step.status,
+    summary: step.summary,
+    error: step.error,
+    tool: step.tool,
+  }));
+
+  if (normalizedSteps.length > 0) return normalizedSteps;
+
+  return tools.slice(0, 4).map((tool, index) => ({
+    stepId: `tool-${index + 1}`,
+    label: `Using ${tool}`,
+    status: 'completed',
+    summary: undefined,
+    error: undefined,
+    tool,
+  }));
+}
+
+function buildFinalMetadata(params: {
+  unified: UnifiedResult;
+  structuredData: Record<string, unknown>;
+  confidence: number | null;
+  structured?: StructuredAnswer;
+  tools: string[];
+  memoryUsed: boolean;
+  suggestedActions: string[];
+  responseMode: ResponseMode;
+  operatorResponse?: OperatorResponse;
+}) {
+  const {
+    unified,
+    structuredData,
+    confidence,
+    structured,
+    tools,
+    memoryUsed,
+    suggestedActions,
+    responseMode,
+    operatorResponse,
+  } = params;
+
+  const safeToolResults = Array.isArray(structuredData.toolResults)
+    ? structuredData.toolResults
+    : tools.map((tool) => ({ tool, ok: true }));
+
+  const safeMemory =
+    structuredData.memory && typeof structuredData.memory === 'object'
+      ? structuredData.memory
+      : {
+          items: memoryUsed ? [{ kind: 'summary' }] : [],
+        };
+
+  const mergedStructuredData = {
+    ...structuredData,
+    route: {
+      ...(typeof structuredData.route === 'object' && structuredData.route
+        ? (structuredData.route as Record<string, unknown>)
+        : {}),
+      confidence,
+    },
+    toolResults: safeToolResults,
+    memory: safeMemory,
+    structuredAnswer: structured,
+  };
+
+  return {
+    ...(unified.metadata || {}),
+    responseMode,
+    execution:
+      typeof structuredData.execution === 'object' && structuredData.execution
+        ? (structuredData.execution as Record<string, unknown>)
+        : undefined,
+    operatorResponse,
+    structuredData: mergedStructuredData,
+    suggestedActions,
+    memoryUsed,
+  };
+}
+
 export async function POST(request: NextRequest) {
   let payload: NormalizedPayload;
 
@@ -540,7 +641,9 @@ export async function POST(request: NextRequest) {
 
   if (!upstream.ok) {
     const reason =
-      rawResult && typeof rawResult === 'object' ? (rawResult as Record<string, unknown>) : null;
+      rawResult && typeof rawResult === 'object'
+        ? (rawResult as Record<string, unknown>)
+        : null;
 
     const message =
       reason && typeof reason.message === 'string'
@@ -604,32 +707,18 @@ export async function POST(request: NextRequest) {
     : [];
 
   const tokens = tokenChunks(final);
-
-  const normalizedSteps = steps.slice(0, 8).map((step, index) => ({
-    stepId: `tool-${index + 1}`,
-    label:
-      step.action?.trim() ||
-      step.tool?.trim() ||
-      `Tool step ${index + 1}`,
-    status: step.status,
-    summary: step.summary,
-    error: step.error,
-    tool: step.tool,
-  }));
-
-  const fallbackToolSteps =
-    normalizedSteps.length === 0
-      ? tools.slice(0, 4).map((tool, index) => ({
-          stepId: `tool-${index + 1}`,
-          label: `Using ${tool}`,
-          status: 'completed',
-          summary: undefined,
-          error: undefined,
-          tool,
-        }))
-      : [];
-
-  const toolSteps = normalizedSteps.length > 0 ? normalizedSteps : fallbackToolSteps;
+  const toolSteps = buildNormalizedToolSteps(steps, tools);
+  const finalMetadata = buildFinalMetadata({
+    unified,
+    structuredData,
+    confidence,
+    structured,
+    tools,
+    memoryUsed,
+    suggestedActions,
+    responseMode,
+    operatorResponse,
+  });
 
   const stream = new ReadableStream<Uint8Array>({
     async start(controller) {
@@ -641,157 +730,149 @@ export async function POST(request: NextRequest) {
         responseMode === 'operator' || responseMode === 'tool';
       const shouldEmitCompactWorkflow = responseMode === 'fast';
 
-      if (shouldEmitWorkflow || shouldEmitCompactWorkflow) {
-        send({
-          type: 'router_started',
-          stepId: 'router',
-          label: 'Analyzing request',
-          requestId,
-        });
-
-        await delay(120);
-        send({
-          type: 'router_completed',
-          stepId: 'router',
-          label: 'Analyzing request',
-          requestId,
-        });
-      }
-
-      if (shouldEmitWorkflow) {
-        await delay(90);
-        send({
-          type: 'planning_started',
-          stepId: 'planning',
-          label: 'Building execution plan',
-          requestId,
-        });
-
-        await delay(120);
-        send({
-          type: 'planning_completed',
-          stepId: 'planning',
-          label: 'Building execution plan',
-          requestId,
-        });
-
-        await delay(90);
-        send({
-          type: 'memory_started',
-          stepId: 'memory',
-          label: 'Checking memory',
-          requestId,
-        });
-
-        await delay(120);
-        send({
-          type: 'memory_completed',
-          stepId: 'memory',
-          label: 'Checking memory',
-          status: memoryUsed ? 'completed' : 'skipped',
-          summary: memoryUsed
-            ? 'Relevant memory was incorporated.'
-            : 'No relevant memory found for this request.',
-          requestId,
-        });
-      }
-
-      if (responseMode === 'tool' || (responseMode === 'operator' && toolSteps.length > 0)) {
-        for (const step of toolSteps) {
-          await delay(110);
+      try {
+        if (shouldEmitWorkflow || shouldEmitCompactWorkflow) {
           send({
-            type: 'tool_started',
-            stepId: step.stepId,
-            label: step.label,
-            summary: step.summary,
-            tool: step.tool,
+            type: 'router_started',
+            stepId: 'router',
+            label: 'Analyzing request',
             requestId,
           });
 
-          await delay(140);
+          await delay(120);
           send({
-            type: 'tool_completed',
-            stepId: step.stepId,
-            label: step.label,
-            summary: step.summary,
-            tool: step.tool,
-            status: step.status,
-            error: step.error,
+            type: 'router_completed',
+            stepId: 'router',
+            label: 'Analyzing request',
             requestId,
           });
         }
-      }
 
-      const firstTokenAt = Date.now();
-      let emittedChars = 0;
+        if (shouldEmitWorkflow) {
+          await delay(90);
+          send({
+            type: 'planning_started',
+            stepId: 'planning',
+            label: 'Building execution plan',
+            requestId,
+          });
 
-      await delay(120);
+          await delay(120);
+          send({
+            type: 'planning_completed',
+            stepId: 'planning',
+            label: 'Building execution plan',
+            requestId,
+          });
 
-      for (let index = 0; index < tokens.length; index += 1) {
-        const token = tokens[index];
-        await delay(getChunkDelay(token, index));
-        emittedChars += token.length;
+          await delay(90);
+          send({
+            type: 'memory_started',
+            stepId: 'memory',
+            label: 'Checking memory',
+            requestId,
+          });
+
+          await delay(120);
+          send({
+            type: 'memory_completed',
+            stepId: 'memory',
+            label: 'Checking memory',
+            status: memoryUsed ? 'completed' : 'skipped',
+            summary: memoryUsed
+              ? 'Relevant memory was incorporated.'
+              : 'No relevant memory found for this request.',
+            requestId,
+          });
+        }
+
+        if (
+          responseMode === 'tool' ||
+          (responseMode === 'operator' && toolSteps.length > 0)
+        ) {
+          for (const step of toolSteps) {
+            await delay(110);
+            send({
+              type: 'tool_started',
+              stepId: step.stepId,
+              label: step.label,
+              summary: step.summary,
+              tool: step.tool,
+              requestId,
+            });
+
+            await delay(140);
+            send({
+              type: 'tool_completed',
+              stepId: step.stepId,
+              label: step.label,
+              summary: step.summary,
+              tool: step.tool,
+              status: step.status,
+              error: step.error,
+              requestId,
+            });
+          }
+        }
+
+        const firstTokenAt = Date.now();
+        let emittedChars = 0;
+
+        await delay(120);
+
+        for (let index = 0; index < tokens.length; index += 1) {
+          const token = tokens[index];
+          await delay(getChunkDelay(token, index));
+          emittedChars += token.length;
+
+          send({
+            type: 'answer_delta',
+            delta: token,
+            emittedChars,
+            requestId,
+          });
+        }
 
         send({
-          type: 'answer_delta',
-          delta: token,
-          emittedChars,
+          type: 'answer_completed',
+          content: final,
+          structured,
+          structuredData: finalMetadata.structuredData,
+          toolResults: Array.isArray(finalMetadata.structuredData.toolResults)
+            ? finalMetadata.structuredData.toolResults
+            : tools.map((tool) => ({ tool, ok: true })),
+          route,
+          metadata: finalMetadata,
+          operatorResponse,
+          metrics: {
+            ttfbMs: firstTokenAt - start,
+            completionMs: Date.now() - start,
+            charCount: final.length,
+          },
           requestId,
         });
-      }
-
-      send({
-        type: 'answer_completed',
-        content: final,
-        structured,
-        structuredData,
-        toolResults: Array.isArray(structuredData.toolResults)
-          ? structuredData.toolResults
-          : tools.map((tool) => ({ tool, ok: true })),
-        route,
-        metadata: {
-          ...(unified.metadata || {}),
-          responseMode,
-          execution:
-            typeof structuredData.execution === 'object' &&
-            structuredData.execution
-              ? (structuredData.execution as Record<string, unknown>)
-              : undefined,
+      } catch {
+        send({
+          type: 'answer_completed',
+          content: final || SAFE_FALLBACK,
+          structured,
+          structuredData: finalMetadata.structuredData,
+          toolResults: Array.isArray(finalMetadata.structuredData.toolResults)
+            ? finalMetadata.structuredData.toolResults
+            : tools.map((tool) => ({ tool, ok: true })),
+          route,
+          metadata: finalMetadata,
           operatorResponse,
-          structuredData: {
-            ...structuredData,
-            route: {
-              ...(typeof structuredData.route === 'object' &&
-              structuredData.route
-                ? (structuredData.route as Record<string, unknown>)
-                : {}),
-              confidence,
-            },
-            toolResults:
-              Array.isArray(structuredData.toolResults)
-                ? structuredData.toolResults
-                : tools.map((tool) => ({ tool, ok: true })),
-            memory:
-              structuredData.memory && typeof structuredData.memory === 'object'
-                ? structuredData.memory
-                : {
-                    items: memoryUsed ? [{ kind: 'summary' }] : [],
-                  },
-            structuredAnswer: structured,
+          metrics: {
+            ttfbMs: Date.now() - start,
+            completionMs: Date.now() - start,
+            charCount: final.length,
           },
-          suggestedActions,
-          memoryUsed,
-        },
-        operatorResponse,
-        metrics: {
-          ttfbMs: firstTokenAt - start,
-          completionMs: Date.now() - start,
-          charCount: final.length,
-        },
-        requestId,
-      });
-
-      controller.close();
+          requestId,
+        });
+      } finally {
+        controller.close();
+      }
     },
   });
 
@@ -800,6 +881,7 @@ export async function POST(request: NextRequest) {
       'Content-Type': 'application/x-ndjson; charset=utf-8',
       'Cache-Control': 'no-cache, no-transform',
       Connection: 'keep-alive',
+      'X-Accel-Buffering': 'no',
       'x-kivo-request-id': requestId,
     },
   });
