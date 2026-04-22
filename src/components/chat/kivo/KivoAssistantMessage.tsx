@@ -1,8 +1,9 @@
 'use client';
 
-import { motion, AnimatePresence } from 'framer-motion';
+import { AnimatePresence, motion } from 'framer-motion';
 import type { Message } from '@/app/store/app-store';
 import { ResponseRenderer } from '@/components/chat/ResponseRenderer';
+import { KivoWebSourceCards } from './KivoWebSourceCards';
 
 function KivoBrandHeader() {
   return (
@@ -89,36 +90,67 @@ function ToolCard({
   );
 }
 
+function safeRecord(value: unknown): Record<string, unknown> | null {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
+  return value as Record<string, unknown>;
+}
+
 function getToolCards(message: Message) {
-  const metadata = message.agentMetadata as any;
-  const execution = metadata?.execution;
+  const metadata = safeRecord(message.agentMetadata);
+  const execution = safeRecord(metadata?.execution);
 
   if (!execution) return [];
 
   const cards = [];
 
-  if (execution.usedMemory) {
-    cards.push({
-      title: 'Memory Retrieved',
-      subtitle: 'Used previous context to improve answer',
-    });
-  }
+  const toolCount =
+    typeof execution.toolCount === 'number' ? execution.toolCount : 0;
 
-  if (execution.usedTools) {
+  if (toolCount > 0) {
     cards.push({
       title: 'Tools Used',
-      subtitle: 'External capabilities were used during generation',
+      subtitle: `${toolCount} tool${toolCount === 1 ? '' : 's'} used during generation`,
     });
   }
 
-  if (execution.verified) {
+  if (typeof execution.statusText === 'string' && execution.statusText.trim()) {
     cards.push({
-      title: 'Verified Output',
-      subtitle: 'Response was checked before delivery',
+      title: 'Execution Status',
+      subtitle: execution.statusText,
     });
   }
 
   return cards;
+}
+
+function getWebSources(message: Message): Array<{ url?: string; title?: string }> {
+  const structuredData = safeRecord(message.structuredData);
+  const metadata = safeRecord(message.agentMetadata);
+  const metadataStructuredData = safeRecord(metadata?.structuredData);
+
+  const candidates = [
+    structuredData?.webSources,
+    metadataStructuredData?.webSources,
+  ];
+
+  for (const value of candidates) {
+    if (!Array.isArray(value)) continue;
+
+    const normalized = value
+      .filter((item) => item && typeof item === 'object')
+      .map((item) => {
+        const source = item as Record<string, unknown>;
+        return {
+          url: typeof source.url === 'string' ? source.url : undefined,
+          title: typeof source.title === 'string' ? source.title : undefined,
+        };
+      })
+      .filter((item) => item.url || item.title);
+
+    if (normalized.length) return normalized;
+  }
+
+  return [];
 }
 
 export function KivoAssistantMessage({
@@ -129,10 +161,10 @@ export function KivoAssistantMessage({
   latestUserContent: string;
 }) {
   const isStreaming = Boolean(message.isStreaming);
-  const showStreamingOnly =
-    isStreaming && !message.content.trim();
+  const showStreamingOnly = isStreaming && !message.content.trim();
 
   const toolCards = getToolCards(message);
+  const webSources = getWebSources(message);
 
   return (
     <motion.div
@@ -170,6 +202,8 @@ export function KivoAssistantMessage({
               latestUserContent={latestUserContent}
             />
           </div>
+
+          <KivoWebSourceCards sources={webSources} />
         </motion.div>
       ) : null}
     </motion.div>
