@@ -8,6 +8,8 @@ type KivoPlan = 'free' | 'plus';
 
 type KivoChatHeaderProps = {
   hasMessages?: boolean;
+  isSidebarOpen?: boolean;
+  onSidebarToggle?: () => void;
   onSummarize?: () => void;
   onCreateTask?: () => void;
   onRename?: () => void;
@@ -228,6 +230,8 @@ function ActionRow({
 
 export function KivoChatHeader({
   hasMessages = false,
+  isSidebarOpen = false,
+  onSidebarToggle,
   onSummarize,
   onCreateTask,
   onRename,
@@ -325,19 +329,33 @@ export function KivoChatHeader({
         <div className="flex w-[44px] shrink-0 justify-start">
           <button
             type="button"
-            onClick={handleBack}
-            aria-label="Go back"
+            onClick={onSidebarToggle ?? handleBack}
+            aria-label={onSidebarToggle ? 'Toggle sidebar' : 'Go back'}
             className="inline-flex h-10 w-10 items-center justify-center rounded-full text-[#1C2431] transition-all duration-200 ease-out hover:bg-black/[0.04] active:scale-[0.96]"
           >
-            <svg viewBox="0 0 24 24" className="h-[21px] w-[21px]" fill="none">
-              <path
-                d="M14.5 5L7.5 12L14.5 19"
-                stroke="currentColor"
-                strokeWidth="2.2"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-              />
-            </svg>
+            {onSidebarToggle ? (
+              <svg viewBox="0 0 24 24" className="h-[20px] w-[20px]" fill="none">
+                <path
+                  d="M4.5 7.5H19.5M4.5 12H19.5M4.5 16.5H14.5"
+                  stroke="currentColor"
+                  strokeWidth="2.1"
+                  strokeLinecap="round"
+                />
+                {isSidebarOpen ? (
+                  <circle cx="18.2" cy="16.5" r="1.1" fill="currentColor" />
+                ) : null}
+              </svg>
+            ) : (
+              <svg viewBox="0 0 24 24" className="h-[21px] w-[21px]" fill="none">
+                <path
+                  d="M14.5 5L7.5 12L14.5 19"
+                  stroke="currentColor"
+                  strokeWidth="2.2"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                />
+              </svg>
+            )}
           </button>
         </div>
 
