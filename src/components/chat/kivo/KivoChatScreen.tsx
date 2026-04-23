@@ -1072,20 +1072,22 @@ export function KivoChatScreen() {
 
           <KivoChatScreenNoticeToast notice={notice} />
 
-          <KivoComposerDock
-            value={draftPrompt}
-            onChange={setDraftPrompt}
-            onSend={handleSend}
-            onPlusClick={() => setActionSheetOpen(true)}
-            onQuickActionClick={() => setWorkspaceOpen(true)}
-            onMicClick={toggleMic}
-            canSend={canSend}
-            isListening={isListening}
-            isSending={isBusy}
-            placeholder={placeholder}
-            keyboardOffset={keyboardOffset}
-            containerRef={composerDockRef}
-          />
+          <div className="pl-3">
+            <KivoComposerDock
+              value={draftPrompt}
+              onChange={setDraftPrompt}
+              onSend={handleSend}
+              onPlusClick={() => setActionSheetOpen(true)}
+              onQuickActionClick={() => setWorkspaceOpen(true)}
+              onMicClick={toggleMic}
+              canSend={canSend}
+              isListening={isListening}
+              isSending={isBusy}
+              placeholder={placeholder}
+              keyboardOffset={keyboardOffset}
+              containerRef={composerDockRef}
+            />
+          </div>
 
           <KivoReferralSuccessToast
             open={referralToastOpen}
