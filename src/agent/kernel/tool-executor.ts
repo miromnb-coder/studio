@@ -1,10 +1,10 @@
-import type { KernelRequest } from "./types";
+import type { KernelRequest } from './types';
 import type {
   KernelToolContext,
   KernelToolName,
   KernelToolResult,
-} from "./tool-registry";
-import { runKernelTool } from "./tools";
+} from './tool-registry';
+import { runKernelTool } from './tools';
 
 export async function executeKernelTools(
   tools: KernelToolName[],
