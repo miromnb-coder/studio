@@ -10,8 +10,6 @@ import KivoSidebar, {
 
 const CLOSED_WIDTH = 72;
 const OPEN_WIDTH = 288;
-const TOP_OFFSET = 0;
-const BOTTOM_OFFSET = 0;
 
 type KivoChatSidebarAreaProps = Omit<
   KivoSidebarProps,
@@ -24,27 +22,29 @@ type KivoChatSidebarAreaProps = Omit<
 
 export function KivoChatSidebarArea({
   initialSection = null,
-  panelOpen: panelOpenProp,
+  panelOpen: controlledPanelOpen,
   onPanelOpenChange,
   ...sidebarProps
 }: KivoChatSidebarAreaProps) {
-  const [panelOpenInternal, setPanelOpenInternal] = useState(false);
+  const [internalPanelOpen, setInternalPanelOpen] = useState(false);
   const [activeSection, setActiveSection] = useState<KivoSidebarSection | null>(initialSection);
-  const panelOpen = panelOpenProp ?? panelOpenInternal;
 
-  const setPanelOpen = useCallback(
-    (open: boolean) => {
-      if (panelOpenProp === undefined) {
-        setPanelOpenInternal(open);
+  const panelOpen =
+    typeof controlledPanelOpen === 'boolean' ? controlledPanelOpen : internalPanelOpen;
+
+  const setPanelOpenState = useCallback(
+    (next: boolean) => {
+      if (typeof controlledPanelOpen !== 'boolean') {
+        setInternalPanelOpen(next);
       }
-      onPanelOpenChange?.(open);
+      onPanelOpenChange?.(next);
     },
-    [onPanelOpenChange, panelOpenProp],
+    [controlledPanelOpen, onPanelOpenChange],
   );
 
   const handleCloseSidebarPanel = useCallback(() => {
-    setPanelOpen(false);
-  }, [setPanelOpen]);
+    setPanelOpenState(false);
+  }, [setPanelOpenState]);
 
   const fireSectionAction = useCallback(
     (section: KivoSidebarSection) => {
@@ -84,15 +84,15 @@ export function KivoChatSidebarArea({
   const handleSidebarSectionChange = useCallback(
     (section: KivoSidebarSection) => {
       if (panelOpen && activeSection === section) {
-        setPanelOpen(false);
+        setPanelOpenState(false);
         return;
       }
 
       setActiveSection(section);
-      setPanelOpen(true);
+      setPanelOpenState(true);
       fireSectionAction(section);
     },
-    [activeSection, fireSectionAction, panelOpen],
+    [activeSection, fireSectionAction, panelOpen, setPanelOpenState],
   );
 
   const sharedSidebarProps: KivoSidebarProps = useMemo(
@@ -132,7 +132,7 @@ export function KivoChatSidebarArea({
 
       <motion.aside
         aria-label="Kivo sidebar"
-        className="fixed left-0 top-0 bottom-0 z-[80] overflow-hidden border-r border-black/[0.035] bg-[#F7F8FA]/96 backdrop-blur-xl"
+        className="fixed inset-y-0 left-0 z-[80] overflow-hidden border-r border-black/[0.035] bg-[#F7F8FA]/96 backdrop-blur-xl"
         style={{
           borderTopRightRadius: 22,
           borderBottomRightRadius: 22,
@@ -146,17 +146,14 @@ export function KivoChatSidebarArea({
         }}
       >
         <div className="flex h-full min-w-0">
-          <div
-            className="relative z-[2] h-full shrink-0"
-            style={{ width: CLOSED_WIDTH }}
-          >
+          <div className="relative z-[2] h-full shrink-0" style={{ width: CLOSED_WIDTH }}>
             <KivoSidebar {...sharedSidebarProps} />
           </div>
 
           <AnimatePresence initial={false} mode="wait">
-            {panelOpen && activeSection ? (
+            {panelOpen ? (
               <motion.div
-                key={activeSection}
+                key={activeSection ?? 'default'}
                 className="relative h-full min-w-0 flex-1 border-l border-black/[0.03]"
                 initial={{ opacity: 0, x: -8 }}
                 animate={{ opacity: 1, x: 0 }}
