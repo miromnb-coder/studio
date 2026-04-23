@@ -6,8 +6,10 @@ import { resolveAppOrigin } from '@/lib/auth/redirects';
 import {
   encryptCalendarToken,
   getGoogleAccountProfile,
-  GOOGLE_CALENDAR_READONLY_SCOPE,
+  GOOGLE_CALENDAR_DEFAULT_SCOPES,
+  GOOGLE_CALENDAR_WRITE_SCOPE,
   hasCalendarReadonlyScope,
+  hasCalendarWriteScope,
 } from '@/lib/integrations/google-calendar';
 
 export const runtime = 'nodejs';
@@ -22,7 +24,9 @@ type GoogleTokenBundle = {
 };
 
 function toObject(value: unknown): Record<string, unknown> {
-  return typeof value === 'object' && value !== null ? (value as Record<string, unknown>) : {};
+  return typeof value === 'object' && value !== null
+    ? (value as Record<string, unknown>)
+    : {};
 }
 
 function createAdminClient() {
@@ -30,7 +34,9 @@ function createAdminClient() {
   const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
   if (!supabaseUrl || !serviceRoleKey) {
-    throw new Error('Missing NEXT_PUBLIC_SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY');
+    throw new Error(
+      'Missing NEXT_PUBLIC_SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY',
+    );
   }
 
   return createSupabaseClient(supabaseUrl, serviceRoleKey, {
@@ -67,7 +73,9 @@ async function exchangeCodeForGoogleCalendarToken(
 
   if (!response.ok) {
     const text = await response.text().catch(() => '');
-    throw new Error(`Google Calendar token exchange failed (${response.status}): ${text}`);
+    throw new Error(
+      `Google Calendar token exchange failed (${response.status}): ${text}`,
+    );
   }
 
   const payload = (await response.json()) as {
@@ -79,13 +87,17 @@ async function exchangeCodeForGoogleCalendarToken(
   };
 
   if (!payload.access_token) {
-    throw new Error('Google Calendar token exchange returned no access token');
+    throw new Error(
+      'Google Calendar token exchange returned no access token',
+    );
   }
 
   return {
     accessToken: payload.access_token,
     refreshToken: payload.refresh_token ?? null,
-    expiryDate: payload.expires_in ? Date.now() + payload.expires_in * 1000 : undefined,
+    expiryDate: payload.expires_in
+      ? Date.now() + payload.expires_in * 1000
+      : undefined,
     scope: payload.scope,
     tokenType: payload.token_type,
   };
@@ -108,7 +120,9 @@ async function verifyCalendarAccessToken(accessToken: string): Promise<{
 
   if (!response.ok) {
     const text = await response.text().catch(() => '');
-    throw new Error(`Google Calendar verification failed (${response.status}): ${text}`);
+    throw new Error(
+      `Google Calendar verification failed (${response.status}): ${text}`,
+    );
   }
 
   const payload = (await response.json()) as {
@@ -120,21 +134,24 @@ async function verifyCalendarAccessToken(accessToken: string): Promise<{
   };
 
   const items = Array.isArray(payload.items) ? payload.items : [];
-  const primary =
-    items.find((item) => item?.primary) ??
-    items[0] ??
-    null;
+  const primary = items.find((item) => item?.primary) ?? items[0] ?? null;
 
   return {
     calendarsFound: items.length,
     primaryCalendarId: typeof primary?.id === 'string' ? primary.id : null,
-    primarySummary: typeof primary?.summary === 'string' ? primary.summary : null,
+    primarySummary:
+      typeof primary?.summary === 'string' ? primary.summary : null,
   };
 }
 
 async function writeOrThrow(
   label: string,
-  operation: () => Promise<{ error: unknown; data?: unknown; status?: number; statusText?: string }>,
+  operation: () => Promise<{
+    error: unknown;
+    data?: unknown;
+    status?: number;
+    statusText?: string;
+  }>,
   payload: Record<string, unknown>,
 ) {
   console.log('GOOGLE_CALENDAR_CALLBACK_WRITE_START', { label, payload });
@@ -194,6 +211,7 @@ export async function GET(req: Request) {
       });
       return failRedirect('missing_oauth_flow');
     }
+
     if (!returnedFlow || returnedFlow !== localFlow) {
       console.error('GOOGLE_CALENDAR_CALLBACK_FLOW_MISMATCH', {
         expectedFlow: localFlow,
@@ -208,11 +226,12 @@ export async function GET(req: Request) {
 
     let accessToken: string | null = null;
     let refreshToken: string | null = null;
-    let tokenScope = GOOGLE_CALENDAR_READONLY_SCOPE;
+    let tokenScope = GOOGLE_CALENDAR_DEFAULT_SCOPES;
     let tokenType = 'Bearer';
     let expiryIso: string | null = null;
 
-    const { data: exchangeData, error: exchangeError } = await supabase.auth.exchangeCodeForSession(code);
+    const { data: exchangeData, error: exchangeError } =
+      await supabase.auth.exchangeCodeForSession(code);
 
     if (!exchangeError) {
       const session = exchangeData.session as
@@ -235,12 +254,18 @@ export async function GET(req: Request) {
         tokenType = session.token_type;
       }
     } else {
-      console.error('GOOGLE_CALENDAR_CALLBACK_SESSION_EXCHANGE_ERROR', exchangeError);
+      console.error(
+        'GOOGLE_CALENDAR_CALLBACK_SESSION_EXCHANGE_ERROR',
+        exchangeError,
+      );
     }
 
     if (!accessToken) {
       const redirectUri = `${appOrigin}/api/integrations/google-calendar/callback`;
-      const fallbackTokens = await exchangeCodeForGoogleCalendarToken(code, redirectUri);
+      const fallbackTokens = await exchangeCodeForGoogleCalendarToken(
+        code,
+        redirectUri,
+      );
 
       accessToken = fallbackTokens.accessToken;
       refreshToken = fallbackTokens.refreshToken || null;
@@ -250,23 +275,33 @@ export async function GET(req: Request) {
         ? new Date(fallbackTokens.expiryDate).toISOString()
         : null;
     }
+
     const scopeFromQuery = requestUrl.searchParams.get('scope');
     if (scopeFromQuery) {
       tokenScope = scopeFromQuery;
     }
+
     if (!hasCalendarReadonlyScope(tokenScope)) {
-      tokenScope = `${tokenScope} ${GOOGLE_CALENDAR_READONLY_SCOPE}`.trim();
+      tokenScope = `${tokenScope} ${GOOGLE_CALENDAR_DEFAULT_SCOPES}`.trim();
+    }
+
+    if (!hasCalendarWriteScope(tokenScope)) {
+      tokenScope = `${tokenScope} ${GOOGLE_CALENDAR_WRITE_SCOPE}`.trim();
     }
 
     const calendarProfile = await verifyCalendarAccessToken(accessToken);
     const googleProfile = await getGoogleAccountProfile(accessToken);
 
-    const { data: authUser } = await adminSupabase.auth.admin.getUserById(userId);
+    const { data: authUser } = await adminSupabase.auth.admin.getUserById(
+      userId,
+    );
     const inferredEmail = googleProfile.email || authUser.user?.email || null;
 
     const { data: financeProfile } = await adminSupabase
       .from('finance_profiles')
-      .select('last_analysis,active_subscriptions,total_monthly_cost,estimated_savings,currency,memory_summary')
+      .select(
+        'last_analysis,active_subscriptions,total_monthly_cost,estimated_savings,currency,memory_summary',
+      )
       .eq('user_id', userId)
       .maybeSingle();
 
@@ -295,7 +330,9 @@ export async function GET(req: Request) {
           scope: tokenScope,
           token_type: tokenType,
           access_token_encrypted: encryptCalendarToken(accessToken),
-          refresh_token_encrypted: refreshToken ? encryptCalendarToken(refreshToken) : null,
+          refresh_token_encrypted: refreshToken
+            ? encryptCalendarToken(refreshToken)
+            : null,
           expires_at: expiryIso,
           connected_at: connectedAt,
           last_synced_at: connectedAt,
@@ -324,7 +361,10 @@ export async function GET(req: Request) {
         step: 'finance_profiles_google_calendar_connected',
         error: errorAtFinanceWrite,
       });
-      return failRedirect('write_failed', 'finance_profiles_google_calendar_connected');
+      return failRedirect(
+        'write_failed',
+        'finance_profiles_google_calendar_connected',
+      );
     }
 
     const profilePayload = {
