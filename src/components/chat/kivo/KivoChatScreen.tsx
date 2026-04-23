@@ -478,18 +478,6 @@ export function KivoChatScreen() {
     lastMessageCountRef.current = messages.length;
   }, [isAgentResponding, isSending, lastMessageKey, messages, scrollToLatest, updateScrollState]);
 
-  useEffect(() => {
-    if (hasMessages) {
-      setSidebarPanelOpen(false);
-    } else if (!previousHasMessagesRef.current && !hasMessages) {
-      setSidebarPanelOpen(true);
-    } else if (previousHasMessagesRef.current && !hasMessages) {
-      setSidebarPanelOpen(true);
-    }
-
-    previousHasMessagesRef.current = hasMessages;
-  }, [hasMessages]);
-
   const refreshIntegrationStatuses = useCallback(async () => {
     try {
       const [gmailResponse, calendarResponse] = await Promise.all([
@@ -588,9 +576,6 @@ export function KivoChatScreen() {
     setDraftPrompt('');
     closeWorkspace();
     closeActionSheet();
-
-    setActiveSidebarSection('chats');
-    setSidebarPanelOpen(true);
 
     router.push('/chat');
     focusComposer();
