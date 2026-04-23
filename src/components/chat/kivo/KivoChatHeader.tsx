@@ -49,32 +49,6 @@ const MODE_OPTIONS: ModeOption[] = [
   },
 ];
 
-function HeaderTextButton({
-  onClick,
-  children,
-  label,
-  active = false,
-}: {
-  onClick?: () => void;
-  children: React.ReactNode;
-  label: string;
-  active?: boolean;
-}) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      aria-label={label}
-      className={[
-        'inline-flex items-center justify-center rounded-full transition-all duration-200 ease-out active:scale-[0.97]',
-        active ? 'opacity-100' : 'opacity-100 hover:opacity-70',
-      ].join(' ')}
-    >
-      {children}
-    </button>
-  );
-}
-
 function SummaryButton({ onClick }: { onClick?: () => void }) {
   return (
     <button
@@ -170,7 +144,7 @@ function FloatingPanel({
   return (
     <div
       className={[
-        'overflow-hidden rounded-[28px] border border-black/[0.07] bg-white/96 shadow-[0_28px_90px_rgba(15,23,42,0.18)] backdrop-blur-[18px]',
+        'overflow-hidden rounded-[26px] border border-black/[0.07] bg-white/97 shadow-[0_24px_72px_rgba(15,23,42,0.16)] backdrop-blur-[18px]',
         className,
       ].join(' ')}
     >
@@ -180,7 +154,7 @@ function FloatingPanel({
 }
 
 function Divider() {
-  return <div className="h-px bg-black/[0.075]" />;
+  return <div className="h-px bg-black/[0.07]" />;
 }
 
 function ModeOptionRow({
@@ -196,11 +170,11 @@ function ModeOptionRow({
     <button
       type="button"
       onClick={onClick}
-      className="flex w-full items-start gap-3 px-6 py-5 text-left transition-colors duration-150 hover:bg-black/[0.022]"
+      className="flex w-full items-start gap-3 px-5 py-4 text-left transition-colors duration-150 hover:bg-black/[0.022]"
     >
-      <div className="flex w-6 shrink-0 items-start justify-center pt-1.5">
+      <div className="flex w-5 shrink-0 items-start justify-center pt-1.5">
         {selected ? (
-          <svg viewBox="0 0 20 20" className="h-[18px] w-[18px]" fill="none">
+          <svg viewBox="0 0 20 20" className="h-[17px] w-[17px]" fill="none">
             <path
               d="M4 10.5L8 14.5L16 5.5"
               stroke="currentColor"
@@ -210,15 +184,15 @@ function ModeOptionRow({
             />
           </svg>
         ) : (
-          <span className="block h-[18px] w-[18px]" />
+          <span className="block h-[17px] w-[17px]" />
         )}
       </div>
 
       <div className="min-w-0 flex-1">
-        <div className="text-[17px] font-semibold tracking-[-0.035em] text-[#131A25]">
+        <div className="text-[16px] font-semibold tracking-[-0.03em] text-[#131A25]">
           {option.label}
         </div>
-        <div className="mt-1 text-[15px] leading-[1.34] tracking-[-0.02em] text-[#6B7280]">
+        <div className="mt-1 text-[14px] leading-[1.34] tracking-[-0.018em] text-[#6B7280]">
           {option.description}
         </div>
       </div>
@@ -242,11 +216,11 @@ function ActionRow({
       type="button"
       onClick={onClick}
       className={[
-        'flex w-full items-center justify-between px-7 py-5 text-left transition-colors duration-150',
+        'flex w-full items-center justify-between px-6 py-4 text-left transition-colors duration-150',
         danger ? 'text-[#E14B4B] hover:bg-[#FEF2F2]' : 'text-[#131A25] hover:bg-black/[0.022]',
       ].join(' ')}
     >
-      <span className="text-[16px] font-medium tracking-[-0.025em]">{label}</span>
+      <span className="text-[16px] font-medium tracking-[-0.022em]">{label}</span>
       <span className={danger ? 'text-[#E14B4B]' : 'text-[#374151]'}>{icon}</span>
     </button>
   );
@@ -308,6 +282,12 @@ export function KivoChatHeader({
       window.removeEventListener('keydown', handleEscape);
     };
   }, [modeOpen, moreOpen]);
+
+  useEffect(() => {
+    if (!hasMessages) {
+      setMoreOpen(false);
+    }
+  }, [hasMessages]);
 
   const selectedMode = useMemo(
     () => MODE_OPTIONS.find((item) => item.id === currentMode) ?? MODE_OPTIONS[0],
@@ -385,7 +365,7 @@ export function KivoChatHeader({
             </button>
 
             {modeOpen ? (
-              <div className="absolute left-1/2 top-[44px] z-[70] w-[min(88vw,470px)] -translate-x-1/2 px-2">
+              <div className="absolute left-1/2 top-[34px] z-[70] w-[340px] max-w-[calc(100vw-40px)] -translate-x-1/2 pt-2">
                 <FloatingPanel>
                   {MODE_OPTIONS.map((option, index) => (
                     <div key={option.id}>
@@ -439,7 +419,7 @@ export function KivoChatHeader({
                 </IconAction>
 
                 {moreOpen ? (
-                  <div className="absolute right-[-8px] top-[42px] z-[70] w-[min(84vw,320px)] px-2">
+                  <div className="absolute right-[-10px] top-[34px] z-[70] w-[292px] max-w-[calc(100vw-32px)] pt-2">
                     <FloatingPanel>
                       <ActionRow
                         label="Favorite"
@@ -448,7 +428,7 @@ export function KivoChatHeader({
                           onFavorite?.();
                         }}
                         icon={
-                          <svg viewBox="0 0 24 24" className="h-[22px] w-[22px]" fill="none">
+                          <svg viewBox="0 0 24 24" className="h-[21px] w-[21px]" fill="none">
                             <path
                               d="M12 4.8L14.3 9.3L19.2 10L15.6 13.5L16.5 18.4L12 16L7.5 18.4L8.4 13.5L4.8 10L9.7 9.3L12 4.8Z"
                               stroke="currentColor"
@@ -466,7 +446,7 @@ export function KivoChatHeader({
                           onRename?.();
                         }}
                         icon={
-                          <svg viewBox="0 0 24 24" className="h-[22px] w-[22px]" fill="none">
+                          <svg viewBox="0 0 24 24" className="h-[21px] w-[21px]" fill="none">
                             <path
                               d="M4 20H8L18 10C18.5 9.5 18.5 8.7 18 8.2L15.8 6C15.3 5.5 14.5 5.5 14 6L4 16V20Z"
                               stroke="currentColor"
@@ -484,7 +464,7 @@ export function KivoChatHeader({
                           onViewFiles?.();
                         }}
                         icon={
-                          <svg viewBox="0 0 24 24" className="h-[22px] w-[22px]" fill="none">
+                          <svg viewBox="0 0 24 24" className="h-[21px] w-[21px]" fill="none">
                             <path
                               d="M8 4H14L19 9V20H8C6.9 20 6 19.1 6 18V6C6 4.9 6.9 4 8 4Z"
                               stroke="currentColor"
@@ -520,7 +500,7 @@ export function KivoChatHeader({
                           onTaskDetails?.();
                         }}
                         icon={
-                          <svg viewBox="0 0 24 24" className="h-[22px] w-[22px]" fill="none">
+                          <svg viewBox="0 0 24 24" className="h-[21px] w-[21px]" fill="none">
                             <circle cx="12" cy="12" r="8.5" stroke="currentColor" strokeWidth="1.8" />
                             <path
                               d="M12 10.2V15.2"
@@ -541,7 +521,7 @@ export function KivoChatHeader({
                           onDelete?.();
                         }}
                         icon={
-                          <svg viewBox="0 0 24 24" className="h-[22px] w-[22px]" fill="none">
+                          <svg viewBox="0 0 24 24" className="h-[21px] w-[21px]" fill="none">
                             <path
                               d="M5 7H19M9 7V5.8C9 5.35 9.35 5 9.8 5H14.2C14.65 5 15 5.35 15 5.8V7M9 11V17M15 11V17M7.8 7H16.2L15.6 19.2C15.57 19.66 15.19 20 14.73 20H9.27C8.81 20 8.43 19.66 8.4 19.2L7.8 7Z"
                               stroke="currentColor"
