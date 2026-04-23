@@ -60,6 +60,7 @@ type ProductivityToolId = 'gmail' | 'calendar' | 'money-saver' | 'tasks';
 const NEAR_BOTTOM_THRESHOLD = 140;
 const SCROLL_MEMORY_KEY = 'kivo-chat-scroll-memory-v1';
 const MIN_SCROLL_SAFETY_SPACE = 28;
+const RAIL_WIDTH = 84;
 
 export function KivoChatScreen() {
   const router = useRouter();
@@ -94,6 +95,10 @@ export function KivoChatScreen() {
   const [gmailConnected, setGmailConnected] = useState(false);
   const [calendarConnected, setCalendarConnected] = useState(false);
 
+  const [sidebarPanelOpen, setSidebarPanelOpen] = useState(false);
+  const [activeSidebarSection, setActiveSidebarSection] =
+    useState<KivoSidebarSection | null>('chats');
+
   const recognitionRef = useRef<SpeechRecognitionLike | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const noticeTimeoutRef = useRef<number | null>(null);
@@ -114,9 +119,6 @@ export function KivoChatScreen() {
   const canSend = draftPrompt.trim().length > 0 || hasAttachments;
   const isBusy = isSending || isAgentResponding;
 
-  const [sidebarPanelOpen, setSidebarPanelOpen] = useState(!hasMessages);
-  const [activeSidebarSection, setActiveSidebarSection] =
-    useState<KivoSidebarSection>('chats');
   const previousHasMessagesRef = useRef(hasMessages);
 
   const scrollBottomPadding = Math.max(
@@ -195,18 +197,15 @@ export function KivoChatScreen() {
     scrollMemoryRef.current[activeConversationId] = Math.max(distanceFromBottom, 0);
   }, [activeConversationId, hasMessages]);
 
-  const scrollToLatest = useCallback(
-    (behavior: ScrollBehavior = 'smooth') => {
-      const scroller = mainScrollRef.current;
-      if (!scroller) return;
+  const scrollToLatest = useCallback((behavior: ScrollBehavior = 'smooth') => {
+    const scroller = mainScrollRef.current;
+    if (!scroller) return;
 
-      scroller.scrollTo({
-        top: scroller.scrollHeight,
-        behavior,
-      });
-    },
-    [],
-  );
+    scroller.scrollTo({
+      top: scroller.scrollHeight,
+      behavior,
+    });
+  }, []);
 
   const placeholder = useMemo(() => {
     if (hasAttachments && !draftPrompt.trim()) {
@@ -485,18 +484,16 @@ export function KivoChatScreen() {
   }, [isAgentResponding, isSending, lastMessageKey, messages, scrollToLatest, updateScrollState]);
 
   useEffect(() => {
-    const previousHasMessages = previousHasMessagesRef.current;
-
-    if (!previousHasMessages && hasMessages) {
+    if (hasMessages) {
       setSidebarPanelOpen(false);
-    }
-
-    if (previousHasMessages && !hasMessages) {
+    } else if (!previousHasMessagesRef.current && !hasMessages) {
+      setSidebarPanelOpen(true);
+    } else if (previousHasMessagesRef.current && !hasMessages) {
       setSidebarPanelOpen(true);
     }
 
     previousHasMessagesRef.current = hasMessages;
-  }, [hasMessages, activeConversationId]);
+  }, [hasMessages]);
 
   const refreshIntegrationStatuses = useCallback(async () => {
     try {
@@ -1013,22 +1010,18 @@ export function KivoChatScreen() {
     [openOperatorRoute],
   );
 
-  const handleSidebarSectionChange = useCallback(
-    (section: KivoSidebarSection) => {
-      setActiveSidebarSection(section);
+  const handleSidebarSectionChange = useCallback((section: KivoSidebarSection) => {
+    setActiveSidebarSection((current) => {
+      if (current === section) return current;
+      return section;
+    });
 
-      if (hasMessages) {
-        setSidebarPanelOpen(true);
-      }
-    },
-    [hasMessages],
-  );
+    setSidebarPanelOpen(true);
+  }, []);
 
   const handleCloseSidebarPanel = useCallback(() => {
-    if (hasMessages) {
-      setSidebarPanelOpen(false);
-    }
-  }, [hasMessages]);
+    setSidebarPanelOpen(false);
+  }, []);
 
   const handleSidebarSearch = useCallback(() => {
     setDraftPrompt('Help me find this in my chats, tools, or memory: ');
@@ -1040,12 +1033,9 @@ export function KivoChatScreen() {
     (conversationId: string) => {
       openConversation(conversationId);
       router.push('/chat');
-
-      if (hasMessages) {
-        setSidebarPanelOpen(false);
-      }
+      setSidebarPanelOpen(false);
     },
-    [hasMessages, openConversation, router],
+    [openConversation, router],
   );
 
   return (
@@ -1081,13 +1071,11 @@ export function KivoChatScreen() {
         onUpgrade={() => router.push('/upgrade')}
       />
 
-      <div className="relative mx-auto flex h-full w-full max-w-[560px] flex-col transition-[padding] duration-300 ease-out">
-        <div
-          className="flex h-full w-full flex-col transition-transform duration-300 ease-out"
-          style={{
-            transform: hasMessages ? 'translateX(56px)' : 'translateX(0px)',
-          }}
-        >
+      <div
+        className="relative h-full transition-[padding-left] duration-300 ease-out"
+        style={{ paddingLeft: `${RAIL_WIDTH}px` }}
+      >
+        <div className="mx-auto flex h-full w-full max-w-[560px] flex-col">
           <KivoChatHeader
             title="Kivo"
             hasMessages={hasMessages}
