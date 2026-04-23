@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { useRouter } from 'next/navigation';
 
 type KivoMode = 'lite' | 'smart' | 'operator';
@@ -56,7 +56,7 @@ function SummaryButton({ onClick }: { onClick?: () => void }) {
     <button
       type="button"
       onClick={onClick}
-      className="hidden items-center gap-2 text-[15px] font-medium tracking-[-0.025em] text-[#1C2431] transition-opacity duration-200 hover:opacity-70 active:scale-[0.98] sm:inline-flex"
+      className="hidden items-center gap-2 text-[14px] font-medium tracking-[-0.025em] text-[#1C2431] transition-opacity duration-200 hover:opacity-70 active:scale-[0.98] sm:inline-flex"
       aria-label="Summarize chat"
     >
       <svg viewBox="0 0 24 24" className="h-[16px] w-[16px]" fill="none">
@@ -81,7 +81,7 @@ function IconAction({
   onClick?: () => void;
   label: string;
   active?: boolean;
-  children: React.ReactNode;
+  children: ReactNode;
 }) {
   return (
     <button
@@ -111,7 +111,7 @@ function PlainPlanIndicator({
     <button
       type="button"
       onClick={onClick}
-      className="inline-flex items-center gap-1.5 text-[16px] font-medium tracking-[-0.025em] text-[#1C2431] transition-opacity duration-200 hover:opacity-70 active:scale-[0.98]"
+      className="inline-flex items-center gap-1.5 whitespace-nowrap text-[15px] font-medium tracking-[-0.025em] text-[#1C2431] transition-opacity duration-200 hover:opacity-70 active:scale-[0.98]"
       aria-label={isPlus ? 'Current plan Plus' : 'Current plan Free'}
     >
       <span className="inline-flex h-4 w-4 items-center justify-center text-[#4B5563]">
@@ -140,7 +140,7 @@ function FloatingPanel({
   children,
   className = '',
 }: {
-  children: React.ReactNode;
+  children: ReactNode;
   className?: string;
 }) {
   return (
@@ -209,7 +209,7 @@ function ActionRow({
   danger = false,
 }: {
   label: string;
-  icon: React.ReactNode;
+  icon: ReactNode;
   onClick?: () => void;
   danger?: boolean;
 }) {
@@ -295,7 +295,7 @@ export function KivoChatHeader({
 
   const selectedMode = useMemo(
     () => MODE_OPTIONS.find((item) => item.id === currentMode) ?? MODE_OPTIONS[0],
-    [currentMode]
+    [currentMode],
   );
 
   const handleBack = () => {
@@ -325,8 +325,8 @@ export function KivoChatHeader({
       className="relative z-30 border-b border-black/[0.035] bg-white/82 backdrop-blur-2xl"
       style={{ paddingTop: 'env(safe-area-inset-top, 0px)' }}
     >
-      <div className="mx-auto flex h-[78px] w-full max-w-[560px] items-center px-5">
-        <div className="flex w-[44px] shrink-0 justify-start">
+      <div className="mx-auto flex h-[74px] w-full max-w-[560px] items-center gap-2 px-4 sm:h-[78px] sm:px-5">
+        <div className="flex w-[40px] shrink-0 justify-start sm:w-[44px]">
           <button
             type="button"
             onClick={onSidebarToggle ?? handleBack}
@@ -341,9 +341,7 @@ export function KivoChatHeader({
                   strokeWidth="2.1"
                   strokeLinecap="round"
                 />
-                {isSidebarOpen ? (
-                  <circle cx="18.2" cy="16.5" r="1.1" fill="currentColor" />
-                ) : null}
+                {isSidebarOpen ? <circle cx="18.2" cy="16.5" r="1.1" fill="currentColor" /> : null}
               </svg>
             ) : (
               <svg viewBox="0 0 24 24" className="h-[21px] w-[21px]" fill="none">
@@ -360,7 +358,7 @@ export function KivoChatHeader({
         </div>
 
         <div className="flex min-w-0 flex-1 justify-center">
-          <div ref={modeRef} className="relative">
+          <div ref={modeRef} className="relative min-w-0 max-w-full">
             <button
               type="button"
               onClick={() => {
@@ -368,10 +366,10 @@ export function KivoChatHeader({
                 setMoreOpen(false);
               }}
               aria-label="Open agent mode selector"
-              className="inline-flex items-center gap-1.5 text-[18px] font-semibold tracking-[-0.04em] text-[#131A25] transition-opacity duration-200 hover:opacity-70 active:scale-[0.985]"
+              className="inline-flex max-w-full items-center gap-1.5 whitespace-nowrap text-[17px] font-semibold tracking-[-0.04em] text-[#131A25] transition-opacity duration-200 hover:opacity-70 active:scale-[0.985] sm:text-[18px]"
             >
-              <span>{selectedMode.label.replace(' – Plus only', '')}</span>
-              <svg viewBox="0 0 20 20" className="h-[16px] w-[16px]" fill="none">
+              <span className="truncate">{selectedMode.label.replace(' – Plus only', '')}</span>
+              <svg viewBox="0 0 20 20" className="h-[16px] w-[16px] shrink-0" fill="none">
                 <path
                   d="M5 7.5L10 12.5L15 7.5"
                   stroke="currentColor"
@@ -383,7 +381,7 @@ export function KivoChatHeader({
             </button>
 
             {modeOpen ? (
-              <div className="absolute left-1/2 top-[34px] z-[70] w-[340px] max-w-[calc(100vw-40px)] -translate-x-1/2 pt-2">
+              <div className="absolute left-1/2 top-[34px] z-[70] w-[340px] max-w-[calc(100vw-28px)] -translate-x-1/2 pt-2 sm:max-w-[calc(100vw-40px)]">
                 <FloatingPanel>
                   {MODE_OPTIONS.map((option, index) => (
                     <div key={option.id}>
@@ -403,7 +401,10 @@ export function KivoChatHeader({
 
         <div
           ref={moreRef}
-          className="flex min-w-[120px] shrink-0 items-center justify-end gap-3"
+          className={[
+            'flex shrink-0 items-center justify-end gap-2 sm:gap-3',
+            hasMessages ? 'min-w-[90px] sm:min-w-[120px]' : 'min-w-[72px] sm:min-w-[84px]',
+          ].join(' ')}
         >
           {hasMessages ? (
             <>
@@ -437,7 +438,7 @@ export function KivoChatHeader({
                 </IconAction>
 
                 {moreOpen ? (
-                  <div className="absolute right-[-10px] top-[34px] z-[70] w-[292px] max-w-[calc(100vw-32px)] pt-2">
+                  <div className="absolute right-[-8px] top-[34px] z-[70] w-[292px] max-w-[calc(100vw-24px)] pt-2 sm:right-[-10px] sm:max-w-[calc(100vw-32px)]">
                     <FloatingPanel>
                       <ActionRow
                         label="Favorite"
@@ -469,6 +470,43 @@ export function KivoChatHeader({
                               d="M4 20H8L18 10C18.5 9.5 18.5 8.7 18 8.2L15.8 6C15.3 5.5 14.5 5.5 14 6L4 16V20Z"
                               stroke="currentColor"
                               strokeWidth="1.8"
+                              strokeLinejoin="round"
+                            />
+                          </svg>
+                        }
+                      />
+                      <Divider />
+                      <ActionRow
+                        label="Pin chat"
+                        onClick={() => {
+                          setMoreOpen(false);
+                          onPinChat?.();
+                        }}
+                        icon={
+                          <svg viewBox="0 0 24 24" className="h-[21px] w-[21px]" fill="none">
+                            <path
+                              d="M8 4.5H16L14.5 9.2L17.5 12.2L13 13.5V19.5L11 17.6L9 19.5V13.5L4.5 12.2L7.5 9.2L8 4.5Z"
+                              stroke="currentColor"
+                              strokeWidth="1.8"
+                              strokeLinejoin="round"
+                            />
+                          </svg>
+                        }
+                      />
+                      <Divider />
+                      <ActionRow
+                        label="Export"
+                        onClick={() => {
+                          setMoreOpen(false);
+                          onExport?.();
+                        }}
+                        icon={
+                          <svg viewBox="0 0 24 24" className="h-[21px] w-[21px]" fill="none">
+                            <path
+                              d="M12 4V14M12 4L8.5 7.5M12 4L15.5 7.5M6 14.5V17C6 18.1 6.9 19 8 19H16C17.1 19 18 18.1 18 17V14.5"
+                              stroke="currentColor"
+                              strokeWidth="1.8"
+                              strokeLinecap="round"
                               strokeLinejoin="round"
                             />
                           </svg>
