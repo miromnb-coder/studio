@@ -16,11 +16,12 @@ import {
 } from './KivoChatScreenNoticeToast';
 import { KivoChatScreenScrollToLatestButton } from './KivoChatScreenScrollToLatestButton';
 import { KivoComposerDock } from './KivoComposerDock';
+import {
+  KivoChatSidebarArea,
+  KIVO_CHAT_SIDEBAR_RAIL_WIDTH,
+} from './KivoChatSidebarArea';
 import { KivoReferralSuccessToast } from './KivoReferralSuccessToast';
-import KivoSidebar, {
-  type KivoSidebarRecentChat,
-  type KivoSidebarSection,
-} from './KivoSidebar';
+import { type KivoSidebarRecentChat } from './KivoSidebar';
 
 type SpeechRecognitionEventLike = Event & {
   results: ArrayLike<ArrayLike<{ transcript: string }>>;
@@ -60,8 +61,6 @@ type ProductivityToolId = 'gmail' | 'calendar' | 'money-saver' | 'tasks';
 const NEAR_BOTTOM_THRESHOLD = 140;
 const SCROLL_MEMORY_KEY = 'kivo-chat-scroll-memory-v1';
 const MIN_SCROLL_SAFETY_SPACE = 28;
-const RAIL_WIDTH = 84;
-
 export function KivoChatScreen() {
   const router = useRouter();
   const pathname = usePathname();
@@ -94,10 +93,6 @@ export function KivoChatScreen() {
 
   const [gmailConnected, setGmailConnected] = useState(false);
   const [calendarConnected, setCalendarConnected] = useState(false);
-
-  const [sidebarPanelOpen, setSidebarPanelOpen] = useState(false);
-  const [activeSidebarSection, setActiveSidebarSection] =
-    useState<KivoSidebarSection | null>('chats');
 
   const recognitionRef = useRef<SpeechRecognitionLike | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
@@ -1010,19 +1005,6 @@ export function KivoChatScreen() {
     [openOperatorRoute],
   );
 
-  const handleSidebarSectionChange = useCallback((section: KivoSidebarSection) => {
-    setActiveSidebarSection((current) => {
-      if (current === section) return current;
-      return section;
-    });
-
-    setSidebarPanelOpen(true);
-  }, []);
-
-  const handleCloseSidebarPanel = useCallback(() => {
-    setSidebarPanelOpen(false);
-  }, []);
-
   const handleSidebarSearch = useCallback(() => {
     setDraftPrompt('Help me find this in my chats, tools, or memory: ');
     focusComposer();
@@ -1033,7 +1015,6 @@ export function KivoChatScreen() {
     (conversationId: string) => {
       openConversation(conversationId);
       router.push('/chat');
-      setSidebarPanelOpen(false);
     },
     [openConversation, router],
   );
@@ -1042,21 +1023,14 @@ export function KivoChatScreen() {
     <div className="relative h-[100dvh] overflow-hidden bg-transparent text-[#2f3640]">
       <KivoChatScreenBackground />
 
-      <KivoSidebar
+      <KivoChatSidebarArea
         hasMessages={hasMessages}
-        panelOpen={sidebarPanelOpen}
-        activeSection={activeSidebarSection}
         userName={user?.name || 'Miro'}
         plan="free"
         recentChats={sidebarRecentChats}
-        onClosePanel={handleCloseSidebarPanel}
-        onSectionChange={handleSidebarSectionChange}
         onNewChat={createNewChat}
         onSearch={handleSidebarSearch}
         onOpenChat={handleOpenChatFromSidebar}
-        onOpenAgents={() => setActiveSidebarSection('agents')}
-        onOpenTools={() => setActiveSidebarSection('tools')}
-        onOpenAlerts={() => setActiveSidebarSection('alerts')}
         onOpenSettings={() => router.push('/settings')}
         onQuickTask={() => {
           setDraftPrompt('Help me complete this task quickly: ');
@@ -1073,7 +1047,7 @@ export function KivoChatScreen() {
 
       <div
         className="relative h-full transition-[padding-left] duration-300 ease-out"
-        style={{ paddingLeft: `${RAIL_WIDTH}px` }}
+        style={{ paddingLeft: `${KIVO_CHAT_SIDEBAR_RAIL_WIDTH}px` }}
       >
         <div className="mx-auto flex h-full w-full max-w-[560px] flex-col">
           <KivoChatHeader
