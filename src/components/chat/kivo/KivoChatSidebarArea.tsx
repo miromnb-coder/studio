@@ -8,9 +8,9 @@ import KivoSidebar, {
   type KivoSidebarSection,
 } from './KivoSidebar';
 
-const CLOSED_WIDTH = 84;
-const OPEN_WIDTH = 332;
-const TOP_OFFSET = 88;
+const CLOSED_WIDTH = 72;
+const OPEN_WIDTH = 288;
+const TOP_OFFSET = 0;
 const BOTTOM_OFFSET = 0;
 
 type KivoChatSidebarAreaProps = Omit<
@@ -117,13 +117,11 @@ export function KivoChatSidebarArea({
 
       <motion.aside
         aria-label="Kivo sidebar"
-        className="fixed left-0 z-[80] overflow-hidden border-r border-black/[0.04] bg-[#F7F8FA]/96 backdrop-blur-xl"
+        className="fixed left-0 top-0 bottom-0 z-[80] overflow-hidden border-r border-black/[0.035] bg-[#F7F8FA]/96 backdrop-blur-xl"
         style={{
-          top: TOP_OFFSET,
-          bottom: BOTTOM_OFFSET,
-          borderTopRightRadius: 28,
-          borderBottomRightRadius: 28,
-          boxShadow: '18px 0 54px rgba(15,23,42,0.08)',
+          borderTopRightRadius: 22,
+          borderBottomRightRadius: 22,
+          boxShadow: '10px 0 28px rgba(15,23,42,0.05)',
         }}
         initial={false}
         animate={{ width: panelOpen ? OPEN_WIDTH : CLOSED_WIDTH }}
@@ -144,10 +142,10 @@ export function KivoChatSidebarArea({
             {panelOpen && activeSection ? (
               <motion.div
                 key={activeSection}
-                className="relative h-full min-w-0 flex-1 border-l border-black/[0.035]"
-                initial={{ opacity: 0, x: -10 }}
+                className="relative h-full min-w-0 flex-1 border-l border-black/[0.03]"
+                initial={{ opacity: 0, x: -8 }}
                 animate={{ opacity: 1, x: 0 }}
-                exit={{ opacity: 0, x: -10 }}
+                exit={{ opacity: 0, x: -8 }}
                 transition={{ duration: 0.18, ease: 'easeOut' }}
               >
                 <div className="h-full overflow-hidden bg-transparent">
