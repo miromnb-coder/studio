@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { useAppStore } from '@/app/store/app-store';
 import type { MessageAttachment } from '@/app/store/app-store';
@@ -1072,7 +1072,14 @@ export function KivoChatScreen() {
 
           <KivoChatScreenNoticeToast notice={notice} />
 
-          <div>
+          <div
+            className="[&>div]:!left-[var(--kivo-composer-sidebar-offset)] [&>div]:!right-0 [&>div]:!mx-0 [&>div]:!w-[calc(100%-var(--kivo-composer-sidebar-offset))] [&>div]:!max-w-none [&>div]:!translate-x-0 [&>div]:transition-[left,width] [&>div]:duration-300 [&>div]:ease-out"
+            style={
+              {
+                ['--kivo-composer-sidebar-offset' as string]: `${KIVO_CHAT_SIDEBAR_RAIL_WIDTH}px`,
+              } as CSSProperties
+            }
+          >
             <KivoComposerDock
               value={draftPrompt}
               onChange={setDraftPrompt}
@@ -1086,7 +1093,7 @@ export function KivoChatScreen() {
               placeholder={placeholder}
               keyboardOffset={keyboardOffset}
               containerRef={composerDockRef}
-              desktopShiftX={Math.round(KIVO_CHAT_SIDEBAR_RAIL_WIDTH / 2)}
+              desktopShiftX={0}
             />
           </div>
 
