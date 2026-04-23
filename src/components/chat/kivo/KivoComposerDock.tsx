@@ -16,6 +16,7 @@ type KivoComposerDockProps = {
   placeholder?: string;
   keyboardOffset?: number;
   containerRef?: Ref<HTMLDivElement>;
+  desktopShiftX?: number;
 };
 
 const MIN_TEXTAREA_HEIGHT = 30;
@@ -34,6 +35,7 @@ export function KivoComposerDock({
   placeholder = 'Assign a task or ask anything',
   keyboardOffset = 0,
   containerRef,
+  desktopShiftX = 0,
 }: KivoComposerDockProps) {
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
 
@@ -51,8 +53,9 @@ export function KivoComposerDock({
   return (
     <div
       ref={containerRef}
-      className="pointer-events-none fixed inset-x-0 z-40 mx-auto w-full max-w-[560px] px-4 pb-4"
+      className="pointer-events-none fixed inset-x-0 z-40 mx-auto w-full max-w-[560px] px-4 pb-4 md:translate-x-[var(--kivo-composer-shift-x)]"
       style={{
+        ['--kivo-composer-shift-x' as string]: `${desktopShiftX}px`,
         bottom: `calc(env(safe-area-inset-bottom, 0px) + ${Math.max(0, keyboardOffset)}px)`,
       }}
     >
@@ -71,7 +74,7 @@ export function KivoComposerDock({
             }}
             rows={1}
             placeholder={placeholder}
-            className="w-full resize-none border-0 bg-transparent p-0 text-[16px] font-normal leading-6 tracking-[-0.02em] text-[#3a404a] outline-none placeholder:text-[#97a0ad]"
+            className="w-full resize-none border-0 bg-transparent p-0 text-[15px] font-normal leading-[1.45] tracking-[-0.018em] text-[#3a404a] outline-none placeholder:text-[14px] placeholder:text-[#97a0ad]"
             style={{
               minHeight: `${MIN_TEXTAREA_HEIGHT}px`,
               maxHeight: `${MAX_TEXTAREA_HEIGHT}px`,

@@ -62,13 +62,13 @@ export function KivoChatScreenMainContent({
           >
             <div className="flex max-w-[360px] flex-col items-center text-center">
               <h2
-                className="text-center text-[34px] font-normal leading-[1.08] tracking-[-0.05em] text-[#353b45] sm:text-[40px]"
+                className="text-center text-[30px] font-normal leading-[1.04] tracking-[-0.045em] text-[#353b45] sm:text-[35px]"
                 style={{ fontFamily: 'ui-serif, Georgia, Times, serif' }}
               >
                 What needs your attention today?
               </h2>
 
-              <p className="mt-4 max-w-[300px] text-balance text-[16px] font-normal leading-[1.5] tracking-[-0.02em] text-[#6b7280] sm:text-[17px]">
+              <p className="mt-3.5 max-w-[300px] text-balance text-[14px] font-normal leading-[1.42] tracking-[-0.018em] text-[#6b7280] sm:text-[15px]">
                 Plan, decide, and move faster.
               </p>
             </div>

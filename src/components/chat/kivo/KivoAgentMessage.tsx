@@ -27,7 +27,7 @@ export function KivoAgentMessage({
     splitContent(content);
 
   return (
-    <div className="space-y-3">
+    <div className="space-y-2.5 text-[14px] leading-[1.5]">
       {status &&
         status !== "completed" && (
           <KivoStatusTimeline
@@ -36,7 +36,7 @@ export function KivoAgentMessage({
         )}
 
       <KivoResponseCard title="Main Answer">
-        <div className="whitespace-pre-wrap">
+        <div className="whitespace-pre-wrap text-[14px] leading-[1.5]">
           {sections.main ||
             "Working..."}
         </div>
