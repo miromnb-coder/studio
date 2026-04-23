@@ -1,6 +1,15 @@
 import crypto from 'node:crypto';
 
-export const GOOGLE_CALENDAR_READONLY_SCOPE = 'https://www.googleapis.com/auth/calendar.readonly';
+export const GOOGLE_CALENDAR_READONLY_SCOPE =
+  'https://www.googleapis.com/auth/calendar.readonly';
+
+export const GOOGLE_CALENDAR_WRITE_SCOPE =
+  'https://www.googleapis.com/auth/calendar';
+
+export const GOOGLE_CALENDAR_DEFAULT_SCOPES = [
+  GOOGLE_CALENDAR_WRITE_SCOPE,
+  GOOGLE_CALENDAR_READONLY_SCOPE,
+].join(' ');
 
 export interface GoogleTokenBundle {
   accessToken: string;
@@ -63,7 +72,9 @@ function parseKeyMaterial(key: string): Buffer {
 
   try {
     const base64 = Buffer.from(trimmed, 'base64');
-    if (base64.byteLength >= 32) return crypto.createHash('sha256').update(base64).digest();
+    if (base64.byteLength >= 32) {
+      return crypto.createHash('sha256').update(base64).digest();
+    }
   } catch {
     // fallback to utf8 hashing
   }
@@ -72,10 +83,16 @@ function parseKeyMaterial(key: string): Buffer {
 }
 
 function getEncryptionKey(): Buffer {
-  const raw = process.env.GOOGLE_TOKEN_ENCRYPTION_KEY || process.env.GMAIL_TOKEN_ENCRYPTION_KEY;
+  const raw =
+    process.env.GOOGLE_TOKEN_ENCRYPTION_KEY ||
+    process.env.GMAIL_TOKEN_ENCRYPTION_KEY;
+
   if (!raw) {
-    throw new Error('Missing GOOGLE_TOKEN_ENCRYPTION_KEY (or GMAIL_TOKEN_ENCRYPTION_KEY fallback).');
+    throw new Error(
+      'Missing GOOGLE_TOKEN_ENCRYPTION_KEY (or GMAIL_TOKEN_ENCRYPTION_KEY fallback).',
+    );
   }
+
   return parseKeyMaterial(raw);
 }
 
@@ -83,14 +100,19 @@ export function encryptCalendarToken(plainText: string): string {
   const iv = crypto.randomBytes(12);
   const key = getEncryptionKey();
   const cipher = crypto.createCipheriv('aes-256-gcm', key, iv);
-  const encrypted = Buffer.concat([cipher.update(plainText, 'utf8'), cipher.final()]);
+  const encrypted = Buffer.concat([
+    cipher.update(plainText, 'utf8'),
+    cipher.final(),
+  ]);
   const tag = cipher.getAuthTag();
   return `${iv.toString('base64')}:${tag.toString('base64')}:${encrypted.toString('base64')}`;
 }
 
 export function decryptCalendarToken(payload: string): string {
   const [ivPart, tagPart, dataPart] = payload.split(':');
-  if (!ivPart || !tagPart || !dataPart) throw new Error('Invalid encrypted token payload.');
+  if (!ivPart || !tagPart || !dataPart) {
+    throw new Error('Invalid encrypted token payload.');
+  }
 
   const key = getEncryptionKey();
   const iv = Buffer.from(ivPart, 'base64');
@@ -98,21 +120,38 @@ export function decryptCalendarToken(payload: string): string {
   const encrypted = Buffer.from(dataPart, 'base64');
   const decipher = crypto.createDecipheriv('aes-256-gcm', key, iv);
   decipher.setAuthTag(tag);
-  const decrypted = Buffer.concat([decipher.update(encrypted), decipher.final()]);
+  const decrypted = Buffer.concat([
+    decipher.update(encrypted),
+    decipher.final(),
+  ]);
   return decrypted.toString('utf8');
 }
 
-export function parseCalendarIntegrationState(value: unknown): GoogleCalendarIntegrationState {
+export function parseCalendarIntegrationState(
+  value: unknown,
+): GoogleCalendarIntegrationState {
   if (!value || typeof value !== 'object') return {};
   return value as GoogleCalendarIntegrationState;
 }
 
-export function hasCalendarReadonlyScope(scope: string | null | undefined): boolean {
+export function hasCalendarReadonlyScope(
+  scope: string | null | undefined,
+): boolean {
   if (!scope) return false;
   return scope.split(/\s+/).includes(GOOGLE_CALENDAR_READONLY_SCOPE);
 }
 
-export async function exchangeCodeForToken(code: string, redirectUri: string): Promise<GoogleTokenBundle> {
+export function hasCalendarWriteScope(
+  scope: string | null | undefined,
+): boolean {
+  if (!scope) return false;
+  return scope.split(/\s+/).includes(GOOGLE_CALENDAR_WRITE_SCOPE);
+}
+
+export async function exchangeCodeForToken(
+  code: string,
+  redirectUri: string,
+): Promise<GoogleTokenBundle> {
   const clientId = process.env.GOOGLE_CLIENT_ID;
   const clientSecret = process.env.GOOGLE_CLIENT_SECRET;
 
@@ -151,13 +190,17 @@ export async function exchangeCodeForToken(code: string, redirectUri: string): P
   return {
     accessToken: payload.access_token,
     refreshToken: payload.refresh_token,
-    expiryDate: payload.expires_in ? Date.now() + payload.expires_in * 1000 : undefined,
-    scope: payload.scope || GOOGLE_CALENDAR_READONLY_SCOPE,
+    expiryDate: payload.expires_in
+      ? Date.now() + payload.expires_in * 1000
+      : undefined,
+    scope: payload.scope || GOOGLE_CALENDAR_DEFAULT_SCOPES,
     tokenType: payload.token_type,
   };
 }
 
-export async function refreshAccessToken(refreshToken: string): Promise<GoogleTokenBundle> {
+export async function refreshAccessToken(
+  refreshToken: string,
+): Promise<GoogleTokenBundle> {
   const clientId = process.env.GOOGLE_CLIENT_ID;
   const clientSecret = process.env.GOOGLE_CLIENT_SECRET;
 
@@ -193,8 +236,10 @@ export async function refreshAccessToken(refreshToken: string): Promise<GoogleTo
 
   return {
     accessToken: payload.access_token,
-    expiryDate: payload.expires_in ? Date.now() + payload.expires_in * 1000 : undefined,
-    scope: payload.scope || GOOGLE_CALENDAR_READONLY_SCOPE,
+    expiryDate: payload.expires_in
+      ? Date.now() + payload.expires_in * 1000
+      : undefined,
+    scope: payload.scope || GOOGLE_CALENDAR_DEFAULT_SCOPES,
     tokenType: payload.token_type,
   };
 }
@@ -205,7 +250,9 @@ function resolveTokenExpiry(value: string | null | undefined): number | null {
   return Number.isNaN(parsed.getTime()) ? null : parsed.getTime();
 }
 
-export async function getUsableAccessTokenFromIntegration(input: GoogleCalendarIntegrationState): Promise<{
+export async function getUsableAccessTokenFromIntegration(
+  input: GoogleCalendarIntegrationState,
+): Promise<{
   accessToken: string;
   refreshApplied: boolean;
   nextIntegration: GoogleCalendarIntegrationState;
@@ -216,13 +263,20 @@ export async function getUsableAccessTokenFromIntegration(input: GoogleCalendarI
   let accessToken = decryptCalendarToken(encryptedAccessToken);
   const refreshEncrypted = String(input.refresh_token_encrypted || '');
   const expiresAtEpoch = resolveTokenExpiry(input.expires_at);
-  const needsRefresh = Boolean(refreshEncrypted) && Boolean(expiresAtEpoch && expiresAtEpoch < Date.now() + 60_000);
+  const needsRefresh = Boolean(refreshEncrypted) &&
+    Boolean(expiresAtEpoch && expiresAtEpoch < Date.now() + 60_000);
 
   if (!needsRefresh) {
-    return { accessToken, refreshApplied: false, nextIntegration: { ...input } };
+    return {
+      accessToken,
+      refreshApplied: false,
+      nextIntegration: { ...input },
+    };
   }
 
-  const refreshed = await refreshAccessToken(decryptCalendarToken(refreshEncrypted));
+  const refreshed = await refreshAccessToken(
+    decryptCalendarToken(refreshEncrypted),
+  );
   accessToken = refreshed.accessToken;
 
   return {
@@ -231,8 +285,10 @@ export async function getUsableAccessTokenFromIntegration(input: GoogleCalendarI
     nextIntegration: {
       ...input,
       access_token_encrypted: encryptCalendarToken(refreshed.accessToken),
-      expires_at: refreshed.expiryDate ? new Date(refreshed.expiryDate).toISOString() : input.expires_at || null,
-      scope: refreshed.scope || input.scope || GOOGLE_CALENDAR_READONLY_SCOPE,
+      expires_at: refreshed.expiryDate
+        ? new Date(refreshed.expiryDate).toISOString()
+        : input.expires_at || null,
+      scope: refreshed.scope || input.scope || GOOGLE_CALENDAR_DEFAULT_SCOPES,
       token_type: refreshed.tokenType || input.token_type || 'Bearer',
       status: 'connected',
       last_error: null,
@@ -240,7 +296,9 @@ export async function getUsableAccessTokenFromIntegration(input: GoogleCalendarI
   };
 }
 
-export async function getGoogleAccountProfile(accessToken: string): Promise<GoogleAccountProfile> {
+export async function getGoogleAccountProfile(
+  accessToken: string,
+): Promise<GoogleAccountProfile> {
   const response = await fetch('https://www.googleapis.com/oauth2/v2/userinfo', {
     headers: { Authorization: `Bearer ${accessToken}` },
     cache: 'no-store',
@@ -271,18 +329,28 @@ export async function getGoogleAccountProfile(accessToken: string): Promise<Goog
   };
 }
 
-export async function listCalendars(accessToken: string): Promise<GoogleCalendarListItem[]> {
-  const response = await fetch('https://www.googleapis.com/calendar/v3/users/me/calendarList', {
-    headers: { Authorization: `Bearer ${accessToken}` },
-    cache: 'no-store',
-  });
+export async function listCalendars(
+  accessToken: string,
+): Promise<GoogleCalendarListItem[]> {
+  const response = await fetch(
+    'https://www.googleapis.com/calendar/v3/users/me/calendarList',
+    {
+      headers: { Authorization: `Bearer ${accessToken}` },
+      cache: 'no-store',
+    },
+  );
 
   if (!response.ok) {
     throw new Error(`Calendar list request failed (${response.status}).`);
   }
 
   const payload = (await response.json()) as {
-    items?: Array<{ id?: string; summary?: string; primary?: boolean; timeZone?: string }>;
+    items?: Array<{
+      id?: string;
+      summary?: string;
+      primary?: boolean;
+      timeZone?: string;
+    }>;
   };
 
   const calendars: GoogleCalendarListItem[] = [];
@@ -296,26 +364,33 @@ export async function listCalendars(accessToken: string): Promise<GoogleCalendar
       timeZone: item.timeZone,
     });
   }
+
   return calendars;
 }
 
-function toEventDateTime(value: { date?: string; dateTime?: string } | undefined, fallback = new Date()): string {
+function toEventDateTime(
+  value: { date?: string; dateTime?: string } | undefined,
+  fallback = new Date(),
+): string {
   if (!value) return fallback.toISOString();
   if (value.dateTime) return value.dateTime;
   if (value.date) return `${value.date}T00:00:00.000Z`;
   return fallback.toISOString();
 }
 
-function normalizeEvent(input: {
-  id?: string;
-  summary?: string;
-  description?: string;
-  location?: string;
-  status?: string;
-  start?: { date?: string; dateTime?: string };
-  end?: { date?: string; dateTime?: string };
-  organizer?: { email?: string };
-}, calendarId: string): GoogleCalendarEvent | null {
+function normalizeEvent(
+  input: {
+    id?: string;
+    summary?: string;
+    description?: string;
+    location?: string;
+    status?: string;
+    start?: { date?: string; dateTime?: string };
+    end?: { date?: string; dateTime?: string };
+    organizer?: { email?: string };
+  },
+  calendarId: string,
+): GoogleCalendarEvent | null {
   const id = String(input.id || '').trim();
   if (!id) return null;
 
@@ -352,10 +427,13 @@ export async function listEvents(params: {
   if (params.timeMin) query.set('timeMin', params.timeMin);
   if (params.timeMax) query.set('timeMax', params.timeMax);
 
-  const response = await fetch(`https://www.googleapis.com/calendar/v3/calendars/${calendarId}/events?${query.toString()}`, {
-    headers: { Authorization: `Bearer ${params.accessToken}` },
-    cache: 'no-store',
-  });
+  const response = await fetch(
+    `https://www.googleapis.com/calendar/v3/calendars/${calendarId}/events?${query.toString()}`,
+    {
+      headers: { Authorization: `Bearer ${params.accessToken}` },
+      cache: 'no-store',
+    },
+  );
 
   if (!response.ok) {
     throw new Error(`Calendar events request failed (${response.status}).`);
@@ -379,7 +457,10 @@ export async function listEvents(params: {
     .filter((item): item is GoogleCalendarEvent => Boolean(item));
 }
 
-export async function fetchTodayEvents(accessToken: string, calendarId = 'primary'): Promise<GoogleCalendarEvent[]> {
+export async function fetchTodayEvents(
+  accessToken: string,
+  calendarId = 'primary',
+): Promise<GoogleCalendarEvent[]> {
   const start = new Date();
   start.setUTCHours(0, 0, 0, 0);
   const end = new Date(start);
@@ -394,7 +475,10 @@ export async function fetchTodayEvents(accessToken: string, calendarId = 'primar
   });
 }
 
-export async function fetchNext7DaysEvents(accessToken: string, calendarId = 'primary'): Promise<GoogleCalendarEvent[]> {
+export async function fetchNext7DaysEvents(
+  accessToken: string,
+  calendarId = 'primary',
+): Promise<GoogleCalendarEvent[]> {
   const start = new Date();
   const end = new Date(start);
   end.setUTCDate(end.getUTCDate() + 7);
@@ -417,14 +501,28 @@ export interface FreeBlock {
 function eventDurationMinutes(event: GoogleCalendarEvent): number {
   const start = new Date(event.startAt).getTime();
   const end = new Date(event.endAt).getTime();
-  if (!Number.isFinite(start) || !Number.isFinite(end) || end <= start) return 0;
+  if (!Number.isFinite(start) || !Number.isFinite(end) || end <= start) {
+    return 0;
+  }
   return Math.round((end - start) / 60000);
 }
 
-export function computeFreeTimeBlocks(events: GoogleCalendarEvent[], windowStart: Date, windowEnd: Date): FreeBlock[] {
+export function computeFreeTimeBlocks(
+  events: GoogleCalendarEvent[],
+  windowStart: Date,
+  windowEnd: Date,
+): FreeBlock[] {
   const sorted = [...events]
-    .map((event) => ({ start: new Date(event.startAt).getTime(), end: new Date(event.endAt).getTime() }))
-    .filter((event) => Number.isFinite(event.start) && Number.isFinite(event.end) && event.end > event.start)
+    .map((event) => ({
+      start: new Date(event.startAt).getTime(),
+      end: new Date(event.endAt).getTime(),
+    }))
+    .filter(
+      (event) =>
+        Number.isFinite(event.start) &&
+        Number.isFinite(event.end) &&
+        event.end > event.start,
+    )
     .sort((a, b) => a.start - b.start);
 
   const blocks: FreeBlock[] = [];
@@ -433,13 +531,21 @@ export function computeFreeTimeBlocks(events: GoogleCalendarEvent[], windowStart
 
   for (const event of sorted) {
     if (event.end <= cursor) continue;
+
     const boundedStart = Math.max(event.start, windowStart.getTime());
     const boundedEnd = Math.min(event.end, endTime);
-    if (boundedEnd <= windowStart.getTime() || boundedStart >= endTime) continue;
+
+    if (boundedEnd <= windowStart.getTime() || boundedStart >= endTime) {
+      continue;
+    }
 
     if (boundedStart > cursor) {
       const durationMinutes = Math.round((boundedStart - cursor) / 60000);
-      blocks.push({ startAt: new Date(cursor).toISOString(), endAt: new Date(boundedStart).toISOString(), durationMinutes });
+      blocks.push({
+        startAt: new Date(cursor).toISOString(),
+        endAt: new Date(boundedStart).toISOString(),
+        durationMinutes,
+      });
     }
 
     cursor = Math.max(cursor, boundedEnd);
@@ -447,7 +553,11 @@ export function computeFreeTimeBlocks(events: GoogleCalendarEvent[], windowStart
   }
 
   if (cursor < endTime) {
-    blocks.push({ startAt: new Date(cursor).toISOString(), endAt: new Date(endTime).toISOString(), durationMinutes: Math.round((endTime - cursor) / 60000) });
+    blocks.push({
+      startAt: new Date(cursor).toISOString(),
+      endAt: new Date(endTime).toISOString(),
+      durationMinutes: Math.round((endTime - cursor) / 60000),
+    });
   }
 
   return blocks.filter((block) => block.durationMinutes > 0);
@@ -460,14 +570,21 @@ export function detectBasicOverload(events: GoogleCalendarEvent[]): {
   noRecoveryGaps: boolean;
 } {
   const timedEvents = events.filter((event) => !event.isAllDay);
-  const totalMeetingMinutes = timedEvents.reduce((sum, event) => sum + eventDurationMinutes(event), 0);
+  const totalMeetingMinutes = timedEvents.reduce(
+    (sum, event) => sum + eventDurationMinutes(event),
+    0,
+  );
   const tooManyMeetings = timedEvents.length >= 8 || totalMeetingMinutes >= 360;
 
-  const sorted = [...timedEvents].sort((a, b) => +new Date(a.startAt) - +new Date(b.startAt));
+  const sorted = [...timedEvents].sort(
+    (a, b) => +new Date(a.startAt) - +new Date(b.startAt),
+  );
+
   let recoveryGapFound = false;
   for (let i = 1; i < sorted.length; i += 1) {
     const previousEnd = +new Date(sorted[i - 1].endAt);
     const nextStart = +new Date(sorted[i].startAt);
+
     if (nextStart - previousEnd >= 15 * 60 * 1000) {
       recoveryGapFound = true;
       break;
@@ -483,10 +600,13 @@ export function detectBasicOverload(events: GoogleCalendarEvent[]): {
 }
 
 export async function revokeGoogleToken(token: string): Promise<void> {
-  const response = await fetch(`https://oauth2.googleapis.com/revoke?token=${encodeURIComponent(token)}`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-  });
+  const response = await fetch(
+    `https://oauth2.googleapis.com/revoke?token=${encodeURIComponent(token)}`,
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    },
+  );
 
   if (!response.ok) {
     throw new Error(`Token revoke failed (${response.status}).`);
