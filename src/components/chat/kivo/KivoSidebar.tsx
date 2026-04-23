@@ -1,4 +1,6 @@
 'use client';
+
+import type { ReactNode } from 'react';
 import {
   Bell,
   BrainCircuit,
@@ -65,8 +67,9 @@ export type KivoSidebarProps = {
 type RailItem = {
   id: KivoSidebarSection;
   label: string;
-  icon: React.ReactNode;
+  icon: ReactNode;
   dividerBefore?: boolean;
+  badge?: string;
 };
 
 const RAIL_ITEMS: RailItem[] = [
@@ -100,6 +103,7 @@ const RAIL_ITEMS: RailItem[] = [
     id: 'alerts',
     label: 'Alerts',
     icon: <Bell className="h-[18px] w-[18px]" strokeWidth={2.2} />,
+    badge: '2',
   },
   {
     id: 'settings',
@@ -112,7 +116,7 @@ function Divider() {
   return <div className="h-px bg-black/[0.055]" />;
 }
 
-function SectionLabel({ children }: { children: React.ReactNode }) {
+function SectionLabel({ children }: { children: ReactNode }) {
   return (
     <div className="px-5 pb-3 pt-1 text-[12px] font-semibold uppercase tracking-[0.12em] text-[#8A919E]">
       {children}
@@ -124,11 +128,13 @@ function RailButton({
   active,
   label,
   icon,
+  badge,
   onClick,
 }: {
   active?: boolean;
   label: string;
-  icon: React.ReactNode;
+  icon: ReactNode;
+  badge?: string;
   onClick: () => void;
 }) {
   return (
@@ -138,13 +144,19 @@ function RailButton({
       title={label}
       onClick={onClick}
       className={[
-        'inline-flex h-11 w-11 items-center justify-center rounded-2xl transition-all duration-200',
+        'relative inline-flex h-12 w-12 items-center justify-center rounded-[18px] transition-all duration-200',
         active
-          ? 'bg-[#111827] text-white shadow-[0_10px_24px_rgba(15,23,42,0.18)]'
-          : 'text-[#151922] hover:bg-black/[0.04] active:scale-[0.97]',
+          ? 'bg-black/[0.065] text-[#111827] shadow-[0_8px_24px_rgba(15,23,42,0.06)]'
+          : 'text-[#151922] hover:bg-black/[0.035] active:scale-[0.97]',
       ].join(' ')}
     >
       {icon}
+
+      {badge ? (
+        <span className="absolute right-0.5 top-0.5 inline-flex h-[18px] min-w-[18px] items-center justify-center rounded-full bg-[#111827] px-1 text-[10px] font-semibold leading-none text-white">
+          {badge}
+        </span>
+      ) : null}
     </button>
   );
 }
@@ -155,7 +167,7 @@ function ActionCard({
   subtitle,
   onClick,
 }: {
-  icon: React.ReactNode;
+  icon: ReactNode;
   title: string;
   subtitle: string;
   onClick?: () => void;
@@ -164,7 +176,7 @@ function ActionCard({
     <button
       type="button"
       onClick={onClick}
-      className="rounded-[22px] border border-black/[0.045] bg-white px-4 py-4 text-left shadow-[0_10px_24px_rgba(15,23,42,0.028)] transition-all duration-200 hover:-translate-y-[1px] hover:shadow-[0_14px_30px_rgba(15,23,42,0.04)] active:scale-[0.985]"
+      className="rounded-[22px] border border-black/[0.045] bg-white/88 px-4 py-4 text-left shadow-[0_10px_24px_rgba(15,23,42,0.028)] transition-all duration-200 hover:-translate-y-[1px] hover:shadow-[0_14px_30px_rgba(15,23,42,0.04)] active:scale-[0.985]"
     >
       <div className="mb-3 flex h-10 w-10 items-center justify-center rounded-2xl bg-black/[0.035] text-[#151922]">
         {icon}
@@ -184,12 +196,12 @@ function SystemCard({
   title,
   meta,
 }: {
-  icon: React.ReactNode;
+  icon: ReactNode;
   title: string;
   meta: string;
 }) {
   return (
-    <div className="rounded-[20px] border border-black/[0.045] bg-white px-4 py-4 shadow-[0_8px_20px_rgba(15,23,42,0.025)]">
+    <div className="rounded-[20px] border border-black/[0.045] bg-white/88 px-4 py-4 shadow-[0_8px_20px_rgba(15,23,42,0.025)]">
       <div className="mb-3 flex h-10 w-10 items-center justify-center rounded-2xl bg-black/[0.035] text-[#151922]">
         {icon}
       </div>
@@ -239,7 +251,7 @@ function ServiceTile({
   label,
   onClick,
 }: {
-  icon: React.ReactNode;
+  icon: ReactNode;
   label: string;
   onClick?: () => void;
 }) {
@@ -247,7 +259,7 @@ function ServiceTile({
     <button
       type="button"
       onClick={onClick}
-      className="rounded-[18px] border border-black/[0.045] bg-white px-3 py-4 text-center shadow-[0_8px_20px_rgba(15,23,42,0.025)] transition-all duration-200 hover:-translate-y-[1px] hover:shadow-[0_12px_26px_rgba(15,23,42,0.04)] active:scale-[0.985]"
+      className="rounded-[18px] border border-black/[0.045] bg-white/88 px-3 py-4 text-center shadow-[0_8px_20px_rgba(15,23,42,0.025)] transition-all duration-200 hover:-translate-y-[1px] hover:shadow-[0_12px_26px_rgba(15,23,42,0.04)] active:scale-[0.985]"
     >
       <div className="mx-auto mb-3 flex h-11 w-11 items-center justify-center rounded-2xl bg-black/[0.03]">
         {icon}
@@ -354,7 +366,7 @@ function EmptyWorkspacePanel(props: KivoSidebarProps) {
             onSectionChange('search');
             onSearch?.();
           }}
-          className="flex w-full items-center gap-3 rounded-[22px] border border-black/[0.045] bg-white px-4 py-4 text-left shadow-[0_10px_24px_rgba(15,23,42,0.03)] transition-all hover:bg-[#FCFCFD]"
+          className="flex w-full items-center gap-3 rounded-[22px] border border-black/[0.045] bg-white/88 px-4 py-4 text-left shadow-[0_10px_24px_rgba(15,23,42,0.03)] transition-all hover:bg-[#FCFCFD]"
         >
           <Search className="h-5 w-5 text-[#6D7482]" strokeWidth={2.2} />
           <span className="flex-1 text-[15px] text-[#8A919E]">
@@ -416,7 +428,7 @@ function EmptyWorkspacePanel(props: KivoSidebarProps) {
       </div>
 
       <SectionLabel>Continue working</SectionLabel>
-      <div className="mx-5 overflow-hidden rounded-[24px] border border-black/[0.045] bg-white shadow-[0_10px_24px_rgba(15,23,42,0.028)]">
+      <div className="mx-5 overflow-hidden rounded-[24px] border border-black/[0.045] bg-white/88 shadow-[0_10px_24px_rgba(15,23,42,0.028)]">
         {recentChats.length > 0 ? (
           recentChats.slice(0, 4).map((chat, index) => (
             <div key={chat.id}>
@@ -475,7 +487,7 @@ function ChatsPanel({
     <div className="flex h-full flex-col overflow-y-auto pb-6">
       <PanelHeader title="Chats" subtitle="Continue recent conversations" />
 
-      <div className="mx-5 overflow-hidden rounded-[24px] border border-black/[0.045] bg-white shadow-[0_10px_24px_rgba(15,23,42,0.028)]">
+      <div className="mx-5 overflow-hidden rounded-[24px] border border-black/[0.045] bg-white/88 shadow-[0_10px_24px_rgba(15,23,42,0.028)]">
         {recentChats.length > 0 ? (
           recentChats.map((chat, index) => (
             <div key={chat.id}>
@@ -500,7 +512,7 @@ function SearchPanel({ onSearch }: { onSearch?: () => void }) {
         <button
           type="button"
           onClick={onSearch}
-          className="flex w-full items-center gap-3 rounded-[22px] border border-black/[0.045] bg-white px-4 py-4 text-left shadow-[0_10px_24px_rgba(15,23,42,0.03)] transition-all hover:bg-[#FCFCFD]"
+          className="flex w-full items-center gap-3 rounded-[22px] border border-black/[0.045] bg-white/88 px-4 py-4 text-left shadow-[0_10px_24px_rgba(15,23,42,0.03)] transition-all hover:bg-[#FCFCFD]"
         >
           <Search className="h-5 w-5 text-[#6D7482]" strokeWidth={2.2} />
           <span className="text-[15px] text-[#8A919E]">Tap to open search</span>
@@ -533,7 +545,7 @@ function AgentsPanel({ onUpgrade }: { onUpgrade?: () => void }) {
     <div className="flex h-full flex-col overflow-y-auto pb-6">
       <PanelHeader title="Agents" subtitle="Choose how Kivo should work" />
 
-      <div className="mx-5 overflow-hidden rounded-[24px] border border-black/[0.045] bg-white shadow-[0_10px_24px_rgba(15,23,42,0.028)]">
+      <div className="mx-5 overflow-hidden rounded-[24px] border border-black/[0.045] bg-white/88 shadow-[0_10px_24px_rgba(15,23,42,0.028)]">
         {rows.map((row, index) => (
           <div key={row.title}>
             {index > 0 ? <Divider /> : null}
@@ -594,7 +606,7 @@ function AlertsPanel() {
     <div className="flex h-full flex-col overflow-y-auto pb-6">
       <PanelHeader title="Alerts" subtitle="Important updates and system activity" />
 
-      <div className="mx-5 rounded-[24px] border border-black/[0.045] bg-white px-5 py-5 shadow-[0_10px_24px_rgba(15,23,42,0.028)]">
+      <div className="mx-5 rounded-[24px] border border-black/[0.045] bg-white/88 px-5 py-5 shadow-[0_10px_24px_rgba(15,23,42,0.028)]">
         <div className="text-[15px] font-medium text-[#151922]">2 new alerts</div>
         <div className="mt-1 text-[13px] text-[#6D7482]">
           Your alert feed can be wired here next.
@@ -613,7 +625,7 @@ function SettingsPanel({ onOpenSettings }: { onOpenSettings?: () => void }) {
         <button
           type="button"
           onClick={onOpenSettings}
-          className="flex w-full items-center justify-between rounded-[22px] border border-black/[0.045] bg-white px-5 py-4 text-left shadow-[0_10px_24px_rgba(15,23,42,0.028)] transition-colors duration-150 hover:bg-black/[0.02]"
+          className="flex w-full items-center justify-between rounded-[22px] border border-black/[0.045] bg-white/88 px-5 py-4 text-left shadow-[0_10px_24px_rgba(15,23,42,0.028)] transition-colors duration-150 hover:bg-black/[0.02]"
         >
           <span className="text-[15px] font-medium text-[#151922]">Open settings</span>
           <ChevronRight className="h-4 w-4 text-[#6D7482]" strokeWidth={2.2} />
@@ -661,21 +673,22 @@ export default function KivoSidebar(props: KivoSidebarProps) {
   const { panelOpen, activeSection, onSectionChange } = props;
 
   return (
-    <div className="flex h-full w-full flex-col border-r border-black/[0.04] bg-[#F7F8FA]/92 px-3 py-4 shadow-[8px_0_28px_rgba(15,23,42,0.045)] backdrop-blur-xl">
-      <div className="mb-4 flex items-center justify-center">
-        <div className="flex h-12 w-12 items-center justify-center rounded-full bg-[#7B5342] text-[24px] font-medium text-white">
+    <div className="flex h-full w-full flex-col bg-transparent px-3 py-4">
+      <div className="mb-5 flex items-center justify-center">
+        <div className="flex h-12 w-12 items-center justify-center rounded-full bg-[#7B5342] text-[22px] font-medium text-white shadow-[0_6px_18px_rgba(123,83,66,0.18)]">
           {(props.userName || 'M').charAt(0).toUpperCase()}
         </div>
       </div>
 
-      <div className="flex flex-col items-center gap-2">
+      <div className="flex flex-1 flex-col items-center gap-2">
         {RAIL_ITEMS.map((item) => (
           <div key={item.id} className="flex w-full flex-col items-center">
-            {item.dividerBefore ? <div className="mb-2 mt-1 h-px w-10 bg-black/[0.06]" /> : null}
+            {item.dividerBefore ? <div className="mb-2 mt-1 h-px w-10 bg-black/[0.055]" /> : null}
 
             <RailButton
               label={item.label}
               icon={item.icon}
+              badge={item.badge}
               active={panelOpen && activeSection === item.id}
               onClick={() => onSectionChange(item.id)}
             />
