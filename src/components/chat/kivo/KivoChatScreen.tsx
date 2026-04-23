@@ -1,15 +1,20 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { AnimatePresence, motion } from 'framer-motion';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
-import { AlertCircle, Paperclip, X } from 'lucide-react';
 import { useAppStore } from '@/app/store/app-store';
 import type { MessageAttachment } from '@/app/store/app-store';
-import { MessageThread } from '@/components/chat/MessageThread';
 import { WorkspaceSheet } from '@/components/chat/WorkspaceSheet';
 import { KivoActionSheet } from './KivoActionSheet';
+import { KivoChatScreenAttachmentTray } from './KivoChatScreenAttachmentTray';
+import { KivoChatScreenBackground } from './KivoChatScreenBackground';
 import KivoChatHeader from './KivoChatHeader';
+import { KivoChatScreenMainContent } from './KivoChatScreenMainContent';
+import {
+  KivoChatScreenNoticeToast,
+  type KivoChatNotice,
+} from './KivoChatScreenNoticeToast';
+import { KivoChatScreenScrollToLatestButton } from './KivoChatScreenScrollToLatestButton';
 import { KivoComposerDock } from './KivoComposerDock';
 import { KivoReferralSuccessToast } from './KivoReferralSuccessToast';
 
@@ -34,11 +39,6 @@ declare global {
     SpeechRecognition?: new () => SpeechRecognitionLike;
   }
 }
-
-type Notice = {
-  title: string;
-  detail: string;
-};
 
 type WorkspaceQuickActionId = 'analyze' | 'planner' | 'money-saver' | 'ask-agent';
 type WorkspaceToolId =
@@ -81,7 +81,7 @@ export function KivoChatScreen() {
   const [filePickerAccept, setFilePickerAccept] = useState('');
   const [workspaceOpen, setWorkspaceOpen] = useState(false);
   const [actionSheetOpen, setActionSheetOpen] = useState(false);
-  const [notice, setNotice] = useState<Notice | null>(null);
+  const [notice, setNotice] = useState<KivoChatNotice | null>(null);
 
   const [referralToastOpen, setReferralToastOpen] = useState(false);
   const [referralToastTitle, setReferralToastTitle] = useState('');
@@ -970,25 +970,7 @@ export function KivoChatScreen() {
 
   return (
     <div className="relative h-[100dvh] overflow-hidden bg-transparent text-[#2f3640]">
-      <div className="pointer-events-none absolute inset-0 overflow-hidden">
-        <div className="absolute inset-0 bg-[linear-gradient(180deg,#f8f8f9_0%,#f4f5f7_36%,#eef2f6_100%)]" />
-
-        <div className="absolute inset-x-0 top-0 h-[220px] bg-[radial-gradient(ellipse_at_top,rgba(255,255,255,0.92)_0%,rgba(255,255,255,0.42)_46%,rgba(255,255,255,0)_82%)]" />
-
-        <motion.div
-          className="absolute left-1/2 top-[43%] h-[320px] w-[320px] -translate-x-1/2 -translate-y-1/2 rounded-full bg-[radial-gradient(circle,rgba(255,255,255,0.82)_0%,rgba(248,250,253,0.46)_36%,rgba(241,244,249,0.12)_68%,rgba(241,244,249,0)_100%)] blur-[26px]"
-          animate={{ opacity: [0.86, 1, 0.86] }}
-          transition={{ duration: 8, repeat: Infinity, ease: 'easeInOut' }}
-        />
-
-        <motion.div
-          className="absolute left-1/2 bottom-[110px] h-[210px] w-[82%] -translate-x-1/2 rounded-full bg-[radial-gradient(ellipse_at_center,rgba(255,255,255,0.82)_0%,rgba(246,248,252,0.42)_52%,rgba(246,248,252,0)_100%)] blur-[26px]"
-          animate={{ opacity: [0.74, 0.94, 0.74] }}
-          transition={{ duration: 10, repeat: Infinity, ease: 'easeInOut' }}
-        />
-
-        <div className="absolute inset-x-0 bottom-0 h-[280px] bg-[linear-gradient(180deg,rgba(244,246,249,0)_0%,rgba(241,244,248,0.34)_36%,rgba(236,240,246,0.88)_76%,rgba(234,239,246,1)_100%)]" />
-      </div>
+      <KivoChatScreenBackground />
 
       <div className="relative mx-auto flex h-full w-full max-w-[560px] flex-col">
         <KivoChatHeader
@@ -998,156 +980,35 @@ export function KivoChatScreen() {
           onCreateTask={handleHeaderCreateTask}
         />
 
-        <main
-          ref={mainScrollRef}
-          className="relative flex min-h-0 flex-1 flex-col overflow-y-auto overscroll-contain [scrollbar-gutter:stable] [-webkit-overflow-scrolling:touch]"
-          style={{ paddingBottom: scrollBottomPadding }}
-        >
-          <AnimatePresence initial={false}>
-            {streamError ? (
-              <motion.div
-                key="stream-error"
-                initial={{ opacity: 0, y: -8 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, y: -6 }}
-                className="px-6 pt-4"
-              >
-                <div className="flex items-start gap-2 rounded-[18px] border border-black/[0.07] bg-white/88 px-4 py-3 text-sm text-[#5f6877] shadow-[0_12px_28px_rgba(15,23,42,0.06)] backdrop-blur-xl">
-                  <AlertCircle className="mt-0.5 h-4 w-4 shrink-0 text-[#7a8598]" />
-                  <span>{refinedStreamError}</span>
-                </div>
-              </motion.div>
-            ) : null}
-          </AnimatePresence>
+        <KivoChatScreenMainContent
+          mainScrollRef={mainScrollRef}
+          scrollBottomPadding={scrollBottomPadding}
+          streamError={streamError}
+          refinedStreamError={refinedStreamError}
+          hasMessages={hasMessages}
+          isAgentResponding={isAgentResponding}
+          isSending={isSending}
+          messages={messages}
+          lastMessageSafetySpacer={lastMessageSafetySpacer}
+        />
 
-          <AnimatePresence mode="wait" initial={false}>
-            {!hasMessages ? (
-              <motion.div
-                key="empty-state"
-                initial={{ opacity: 0, y: 8 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, y: -10, scale: 0.985 }}
-                transition={{ duration: 0.22, ease: 'easeOut' }}
-                className="flex min-h-0 flex-1 items-start justify-center px-8 pt-[16vh]"
-              >
-                <div className="flex max-w-[360px] flex-col items-center text-center">
-                  <h2
-                    className="text-center text-[34px] font-normal leading-[1.08] tracking-[-0.05em] text-[#353b45] sm:text-[40px]"
-                    style={{ fontFamily: 'ui-serif, Georgia, Times, serif' }}
-                  >
-                    What needs your attention today?
-                  </h2>
+        <KivoChatScreenScrollToLatestButton
+          show={showScrollToLatest}
+          bottom={latestButtonBottom}
+          onClick={() => {
+            scrollToLatest('smooth');
+            requestAnimationFrame(() => updateScrollState());
+          }}
+        />
 
-                  <p className="mt-4 max-w-[300px] text-balance text-[16px] font-normal leading-[1.5] tracking-[-0.02em] text-[#6b7280] sm:text-[17px]">
-                    Plan, decide, and move faster.
-                  </p>
-                </div>
-              </motion.div>
-            ) : (
-              <motion.div
-                key="message-state"
-                initial={{ opacity: 0, y: 14 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0 }}
-                transition={{ duration: 0.24, ease: 'easeOut' }}
-                className="flex min-h-0 flex-1 flex-col px-1 pt-3"
-              >
-                <MessageThread
-                  messages={messages}
-                  pending={isAgentResponding || isSending}
-                />
-              </motion.div>
-            )}
-          </AnimatePresence>
+        <KivoChatScreenAttachmentTray
+          attachments={attachments}
+          keyboardOffset={keyboardOffset}
+          attachmentTrayRef={attachmentTrayRef}
+          onRemoveAttachment={removeAttachment}
+        />
 
-          <div
-            aria-hidden="true"
-            className="w-full shrink-0"
-            style={{ height: lastMessageSafetySpacer }}
-          />
-        </main>
-
-        <AnimatePresence initial={false}>
-          {showScrollToLatest ? (
-            <motion.button
-              key="scroll-to-latest"
-              type="button"
-              initial={{ opacity: 0, y: 10 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: 6 }}
-              transition={{ duration: 0.18, ease: 'easeOut' }}
-              onClick={() => {
-                scrollToLatest('smooth');
-                requestAnimationFrame(() => updateScrollState());
-              }}
-              className="fixed right-5 z-30 inline-flex items-center rounded-full border border-black/[0.08] bg-white/90 px-3 py-2 text-[12px] font-medium tracking-[-0.01em] text-[#495264] shadow-[0_10px_24px_rgba(15,23,42,0.09)] backdrop-blur-md transition-all duration-150 hover:bg-white"
-              style={{
-                bottom: `${latestButtonBottom}px`,
-              }}
-            >
-              Latest
-            </motion.button>
-          ) : null}
-        </AnimatePresence>
-
-        <AnimatePresence initial={false}>
-          {hasAttachments ? (
-            <motion.div
-              key="attachment-tray"
-              initial={{ opacity: 0, y: 10 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: 8 }}
-              transition={{ duration: 0.18, ease: 'easeOut' }}
-              className="pointer-events-none fixed inset-x-0 z-20 mx-auto w-full max-w-[560px] px-5"
-              ref={attachmentTrayRef}
-              style={{
-                bottom: `calc(138px + env(safe-area-inset-bottom, 0px) + ${Math.max(0, keyboardOffset)}px)`,
-              }}
-            >
-              <div className="pointer-events-auto mx-auto flex max-w-[500px] flex-wrap gap-2">
-                {attachments.map((attachment) => (
-                  <div
-                    key={attachment.id}
-                    className="inline-flex items-center gap-2 rounded-full border border-black/[0.05] bg-white/96 px-3 py-2 text-[12px] text-[#5e6573] shadow-[0_8px_22px_rgba(17,24,39,0.06)] backdrop-blur"
-                  >
-                    <Paperclip className="h-3.5 w-3.5" />
-                    <span className="max-w-[150px] truncate">{attachment.name}</span>
-                    <button
-                      type="button"
-                      onClick={() => removeAttachment(attachment.id)}
-                      aria-label={`Remove ${attachment.name}`}
-                      className="inline-flex h-4 w-4 items-center justify-center rounded-full text-[#7d8593] transition-all duration-200 ease-out hover:text-[#2f3640] active:scale-[0.97]"
-                    >
-                      <X className="h-3.5 w-3.5" />
-                    </button>
-                  </div>
-                ))}
-              </div>
-            </motion.div>
-          ) : null}
-        </AnimatePresence>
-
-        <AnimatePresence initial={false}>
-          {notice ? (
-            <motion.div
-              key="notice"
-              initial={{ opacity: 0, y: -8 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -6 }}
-              transition={{ duration: 0.18, ease: 'easeOut' }}
-              className="pointer-events-none fixed inset-x-0 top-[88px] z-40 mx-auto w-full max-w-[560px] px-5"
-            >
-              <div className="pointer-events-auto ml-auto w-fit max-w-[320px] rounded-[18px] border border-black/[0.05] bg-white/92 px-4 py-3 shadow-[0_14px_30px_rgba(15,23,42,0.08)] backdrop-blur">
-                <p className="text-[13px] font-semibold tracking-[-0.01em] text-[#364152]">
-                  {notice.title}
-                </p>
-                <p className="mt-1 text-[12px] leading-5 text-[#6a7382]">
-                  {notice.detail}
-                </p>
-              </div>
-            </motion.div>
-          ) : null}
-        </AnimatePresence>
+        <KivoChatScreenNoticeToast notice={notice} />
 
         <KivoComposerDock
           value={draftPrompt}
