@@ -1,7 +1,7 @@
 import crypto from 'node:crypto';
 import { NextResponse } from 'next/server';
 import { createClient as createSupabaseServerClient } from '@/lib/supabase/server';
-import { GOOGLE_CALENDAR_READONLY_SCOPE } from '@/lib/integrations/google-calendar';
+import { GOOGLE_CALENDAR_DEFAULT_SCOPES } from '@/lib/integrations/google-calendar';
 import { resolveAppOrigin } from '@/lib/auth/redirects';
 
 export const runtime = 'nodejs';
@@ -28,7 +28,7 @@ export async function GET(req: Request) {
       provider: 'google',
       options: {
         redirectTo,
-        scopes: GOOGLE_CALENDAR_READONLY_SCOPE,
+        scopes: GOOGLE_CALENDAR_DEFAULT_SCOPES,
         queryParams: {
           access_type: 'offline',
           prompt: 'consent',
@@ -39,10 +39,14 @@ export async function GET(req: Request) {
 
     if (error || !data.url) {
       console.error('GOOGLE_CALENDAR_CONNECT_SUPABASE_OAUTH_ERROR', error);
-      return NextResponse.json({ error: 'GOOGLE_CALENDAR_CONNECT_FAILED' }, { status: 500 });
+      return NextResponse.json(
+        { error: 'GOOGLE_CALENDAR_CONNECT_FAILED' },
+        { status: 500 },
+      );
     }
 
     const response = NextResponse.redirect(data.url);
+
     response.cookies.set({
       name: 'google_calendar_oauth_flow',
       value: flowNonce,
@@ -52,6 +56,7 @@ export async function GET(req: Request) {
       path: '/',
       maxAge: 60 * 10,
     });
+
     response.cookies.set({
       name: 'google_calendar_oauth_user_id',
       value: userId,
@@ -65,6 +70,9 @@ export async function GET(req: Request) {
     return response;
   } catch (error) {
     console.error('GOOGLE_CALENDAR_CONNECT_ERROR', error);
-    return NextResponse.json({ error: 'GOOGLE_CALENDAR_CONNECT_FAILED' }, { status: 500 });
+    return NextResponse.json(
+      { error: 'GOOGLE_CALENDAR_CONNECT_FAILED' },
+      { status: 500 },
+    );
   }
 }
