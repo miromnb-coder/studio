@@ -17,6 +17,10 @@ import {
 import { KivoChatScreenScrollToLatestButton } from './KivoChatScreenScrollToLatestButton';
 import { KivoComposerDock } from './KivoComposerDock';
 import { KivoReferralSuccessToast } from './KivoReferralSuccessToast';
+import KivoSidebar, {
+  type KivoSidebarRecentChat,
+  type KivoSidebarSection,
+} from './KivoSidebar';
 
 type SpeechRecognitionEventLike = Event & {
   results: ArrayLike<ArrayLike<{ transcript: string }>>;
@@ -110,6 +114,11 @@ export function KivoChatScreen() {
   const canSend = draftPrompt.trim().length > 0 || hasAttachments;
   const isBusy = isSending || isAgentResponding;
 
+  const [sidebarPanelOpen, setSidebarPanelOpen] = useState(!hasMessages);
+  const [activeSidebarSection, setActiveSidebarSection] =
+    useState<KivoSidebarSection>('chats');
+  const previousHasMessagesRef = useRef(hasMessages);
+
   const scrollBottomPadding = Math.max(
     MIN_SCROLL_SAFETY_SPACE,
     bottomOverlayInset + MIN_SCROLL_SAFETY_SPACE,
@@ -119,6 +128,26 @@ export function KivoChatScreen() {
     12,
     Math.round(bottomOverlayInset + MIN_SCROLL_SAFETY_SPACE),
   );
+
+  const sidebarRecentChats = useMemo<KivoSidebarRecentChat[]>(() => {
+    if (!activeConversationId) return [];
+
+    const firstUserMessage = messages.find(
+      (message) => message.role === 'user' && message.content.trim().length > 0,
+    );
+    const lastMessage = messages[messages.length - 1];
+
+    return [
+      {
+        id: activeConversationId,
+        title:
+          firstUserMessage?.content.trim().slice(0, 42) ||
+          (hasMessages ? 'Current conversation' : 'New conversation'),
+        preview: lastMessage?.content?.trim().slice(0, 72) || 'Continue working',
+        timestamp: hasMessages ? 'Now' : '',
+      },
+    ];
+  }, [activeConversationId, hasMessages, messages]);
 
   const measureBottomOverlayInset = useCallback(() => {
     if (typeof window === 'undefined') return;
@@ -439,8 +468,7 @@ export function KivoChatScreen() {
     const messageCountChanged = messages.length !== lastMessageCountRef.current;
     const shouldFollow =
       isNearBottomRef.current ||
-      (messageCountChanged &&
-        messages[messages.length - 1]?.role === 'user');
+      (messageCountChanged && messages[messages.length - 1]?.role === 'user');
 
     if (!shouldFollow) {
       lastMessageCountRef.current = messages.length;
@@ -455,6 +483,20 @@ export function KivoChatScreen() {
 
     lastMessageCountRef.current = messages.length;
   }, [isAgentResponding, isSending, lastMessageKey, messages, scrollToLatest, updateScrollState]);
+
+  useEffect(() => {
+    const previousHasMessages = previousHasMessagesRef.current;
+
+    if (!previousHasMessages && hasMessages) {
+      setSidebarPanelOpen(false);
+    }
+
+    if (previousHasMessages && !hasMessages) {
+      setSidebarPanelOpen(true);
+    }
+
+    previousHasMessagesRef.current = hasMessages;
+  }, [hasMessages, activeConversationId]);
 
   const refreshIntegrationStatuses = useCallback(async () => {
     try {
@@ -554,6 +596,9 @@ export function KivoChatScreen() {
     setDraftPrompt('');
     closeWorkspace();
     closeActionSheet();
+
+    setActiveSidebarSection('chats');
+    setSidebarPanelOpen(true);
 
     router.push('/chat');
     focusComposer();
@@ -968,122 +1013,193 @@ export function KivoChatScreen() {
     [openOperatorRoute],
   );
 
+  const handleSidebarSectionChange = useCallback(
+    (section: KivoSidebarSection) => {
+      setActiveSidebarSection(section);
+
+      if (hasMessages) {
+        setSidebarPanelOpen(true);
+      }
+    },
+    [hasMessages],
+  );
+
+  const handleCloseSidebarPanel = useCallback(() => {
+    if (hasMessages) {
+      setSidebarPanelOpen(false);
+    }
+  }, [hasMessages]);
+
+  const handleSidebarSearch = useCallback(() => {
+    setDraftPrompt('Help me find this in my chats, tools, or memory: ');
+    focusComposer();
+    showNotice('Search ready', 'Type what you want to find.');
+  }, [focusComposer, setDraftPrompt, showNotice]);
+
+  const handleOpenChatFromSidebar = useCallback(
+    (conversationId: string) => {
+      openConversation(conversationId);
+      router.push('/chat');
+
+      if (hasMessages) {
+        setSidebarPanelOpen(false);
+      }
+    },
+    [hasMessages, openConversation, router],
+  );
+
   return (
     <div className="relative h-[100dvh] overflow-hidden bg-transparent text-[#2f3640]">
       <KivoChatScreenBackground />
 
-      <div className="relative mx-auto flex h-full w-full max-w-[560px] flex-col">
-        <KivoChatHeader
-          title="Kivo"
-          hasMessages={hasMessages}
-          onSummarize={handleHeaderSummarize}
-          onCreateTask={handleHeaderCreateTask}
-        />
+      <KivoSidebar
+        hasMessages={hasMessages}
+        panelOpen={sidebarPanelOpen}
+        activeSection={activeSidebarSection}
+        userName={user?.name || 'Miro'}
+        plan="free"
+        recentChats={sidebarRecentChats}
+        onClosePanel={handleCloseSidebarPanel}
+        onSectionChange={handleSidebarSectionChange}
+        onNewChat={createNewChat}
+        onSearch={handleSidebarSearch}
+        onOpenChat={handleOpenChatFromSidebar}
+        onOpenAgents={() => setActiveSidebarSection('agents')}
+        onOpenTools={() => setActiveSidebarSection('tools')}
+        onOpenAlerts={() => setActiveSidebarSection('alerts')}
+        onOpenSettings={() => router.push('/settings')}
+        onQuickTask={() => {
+          setDraftPrompt('Help me complete this task quickly: ');
+          focusComposer();
+        }}
+        onAnalyzeFile={() => openOperatorRoute('/analyze')}
+        onPlanMyDay={() => openOperatorRoute('/actions?type=planner')}
+        onOpenGmail={() => handleActionTool('gmail')}
+        onOpenCalendar={() => handleActionTool('calendar')}
+        onOpenDrive={() => openOperatorRoute('/tools?source=drive')}
+        onOpenWeb={() => openOperatorRoute('/tools?tool=browser-search')}
+        onUpgrade={() => router.push('/upgrade')}
+      />
 
-        <KivoChatScreenMainContent
-          mainScrollRef={mainScrollRef}
-          scrollBottomPadding={scrollBottomPadding}
-          streamError={streamError}
-          refinedStreamError={refinedStreamError}
-          hasMessages={hasMessages}
-          isAgentResponding={isAgentResponding}
-          isSending={isSending}
-          messages={messages}
-          lastMessageSafetySpacer={lastMessageSafetySpacer}
-        />
-
-        <KivoChatScreenScrollToLatestButton
-          show={showScrollToLatest}
-          bottom={latestButtonBottom}
-          onClick={() => {
-            scrollToLatest('smooth');
-            requestAnimationFrame(() => updateScrollState());
+      <div className="relative mx-auto flex h-full w-full max-w-[560px] flex-col transition-[padding] duration-300 ease-out">
+        <div
+          className="flex h-full w-full flex-col transition-transform duration-300 ease-out"
+          style={{
+            transform: hasMessages ? 'translateX(56px)' : 'translateX(0px)',
           }}
-        />
+        >
+          <KivoChatHeader
+            title="Kivo"
+            hasMessages={hasMessages}
+            onSummarize={handleHeaderSummarize}
+            onCreateTask={handleHeaderCreateTask}
+          />
 
-        <KivoChatScreenAttachmentTray
-          attachments={attachments}
-          keyboardOffset={keyboardOffset}
-          attachmentTrayRef={attachmentTrayRef}
-          onRemoveAttachment={removeAttachment}
-        />
+          <KivoChatScreenMainContent
+            mainScrollRef={mainScrollRef}
+            scrollBottomPadding={scrollBottomPadding}
+            streamError={streamError}
+            refinedStreamError={refinedStreamError}
+            hasMessages={hasMessages}
+            isAgentResponding={isAgentResponding}
+            isSending={isSending}
+            messages={messages}
+            lastMessageSafetySpacer={lastMessageSafetySpacer}
+          />
 
-        <KivoChatScreenNoticeToast notice={notice} />
+          <KivoChatScreenScrollToLatestButton
+            show={showScrollToLatest}
+            bottom={latestButtonBottom}
+            onClick={() => {
+              scrollToLatest('smooth');
+              requestAnimationFrame(() => updateScrollState());
+            }}
+          />
 
-        <KivoComposerDock
-          value={draftPrompt}
-          onChange={setDraftPrompt}
-          onSend={handleSend}
-          onPlusClick={() => setActionSheetOpen(true)}
-          onQuickActionClick={() => setWorkspaceOpen(true)}
-          onMicClick={toggleMic}
-          canSend={canSend}
-          isListening={isListening}
-          isSending={isBusy}
-          placeholder={placeholder}
-          keyboardOffset={keyboardOffset}
-          containerRef={composerDockRef}
-        />
+          <KivoChatScreenAttachmentTray
+            attachments={attachments}
+            keyboardOffset={keyboardOffset}
+            attachmentTrayRef={attachmentTrayRef}
+            onRemoveAttachment={removeAttachment}
+          />
 
-        <KivoReferralSuccessToast
-          open={referralToastOpen}
-          title={referralToastTitle}
-          detail={referralToastDetail}
-          onClose={() => setReferralToastOpen(false)}
-        />
+          <KivoChatScreenNoticeToast notice={notice} />
 
-        <KivoActionSheet
-          open={actionSheetOpen}
-          isListening={isListening}
-          attachments={attachments}
-          toolState={{
-            gmail: {
-              connected: gmailConnected,
-              subtitle: 'Inbox summary, urgent emails, subscriptions',
-            },
-            calendar: {
-              connected: calendarConnected,
-              subtitle: 'Today plan, reminders, free time',
-            },
-            'money-saver': {
-              connected: true,
-              subtitle: 'Find leaks, subscriptions, savings',
-            },
-            tasks: {
-              connected: true,
-              subtitle: 'Notes, todos, action items',
-            },
-          }}
-          onClose={closeActionSheet}
-          onAddImages={() => openFilePicker('image/*')}
-          onAddFiles={() => openFilePicker()}
-          onPasteLink={handlePasteLink}
-          onVoiceInput={toggleMic}
-          onAiAction={handleAiAction}
-          onToolAction={handleActionTool}
-        />
+          <KivoComposerDock
+            value={draftPrompt}
+            onChange={setDraftPrompt}
+            onSend={handleSend}
+            onPlusClick={() => setActionSheetOpen(true)}
+            onQuickActionClick={() => setWorkspaceOpen(true)}
+            onMicClick={toggleMic}
+            canSend={canSend}
+            isListening={isListening}
+            isSending={isBusy}
+            placeholder={placeholder}
+            keyboardOffset={keyboardOffset}
+            containerRef={composerDockRef}
+          />
 
-        <WorkspaceSheet
-          open={workspaceOpen}
-          onClose={closeWorkspace}
-          onQuickAction={handleQuickAction}
-          onConnectorAction={handleConnectorAction}
-          onToolSelect={handleToolSelect}
-          onRecentSelect={handleRecentSelect}
-        />
+          <KivoReferralSuccessToast
+            open={referralToastOpen}
+            title={referralToastTitle}
+            detail={referralToastDetail}
+            onClose={() => setReferralToastOpen(false)}
+          />
 
-        <input
-          ref={fileInputRef}
-          type="file"
-          multiple
-          accept={filePickerAccept}
-          className="hidden"
-          onChange={(event) => {
-            addAttachments(event.target.files ?? []);
-            event.currentTarget.value = '';
-            setFilePickerAccept('');
-          }}
-        />
+          <KivoActionSheet
+            open={actionSheetOpen}
+            isListening={isListening}
+            attachments={attachments}
+            toolState={{
+              gmail: {
+                connected: gmailConnected,
+                subtitle: 'Inbox summary, urgent emails, subscriptions',
+              },
+              calendar: {
+                connected: calendarConnected,
+                subtitle: 'Today plan, reminders, free time',
+              },
+              'money-saver': {
+                connected: true,
+                subtitle: 'Find leaks, subscriptions, savings',
+              },
+              tasks: {
+                connected: true,
+                subtitle: 'Notes, todos, action items',
+              },
+            }}
+            onClose={closeActionSheet}
+            onAddImages={() => openFilePicker('image/*')}
+            onAddFiles={() => openFilePicker()}
+            onPasteLink={handlePasteLink}
+            onVoiceInput={toggleMic}
+            onAiAction={handleAiAction}
+            onToolAction={handleActionTool}
+          />
+
+          <WorkspaceSheet
+            open={workspaceOpen}
+            onClose={closeWorkspace}
+            onQuickAction={handleQuickAction}
+            onConnectorAction={handleConnectorAction}
+            onToolSelect={handleToolSelect}
+            onRecentSelect={handleRecentSelect}
+          />
+
+          <input
+            ref={fileInputRef}
+            type="file"
+            multiple
+            accept={filePickerAccept}
+            className="hidden"
+            onChange={(event) => {
+              addAttachments(event.target.files ?? []);
+              event.currentTarget.value = '';
+              setFilePickerAccept('');
+            }}
+          />
+        </div>
       </div>
     </div>
   );
