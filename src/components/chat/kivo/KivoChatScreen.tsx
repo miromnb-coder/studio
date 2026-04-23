@@ -1072,7 +1072,7 @@ export function KivoChatScreen() {
 
           <KivoChatScreenNoticeToast notice={notice} />
 
-          <div className="pl-3">
+          <div>
             <KivoComposerDock
               value={draftPrompt}
               onChange={setDraftPrompt}
@@ -1086,6 +1086,7 @@ export function KivoChatScreen() {
               placeholder={placeholder}
               keyboardOffset={keyboardOffset}
               containerRef={composerDockRef}
+              desktopShiftX={Math.round(KIVO_CHAT_SIDEBAR_RAIL_WIDTH / 2)}
             />
           </div>
 

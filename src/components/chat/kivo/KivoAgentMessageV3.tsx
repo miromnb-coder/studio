@@ -18,7 +18,7 @@ export function KivoAgentMessageV3({
   streaming,
 }: Props) {
   return (
-    <div className="space-y-3">
+    <div className="space-y-2.5 text-[14px] leading-[1.5]">
       {status &&
         status !==
           "completed" && (
@@ -27,7 +27,7 @@ export function KivoAgentMessageV3({
           />
         )}
 
-      <div className="rounded-3xl border border-white/10 bg-white/5 p-4 backdrop-blur-xl">
+      <div className="rounded-3xl border border-white/10 bg-white/5 p-3.5 backdrop-blur-xl">
         {streaming ? (
           <KivoTypingStream
             text={content}
