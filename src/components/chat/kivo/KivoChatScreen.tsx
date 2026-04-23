@@ -19,6 +19,7 @@ import { KivoComposerDock } from './KivoComposerDock';
 import {
   KivoChatSidebarArea,
   KIVO_CHAT_SIDEBAR_RAIL_WIDTH,
+  KIVO_CHAT_SIDEBAR_OPEN_WIDTH,
 } from './KivoChatSidebarArea';
 import { KivoReferralSuccessToast } from './KivoReferralSuccessToast';
 import { type KivoSidebarRecentChat } from './KivoSidebar';
@@ -102,6 +103,7 @@ export function KivoChatScreen() {
   const isNearBottomRef = useRef(true);
   const scrollMemoryRef = useRef<Record<string, number>>({});
   const [showScrollToLatest, setShowScrollToLatest] = useState(false);
+  const [isSidebarOpen, setIsSidebarOpen] = useState(() => messages.length === 0);
   const [keyboardOffset, setKeyboardOffset] = useState(0);
   const [bottomOverlayInset, setBottomOverlayInset] = useState(0);
   const scrollTickingRef = useRef(false);
@@ -115,6 +117,18 @@ export function KivoChatScreen() {
   const isBusy = isSending || isAgentResponding;
 
   const previousHasMessagesRef = useRef(hasMessages);
+
+  useEffect(() => {
+    const previousHasMessages = previousHasMessagesRef.current;
+
+    if (hasMessages && !previousHasMessages) {
+      setIsSidebarOpen(false);
+    } else if (!hasMessages && previousHasMessages) {
+      setIsSidebarOpen(true);
+    }
+
+    previousHasMessagesRef.current = hasMessages;
+  }, [hasMessages]);
 
   const scrollBottomPadding = Math.max(
     MIN_SCROLL_SAFETY_SPACE,
@@ -1009,6 +1023,8 @@ export function KivoChatScreen() {
       <KivoChatScreenBackground />
 
       <KivoChatSidebarArea
+        panelOpen={isSidebarOpen}
+        onPanelOpenChange={setIsSidebarOpen}
         hasMessages={hasMessages}
         userName={user?.name || 'Miro'}
         plan="free"
@@ -1032,12 +1048,18 @@ export function KivoChatScreen() {
 
       <div
         className="relative h-full transition-[padding-left] duration-300 ease-out"
-        style={{ paddingLeft: `${KIVO_CHAT_SIDEBAR_RAIL_WIDTH}px` }}
+        style={{
+          paddingLeft: `${
+            isSidebarOpen ? KIVO_CHAT_SIDEBAR_OPEN_WIDTH : KIVO_CHAT_SIDEBAR_RAIL_WIDTH
+          }px`,
+        }}
       >
         <div className="mx-auto flex h-full w-full max-w-[560px] flex-col">
           <KivoChatHeader
             title="Kivo"
             hasMessages={hasMessages}
+            isSidebarOpen={isSidebarOpen}
+            onSidebarToggle={() => setIsSidebarOpen((open) => !open)}
             onSummarize={handleHeaderSummarize}
             onCreateTask={handleHeaderCreateTask}
           />
@@ -1076,7 +1098,11 @@ export function KivoChatScreen() {
             className="[&>div]:!left-[var(--kivo-composer-sidebar-offset)] [&>div]:!right-0 [&>div]:!mx-0 [&>div]:!w-[calc(100%-var(--kivo-composer-sidebar-offset))] [&>div]:!max-w-none [&>div]:!translate-x-0 [&>div]:transition-[left,width] [&>div]:duration-300 [&>div]:ease-out"
             style={
               {
-                ['--kivo-composer-sidebar-offset' as string]: `${KIVO_CHAT_SIDEBAR_RAIL_WIDTH}px`,
+                ['--kivo-composer-sidebar-offset' as string]: `${
+                  isSidebarOpen
+                    ? KIVO_CHAT_SIDEBAR_OPEN_WIDTH
+                    : KIVO_CHAT_SIDEBAR_RAIL_WIDTH
+                }px`,
               } as CSSProperties
             }
           >

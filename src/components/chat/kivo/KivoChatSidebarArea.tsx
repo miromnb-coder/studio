@@ -18,18 +18,33 @@ type KivoChatSidebarAreaProps = Omit<
   'panelOpen' | 'activeSection' | 'onSectionChange' | 'onClosePanel'
 > & {
   initialSection?: KivoSidebarSection | null;
+  panelOpen?: boolean;
+  onPanelOpenChange?: (open: boolean) => void;
 };
 
 export function KivoChatSidebarArea({
   initialSection = null,
+  panelOpen: panelOpenProp,
+  onPanelOpenChange,
   ...sidebarProps
 }: KivoChatSidebarAreaProps) {
-  const [panelOpen, setPanelOpen] = useState(false);
+  const [panelOpenInternal, setPanelOpenInternal] = useState(false);
   const [activeSection, setActiveSection] = useState<KivoSidebarSection | null>(initialSection);
+  const panelOpen = panelOpenProp ?? panelOpenInternal;
+
+  const setPanelOpen = useCallback(
+    (open: boolean) => {
+      if (panelOpenProp === undefined) {
+        setPanelOpenInternal(open);
+      }
+      onPanelOpenChange?.(open);
+    },
+    [onPanelOpenChange, panelOpenProp],
+  );
 
   const handleCloseSidebarPanel = useCallback(() => {
     setPanelOpen(false);
-  }, []);
+  }, [setPanelOpen]);
 
   const fireSectionAction = useCallback(
     (section: KivoSidebarSection) => {
