@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useState } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import KivoSidebar, {
   KivoSidebarPanelContent,
@@ -8,16 +8,22 @@ import KivoSidebar, {
   type KivoSidebarSection,
 } from './KivoSidebar';
 
-const RAIL_WIDTH = 84;
-const PANEL_WIDTH = 332;
+const CLOSED_WIDTH = 84;
+const OPEN_WIDTH = 332;
 const TOP_OFFSET = 88;
 const BOTTOM_OFFSET = 20;
 
-type KivoChatSidebarAreaProps = Omit<KivoSidebarProps, 'panelOpen' | 'activeSection' | 'onSectionChange' | 'onClosePanel'> & {
+type KivoChatSidebarAreaProps = Omit<
+  KivoSidebarProps,
+  'panelOpen' | 'activeSection' | 'onSectionChange' | 'onClosePanel'
+> & {
   initialSection?: KivoSidebarSection | null;
 };
 
-export function KivoChatSidebarArea({ initialSection = 'chats', ...sidebarProps }: KivoChatSidebarAreaProps) {
+export function KivoChatSidebarArea({
+  initialSection = null,
+  ...sidebarProps
+}: KivoChatSidebarAreaProps) {
   const [panelOpen, setPanelOpen] = useState(false);
   const [activeSection, setActiveSection] = useState<KivoSidebarSection | null>(initialSection);
 
@@ -25,16 +31,8 @@ export function KivoChatSidebarArea({ initialSection = 'chats', ...sidebarProps 
     setPanelOpen(false);
   }, []);
 
-  const handleSidebarSectionChange = useCallback(
+  const fireSectionAction = useCallback(
     (section: KivoSidebarSection) => {
-      if (activeSection === section && panelOpen) {
-        setPanelOpen(false);
-        return;
-      }
-
-      setActiveSection(section);
-      setPanelOpen(true);
-
       switch (section) {
         case 'new':
           sidebarProps.onNewChat?.();
@@ -58,74 +56,104 @@ export function KivoChatSidebarArea({ initialSection = 'chats', ...sidebarProps 
           break;
       }
     },
-    [activeSection, panelOpen, sidebarProps],
+    [sidebarProps],
   );
 
-  const sharedSidebarProps: KivoSidebarProps = {
-    ...sidebarProps,
-    panelOpen,
-    activeSection,
-    onClosePanel: handleCloseSidebarPanel,
-    onSectionChange: handleSidebarSectionChange,
-  };
+  const handleSidebarSectionChange = useCallback(
+    (section: KivoSidebarSection) => {
+      if (panelOpen && activeSection === section) {
+        setPanelOpen(false);
+        return;
+      }
+
+      setActiveSection(section);
+      setPanelOpen(true);
+      fireSectionAction(section);
+    },
+    [activeSection, fireSectionAction, panelOpen],
+  );
+
+  const sharedSidebarProps: KivoSidebarProps = useMemo(
+    () => ({
+      ...sidebarProps,
+      panelOpen,
+      activeSection,
+      onClosePanel: handleCloseSidebarPanel,
+      onSectionChange: handleSidebarSectionChange,
+    }),
+    [sidebarProps, panelOpen, activeSection, handleCloseSidebarPanel, handleSidebarSectionChange],
+  );
 
   return (
     <>
-      <div
-        className="fixed left-0 z-[70]"
+      <AnimatePresence initial={false}>
+        {panelOpen ? (
+          <motion.button
+            key="kivo-sidebar-overlay"
+            type="button"
+            aria-label="Close sidebar"
+            onClick={handleCloseSidebarPanel}
+            className="fixed inset-0 z-[65] bg-transparent"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.18, ease: 'easeOut' }}
+          />
+        ) : null}
+      </AnimatePresence>
+
+      <motion.aside
+        aria-label="Kivo sidebar"
+        className="fixed left-0 z-[80] overflow-hidden border-r border-black/[0.04] bg-[#F7F8FA]/96 backdrop-blur-xl"
         style={{
           top: TOP_OFFSET,
           bottom: BOTTOM_OFFSET,
-          width: RAIL_WIDTH,
+          borderTopRightRadius: 28,
+          borderBottomRightRadius: 28,
+          boxShadow: '18px 0 54px rgba(15,23,42,0.08)',
+        }}
+        initial={false}
+        animate={{
+          width: panelOpen ? OPEN_WIDTH : CLOSED_WIDTH,
+        }}
+        transition={{
+          duration: panelOpen ? 0.24 : 0.2,
+          ease: [0.22, 1, 0.36, 1],
         }}
       >
-        <KivoSidebar {...sharedSidebarProps} />
-      </div>
+        <div className="flex h-full min-w-0">
+          <div
+            className="relative z-[2] h-full shrink-0"
+            style={{
+              width: CLOSED_WIDTH,
+            }}
+          >
+            <KivoSidebar {...sharedSidebarProps} />
+          </div>
 
-      <AnimatePresence initial={false}>
-        {panelOpen ? (
-          <>
-            <motion.button
-              type="button"
-              aria-label="Close sidebar panel"
-              onClick={handleCloseSidebarPanel}
-              className="fixed inset-0 z-[65] bg-transparent"
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-            />
-
-            <motion.div
-              className="fixed z-[80] overflow-hidden border-r border-black/[0.04] bg-[#F7F8FA]/97 backdrop-blur-xl"
-              style={{
-                top: TOP_OFFSET,
-                bottom: BOTTOM_OFFSET,
-                left: RAIL_WIDTH,
-                width: PANEL_WIDTH,
-                borderTopRightRadius: 28,
-                borderBottomRightRadius: 28,
-                boxShadow: '18px 0 54px rgba(15,23,42,0.08)',
-              }}
-              initial={{ width: 0, opacity: 1 }}
-              animate={{ width: PANEL_WIDTH, opacity: 1 }}
-              exit={{ width: 0, opacity: 1 }}
-              transition={{ duration: 0.24, ease: 'easeOut' }}
-            >
+          <AnimatePresence initial={false}>
+            {panelOpen && activeSection ? (
               <motion.div
-                className="h-full"
-                initial={{ x: -10, opacity: 0 }}
-                animate={{ x: 0, opacity: 1 }}
-                exit={{ x: -10, opacity: 0 }}
+                key={activeSection}
+                className="relative h-full min-w-0 flex-1 border-l border-black/[0.035]"
+                initial={{ opacity: 0, x: -12 }}
+                animate={{ opacity: 1, x: 0 }}
+                exit={{ opacity: 0, x: -12 }}
                 transition={{ duration: 0.18, ease: 'easeOut' }}
               >
-                <KivoSidebarPanelContent {...sharedSidebarProps} />
+                <div className="h-full overflow-hidden bg-transparent">
+                  <KivoSidebarPanelContent {...sharedSidebarProps} />
+                </div>
               </motion.div>
-            </motion.div>
-          </>
-        ) : null}
-      </AnimatePresence>
+            ) : null}
+          </AnimatePresence>
+        </div>
+      </motion.aside>
     </>
   );
 }
 
-export { RAIL_WIDTH as KIVO_CHAT_SIDEBAR_RAIL_WIDTH };
+export {
+  CLOSED_WIDTH as KIVO_CHAT_SIDEBAR_RAIL_WIDTH,
+  OPEN_WIDTH as KIVO_CHAT_SIDEBAR_OPEN_WIDTH,
+};
