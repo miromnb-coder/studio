@@ -1,6 +1,4 @@
 'use client';
-
-import { AnimatePresence, motion } from 'framer-motion';
 import {
   Bell,
   BrainCircuit,
@@ -33,7 +31,7 @@ export type KivoSidebarRecentChat = {
   timestamp?: string;
 };
 
-type KivoSidebarProps = {
+export type KivoSidebarProps = {
   hasMessages?: boolean;
   panelOpen: boolean;
   activeSection: KivoSidebarSection | null;
@@ -70,11 +68,6 @@ type RailItem = {
   icon: React.ReactNode;
   dividerBefore?: boolean;
 };
-
-const RAIL_WIDTH = 84;
-const PANEL_WIDTH = 332;
-const TOP_OFFSET = 88;
-const BOTTOM_OFFSET = 20;
 
 const RAIL_ITEMS: RailItem[] = [
   {
@@ -665,129 +658,34 @@ function PanelContent(props: KivoSidebarProps) {
 }
 
 export default function KivoSidebar(props: KivoSidebarProps) {
-  const {
-    panelOpen,
-    activeSection,
-    onClosePanel,
-    onSectionChange,
-    onNewChat,
-    onSearch,
-    onOpenAgents,
-    onOpenTools,
-    onOpenAlerts,
-    onOpenSettings,
-  } = props;
-
-  const handleRailClick = (section: KivoSidebarSection) => {
-    if (activeSection === section && panelOpen) {
-      onClosePanel();
-      return;
-    }
-
-    onSectionChange(section);
-
-    switch (section) {
-      case 'new':
-        onNewChat?.();
-        break;
-      case 'search':
-        onSearch?.();
-        break;
-      case 'agents':
-        onOpenAgents?.();
-        break;
-      case 'tools':
-        onOpenTools?.();
-        break;
-      case 'alerts':
-        onOpenAlerts?.();
-        break;
-      case 'settings':
-        onOpenSettings?.();
-        break;
-      default:
-        break;
-    }
-  };
+  const { panelOpen, activeSection, onSectionChange } = props;
 
   return (
-    <>
-      <div
-        className="fixed left-0 z-[70]"
-        style={{
-          top: TOP_OFFSET,
-          bottom: BOTTOM_OFFSET,
-          width: RAIL_WIDTH,
-        }}
-      >
-        <div className="flex h-full w-full flex-col border-r border-black/[0.04] bg-[#F7F8FA]/92 px-3 py-4 shadow-[8px_0_28px_rgba(15,23,42,0.045)] backdrop-blur-xl">
-          <div className="mb-4 flex items-center justify-center">
-            <div className="flex h-12 w-12 items-center justify-center rounded-full bg-[#7B5342] text-[24px] font-medium text-white">
-              {(props.userName || 'M').charAt(0).toUpperCase()}
-            </div>
-          </div>
-
-          <div className="flex flex-col items-center gap-2">
-            {RAIL_ITEMS.map((item) => (
-              <div key={item.id} className="flex w-full flex-col items-center">
-                {item.dividerBefore ? (
-                  <div className="mb-2 mt-1 h-px w-10 bg-black/[0.06]" />
-                ) : null}
-
-                <RailButton
-                  label={item.label}
-                  icon={item.icon}
-                  active={panelOpen && activeSection === item.id}
-                  onClick={() => handleRailClick(item.id)}
-                />
-              </div>
-            ))}
-          </div>
+    <div className="flex h-full w-full flex-col border-r border-black/[0.04] bg-[#F7F8FA]/92 px-3 py-4 shadow-[8px_0_28px_rgba(15,23,42,0.045)] backdrop-blur-xl">
+      <div className="mb-4 flex items-center justify-center">
+        <div className="flex h-12 w-12 items-center justify-center rounded-full bg-[#7B5342] text-[24px] font-medium text-white">
+          {(props.userName || 'M').charAt(0).toUpperCase()}
         </div>
       </div>
 
-      <AnimatePresence initial={false}>
-        {panelOpen ? (
-          <>
-            <motion.button
-              type="button"
-              aria-label="Close sidebar panel"
-              onClick={onClosePanel}
-              className="fixed inset-0 z-[65] bg-transparent"
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-            />
+      <div className="flex flex-col items-center gap-2">
+        {RAIL_ITEMS.map((item) => (
+          <div key={item.id} className="flex w-full flex-col items-center">
+            {item.dividerBefore ? <div className="mb-2 mt-1 h-px w-10 bg-black/[0.06]" /> : null}
 
-            <motion.div
-              className="fixed z-[80] overflow-hidden border-r border-black/[0.04] bg-[#F7F8FA]/97 backdrop-blur-xl"
-              style={{
-                top: TOP_OFFSET,
-                bottom: BOTTOM_OFFSET,
-                left: RAIL_WIDTH,
-                width: PANEL_WIDTH,
-                borderTopRightRadius: 28,
-                borderBottomRightRadius: 28,
-                boxShadow: '18px 0 54px rgba(15,23,42,0.08)',
-              }}
-              initial={{ width: 0, opacity: 1 }}
-              animate={{ width: PANEL_WIDTH, opacity: 1 }}
-              exit={{ width: 0, opacity: 1 }}
-              transition={{ duration: 0.24, ease: 'easeOut' }}
-            >
-              <motion.div
-                className="h-full"
-                initial={{ x: -10, opacity: 0 }}
-                animate={{ x: 0, opacity: 1 }}
-                exit={{ x: -10, opacity: 0 }}
-                transition={{ duration: 0.18, ease: 'easeOut' }}
-              >
-                <PanelContent {...props} />
-              </motion.div>
-            </motion.div>
-          </>
-        ) : null}
-      </AnimatePresence>
-    </>
+            <RailButton
+              label={item.label}
+              icon={item.icon}
+              active={panelOpen && activeSection === item.id}
+              onClick={() => onSectionChange(item.id)}
+            />
+          </div>
+        ))}
+      </div>
+    </div>
   );
+}
+
+export function KivoSidebarPanelContent(props: KivoSidebarProps) {
+  return <PanelContent {...props} />;
 }
