@@ -19,7 +19,6 @@ import { KivoComposerDock } from './KivoComposerDock';
 import {
   KivoChatSidebarArea,
   KIVO_CHAT_SIDEBAR_RAIL_WIDTH,
-  KIVO_CHAT_SIDEBAR_OPEN_WIDTH,
 } from './KivoChatSidebarArea';
 import { KivoReferralSuccessToast } from './KivoReferralSuccessToast';
 import { type KivoSidebarRecentChat } from './KivoSidebar';
@@ -62,6 +61,14 @@ type ProductivityToolId = 'gmail' | 'calendar' | 'money-saver' | 'tasks';
 const NEAR_BOTTOM_THRESHOLD = 140;
 const SCROLL_MEMORY_KEY = 'kivo-chat-scroll-memory-v1';
 const MIN_SCROLL_SAFETY_SPACE = 28;
+
+/**
+ * Sidebarin open-tila on overlay, joten chat-layout ei saa kutistua sen mukana.
+ * Huomioidaan vain pysyvä rail + pieni hengitystila.
+ */
+const CHAT_LEFT_OFFSET = KIVO_CHAT_SIDEBAR_RAIL_WIDTH + 12;
+const COMPOSER_LEFT_OFFSET = KIVO_CHAT_SIDEBAR_RAIL_WIDTH + 12;
+
 export function KivoChatScreen() {
   const router = useRouter();
   const pathname = usePathname();
@@ -1049,14 +1056,11 @@ export function KivoChatScreen() {
       <div
         className="relative h-full transition-[padding-left] duration-300 ease-out"
         style={{
-          paddingLeft: `${
-            isSidebarOpen ? KIVO_CHAT_SIDEBAR_OPEN_WIDTH : KIVO_CHAT_SIDEBAR_RAIL_WIDTH
-          }px`,
+          paddingLeft: `${KIVO_CHAT_SIDEBAR_RAIL_WIDTH + 12}px`,
         }}
       >
         <div className="mx-auto flex h-full w-full max-w-[560px] flex-col">
           <KivoChatHeader
-            title="Kivo"
             hasMessages={hasMessages}
             isSidebarOpen={isSidebarOpen}
             onSidebarToggle={() => setIsSidebarOpen((open) => !open)}
@@ -1095,14 +1099,10 @@ export function KivoChatScreen() {
           <KivoChatScreenNoticeToast notice={notice} />
 
           <div
-            className="[&>div]:!left-[var(--kivo-composer-sidebar-offset)] [&>div]:!right-0 [&>div]:!mx-0 [&>div]:!w-[calc(100%-var(--kivo-composer-sidebar-offset))] [&>div]:!max-w-none [&>div]:!translate-x-0 [&>div]:transition-[left,width] [&>div]:duration-300 [&>div]:ease-out"
+            className="[&>div]:!left-[var(--kivo-composer-left)] [&>div]:!right-3 [&>div]:!mx-0 [&>div]:!w-auto [&>div]:!max-w-none [&>div]:!translate-x-0 [&>div]:transition-[left,right] [&>div]:duration-300 [&>div]:ease-out"
             style={
               {
-                ['--kivo-composer-sidebar-offset' as string]: `${
-                  isSidebarOpen
-                    ? KIVO_CHAT_SIDEBAR_OPEN_WIDTH
-                    : KIVO_CHAT_SIDEBAR_RAIL_WIDTH
-                }px`,
+                ['--kivo-composer-left' as string]: `${COMPOSER_LEFT_OFFSET}px`,
               } as CSSProperties
             }
           >
@@ -1187,3 +1187,5 @@ export function KivoChatScreen() {
     </div>
   );
 }
+
+export default KivoChatScreen;
