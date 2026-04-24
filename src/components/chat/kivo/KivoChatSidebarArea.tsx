@@ -2,6 +2,7 @@
 
 import { useCallback, useMemo, useState } from 'react';
 import { motion } from 'framer-motion';
+import { usePathname, useRouter } from 'next/navigation';
 import KivoSidebar, {
   type KivoSidebarProps,
   type KivoSidebarSection,
@@ -23,32 +24,52 @@ export function KivoChatSidebarArea({
   onPanelOpenChange,
   ...sidebarProps
 }: KivoChatSidebarAreaProps) {
+  const router = useRouter();
+  const pathname = usePathname();
   const [activeSection, setActiveSection] = useState<KivoSidebarSection | null>(
     initialSection,
+  );
+
+  const navigateTo = useCallback(
+    (href: string, action?: () => void) => {
+      if (pathname === href) {
+        onPanelOpenChange?.(false);
+        return;
+      }
+
+      if (action) {
+        action();
+        return;
+      }
+
+      router.push(href);
+    },
+    [onPanelOpenChange, pathname, router],
   );
 
   const fireSectionAction = useCallback(
     (section: KivoSidebarSection) => {
       switch (section) {
         case 'new':
-          sidebarProps.onNewChat?.();
+          navigateTo('/chat', sidebarProps.onNewChat);
           break;
         case 'search':
-          sidebarProps.onSearch?.();
+          navigateTo('/search', sidebarProps.onSearch);
           break;
         case 'chats':
+          navigateTo('/history');
           break;
         case 'agents':
-          sidebarProps.onOpenAgents?.();
+          navigateTo('/agents', sidebarProps.onOpenAgents);
           break;
         case 'tools':
-          sidebarProps.onOpenTools?.();
+          navigateTo('/tools', sidebarProps.onOpenTools);
           break;
         case 'alerts':
-          sidebarProps.onOpenAlerts?.();
+          navigateTo('/alerts', sidebarProps.onOpenAlerts);
           break;
         case 'settings':
-          sidebarProps.onOpenSettings?.();
+          navigateTo('/settings', sidebarProps.onOpenSettings);
           break;
         default:
           break;
@@ -61,6 +82,7 @@ export function KivoChatSidebarArea({
       sidebarProps.onOpenTools,
       sidebarProps.onOpenAlerts,
       sidebarProps.onOpenSettings,
+      navigateTo,
     ],
   );
 
@@ -101,7 +123,7 @@ export function KivoChatSidebarArea({
       animate={{ x: 0, opacity: 1 }}
       exit={{ x: -RAIL_WIDTH, opacity: 0 }}
       transition={{
-        duration: 0.22,
+        duration: 0.12,
         ease: [0.22, 1, 0.36, 1],
       }}
     >
