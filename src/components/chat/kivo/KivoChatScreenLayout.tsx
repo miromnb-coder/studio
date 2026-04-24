@@ -165,11 +165,7 @@ export function KivoChatScreenLayout({
   filePickerAccept,
   onHiddenFileInputChange,
 }: Props) {
-  const sidebarWidth = showSidebarRail
-    ? isSidebarOpen
-      ? KIVO_CHAT_SIDEBAR_OPEN_WIDTH
-      : KIVO_CHAT_SIDEBAR_RAIL_WIDTH
-    : 0;
+  const sidebarWidth = showSidebarRail ? KIVO_CHAT_SIDEBAR_RAIL_WIDTH : 0;
 
   const contentLeftOffset = sidebarWidth ? sidebarWidth + SIDEBAR_GAP : 0;
   const composerLeftOffset = sidebarWidth ? sidebarWidth + SIDEBAR_GAP : 12;
