@@ -12,6 +12,7 @@ import { KivoChatScreenScrollToLatestButton } from './KivoChatScreenScrollToLate
 import { KivoComposerDock } from './KivoComposerDock';
 import {
   KivoChatSidebarArea,
+  KIVO_CHAT_SIDEBAR_OPEN_WIDTH,
   KIVO_CHAT_SIDEBAR_RAIL_WIDTH,
 } from './KivoChatSidebarArea';
 import { KivoReferralSuccessToast } from './KivoReferralSuccessToast';
@@ -23,9 +24,12 @@ type Props = {
   userName: string;
   hasMessages: boolean;
   sidebarRecentChats: KivoSidebarRecentChat[];
-  isSidebarOpen: boolean;
+
   showSidebarRail: boolean;
+  setShowSidebarRail: Dispatch<SetStateAction<boolean>>;
+  isSidebarOpen: boolean;
   setIsSidebarOpen: Dispatch<SetStateAction<boolean>>;
+
   createNewChat: () => void;
   handleSidebarSearch: () => void;
   handleOpenChatFromSidebar: (conversationId: string) => void;
@@ -94,8 +98,9 @@ export function KivoChatScreenLayout({
   userName,
   hasMessages,
   sidebarRecentChats,
-  isSidebarOpen,
   showSidebarRail,
+  setShowSidebarRail,
+  isSidebarOpen,
   setIsSidebarOpen,
   createNewChat,
   handleSidebarSearch,
@@ -160,13 +165,25 @@ export function KivoChatScreenLayout({
   filePickerAccept,
   onHiddenFileInputChange,
 }: Props) {
-  const contentLeftOffset = showSidebarRail
-    ? KIVO_CHAT_SIDEBAR_RAIL_WIDTH + SIDEBAR_GAP
+  const sidebarWidth = showSidebarRail
+    ? isSidebarOpen
+      ? KIVO_CHAT_SIDEBAR_OPEN_WIDTH
+      : KIVO_CHAT_SIDEBAR_RAIL_WIDTH
     : 0;
 
-  const composerLeftOffset = showSidebarRail
-    ? KIVO_CHAT_SIDEBAR_RAIL_WIDTH + SIDEBAR_GAP
-    : 12;
+  const contentLeftOffset = sidebarWidth ? sidebarWidth + SIDEBAR_GAP : 0;
+  const composerLeftOffset = sidebarWidth ? sidebarWidth + SIDEBAR_GAP : 12;
+
+  const handleSidebarToggle = () => {
+    if (showSidebarRail) {
+      setShowSidebarRail(false);
+      setIsSidebarOpen(false);
+      return;
+    }
+
+    setShowSidebarRail(true);
+    setIsSidebarOpen(false);
+  };
 
   return (
     <div className="relative h-[100dvh] overflow-hidden bg-transparent text-[#2f3640]">
@@ -202,8 +219,8 @@ export function KivoChatScreenLayout({
         <div className="mx-auto flex h-full w-full max-w-[560px] flex-col">
           <KivoChatHeader
             hasMessages={hasMessages}
-            isSidebarOpen={isSidebarOpen}
-            onSidebarToggle={() => setIsSidebarOpen((open) => !open)}
+            isSidebarOpen={showSidebarRail}
+            onSidebarToggle={handleSidebarToggle}
             onSummarize={handleHeaderSummarize}
             onCreateTask={handleHeaderCreateTask}
           />
