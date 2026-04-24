@@ -55,7 +55,7 @@ export default function AgentsPage() {
         className="min-h-screen px-5 pb-16 pt-7 transition-[padding-left] duration-300 ease-out"
         style={{ paddingLeft: railOpen ? RAIL_WIDTH + 24 : 20 }}
       >
-        <div className="mx-auto w-full max-w-[620px]">
+        <div className="mx-auto w-full max-w-[480px]">
           <header className="mb-10 flex items-center justify-between">
             <button
               type="button"
