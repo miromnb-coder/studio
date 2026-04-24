@@ -39,6 +39,8 @@ export function KivoChatScreen() {
   const fileInputRef = useRef<HTMLInputElement | null>(null);
 
   const hasMessages = messages.length > 0;
+  const showSidebarRail = !hasMessages || isSidebarOpen;
+
   useSidebarAutoToggle(hasMessages, setIsSidebarOpen);
 
   const showNotice = useCallback((title: string, detail: string) => {
@@ -183,6 +185,7 @@ export function KivoChatScreen() {
       hasMessages={hasMessages}
       sidebarRecentChats={sidebarRecentChats}
       isSidebarOpen={isSidebarOpen}
+      showSidebarRail={showSidebarRail}
       setIsSidebarOpen={setIsSidebarOpen}
       createNewChat={actions.createNewChat}
       handleSidebarSearch={actions.handleSidebarSearch}
