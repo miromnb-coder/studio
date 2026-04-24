@@ -17,13 +17,14 @@ import {
 import { KivoReferralSuccessToast } from './KivoReferralSuccessToast';
 import { type KivoSidebarRecentChat } from './KivoSidebar';
 
-const COMPOSER_LEFT_OFFSET = KIVO_CHAT_SIDEBAR_RAIL_WIDTH + 12;
+const SIDEBAR_GAP = 12;
 
 type Props = {
   userName: string;
   hasMessages: boolean;
   sidebarRecentChats: KivoSidebarRecentChat[];
   isSidebarOpen: boolean;
+  showSidebarRail: boolean;
   setIsSidebarOpen: Dispatch<SetStateAction<boolean>>;
   createNewChat: () => void;
   handleSidebarSearch: () => void;
@@ -94,6 +95,7 @@ export function KivoChatScreenLayout({
   hasMessages,
   sidebarRecentChats,
   isSidebarOpen,
+  showSidebarRail,
   setIsSidebarOpen,
   createNewChat,
   handleSidebarSearch,
@@ -158,36 +160,44 @@ export function KivoChatScreenLayout({
   filePickerAccept,
   onHiddenFileInputChange,
 }: Props) {
+  const contentLeftOffset = showSidebarRail
+    ? KIVO_CHAT_SIDEBAR_RAIL_WIDTH + SIDEBAR_GAP
+    : 0;
+
+  const composerLeftOffset = showSidebarRail
+    ? KIVO_CHAT_SIDEBAR_RAIL_WIDTH + SIDEBAR_GAP
+    : 12;
+
   return (
     <div className="relative h-[100dvh] overflow-hidden bg-transparent text-[#2f3640]">
       <KivoChatScreenBackground />
 
-      <KivoChatSidebarArea
-        panelOpen={isSidebarOpen}
-        onPanelOpenChange={setIsSidebarOpen}
-        hasMessages={hasMessages}
-        userName={userName}
-        plan="free"
-        recentChats={sidebarRecentChats}
-        onNewChat={createNewChat}
-        onSearch={handleSidebarSearch}
-        onOpenChat={handleOpenChatFromSidebar}
-        onOpenSettings={onOpenSettings}
-        onQuickTask={onQuickTask}
-        onAnalyzeFile={onAnalyzeFile}
-        onPlanMyDay={onPlanMyDay}
-        onOpenGmail={onOpenGmail}
-        onOpenCalendar={onOpenCalendar}
-        onOpenDrive={onOpenDrive}
-        onOpenWeb={onOpenWeb}
-        onUpgrade={onUpgrade}
-      />
+      {showSidebarRail ? (
+        <KivoChatSidebarArea
+          panelOpen={isSidebarOpen}
+          onPanelOpenChange={setIsSidebarOpen}
+          hasMessages={hasMessages}
+          userName={userName}
+          plan="free"
+          recentChats={sidebarRecentChats}
+          onNewChat={createNewChat}
+          onSearch={handleSidebarSearch}
+          onOpenChat={handleOpenChatFromSidebar}
+          onOpenSettings={onOpenSettings}
+          onQuickTask={onQuickTask}
+          onAnalyzeFile={onAnalyzeFile}
+          onPlanMyDay={onPlanMyDay}
+          onOpenGmail={onOpenGmail}
+          onOpenCalendar={onOpenCalendar}
+          onOpenDrive={onOpenDrive}
+          onOpenWeb={onOpenWeb}
+          onUpgrade={onUpgrade}
+        />
+      ) : null}
 
       <div
         className="relative h-full transition-[padding-left] duration-300 ease-out"
-        style={{
-          paddingLeft: `${KIVO_CHAT_SIDEBAR_RAIL_WIDTH + 12}px`,
-        }}
+        style={{ paddingLeft: `${contentLeftOffset}px` }}
       >
         <div className="mx-auto flex h-full w-full max-w-[560px] flex-col">
           <KivoChatHeader
@@ -229,7 +239,7 @@ export function KivoChatScreenLayout({
             className="[&>div]:!left-[var(--kivo-composer-left)] [&>div]:!right-3 [&>div]:!mx-0 [&>div]:!w-auto [&>div]:!max-w-none [&>div]:!translate-x-0 [&>div]:transition-[left,right] [&>div]:duration-300 [&>div]:ease-out"
             style={
               {
-                ['--kivo-composer-left' as string]: `${COMPOSER_LEFT_OFFSET}px`,
+                ['--kivo-composer-left' as string]: `${composerLeftOffset}px`,
               } as CSSProperties
             }
           >
