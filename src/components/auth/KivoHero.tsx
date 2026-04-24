@@ -5,6 +5,9 @@ import { KivoTypeHapticText } from '@/components/ui/KivoTypeHapticText';
 export function KivoHero() {
   return (
     <section className="flex w-full flex-col items-center text-center">
+      {/* Keeps the same top spacing, but no icon */}
+      <div className="mb-4 sm:mb-5 h-[58px] w-[58px] sm:h-[64px] sm:w-[64px]" />
+
       <div className="mb-7 text-[14px] font-medium uppercase tracking-[0.42em] text-black/28 sm:mb-8 sm:text-[15px]">
         KIVO
       </div>
