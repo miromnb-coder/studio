@@ -21,13 +21,15 @@ type KivoChatSidebarAreaProps = Omit<
 };
 
 export function KivoChatSidebarArea({
-  initialSection = null,
+  initialSection = 'chats',
   panelOpen: controlledPanelOpen,
   onPanelOpenChange,
   ...sidebarProps
 }: KivoChatSidebarAreaProps) {
   const [internalPanelOpen, setInternalPanelOpen] = useState(false);
-  const [activeSection, setActiveSection] = useState<KivoSidebarSection | null>(initialSection);
+  const [activeSection, setActiveSection] = useState<KivoSidebarSection | null>(
+    initialSection,
+  );
 
   const panelOpen =
     typeof controlledPanelOpen === 'boolean' ? controlledPanelOpen : internalPanelOpen;
@@ -37,6 +39,7 @@ export function KivoChatSidebarArea({
       if (typeof controlledPanelOpen !== 'boolean') {
         setInternalPanelOpen(next);
       }
+
       onPanelOpenChange?.(next);
     },
     [controlledPanelOpen, onPanelOpenChange],
@@ -136,7 +139,9 @@ export function KivoChatSidebarArea({
         style={{
           borderTopRightRadius: 22,
           borderBottomRightRadius: 22,
-          boxShadow: '10px 0 28px rgba(15,23,42,0.05)',
+          boxShadow: panelOpen
+            ? '14px 0 42px rgba(15,23,42,0.08)'
+            : '6px 0 18px rgba(15,23,42,0.035)',
         }}
         initial={false}
         animate={{ width: panelOpen ? OPEN_WIDTH : CLOSED_WIDTH }}
@@ -153,7 +158,7 @@ export function KivoChatSidebarArea({
           <AnimatePresence initial={false} mode="wait">
             {panelOpen ? (
               <motion.div
-                key={activeSection ?? 'default'}
+                key={activeSection ?? 'chats'}
                 className="relative h-full min-w-0 flex-1 border-l border-black/[0.03]"
                 initial={{ opacity: 0, x: -8 }}
                 animate={{ opacity: 1, x: 0 }}
