@@ -8,7 +8,6 @@ import { KivoChatScreenLayout } from './KivoChatScreenLayout';
 import {
   type KivoChatNotice,
   useKivoChatScreenHooks,
-  useSidebarAutoToggle,
 } from './KivoChatScreenHooks';
 import { useKivoChatScreenActions } from './KivoChatScreenActions';
 
@@ -31,7 +30,12 @@ export function KivoChatScreen() {
   const activeConversationId = useAppStore((s) => s.activeConversationId);
 
   const [notice, setNotice] = useState<KivoChatNotice | null>(null);
-  const [isSidebarOpen, setIsSidebarOpen] = useState(() => messages.length === 0);
+
+  // Rail visibility and expanded panel are intentionally separate:
+  // header button opens only the rail first; rail icon click expands the panel.
+  const [showSidebarRail, setShowSidebarRail] = useState(false);
+  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+
   const [referralToastOpen, setReferralToastOpen] = useState(false);
   const [referralToastTitle, setReferralToastTitle] = useState('');
   const [referralToastDetail, setReferralToastDetail] = useState('');
@@ -39,9 +43,13 @@ export function KivoChatScreen() {
   const fileInputRef = useRef<HTMLInputElement | null>(null);
 
   const hasMessages = messages.length > 0;
-  const showSidebarRail = !hasMessages || isSidebarOpen;
 
-  useSidebarAutoToggle(hasMessages, setIsSidebarOpen);
+  useEffect(() => {
+    if (hasMessages) {
+      setShowSidebarRail(false);
+      setIsSidebarOpen(false);
+    }
+  }, [hasMessages]);
 
   const showNotice = useCallback((title: string, detail: string) => {
     setNotice({ title, detail });
@@ -184,8 +192,9 @@ export function KivoChatScreen() {
       userName={user?.name || 'Miro'}
       hasMessages={hasMessages}
       sidebarRecentChats={sidebarRecentChats}
-      isSidebarOpen={isSidebarOpen}
       showSidebarRail={showSidebarRail}
+      setShowSidebarRail={setShowSidebarRail}
+      isSidebarOpen={isSidebarOpen}
       setIsSidebarOpen={setIsSidebarOpen}
       createNewChat={actions.createNewChat}
       handleSidebarSearch={actions.handleSidebarSearch}
