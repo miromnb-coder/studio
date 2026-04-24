@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
-import { useRouter } from 'next/navigation';
+import { usePathname, useRouter } from 'next/navigation';
 
 type KivoMode = 'lite' | 'smart' | 'operator';
 type KivoPlan = 'free' | 'plus';
@@ -247,6 +247,7 @@ export function KivoChatHeader({
   mode = 'lite',
 }: KivoChatHeaderProps) {
   const router = useRouter();
+  const pathname = usePathname();
 
   const [modeOpen, setModeOpen] = useState(false);
   const [moreOpen, setMoreOpen] = useState(false);
@@ -297,6 +298,7 @@ export function KivoChatHeader({
     () => MODE_OPTIONS.find((item) => item.id === currentMode) ?? MODE_OPTIONS[0],
     [currentMode],
   );
+  const showModeSelector = pathname === '/chat';
 
   const handleBack = () => {
     router.push('/home');
@@ -360,45 +362,47 @@ export function KivoChatHeader({
         </div>
 
         <div className="flex min-w-0 flex-1 justify-center">
-          <div ref={modeRef} className="relative min-w-0 max-w-full">
-            <button
-              type="button"
-              onClick={() => {
-                setModeOpen((v) => !v);
-                setMoreOpen(false);
-              }}
-              aria-label="Open agent mode selector"
-              className="inline-flex max-w-full items-center gap-1.5 whitespace-nowrap text-[17px] font-semibold tracking-[-0.04em] text-[#131A25] transition-opacity duration-200 hover:opacity-70 active:scale-[0.985] sm:text-[18px]"
-            >
-              <span className="truncate">{selectedMode.label.replace(' – Plus only', '')}</span>
-              <svg viewBox="0 0 20 20" className="h-[16px] w-[16px] shrink-0" fill="none">
-                <path
-                  d="M5 7.5L10 12.5L15 7.5"
-                  stroke="currentColor"
-                  strokeWidth="2"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                />
-              </svg>
-            </button>
+          {showModeSelector ? (
+            <div ref={modeRef} className="relative min-w-0 max-w-full">
+              <button
+                type="button"
+                onClick={() => {
+                  setModeOpen((v) => !v);
+                  setMoreOpen(false);
+                }}
+                aria-label="Open agent mode selector"
+                className="inline-flex max-w-full items-center gap-1.5 whitespace-nowrap text-[17px] font-semibold tracking-[-0.04em] text-[#131A25] transition-opacity duration-200 hover:opacity-70 active:scale-[0.985] sm:text-[18px]"
+              >
+                <span className="truncate">{selectedMode.label.replace(' – Plus only', '')}</span>
+                <svg viewBox="0 0 20 20" className="h-[16px] w-[16px] shrink-0" fill="none">
+                  <path
+                    d="M5 7.5L10 12.5L15 7.5"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  />
+                </svg>
+              </button>
 
-            {modeOpen ? (
-              <div className="absolute left-1/2 top-[34px] z-[70] w-[340px] max-w-[calc(100vw-28px)] -translate-x-1/2 pt-2 sm:max-w-[calc(100vw-40px)]">
-                <FloatingPanel>
-                  {MODE_OPTIONS.map((option, index) => (
-                    <div key={option.id}>
-                      {index !== 0 ? <Divider /> : null}
-                      <ModeOptionRow
-                        option={option}
-                        selected={option.id === currentMode}
-                        onClick={() => handleModeSelect(option.id)}
-                      />
-                    </div>
-                  ))}
-                </FloatingPanel>
-              </div>
-            ) : null}
-          </div>
+              {modeOpen ? (
+                <div className="absolute left-1/2 top-[34px] z-[70] w-[340px] max-w-[calc(100vw-28px)] -translate-x-1/2 pt-2 sm:max-w-[calc(100vw-40px)]">
+                  <FloatingPanel>
+                    {MODE_OPTIONS.map((option, index) => (
+                      <div key={option.id}>
+                        {index !== 0 ? <Divider /> : null}
+                        <ModeOptionRow
+                          option={option}
+                          selected={option.id === currentMode}
+                          onClick={() => handleModeSelect(option.id)}
+                        />
+                      </div>
+                    ))}
+                  </FloatingPanel>
+                </div>
+              ) : null}
+            </div>
+          ) : null}
         </div>
 
         <div
