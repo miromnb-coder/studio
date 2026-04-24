@@ -341,7 +341,9 @@ export function KivoChatHeader({
                   strokeWidth="2.1"
                   strokeLinecap="round"
                 />
-                {isSidebarOpen ? <circle cx="18.2" cy="16.5" r="1.1" fill="currentColor" /> : null}
+                {isSidebarOpen ? (
+  <circle cx="18.2" cy="16.5" r="1.1" fill="currentColor" />
+) : null}
               </svg>
             ) : (
               <svg viewBox="0 0 24 24" className="h-[21px] w-[21px]" fill="none">
