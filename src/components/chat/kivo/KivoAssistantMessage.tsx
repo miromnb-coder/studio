@@ -1,6 +1,7 @@
 'use client';
 
 import { AnimatePresence, motion } from 'framer-motion';
+import Image from 'next/image';
 import type { Message } from '@/app/store/app-store';
 import { ResponseRenderer } from '@/components/chat/ResponseRenderer';
 import { KivoWebSourceCards } from './KivoWebSourceCards';
@@ -9,27 +10,15 @@ function KivoBrandHeader() {
   return (
     <div className="mb-2.5 flex items-center gap-2">
       <div className="flex items-center gap-2">
-        <span className="inline-flex h-7 w-7 items-center justify-center">
-          <svg
-            viewBox="0 0 24 24"
-            aria-hidden="true"
-            className="h-6 w-6 text-[#171717]"
-            fill="none"
-          >
-            <circle cx="16.5" cy="7.5" r="2.1" fill="currentColor" />
-            <path
-              d="M6.5 15.2c1.3-3.8 4.2-6.1 7.9-6.1 2.6 0 4.2.8 5.8 2.5"
-              stroke="currentColor"
-              strokeWidth="1.9"
-              strokeLinecap="round"
-            />
-            <path
-              d="M4.6 12.7c1.1 5 4.7 7.7 9.4 7.7 3.1 0 5.3-1 7.2-3"
-              stroke="currentColor"
-              strokeWidth="1.9"
-              strokeLinecap="round"
-            />
-          </svg>
+        <span className="inline-flex h-7 w-7 items-center justify-center overflow-hidden rounded-[8px] bg-white shadow-[0_2px_8px_rgba(15,23,42,0.08)]">
+          <Image
+            src="/icon.svg"
+            alt="Kivo"
+            width={24}
+            height={24}
+            className="h-6 w-6 object-contain"
+            priority
+          />
         </span>
 
         <span
