@@ -1,44 +1,22 @@
 'use client';
 
+import Image from 'next/image';
 import { KivoTypeHapticText } from '@/components/ui/KivoTypeHapticText';
-
-function KivoLogoMark() {
-  return (
-    <svg
-      width="86"
-      height="70"
-      viewBox="0 0 172 140"
-      fill="none"
-      xmlns="http://www.w3.org/2000/svg"
-      aria-hidden="true"
-      className="h-[58px] w-[72px] sm:h-[64px] sm:w-[80px]"
-    >
-      <path
-        d="M32 109C39 118 55 124 80 123C110 121 136 105 153 84C162 73 166 61 165 50C164 44 162 39 158 35"
-        stroke="black"
-        strokeWidth="8"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-        fill="none"
-      />
-      <path
-        d="M71 81L105 51"
-        stroke="black"
-        strokeWidth="10"
-        strokeLinecap="round"
-        fill="none"
-      />
-      <circle cx="65" cy="85" r="18" fill="black" />
-      <circle cx="116" cy="44" r="30" fill="black" />
-    </svg>
-  );
-}
 
 export function KivoHero() {
   return (
     <section className="flex w-full flex-col items-center text-center">
       <div className="mb-4 sm:mb-5">
-        <KivoLogoMark />
+        <span className="inline-flex h-[58px] w-[58px] items-center justify-center overflow-hidden rounded-[16px] bg-white/85 shadow-[0_10px_26px_rgba(0,0,0,0.08)] sm:h-[64px] sm:w-[64px]">
+          <Image
+            src="/icon.svg"
+            alt="Kivo"
+            width={56}
+            height={56}
+            className="h-[46px] w-[46px] object-contain sm:h-[50px] sm:w-[50px]"
+            priority
+          />
+        </span>
       </div>
 
       <div className="mb-7 text-[14px] font-medium uppercase tracking-[0.42em] text-black/28 sm:mb-8 sm:text-[15px]">

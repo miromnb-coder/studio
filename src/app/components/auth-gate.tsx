@@ -1,7 +1,7 @@
 'use client';
 
 import { FormEvent, useState } from 'react';
-import { Sparkles } from 'lucide-react';
+import Image from 'next/image';
 import { useAuthSlice } from '@/app/lib/global-store';
 
 type AuthMode = 'signup' | 'login';
@@ -32,10 +32,10 @@ export function AuthGate({ children }: { children: React.ReactNode }) {
       <div className="w-full max-w-md rounded-[24px] border border-white/10 bg-[#1d2127] p-6 shadow-[0_16px_36px_rgba(0,0,0,0.32)]">
         <div className="mb-6 flex items-center gap-3">
           <div className="rounded-2xl bg-white/5 p-2.5 text-[#c9ced6]">
-            <Sparkles className="h-5 w-5" />
+            <Image src="/icon.svg" alt="Kivo" width={20} height={20} className="h-5 w-5" priority />
           </div>
           <div>
-            <p className="text-lg font-semibold tracking-tight">Welcome to MiroAI</p>
+            <p className="text-lg font-semibold tracking-tight">Welcome to Kivo</p>
             <p className="text-sm text-[#a1a1aa]">Quick local onboarding to get started.</p>
           </div>
         </div>
