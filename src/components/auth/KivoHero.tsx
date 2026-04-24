@@ -1,24 +1,10 @@
 'use client';
 
-import Image from 'next/image';
 import { KivoTypeHapticText } from '@/components/ui/KivoTypeHapticText';
 
 export function KivoHero() {
   return (
     <section className="flex w-full flex-col items-center text-center">
-      <div className="mb-4 sm:mb-5">
-        <span className="inline-flex h-[58px] w-[58px] items-center justify-center overflow-hidden rounded-[16px] bg-white/85 shadow-[0_10px_26px_rgba(0,0,0,0.08)] sm:h-[64px] sm:w-[64px]">
-          <Image
-            src="/icon.svg"
-            alt="Kivo"
-            width={56}
-            height={56}
-            className="h-[46px] w-[46px] object-contain sm:h-[50px] sm:w-[50px]"
-            priority
-          />
-        </span>
-      </div>
-
       <div className="mb-7 text-[14px] font-medium uppercase tracking-[0.42em] text-black/28 sm:mb-8 sm:text-[15px]">
         KIVO
       </div>
