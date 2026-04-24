@@ -1,7 +1,10 @@
 'use client';
 
+import { useState, type ReactNode } from 'react';
 import {
   Activity,
+  Bell,
+  CalendarDays,
   CheckCircle2,
   ChevronRight,
   CircleDollarSign,
@@ -9,178 +12,145 @@ import {
   Globe,
   Mail,
   Menu,
+  MessageCircle,
   Paperclip,
   Plus,
   Search,
-  SlidersHorizontal,
+  Settings2,
   Sparkles,
   Zap,
   ListChecks,
 } from 'lucide-react';
 
+const RAIL_WIDTH = 72;
+
 const agents = [
-  {
-    name: 'Research Agent',
-    desc: 'Finds information, analyzes data, and delivers insights.',
-    icon: Search,
-    tasks: '3 tasks',
-  },
-  {
-    name: 'Planner Agent',
-    desc: 'Plans your day, sets priorities, and keeps you on track.',
-    icon: ListChecks,
-    tasks: '2 tasks',
-  },
-  {
-    name: 'Money Agent',
-    desc: 'Monitors spending, finds savings, and optimizes finances.',
-    icon: CircleDollarSign,
-    tasks: '4 tasks',
-  },
-  {
-    name: 'Automation Agent',
-    desc: 'Automates workflows and repetitive tasks across your apps.',
-    icon: Zap,
-    tasks: '5 tasks',
-  },
-  {
-    name: 'Vision Agent',
-    desc: 'Understands images, documents, and visual data.',
-    icon: Eye,
-    tasks: '1 task',
-  },
+  { name: 'Research Agent', desc: 'Finds information, analyzes data, and delivers insights.', icon: Search, tasks: '3 tasks' },
+  { name: 'Planner Agent', desc: 'Plans your day, sets priorities, and keeps you on track.', icon: ListChecks, tasks: '2 tasks' },
+  { name: 'Money Agent', desc: 'Monitors spending, finds savings, and optimizes finances.', icon: CircleDollarSign, tasks: '4 tasks' },
+  { name: 'Automation Agent', desc: 'Automates workflows and repetitive tasks across your apps.', icon: Zap, tasks: '5 tasks' },
+  { name: 'Vision Agent', desc: 'Understands images, documents, and visual data.', icon: Eye, tasks: '1 task' },
 ];
 
 const recommended = [
-  {
-    name: 'Email Assistant',
-    desc: 'Summarizes emails and drafts smart replies.',
-    icon: Mail,
-  },
-  {
-    name: 'Document Analyst',
-    desc: 'Analyzes and extracts key insights from files.',
-    icon: Paperclip,
-  },
-  {
-    name: 'Web Monitor',
-    desc: 'Monitors websites and alerts you on changes.',
-    icon: Globe,
-  },
+  { name: 'Email Assistant', desc: 'Summarizes emails and drafts smart replies.', icon: Mail },
+  { name: 'Document Analyst', desc: 'Analyzes and extracts key insights from files.', icon: Paperclip },
+  { name: 'Web Monitor', desc: 'Monitors websites and alerts you on changes.', icon: Globe },
 ];
 
 const activity = [
-  {
-    text: 'Research Agent completed “Market analysis Q1 2024”',
-    time: '2h ago',
-    icon: Search,
-  },
-  {
-    text: 'Planner Agent updated your daily plan',
-    time: '3h ago',
-    icon: ListChecks,
-  },
-  {
-    text: 'Money Agent found a new saving opportunity',
-    time: '5h ago',
-    icon: CircleDollarSign,
-  },
+  { text: 'Research Agent completed “Market analysis Q1 2024”', time: '2h ago', icon: Search },
+  { text: 'Planner Agent updated your daily plan', time: '3h ago', icon: ListChecks },
+  { text: 'Money Agent found a new saving opportunity', time: '5h ago', icon: CircleDollarSign },
 ];
 
 export default function AgentsPage() {
+  const [railOpen, setRailOpen] = useState(true);
+
   return (
-    <main className="min-h-screen bg-[#FAFAFA] text-[#111318]">
-      <aside className="fixed inset-y-0 left-0 z-20 hidden w-[72px] flex-col items-center border-r border-black/[0.06] bg-white/75 px-3 py-5 backdrop-blur-xl md:flex">
-        <div className="flex h-10 w-10 items-center justify-center rounded-full bg-[#7B5342] text-[18px] font-medium text-white">
-          M
-        </div>
+    <main className="min-h-screen overflow-x-hidden bg-[#FAFAFA] text-[#111318]">
+      {railOpen ? <MiniRail /> : null}
 
-        <div className="mt-16 flex flex-1 flex-col items-center gap-5">
-          <Plus className="h-5 w-5" />
-          <Search className="h-5 w-5" />
-          <div className="rounded-2xl bg-black/[0.055] p-3">
-            <Sparkles className="h-5 w-5" />
-          </div>
-          <Zap className="h-5 w-5" />
-          <SlidersHorizontal className="h-5 w-5" />
-        </div>
+      <section
+        className="min-h-screen px-5 pb-16 pt-7 transition-[padding-left] duration-300 ease-out"
+        style={{ paddingLeft: railOpen ? RAIL_WIDTH + 24 : 20 }}
+      >
+        <div className="mx-auto w-full max-w-[760px]">
+          <header className="mb-10 flex items-center justify-between">
+            <button
+              type="button"
+              onClick={() => setRailOpen((open) => !open)}
+              className="flex h-10 w-10 items-center justify-center rounded-full hover:bg-black/[0.04] active:scale-[0.96]"
+              aria-label="Toggle sidebar"
+            >
+              <Menu className="h-5 w-5" />
+            </button>
 
-        <div className="text-center text-[11px] font-medium text-[#8A8F98]">
-          <div className="text-[24px] font-bold leading-none">K</div>
-          Kivo
-        </div>
-      </aside>
+            <div className="flex items-center gap-1.5 text-[15px] font-semibold">
+              <Zap className="h-4 w-4" />
+              Free
+            </div>
+          </header>
 
-      <section className="mx-auto max-w-[760px] px-5 pb-16 pt-8 md:ml-[92px] md:px-10">
-        <header className="mb-10 flex items-center justify-between">
-          <button className="flex h-10 w-10 items-center justify-center rounded-full hover:bg-black/[0.04]">
-            <Menu className="h-5 w-5" />
-          </button>
+          <div className="mb-8 flex items-start justify-between gap-4">
+            <div>
+              <h1 className="font-serif text-[42px] leading-none tracking-[-0.06em] text-[#15171C] sm:text-[44px]">
+                Agents
+              </h1>
+              <p className="mt-3 text-[15px] text-[#666C76]">
+                AI agents that work for you.
+              </p>
+            </div>
 
-          <div className="flex items-center gap-1.5 text-[15px] font-semibold">
-            <Zap className="h-4 w-4" />
-            Free
-          </div>
-        </header>
-
-        <div className="mb-8 flex items-start justify-between gap-4">
-          <div>
-            <h1 className="font-serif text-[44px] leading-none tracking-[-0.06em] text-[#15171C]">
-              Agents
-            </h1>
-            <p className="mt-3 text-[15px] text-[#666C76]">
-              AI agents that work for you.
-            </p>
+            <button className="mt-2 inline-flex items-center gap-2 rounded-[16px] bg-[#111318] px-5 py-3 text-[14px] font-medium text-white shadow-[0_12px_30px_rgba(17,19,24,0.16)] active:scale-[0.98]">
+              <Plus className="h-4 w-4" />
+              New agent
+            </button>
           </div>
 
-          <button className="mt-3 inline-flex items-center gap-2 rounded-[16px] bg-[#111318] px-5 py-3 text-[14px] font-medium text-white shadow-[0_12px_30px_rgba(17,19,24,0.16)] active:scale-[0.98]">
-            <Plus className="h-4 w-4" />
-            New agent
-          </button>
-        </div>
+          <div className="mb-8 grid grid-cols-2 gap-4">
+            <StatCard icon={<Activity />} label="Active agents" value="5" sub="Running tasks" />
+            <StatCard icon={<CheckCircle2 />} label="Tasks completed" value="128" sub="This week" />
+          </div>
 
-        <div className="mb-8 grid grid-cols-2 gap-4">
-          <StatCard icon={<Activity />} label="Active agents" value="5" sub="Running tasks" />
-          <StatCard icon={<CheckCircle2 />} label="Tasks completed" value="128" sub="This week" />
-        </div>
+          <SectionTitle>My agents</SectionTitle>
 
-        <SectionTitle>My agents</SectionTitle>
+          <div className="mb-10 overflow-hidden rounded-[24px] border border-black/[0.055] bg-white shadow-[0_12px_36px_rgba(15,23,42,0.035)]">
+            {agents.map((agent, index) => (
+              <AgentRow key={agent.name} {...agent} isLast={index === agents.length - 1} />
+            ))}
+          </div>
 
-        <div className="mb-10 overflow-hidden rounded-[24px] border border-black/[0.055] bg-white shadow-[0_12px_36px_rgba(15,23,42,0.035)]">
-          {agents.map((agent, index) => (
-            <AgentRow key={agent.name} {...agent} isLast={index === agents.length - 1} />
-          ))}
-        </div>
+          <SectionHeader title="Recommended for you" />
 
-        <div className="mb-5 flex items-center justify-between">
-          <SectionTitle className="mb-0">Recommended for you</SectionTitle>
-          <button className="inline-flex items-center gap-1 text-[14px] font-medium text-[#555B65]">
-            See all
-            <ChevronRight className="h-4 w-4" />
-          </button>
-        </div>
+          <div className="mb-10 grid grid-cols-3 gap-4">
+            {recommended.map((item) => (
+              <RecommendedCard key={item.name} {...item} />
+            ))}
+          </div>
 
-        <div className="mb-10 grid grid-cols-3 gap-4">
-          {recommended.map((item) => (
-            <RecommendedCard key={item.name} {...item} />
-          ))}
-        </div>
+          <SectionHeader title="Recent activity" />
 
-        <div className="mb-5 flex items-center justify-between">
-          <SectionTitle className="mb-0">Recent activity</SectionTitle>
-          <button className="inline-flex items-center gap-1 text-[14px] font-medium text-[#555B65]">
-            See all
-            <ChevronRight className="h-4 w-4" />
-          </button>
-        </div>
-
-        <div className="overflow-hidden rounded-[22px] border border-black/[0.055] bg-white shadow-[0_10px_30px_rgba(15,23,42,0.03)]">
-          {activity.map((item, index) => (
-            <ActivityRow key={item.text} {...item} isLast={index === activity.length - 1} />
-          ))}
+          <div className="overflow-hidden rounded-[22px] border border-black/[0.055] bg-white shadow-[0_10px_30px_rgba(15,23,42,0.03)]">
+            {activity.map((item, index) => (
+              <ActivityRow key={item.text} {...item} isLast={index === activity.length - 1} />
+            ))}
+          </div>
         </div>
       </section>
     </main>
+  );
+}
+
+function MiniRail() {
+  return (
+    <aside className="fixed inset-y-0 left-0 z-30 flex w-[72px] flex-col items-center border-r border-black/[0.06] bg-white/78 px-3 py-5 backdrop-blur-xl">
+      <div className="flex h-10 w-10 items-center justify-center rounded-full bg-[#7B5342] text-[18px] font-medium text-white">
+        M
+      </div>
+
+      <div className="mt-16 flex flex-1 flex-col items-center gap-5">
+        <Plus className="h-5 w-5" />
+        <Search className="h-5 w-5" />
+        <div className="rounded-2xl bg-black/[0.055] p-3">
+          <MessageCircle className="h-5 w-5" />
+        </div>
+        <Sparkles className="h-5 w-5" />
+        <CalendarDays className="h-5 w-5" />
+        <div className="relative">
+          <Bell className="h-5 w-5" />
+          <span className="absolute -right-2 -top-2 grid h-5 w-5 place-items-center rounded-full bg-[#111318] text-[11px] font-semibold text-white">
+            2
+          </span>
+        </div>
+        <Settings2 className="h-5 w-5" />
+      </div>
+
+      <div className="text-center text-[11px] font-medium text-[#8A8F98]">
+        <div className="text-[24px] font-bold leading-none">K</div>
+        Kivo
+      </div>
+    </aside>
   );
 }
 
@@ -188,7 +158,7 @@ function SectionTitle({
   children,
   className = '',
 }: {
-  children: React.ReactNode;
+  children: ReactNode;
   className?: string;
 }) {
   return (
@@ -198,20 +168,32 @@ function SectionTitle({
   );
 }
 
+function SectionHeader({ title }: { title: string }) {
+  return (
+    <div className="mb-5 flex items-center justify-between">
+      <SectionTitle className="mb-0">{title}</SectionTitle>
+      <button className="inline-flex items-center gap-1 text-[14px] font-medium text-[#555B65]">
+        See all
+        <ChevronRight className="h-4 w-4" />
+      </button>
+    </div>
+  );
+}
+
 function StatCard({
   icon,
   label,
   value,
   sub,
 }: {
-  icon: React.ReactNode;
+  icon: ReactNode;
   label: string;
   value: string;
   sub: string;
 }) {
   return (
-    <button className="flex items-center gap-5 rounded-[22px] border border-black/[0.055] bg-white px-6 py-5 text-left shadow-[0_10px_28px_rgba(15,23,42,0.035)] transition active:scale-[0.99]">
-      <div className="flex h-14 w-14 items-center justify-center rounded-[18px] bg-[#F4F4F5] text-[#111318]">
+    <button className="flex min-w-0 items-center gap-4 rounded-[22px] border border-black/[0.055] bg-white px-5 py-5 text-left shadow-[0_10px_28px_rgba(15,23,42,0.035)] active:scale-[0.99]">
+      <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-[18px] bg-[#F4F4F5] text-[#111318]">
         <div className="h-6 w-6">{icon}</div>
       </div>
 
@@ -223,7 +205,7 @@ function StatCard({
         <div className="mt-2 text-[13px] text-[#6B7280]">{sub}</div>
       </div>
 
-      <ChevronRight className="h-5 w-5 text-[#777D86]" />
+      <ChevronRight className="h-5 w-5 shrink-0 text-[#777D86]" />
     </button>
   );
 }
@@ -243,7 +225,7 @@ function AgentRow({
 }) {
   return (
     <div
-      className={`flex items-center gap-5 px-5 py-5 ${
+      className={`flex items-center gap-4 px-5 py-5 ${
         isLast ? '' : 'border-b border-black/[0.045]'
       }`}
     >
@@ -262,7 +244,7 @@ function AgentRow({
         </div>
       </div>
 
-      <div className="flex items-center gap-4">
+      <div className="flex shrink-0 items-center gap-4">
         <span className="rounded-[12px] bg-[#F4F4F5] px-3 py-2 text-[13px] font-medium">
           {tasks}
         </span>
@@ -322,7 +304,7 @@ function ActivityRow({
         isLast ? '' : 'border-b border-black/[0.045]'
       }`}
     >
-      <div className="flex h-10 w-10 items-center justify-center rounded-[14px] bg-[#F4F4F5]">
+      <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-[14px] bg-[#F4F4F5]">
         <Icon className="h-5 w-5" />
       </div>
 
@@ -331,7 +313,7 @@ function ActivityRow({
         <div className="mt-1 text-[13px] text-[#8A8F98]">{time}</div>
       </div>
 
-      <CheckCircle2 className="h-5 w-5 text-[#525861]" />
+      <CheckCircle2 className="h-5 w-5 shrink-0 text-[#525861]" />
     </div>
   );
 }
