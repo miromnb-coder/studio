@@ -7,7 +7,6 @@ import {
   ChevronRight,
   Clock3,
   FileText,
-  Mail,
   MoreHorizontal,
   Search,
   X,
@@ -179,7 +178,7 @@ export default function SearchPage() {
 
             <SearchSection title="Events">
               <ResultRow
-                icon={<CalendarDays className="h-5 w-5" />}
+                icon={<GoogleCalendarIcon />}
                 title="Team Stand-up"
                 preview="Today • 10:00 – 10:30 AM"
                 meta="In 20 min"
@@ -257,10 +256,18 @@ function ResultRow({
 }
 
 function FileRow({ title, meta }: { title: string; meta: string }) {
+  const Icon = title.endsWith('.pdf')
+    ? GoogleDriveIcon
+    : title.endsWith('.docx')
+      ? GoogleDocsIcon
+      : title.endsWith('.xlsx')
+        ? GoogleSheetsIcon
+        : FileText;
+
   return (
     <div className="grid grid-cols-[52px_1fr_auto] items-center gap-4 border-b border-black/[0.045] px-5 py-4 last:border-b-0">
       <div className="flex h-11 w-11 items-center justify-center rounded-[15px] bg-black/[0.035]">
-        <FileText className="h-5 w-5" />
+        <Icon />
       </div>
 
       <div>
@@ -285,7 +292,7 @@ function EmailRow({
   return (
     <div className="grid grid-cols-[52px_1fr_auto] items-center gap-4 border-b border-black/[0.045] px-5 py-4 last:border-b-0">
       <div className="flex h-11 w-11 items-center justify-center rounded-[15px] bg-black/[0.035]">
-        <Mail className="h-5 w-5" />
+        <GmailIcon />
       </div>
 
       <div>
@@ -298,5 +305,62 @@ function EmailRow({
         <Circle className="h-2 w-2 fill-black/40 text-black/40" />
       </div>
     </div>
+  );
+}
+
+function GmailIcon() {
+  return (
+    <svg viewBox="0 0 24 24" className="h-6 w-6">
+      <path fill="#EA4335" d="M4 6.5 12 12.5 20 6.5v11A1.5 1.5 0 0 1 18.5 19H17V9.75l-5 3.75-5-3.75V19H5.5A1.5 1.5 0 0 1 4 17.5v-11Z" />
+      <path fill="#FBBC04" d="M4 6.5A1.5 1.5 0 0 1 5.5 5H6l6 4.5L18 5h.5A1.5 1.5 0 0 1 20 6.5l-8 6-8-6Z" />
+      <path fill="#34A853" d="M17 9.75V19h1.5A1.5 1.5 0 0 0 20 17.5v-11l-3 3.25Z" />
+      <path fill="#4285F4" d="M4 6.5v11A1.5 1.5 0 0 0 5.5 19H7V9.75L4 6.5Z" />
+    </svg>
+  );
+}
+
+function GoogleDriveIcon() {
+  return (
+    <svg viewBox="0 0 24 24" className="h-6 w-6">
+      <path fill="#0F9D58" d="M8.2 4h4.3l5.4 9.3h-4.3L8.2 4Z" />
+      <path fill="#4285F4" d="M7.2 5.4 2.5 13.6 4.7 17.5 9.4 9.3 7.2 5.4Z" />
+      <path fill="#F4B400" d="M10.6 13.3h10.9l-2.2 4.2H8.4l2.2-4.2Z" />
+      <path fill="#0F9D58" d="M8.4 17.5h10.9l2.2 3.8H10.6l-2.2-3.8Z" opacity=".9" />
+      <path fill="#4285F4" d="M2.5 13.6h10.9l-2.2 3.9H4.7l-2.2-3.9Z" />
+    </svg>
+  );
+}
+
+function GoogleDocsIcon() {
+  return (
+    <svg viewBox="0 0 24 24" className="h-6 w-6">
+      <path fill="#4285F4" d="M6 2.8h8.2L19 7.6v13.6H6V2.8Z" />
+      <path fill="#AECBFA" d="M14.2 2.8v4.8H19l-4.8-4.8Z" />
+      <path stroke="#fff" strokeWidth="1.2" strokeLinecap="round" d="M8.7 11h6.6M8.7 14h6.6M8.7 17h4.8" />
+    </svg>
+  );
+}
+
+function GoogleSheetsIcon() {
+  return (
+    <svg viewBox="0 0 24 24" className="h-6 w-6">
+      <path fill="#0F9D58" d="M6 2.8h8.2L19 7.6v13.6H6V2.8Z" />
+      <path fill="#A8DAB5" d="M14.2 2.8v4.8H19l-4.8-4.8Z" />
+      <path stroke="#fff" strokeWidth="1.1" d="M8.5 11h7M8.5 14h7M8.5 17h7M10.8 9.5v9M13.2 9.5v9" />
+    </svg>
+  );
+}
+
+function GoogleCalendarIcon() {
+  return (
+    <svg viewBox="0 0 24 24" className="h-6 w-6">
+      <rect x="4" y="4" width="16" height="16" rx="3" fill="#fff" />
+      <path fill="#4285F4" d="M4 8a4 4 0 0 1 4-4h8a4 4 0 0 1 4 4v2H4V8Z" />
+      <path fill="#34A853" d="M4 10h16v6a4 4 0 0 1-4 4H8a4 4 0 0 1-4-4v-6Z" opacity=".18" />
+      <path fill="#EA4335" d="M4 9h16v1.3H4z" />
+      <text x="12" y="17" textAnchor="middle" fontSize="7.5" fontWeight="700" fill="#4285F4">
+        31
+      </text>
+    </svg>
   );
 }
