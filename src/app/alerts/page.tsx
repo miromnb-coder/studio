@@ -9,6 +9,7 @@ import {
   ChevronRight,
   Gift,
   Play,
+  X,
 } from 'lucide-react';
 
 import KivoChatHeader from '@/components/chat/kivo/KivoChatHeader';
@@ -22,10 +23,22 @@ const SIDEBAR_GAP = 12;
 export default function AlertsPage() {
   const router = useRouter();
   const [showSidebarRail, setShowSidebarRail] = useState(false);
+  const [activeTab, setActiveTab] = useState<'All' | 'Updates' | 'Messages'>('All');
+  const [readIds, setReadIds] = useState<string[]>([]);
+  const [showWhatsNew, setShowWhatsNew] = useState(false);
 
   const contentLeftOffset = showSidebarRail
     ? KIVO_CHAT_SIDEBAR_RAIL_WIDTH + SIDEBAR_GAP
     : 0;
+
+  const markRead = (id: string) => {
+    setReadIds((prev) => (prev.includes(id) ? prev : [...prev, id]));
+  };
+
+  const handleOpen = (id: string, path?: string) => {
+    markRead(id);
+    if (path) router.push(path);
+  };
 
   return (
     <main className="relative min-h-[100dvh] overflow-x-hidden bg-[#F8F8F7] text-[#111318]">
@@ -64,19 +77,22 @@ export default function AlertsPage() {
           />
         </div>
 
-        <section className="px-4 pb-14 pt-7 sm:px-5">
+        <section className="px-4 pb-[180px] pt-7 sm:px-5">
           <div className="origin-top-left w-[138%] max-w-[1120px] scale-[0.72]">
             <h1 className="font-serif text-[44px] leading-none tracking-[-0.06em]">
               Notifications
             </h1>
 
             <div className="mt-7 grid grid-cols-3 rounded-[18px] bg-black/[0.035] p-1.5">
-              {['All', 'Updates', 'Messages'].map((tab, index) => (
+              {(['All', 'Updates', 'Messages'] as const).map((tab) => (
                 <button
                   key={tab}
+                  onClick={() => setActiveTab(tab)}
                   className={[
-                    'rounded-[14px] py-3 text-[15px] font-semibold',
-                    index === 0 ? 'bg-white shadow-[0_8px_18px_rgba(15,23,42,0.06)]' : 'text-black/70',
+                    'rounded-[14px] py-3 text-[15px] font-semibold transition-all',
+                    activeTab === tab
+                      ? 'bg-white shadow-[0_8px_18px_rgba(15,23,42,0.06)]'
+                      : 'text-black/70',
                   ].join(' ')}
                 >
                   {tab}
@@ -84,64 +100,123 @@ export default function AlertsPage() {
               ))}
             </div>
 
-            <SectionTitle>Today</SectionTitle>
+            {(activeTab === 'All' || activeTab === 'Updates') && (
+              <>
+                <SectionTitle>Today</SectionTitle>
 
-            <NotificationRow
-              icon={<Gift className="h-6 w-6" />}
-              title="You earned 300 bonus runs"
-              description="Thanks for inviting your friend to Kivo!"
-              time="09:30"
-              unread
-            />
+                <NotificationRow
+                  onClick={() => handleOpen('bonus', '/upgrade')}
+                  icon={<Gift className="h-6 w-6" />}
+                  title="You earned 300 bonus runs"
+                  description="Thanks for inviting your friend to Kivo!"
+                  time="09:30"
+                  unread={!readIds.includes('bonus')}
+                />
 
-            <FeatureCard />
+                <FeatureCard
+                  onPlay={() => setShowWhatsNew(true)}
+                  onOpen={() => setShowWhatsNew(true)}
+                />
+              </>
+            )}
 
-            <SectionTitle>Yesterday</SectionTitle>
+            {(activeTab === 'All' || activeTab === 'Messages') && (
+              <>
+                <SectionTitle>Yesterday</SectionTitle>
 
-            <NotificationRow
-              icon={<CalendarDays className="h-6 w-6" />}
-              title="Your day is planned"
-              description="Kivo created a schedule to help you focus."
-              time="18:05"
-              unread
-            />
+                <NotificationRow
+                  onClick={() => handleOpen('plan', '/chat')}
+                  icon={<CalendarDays className="h-6 w-6" />}
+                  title="Your day is planned"
+                  description="Kivo created a schedule to help you focus."
+                  time="18:05"
+                  unread={!readIds.includes('plan')}
+                />
 
-            <NotificationRow
-              icon={<GmailIcon />}
-              title="Important email summary"
-              description="We found 4 important emails in your inbox."
-              time="17:20"
-              unread
-            />
+                <NotificationRow
+                  onClick={() => handleOpen('gmail', '/actions?tool=gmail')}
+                  icon={<GmailIcon />}
+                  title="Important email summary"
+                  description="We found 4 important emails in your inbox."
+                  time="17:20"
+                  unread={!readIds.includes('gmail')}
+                />
 
-            <NotificationRow
-              icon={<GoogleCalendarIcon />}
-              title="Upcoming event"
-              description="Team stand-up in 10 minutes at 10:00 AM."
-              time="16:45"
-              unread
-            />
+                <NotificationRow
+                  onClick={() => handleOpen('calendar', '/actions?tool=google-calendar')}
+                  icon={<GoogleCalendarIcon />}
+                  title="Upcoming event"
+                  description="Team stand-up in 10 minutes at 10:00 AM."
+                  time="16:45"
+                  unread={!readIds.includes('calendar')}
+                />
 
-            <NotificationRow
-              icon={<GoogleDriveIcon />}
-              title="Files organized"
-              description="Kivo organized 28 files in your Drive."
-              time="15:11"
-              unread
-            />
+                <NotificationRow
+                  onClick={() => handleOpen('drive', '/tools?source=drive')}
+                  icon={<GoogleDriveIcon />}
+                  title="Files organized"
+                  description="Kivo organized 28 files in your Drive."
+                  time="15:11"
+                  unread={!readIds.includes('drive')}
+                />
+              </>
+            )}
 
-            <SectionTitle>This week</SectionTitle>
+            {(activeTab === 'All' || activeTab === 'Updates') && (
+              <>
+                <SectionTitle>This week</SectionTitle>
 
-            <NotificationRow
-              icon={<CheckSquare className="h-6 w-6" />}
-              title="Task completed"
-              description="“Weekly report” has been completed successfully."
-              time="Mon"
-              chevron
-            />
+                <NotificationRow
+                  onClick={() => handleOpen('task', '/history')}
+                  icon={<CheckSquare className="h-6 w-6" />}
+                  title="Task completed"
+                  description="“Weekly report” has been completed successfully."
+                  time="Mon"
+                  chevron
+                />
+              </>
+            )}
           </div>
         </section>
       </div>
+
+      {showWhatsNew ? (
+        <div className="fixed inset-0 z-[80] bg-black/45 backdrop-blur-sm">
+          <div className="flex min-h-full items-center justify-center p-4">
+            <div className="w-full max-w-md rounded-[28px] bg-white p-6 shadow-[0_30px_80px_rgba(0,0,0,0.18)]">
+              <div className="mb-4 flex items-center justify-between">
+                <div className="text-[18px] font-semibold">Kivo Operator Update</div>
+                <button
+                  onClick={() => setShowWhatsNew(false)}
+                  className="rounded-full p-2 hover:bg-black/[0.04]"
+                >
+                  <X className="h-5 w-5" />
+                </button>
+              </div>
+
+              <div className="rounded-[22px] bg-[#F5F5F4] p-5">
+                <div className="text-[14px] font-semibold">What changed</div>
+                <ul className="mt-3 space-y-2 text-[14px] text-black/65">
+                  <li>• Faster multi-step reasoning</li>
+                  <li>• Better live results</li>
+                  <li>• Smarter tool execution</li>
+                  <li>• Cleaner planning responses</li>
+                </ul>
+              </div>
+
+              <button
+                onClick={() => {
+                  setShowWhatsNew(false);
+                  router.push('/chat');
+                }}
+                className="mt-5 w-full rounded-[16px] bg-[#111318] py-3 text-[14px] font-semibold text-white"
+              >
+                Try Kivo Operator
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
     </main>
   );
 }
@@ -161,6 +236,7 @@ function NotificationRow({
   time,
   unread = false,
   chevron = false,
+  onClick,
 }: {
   icon: ReactNode;
   title: string;
@@ -168,9 +244,13 @@ function NotificationRow({
   time: string;
   unread?: boolean;
   chevron?: boolean;
+  onClick?: () => void;
 }) {
   return (
-    <div className="mb-4 grid grid-cols-[64px_1fr_auto] items-center gap-4 rounded-[24px] border border-black/[0.045] bg-white px-5 py-5 shadow-[0_10px_26px_rgba(15,23,42,0.025)]">
+    <button
+      onClick={onClick}
+      className="mb-4 grid w-full grid-cols-[64px_1fr_auto] items-center gap-4 rounded-[24px] border border-black/[0.045] bg-white px-5 py-5 text-left shadow-[0_10px_26px_rgba(15,23,42,0.025)]"
+    >
       <div className="flex h-14 w-14 items-center justify-center rounded-[17px] bg-black/[0.035]">
         {icon}
       </div>
@@ -190,11 +270,17 @@ function NotificationRow({
           <span className="h-2.5 w-2.5 rounded-full bg-black/40" />
         ) : null}
       </div>
-    </div>
+    </button>
   );
 }
 
-function FeatureCard() {
+function FeatureCard({
+  onPlay,
+  onOpen,
+}: {
+  onPlay: () => void;
+  onOpen: () => void;
+}) {
   return (
     <div className="mb-4 grid grid-cols-[1.08fr_0.92fr] overflow-hidden rounded-[24px] border border-black/[0.045] bg-white shadow-[0_10px_26px_rgba(15,23,42,0.025)]">
       <div className="relative min-h-[230px] bg-black/[0.025] p-6">
@@ -215,9 +301,12 @@ function FeatureCard() {
           </div>
         </div>
 
-        <div className="absolute left-1/2 top-1/2 flex h-18 w-18 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full bg-[#111318] text-white shadow-[0_14px_34px_rgba(0,0,0,0.24)]">
+        <button
+          onClick={onPlay}
+          className="absolute left-1/2 top-1/2 flex h-18 w-18 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full bg-[#111318] text-white shadow-[0_14px_34px_rgba(0,0,0,0.24)]"
+        >
           <Play className="h-8 w-8 fill-white" />
-        </div>
+        </button>
       </div>
 
       <div className="p-7">
@@ -228,7 +317,10 @@ function FeatureCard() {
         <p className="mt-5 text-[16px] leading-[1.45] text-black/55">
           Multi-step reasoning, real-time results, better than ever.
         </p>
-        <button className="mt-6 rounded-[14px] bg-white px-5 py-3 text-[14px] font-semibold shadow-[0_8px_20px_rgba(15,23,42,0.05)]">
+        <button
+          onClick={onOpen}
+          className="mt-6 rounded-[14px] bg-white px-5 py-3 text-[14px] font-semibold shadow-[0_8px_20px_rgba(15,23,42,0.05)]"
+        >
           See what’s new
         </button>
       </div>
