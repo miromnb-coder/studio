@@ -27,17 +27,54 @@ import {
 const SIDEBAR_GAP = 12;
 
 const agents = [
-  { name: 'Research Agent', desc: 'Finds information, analyzes data, and delivers insights.', icon: Search, tasks: '3 tasks' },
-  { name: 'Planner Agent', desc: 'Plans your day, sets priorities, and keeps you on track.', icon: ListChecks, tasks: '2 tasks' },
-  { name: 'Money Agent', desc: 'Monitors spending, finds savings, and optimizes finances.', icon: CircleDollarSign, tasks: '4 tasks' },
-  { name: 'Automation Agent', desc: 'Automates workflows and repetitive tasks.', icon: Zap, tasks: '5 tasks' },
-  { name: 'Vision Agent', desc: 'Understands images, documents, and visual data.', icon: Eye, tasks: '1 task' },
+  {
+    name: 'Research Agent',
+    desc: 'Finds information, analyzes data, and delivers insights.',
+    icon: Search,
+    tasks: '3 tasks',
+  },
+  {
+    name: 'Planner Agent',
+    desc: 'Plans your day, sets priorities, and keeps you on track.',
+    icon: ListChecks,
+    tasks: '2 tasks',
+  },
+  {
+    name: 'Money Agent',
+    desc: 'Monitors spending, finds savings, and optimizes finances.',
+    icon: CircleDollarSign,
+    tasks: '4 tasks',
+  },
+  {
+    name: 'Automation Agent',
+    desc: 'Automates workflows and repetitive tasks.',
+    icon: Zap,
+    tasks: '5 tasks',
+  },
+  {
+    name: 'Vision Agent',
+    desc: 'Understands images, documents, and visual data.',
+    icon: Eye,
+    tasks: '1 task',
+  },
 ];
 
 const recommended = [
-  { name: 'Email Assistant', desc: 'Summarizes emails and drafts smart replies.', icon: Mail },
-  { name: 'Document Analyst', desc: 'Analyzes and extracts key insights from files.', icon: Paperclip },
-  { name: 'Web Monitor', desc: 'Monitors websites and alerts you on changes.', icon: Globe },
+  {
+    name: 'Email Assistant',
+    desc: 'Summarizes emails and drafts smart replies.',
+    icon: Mail,
+  },
+  {
+    name: 'Document Analyst',
+    desc: 'Analyzes and extracts key insights from files.',
+    icon: Paperclip,
+  },
+  {
+    name: 'Web Monitor',
+    desc: 'Monitors websites and alerts you on changes.',
+    icon: Globe,
+  },
 ];
 
 export default function AgentsPage() {
@@ -83,33 +120,47 @@ export default function AgentsPage() {
           onSidebarToggle={() => setShowSidebarRail((open) => !open)}
         />
 
-        <section className="mx-auto w-full max-w-[920px] px-5 pb-14 pt-8">
-          <div className="mb-7 flex items-start justify-between gap-5">
+        <section className="mx-auto w-full max-w-[920px] px-5 pb-14 pt-7">
+          <div className="mb-6 flex items-start justify-between gap-5">
             <div>
-              <h1 className="font-serif text-[42px] leading-none tracking-[-0.06em]">
+              <h1 className="font-serif text-[34px] leading-none tracking-[-0.06em] sm:text-[38px]">
                 Agents
               </h1>
-              <p className="mt-2 text-[15px] text-black/50">
+              <p className="mt-2 text-[13px] text-black/50 sm:text-[14px]">
                 AI agents that work for you.
               </p>
             </div>
 
-            <button className="inline-flex items-center gap-2 rounded-[18px] bg-[#111318] px-5 py-3 text-[14px] font-medium text-white shadow-[0_14px_34px_rgba(17,19,24,0.16)]">
+            <button className="inline-flex items-center gap-2 rounded-[15px] bg-[#111318] px-4 py-2.5 text-[13px] font-medium text-white shadow-[0_12px_28px_rgba(17,19,24,0.15)]">
               <Plus className="h-4 w-4" />
               New agent
             </button>
           </div>
 
-          <div className="mb-8 grid grid-cols-2 gap-4">
-            <StatCard icon={<Activity />} label="Active agents" value="5" sub="Running tasks" />
-            <StatCard icon={<CheckCircle2 />} label="Tasks completed" value="128" sub="This week" />
+          <div className="mb-7 grid grid-cols-2 gap-4">
+            <StatCard
+              icon={<Activity className="h-5 w-5" />}
+              label="Active agents"
+              value="5"
+              sub="Running tasks"
+            />
+            <StatCard
+              icon={<CheckCircle2 className="h-5 w-5" />}
+              label="Tasks completed"
+              value="128"
+              sub="This week"
+            />
           </div>
 
           <SectionTitle>My agents</SectionTitle>
 
-          <div className="mb-9 overflow-hidden rounded-[26px] border border-black/[0.055] bg-white shadow-[0_12px_34px_rgba(15,23,42,0.035)]">
+          <div className="mb-8 overflow-hidden rounded-[24px] border border-black/[0.055] bg-white shadow-[0_12px_34px_rgba(15,23,42,0.032)]">
             {agents.map((agent, index) => (
-              <AgentRow key={agent.name} {...agent} isLast={index === agents.length - 1} />
+              <AgentRow
+                key={agent.name}
+                {...agent}
+                isLast={index === agents.length - 1}
+              />
             ))}
           </div>
 
@@ -127,60 +178,118 @@ export default function AgentsPage() {
 }
 
 function SectionTitle({ children }: { children: ReactNode }) {
-  return <h2 className="mb-4 text-[20px] font-semibold tracking-[-0.04em]">{children}</h2>;
+  return (
+    <h2 className="mb-4 text-[17px] font-semibold tracking-[-0.04em]">
+      {children}
+    </h2>
+  );
 }
 
-function StatCard({ icon, label, value, sub }: { icon: ReactNode; label: string; value: string; sub: string }) {
+function StatCard({
+  icon,
+  label,
+  value,
+  sub,
+}: {
+  icon: ReactNode;
+  label: string;
+  value: string;
+  sub: string;
+}) {
   return (
-    <div className="flex items-center gap-4 rounded-[24px] border border-black/[0.055] bg-white px-5 py-4 shadow-[0_10px_28px_rgba(15,23,42,0.03)]">
-      <div className="flex h-13 w-13 items-center justify-center rounded-[18px] bg-black/[0.035]">
-        <div className="h-6 w-6">{icon}</div>
+    <div className="flex items-center gap-3 rounded-[22px] border border-black/[0.055] bg-white px-4 py-3.5 shadow-[0_10px_26px_rgba(15,23,42,0.028)]">
+      <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-[15px] bg-black/[0.035]">
+        {icon}
       </div>
+
       <div className="min-w-0 flex-1">
-        <div className="text-[13px] text-black/45">{label}</div>
-        <div className="font-serif text-[34px] leading-none tracking-[-0.06em]">{value}</div>
-        <div className="mt-1 text-[13px] text-black/45">{sub}</div>
+        <div className="text-[12px] leading-tight text-black/45">{label}</div>
+        <div className="font-serif text-[28px] leading-none tracking-[-0.06em]">
+          {value}
+        </div>
+        <div className="mt-1 text-[12px] leading-tight text-black/45">{sub}</div>
       </div>
-      <ChevronRight className="h-5 w-5 text-black/25" />
+
+      <ChevronRight className="h-4 w-4 shrink-0 text-black/25" />
     </div>
   );
 }
 
-function AgentRow({ name, desc, icon: Icon, tasks, isLast }: any) {
+function AgentRow({
+  name,
+  desc,
+  icon: Icon,
+  tasks,
+  isLast,
+}: {
+  name: string;
+  desc: string;
+  icon: typeof Search;
+  tasks: string;
+  isLast: boolean;
+}) {
   return (
-    <div className={`grid grid-cols-[56px_1fr_auto] items-center gap-4 px-5 py-4 ${isLast ? '' : 'border-b border-black/[0.045]'}`}>
-      <div className="flex h-14 w-14 items-center justify-center rounded-[18px] bg-black/[0.035]">
-        <Icon className="h-6 w-6" />
+    <div
+      className={`grid grid-cols-[44px_1fr_auto] items-center gap-3 px-4 py-3.5 ${
+        isLast ? '' : 'border-b border-black/[0.045]'
+      }`}
+    >
+      <div className="flex h-11 w-11 items-center justify-center rounded-[15px] bg-black/[0.035]">
+        <Icon className="h-5 w-5" />
       </div>
-      <div>
-        <div className="text-[17px] font-semibold tracking-[-0.035em]">{name}</div>
-        <p className="mt-1 max-w-[340px] text-[14px] leading-5 text-black/50">{desc}</p>
-        <div className="mt-2 flex items-center gap-2 text-[13px] text-black/55">
-          <span className="h-2 w-2 rounded-full bg-black" />
+
+      <div className="min-w-0">
+        <div className="truncate text-[15px] font-semibold tracking-[-0.035em]">
+          {name}
+        </div>
+        <p className="mt-0.5 max-w-[420px] text-[12.5px] leading-[1.35] text-black/50">
+          {desc}
+        </p>
+        <div className="mt-1.5 flex items-center gap-2 text-[12px] text-black/55">
+          <span className="h-1.5 w-1.5 rounded-full bg-black" />
           Active
         </div>
       </div>
-      <div className="flex items-center gap-3">
-        <span className="rounded-full bg-black/[0.04] px-3 py-1.5 text-[13px] font-medium">{tasks}</span>
-        <button className="relative h-6 w-11 rounded-full bg-black">
-          <span className="absolute right-1 top-1 h-4 w-4 rounded-full bg-white" />
+
+      <div className="flex shrink-0 items-center gap-2.5">
+        <span className="rounded-full bg-black/[0.04] px-2.5 py-1 text-[12px] font-medium">
+          {tasks}
+        </span>
+
+        <button className="relative h-5 w-9 rounded-full bg-black">
+          <span className="absolute right-0.5 top-0.5 h-4 w-4 rounded-full bg-white" />
         </button>
-        <MoreHorizontal className="h-5 w-5 text-black/45" />
-        <ChevronRight className="h-5 w-5 text-black/25" />
+
+        <MoreHorizontal className="h-4 w-4 text-black/45" />
+        <ChevronRight className="h-4 w-4 text-black/25" />
       </div>
     </div>
   );
 }
 
-function RecommendedCard({ name, desc, icon: Icon }: any) {
+function RecommendedCard({
+  name,
+  desc,
+  icon: Icon,
+}: {
+  name: string;
+  desc: string;
+  icon: typeof Mail;
+}) {
   return (
-    <div className="rounded-[22px] border border-black/[0.055] bg-white p-4 shadow-[0_8px_24px_rgba(15,23,42,0.025)]">
-      <div className="mb-4 flex h-10 w-10 items-center justify-center rounded-[14px] bg-black/[0.035]">
-        <Icon className="h-5 w-5" />
+    <div className="rounded-[20px] border border-black/[0.055] bg-white p-3.5 shadow-[0_8px_22px_rgba(15,23,42,0.025)]">
+      <div className="mb-3 flex h-9 w-9 items-center justify-center rounded-[13px] bg-black/[0.035]">
+        <Icon className="h-4.5 w-4.5" />
       </div>
-      <div className="text-[15px] font-semibold tracking-[-0.03em]">{name}</div>
-      <p className="mt-2 text-[13px] leading-[1.4] text-black/50">{desc}</p>
-      <button className="mt-4 w-full rounded-[12px] bg-black/[0.04] py-2.5 text-[13px] font-medium">
+
+      <div className="text-[13.5px] font-semibold tracking-[-0.03em]">
+        {name}
+      </div>
+      <p className="mt-1.5 min-h-[34px] text-[12px] leading-[1.35] text-black/50">
+        {desc}
+      </p>
+
+      <button className="mt-3 w-full rounded-[11px] bg-black/[0.04] py-2 text-[12px] font-medium">
         Add
       </button>
     </div>
