@@ -1,15 +1,16 @@
 'use client';
 
-import { useState, type ReactNode } from 'react';
+import { useMemo, useState, type ReactNode } from 'react';
 import { useRouter } from 'next/navigation';
 import {
-  Bell,
-  CalendarDays,
-  CheckSquare,
+  BrainCircuit,
   ChevronRight,
-  Gift,
+  Grid2X2,
   Play,
+  ShieldCheck,
+  Sparkles,
   X,
+  Zap,
 } from 'lucide-react';
 
 import KivoChatHeader from '@/components/chat/kivo/KivoChatHeader';
@@ -20,10 +21,24 @@ import {
 
 const SIDEBAR_GAP = 12;
 
+type AlertTab = 'All' | 'Updates' | 'Messages';
+
+type RealNotification = {
+  id: string;
+  type: 'update' | 'message';
+  title: string;
+  description: string;
+  time: string;
+  icon: ReactNode;
+  path?: string;
+};
+
+const realNotifications: RealNotification[] = [];
+
 export default function AlertsPage() {
   const router = useRouter();
   const [showSidebarRail, setShowSidebarRail] = useState(false);
-  const [activeTab, setActiveTab] = useState<'All' | 'Updates' | 'Messages'>('All');
+  const [activeTab, setActiveTab] = useState<AlertTab>('All');
   const [readIds, setReadIds] = useState<string[]>([]);
   const [showWhatsNew, setShowWhatsNew] = useState(false);
 
@@ -31,14 +46,25 @@ export default function AlertsPage() {
     ? KIVO_CHAT_SIDEBAR_RAIL_WIDTH + SIDEBAR_GAP
     : 0;
 
+  const visibleNotifications = useMemo(() => {
+    if (activeTab === 'All') return realNotifications;
+    if (activeTab === 'Updates') {
+      return realNotifications.filter((item) => item.type === 'update');
+    }
+    return realNotifications.filter((item) => item.type === 'message');
+  }, [activeTab]);
+
   const markRead = (id: string) => {
     setReadIds((prev) => (prev.includes(id) ? prev : [...prev, id]));
   };
 
-  const handleOpen = (id: string, path?: string) => {
-    markRead(id);
-    if (path) router.push(path);
+  const handleOpen = (notification: RealNotification) => {
+    markRead(notification.id);
+    if (notification.path) router.push(notification.path);
   };
+
+  const showUpdateCard = activeTab === 'All' || activeTab === 'Updates';
+  const showEmptyState = visibleNotifications.length === 0;
 
   return (
     <main className="relative min-h-[100dvh] overflow-x-hidden bg-[#F8F8F7] text-[#111318]">
@@ -100,122 +126,46 @@ export default function AlertsPage() {
               ))}
             </div>
 
-            {(activeTab === 'All' || activeTab === 'Updates') && (
+            {showUpdateCard ? (
               <>
-                <SectionTitle>Today</SectionTitle>
-
-                <NotificationRow
-                  onClick={() => handleOpen('bonus', '/upgrade')}
-                  icon={<Gift className="h-6 w-6" />}
-                  title="You earned 300 bonus runs"
-                  description="Thanks for inviting your friend to Kivo!"
-                  time="09:30"
-                  unread={!readIds.includes('bonus')}
-                />
-
+                <SectionTitle>Latest update</SectionTitle>
                 <FeatureCard
                   onPlay={() => setShowWhatsNew(true)}
                   onOpen={() => setShowWhatsNew(true)}
                 />
               </>
-            )}
+            ) : null}
 
-            {(activeTab === 'All' || activeTab === 'Messages') && (
+            {visibleNotifications.length > 0 ? (
               <>
-                <SectionTitle>Yesterday</SectionTitle>
-
-                <NotificationRow
-                  onClick={() => handleOpen('plan', '/chat')}
-                  icon={<CalendarDays className="h-6 w-6" />}
-                  title="Your day is planned"
-                  description="Kivo created a schedule to help you focus."
-                  time="18:05"
-                  unread={!readIds.includes('plan')}
-                />
-
-                <NotificationRow
-                  onClick={() => handleOpen('gmail', '/actions?tool=gmail')}
-                  icon={<GmailIcon />}
-                  title="Important email summary"
-                  description="We found 4 important emails in your inbox."
-                  time="17:20"
-                  unread={!readIds.includes('gmail')}
-                />
-
-                <NotificationRow
-                  onClick={() => handleOpen('calendar', '/actions?tool=google-calendar')}
-                  icon={<GoogleCalendarIcon />}
-                  title="Upcoming event"
-                  description="Team stand-up in 10 minutes at 10:00 AM."
-                  time="16:45"
-                  unread={!readIds.includes('calendar')}
-                />
-
-                <NotificationRow
-                  onClick={() => handleOpen('drive', '/tools?source=drive')}
-                  icon={<GoogleDriveIcon />}
-                  title="Files organized"
-                  description="Kivo organized 28 files in your Drive."
-                  time="15:11"
-                  unread={!readIds.includes('drive')}
-                />
+                <SectionTitle>Today</SectionTitle>
+                {visibleNotifications.map((notification) => (
+                  <NotificationRow
+                    key={notification.id}
+                    icon={notification.icon}
+                    title={notification.title}
+                    description={notification.description}
+                    time={notification.time}
+                    unread={!readIds.includes(notification.id)}
+                    onClick={() => handleOpen(notification)}
+                  />
+                ))}
               </>
-            )}
-
-            {(activeTab === 'All' || activeTab === 'Updates') && (
-              <>
-                <SectionTitle>This week</SectionTitle>
-
-                <NotificationRow
-                  onClick={() => handleOpen('task', '/history')}
-                  icon={<CheckSquare className="h-6 w-6" />}
-                  title="Task completed"
-                  description="“Weekly report” has been completed successfully."
-                  time="Mon"
-                  chevron
-                />
-              </>
-            )}
+            ) : showEmptyState ? (
+              <EmptyState />
+            ) : null}
           </div>
         </section>
       </div>
 
       {showWhatsNew ? (
-        <div className="fixed inset-0 z-[80] bg-black/45 backdrop-blur-sm">
-          <div className="flex min-h-full items-center justify-center p-4">
-            <div className="w-full max-w-md rounded-[28px] bg-white p-6 shadow-[0_30px_80px_rgba(0,0,0,0.18)]">
-              <div className="mb-4 flex items-center justify-between">
-                <div className="text-[18px] font-semibold">Kivo Operator Update</div>
-                <button
-                  onClick={() => setShowWhatsNew(false)}
-                  className="rounded-full p-2 hover:bg-black/[0.04]"
-                >
-                  <X className="h-5 w-5" />
-                </button>
-              </div>
-
-              <div className="rounded-[22px] bg-[#F5F5F4] p-5">
-                <div className="text-[14px] font-semibold">What changed</div>
-                <ul className="mt-3 space-y-2 text-[14px] text-black/65">
-                  <li>• Faster multi-step reasoning</li>
-                  <li>• Better live results</li>
-                  <li>• Smarter tool execution</li>
-                  <li>• Cleaner planning responses</li>
-                </ul>
-              </div>
-
-              <button
-                onClick={() => {
-                  setShowWhatsNew(false);
-                  router.push('/chat');
-                }}
-                className="mt-5 w-full rounded-[16px] bg-[#111318] py-3 text-[14px] font-semibold text-white"
-              >
-                Try Kivo Operator
-              </button>
-            </div>
-          </div>
-        </div>
+        <WhatsNewModal
+          onClose={() => setShowWhatsNew(false)}
+          onTry={() => {
+            setShowWhatsNew(false);
+            router.push('/chat');
+          }}
+        />
       ) : null}
     </main>
   );
@@ -229,13 +179,28 @@ function SectionTitle({ children }: { children: ReactNode }) {
   );
 }
 
+function EmptyState() {
+  return (
+    <div className="mt-8 rounded-[26px] border border-black/[0.045] bg-white px-6 py-8 text-center shadow-[0_10px_26px_rgba(15,23,42,0.025)]">
+      <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-[18px] bg-black/[0.035]">
+        <Sparkles className="h-6 w-6 text-black/70" />
+      </div>
+      <div className="mt-4 text-[18px] font-semibold tracking-[-0.04em]">
+        No notifications yet
+      </div>
+      <p className="mx-auto mt-2 max-w-[420px] text-[15px] leading-[1.45] text-black/50">
+        Kivo will show important updates here when something needs your attention.
+      </p>
+    </div>
+  );
+}
+
 function NotificationRow({
   icon,
   title,
   description,
   time,
   unread = false,
-  chevron = false,
   onClick,
 }: {
   icon: ReactNode;
@@ -243,7 +208,6 @@ function NotificationRow({
   description: string;
   time: string;
   unread?: boolean;
-  chevron?: boolean;
   onClick?: () => void;
 }) {
   return (
@@ -264,11 +228,7 @@ function NotificationRow({
 
       <div className="flex min-w-[44px] flex-col items-end gap-4 text-[13px] text-black/45">
         {time}
-        {chevron ? (
-          <ChevronRight className="h-5 w-5 text-black/35" />
-        ) : unread ? (
-          <span className="h-2.5 w-2.5 rounded-full bg-black/40" />
-        ) : null}
+        {unread ? <span className="h-2.5 w-2.5 rounded-full bg-black/40" /> : null}
       </div>
     </button>
   );
@@ -282,85 +242,154 @@ function FeatureCard({
   onOpen: () => void;
 }) {
   return (
-    <div className="mb-4 grid grid-cols-[1.08fr_0.92fr] overflow-hidden rounded-[24px] border border-black/[0.045] bg-white shadow-[0_10px_26px_rgba(15,23,42,0.025)]">
-      <div className="relative min-h-[230px] bg-black/[0.025] p-6">
-        <div className="rounded-[18px] bg-white p-5 shadow-[0_12px_28px_rgba(15,23,42,0.06)]">
-          <div className="mb-4 text-[13px] font-semibold">Kivo Operator</div>
-          {['Researching', 'Collecting data', 'Summarizing'].map((item) => (
-            <div key={item} className="mb-3 flex items-center gap-2 text-[12px] text-black/55">
-              <span className="h-4 w-4 rounded-full bg-[#22C55E]/15 text-center text-[10px] text-[#16A34A]">✓</span>
-              {item}
-            </div>
-          ))}
-          <div className="mt-5 h-2 rounded-full bg-black/[0.08]">
-            <div className="h-2 w-[58%] rounded-full bg-black/35" />
+    <div className="mb-4 grid grid-cols-[1.08fr_0.92fr] overflow-hidden rounded-[28px] border border-black/[0.045] bg-white shadow-[0_16px_40px_rgba(15,23,42,0.055)]">
+      <div className="relative min-h-[250px] overflow-hidden bg-[#080914] p-6 text-white">
+        <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_28%,rgba(154,117,255,0.48),transparent_34%),radial-gradient(circle_at_50%_100%,rgba(146,120,255,0.34),transparent_40%)]" />
+        <div className="absolute left-1/2 top-[36px] h-32 w-32 -translate-x-1/2 rounded-full bg-[radial-gradient(circle_at_35%_28%,#B8A4FF,#3B2B74_55%,#090A15_100%)] shadow-[0_0_60px_rgba(152,117,255,0.45)]" />
+        <div className="absolute bottom-8 left-0 right-0 h-px bg-gradient-to-r from-transparent via-white/45 to-transparent" />
+
+        <div className="relative z-10 flex items-center justify-between">
+          <div className="rounded-full bg-white/10 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.12em] text-white/80">
+            New update
           </div>
-          <div className="mt-3 flex justify-between text-[11px] text-black/45">
-            <span>Estimated time</span>
-            <span>2 min left</span>
-          </div>
+          <div className="text-[13px] text-white/55">08:12</div>
+        </div>
+
+        <div className="relative z-10 mt-14 text-center text-[30px] font-semibold tracking-[0.24em] text-white/80">
+          KIVO
         </div>
 
         <button
           onClick={onPlay}
-          className="absolute left-1/2 top-1/2 flex h-18 w-18 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full bg-[#111318] text-white shadow-[0_14px_34px_rgba(0,0,0,0.24)]"
+          className="absolute left-1/2 top-1/2 z-20 flex h-18 w-18 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full bg-black/80 text-white shadow-[0_18px_44px_rgba(0,0,0,0.35)] ring-1 ring-white/20"
         >
           <Play className="h-8 w-8 fill-white" />
         </button>
       </div>
 
       <div className="p-7">
-        <div className="flex justify-end text-[13px] text-black/45">08:12</div>
-        <h3 className="mt-3 font-serif text-[29px] leading-[1.04] tracking-[-0.055em]">
+        <div className="inline-flex rounded-full bg-[#6D5DF6]/10 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.12em] text-[#6D5DF6]">
+          New update
+        </div>
+
+        <h3 className="mt-4 font-serif text-[31px] leading-[1.02] tracking-[-0.06em]">
           Kivo Operator just got smarter
         </h3>
+
         <p className="mt-5 text-[16px] leading-[1.45] text-black/55">
-          Multi-step reasoning, real-time results, better than ever.
+          Smarter reasoning, real-time results, and better tool execution.
         </p>
+
         <button
           onClick={onOpen}
-          className="mt-6 rounded-[14px] bg-white px-5 py-3 text-[14px] font-semibold shadow-[0_8px_20px_rgba(15,23,42,0.05)]"
+          className="mt-6 inline-flex items-center gap-3 rounded-[15px] bg-white px-5 py-3 text-[14px] font-semibold shadow-[0_10px_24px_rgba(15,23,42,0.07)]"
         >
           See what’s new
+          <ChevronRight className="h-4 w-4" />
         </button>
       </div>
     </div>
   );
 }
 
-function GmailIcon() {
+function WhatsNewModal({
+  onClose,
+  onTry,
+}: {
+  onClose: () => void;
+  onTry: () => void;
+}) {
   return (
-    <svg viewBox="0 0 24 24" className="h-7 w-7">
-      <path fill="#EA4335" d="M4 6.5 12 12.5 20 6.5v11A1.5 1.5 0 0 1 18.5 19H17V9.75l-5 3.75-5-3.75V19H5.5A1.5 1.5 0 0 1 4 17.5v-11Z" />
-      <path fill="#FBBC04" d="M4 6.5A1.5 1.5 0 0 1 5.5 5H6l6 4.5L18 5h.5A1.5 1.5 0 0 1 20 6.5l-8 6-8-6Z" />
-      <path fill="#34A853" d="M17 9.75V19h1.5A1.5 1.5 0 0 0 20 17.5v-11l-3 3.25Z" />
-      <path fill="#4285F4" d="M4 6.5v11A1.5 1.5 0 0 0 5.5 19H7V9.75L4 6.5Z" />
-    </svg>
+    <div className="fixed inset-0 z-[80] overflow-y-auto bg-black/55 p-4 backdrop-blur-sm">
+      <div className="mx-auto flex min-h-full max-w-xl items-center justify-center">
+        <div className="w-full overflow-hidden rounded-[32px] bg-[#090A12] text-white shadow-[0_34px_90px_rgba(0,0,0,0.35)]">
+          <div className="relative min-h-[310px] overflow-hidden p-6">
+            <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_28%,rgba(154,117,255,0.55),transparent_34%),radial-gradient(circle_at_50%_100%,rgba(146,120,255,0.38),transparent_40%)]" />
+            <div className="absolute left-1/2 top-[72px] h-40 w-40 -translate-x-1/2 rounded-full bg-[radial-gradient(circle_at_35%_28%,#B8A4FF,#3B2B74_55%,#090A15_100%)] shadow-[0_0_70px_rgba(152,117,255,0.55)]" />
+
+            <button
+              onClick={onClose}
+              className="absolute right-5 top-5 z-20 rounded-full bg-white/10 p-3 text-white hover:bg-white/15"
+            >
+              <X className="h-5 w-5" />
+            </button>
+
+            <div className="relative z-10 flex justify-between">
+              <IconBubble icon={<BrainCircuit className="h-6 w-6" />} />
+              <IconBubble icon={<ShieldCheck className="h-6 w-6" />} />
+            </div>
+
+            <button className="absolute left-1/2 top-[145px] z-20 flex h-20 w-20 -translate-x-1/2 items-center justify-center rounded-full bg-black/80 shadow-[0_20px_50px_rgba(0,0,0,0.4)] ring-1 ring-white/20">
+              <Play className="h-9 w-9 fill-white" />
+            </button>
+          </div>
+
+          <div className="px-6 pb-6">
+            <div className="inline-flex rounded-full bg-[#6D5DF6] px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.12em]">
+              New update
+            </div>
+
+            <h2 className="mt-4 font-serif text-[40px] leading-[1.02] tracking-[-0.06em]">
+              Kivo Operator just got smarter
+            </h2>
+
+            <p className="mt-4 text-[16px] leading-[1.55] text-white/68">
+              Our biggest update yet. Smarter reasoning, deeper context, and real-time
+              results built to handle more.
+            </p>
+
+            <div className="mt-6 grid grid-cols-2 gap-4 border-t border-white/10 pt-6">
+              <Feature icon={<BrainCircuit />} title="Smarter reasoning" desc="Better multi-step understanding" />
+              <Feature icon={<Zap />} title="Real-time results" desc="Faster answers with live data" />
+              <Feature icon={<Grid2X2 />} title="More tools" desc="Seamless integrations" />
+              <Feature icon={<ShieldCheck />} title="Better memory" desc="Remembers useful context" />
+            </div>
+
+            <button
+              onClick={onTry}
+              className="mt-7 flex w-full items-center justify-center gap-3 rounded-[17px] bg-white py-4 text-[15px] font-semibold text-[#111318]"
+            >
+              Try in chat
+              <ChevronRight className="h-5 w-5" />
+            </button>
+
+            <button
+              onClick={onClose}
+              className="mt-3 w-full rounded-[17px] bg-white/10 py-4 text-[15px] font-semibold text-white"
+            >
+              Close
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
   );
 }
 
-function GoogleDriveIcon() {
+function IconBubble({ icon }: { icon: ReactNode }) {
   return (
-    <svg viewBox="0 0 24 24" className="h-7 w-7">
-      <path fill="#0F9D58" d="M8.2 4h4.3l5.4 9.3h-4.3L8.2 4Z" />
-      <path fill="#4285F4" d="M7.2 5.4 2.5 13.6 4.7 17.5 9.4 9.3 7.2 5.4Z" />
-      <path fill="#F4B400" d="M10.6 13.3h10.9l-2.2 4.2H8.4l2.2-4.2Z" />
-      <path fill="#0F9D58" d="M8.4 17.5h10.9l2.2 3.8H10.6l-2.2-3.8Z" opacity=".9" />
-      <path fill="#4285F4" d="M2.5 13.6h10.9l-2.2 3.9H4.7l-2.2-3.9Z" />
-    </svg>
+    <div className="flex h-14 w-14 items-center justify-center rounded-[18px] border border-white/15 bg-white/10 text-white shadow-[0_12px_32px_rgba(0,0,0,0.2)]">
+      {icon}
+    </div>
   );
 }
 
-function GoogleCalendarIcon() {
+function Feature({
+  icon,
+  title,
+  desc,
+}: {
+  icon: ReactNode;
+  title: string;
+  desc: string;
+}) {
   return (
-    <svg viewBox="0 0 24 24" className="h-7 w-7">
-      <rect x="4" y="4" width="16" height="16" rx="3" fill="#fff" />
-      <path fill="#4285F4" d="M4 8a4 4 0 0 1 4-4h8a4 4 0 0 1 4 4v2H4V8Z" />
-      <path fill="#34A853" d="M4 10h16v6a4 4 0 0 1-4 4H8a4 4 0 0 1-4-4v-6Z" opacity=".18" />
-      <path fill="#EA4335" d="M4 9h16v1.3H4z" />
-      <text x="12" y="17" textAnchor="middle" fontSize="7.5" fontWeight="700" fill="#4285F4">
-        31
-      </text>
-    </svg>
+    <div>
+      <div className="mb-3 flex h-11 w-11 items-center justify-center rounded-[14px] bg-white/10 text-white [&>svg]:h-5 [&>svg]:w-5">
+        {icon}
+      </div>
+      <div className="text-[15px] font-semibold">{title}</div>
+      <p className="mt-1 text-[13px] leading-[1.35] text-white/55">{desc}</p>
+    </div>
   );
 }
