@@ -19,18 +19,26 @@ export const metadata: Metadata = {
       { url: '/apple-icon', sizes: '180x180', type: 'image/png' },
     ],
   },
+  themeColor: '#ffffff',
+  manifest: '/manifest.webmanifest',
   openGraph: {
     title: PRODUCT_NAME,
     description: PRODUCT_DESCRIPTION,
     siteName: PRODUCT_NAME,
     type: 'website',
+    images: [
+      {
+        url: '/icon.svg',
+        type: 'image/svg+xml',
+      },
+    ],
   },
   twitter: {
     card: 'summary',
     title: PRODUCT_NAME,
     description: PRODUCT_DESCRIPTION,
+    images: ['/icon.svg'],
   },
-  themeColor: '#ffffff',
 };
 
 export default function RootLayout({
