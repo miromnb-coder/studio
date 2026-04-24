@@ -30,12 +30,7 @@ export function KivoChatScreen() {
   const activeConversationId = useAppStore((s) => s.activeConversationId);
 
   const [notice, setNotice] = useState<KivoChatNotice | null>(null);
-
-  // Rail visibility and expanded panel are intentionally separate:
-  // header button opens only the rail first; rail icon click expands the panel.
   const [showSidebarRail, setShowSidebarRail] = useState(false);
-  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
-
   const [referralToastOpen, setReferralToastOpen] = useState(false);
   const [referralToastTitle, setReferralToastTitle] = useState('');
   const [referralToastDetail, setReferralToastDetail] = useState('');
@@ -47,7 +42,6 @@ export function KivoChatScreen() {
   useEffect(() => {
     if (hasMessages) {
       setShowSidebarRail(false);
-      setIsSidebarOpen(false);
     }
   }, [hasMessages]);
 
@@ -194,8 +188,8 @@ export function KivoChatScreen() {
       sidebarRecentChats={sidebarRecentChats}
       showSidebarRail={showSidebarRail}
       setShowSidebarRail={setShowSidebarRail}
-      isSidebarOpen={isSidebarOpen}
-      setIsSidebarOpen={setIsSidebarOpen}
+      isSidebarOpen={false}
+      setIsSidebarOpen={() => {}}
       createNewChat={actions.createNewChat}
       handleSidebarSearch={actions.handleSidebarSearch}
       handleOpenChatFromSidebar={actions.handleOpenChatFromSidebar}
