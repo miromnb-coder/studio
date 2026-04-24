@@ -1,319 +1,203 @@
 'use client';
 
-import { useState, type ReactNode } from 'react';
-import {
-  Activity,
-  Bell,
-  CalendarDays,
-  CheckCircle2,
-  ChevronRight,
-  CircleDollarSign,
-  Eye,
-  Globe,
-  Mail,
-  Menu,
-  MessageCircle,
-  Paperclip,
-  Plus,
-  Search,
-  Settings2,
-  Sparkles,
-  Zap,
-  ListChecks,
-} from 'lucide-react';
-
-const RAIL_WIDTH = 72;
+import { Search, MoreHorizontal, ChevronRight, Plus, Zap, CheckCircle2 } from 'lucide-react';
 
 const agents = [
-  { name: 'Research Agent', desc: 'Finds information, analyzes data, and delivers insights.', icon: Search, tasks: '3 tasks' },
-  { name: 'Planner Agent', desc: 'Plans your day, sets priorities, and keeps you on track.', icon: ListChecks, tasks: '2 tasks' },
-  { name: 'Money Agent', desc: 'Monitors spending, finds savings, and optimizes finances.', icon: CircleDollarSign, tasks: '4 tasks' },
-  { name: 'Automation Agent', desc: 'Automates workflows and repetitive tasks across your apps.', icon: Zap, tasks: '5 tasks' },
-  { name: 'Vision Agent', desc: 'Understands images, documents, and visual data.', icon: Eye, tasks: '1 task' },
+  {
+    name: 'Research Agent',
+    desc: 'Finds information, analyzes data, and delivers insights.',
+    tasks: '3 tasks',
+  },
+  {
+    name: 'Planner Agent',
+    desc: 'Plans your day, sets priorities, and keeps you on track.',
+    tasks: '2 tasks',
+  },
+  {
+    name: 'Money Agent',
+    desc: 'Monitors spending, finds savings, and optimizes finances.',
+    tasks: '4 tasks',
+  },
+  {
+    name: 'Automation Agent',
+    desc: 'Automates workflows and repetitive tasks.',
+    tasks: '5 tasks',
+  },
+  {
+    name: 'Vision Agent',
+    desc: 'Understands images, documents, and visual data.',
+    tasks: '1 task',
+  },
 ];
 
-const recommended = [
-  { name: 'Email Assistant', desc: 'Summarizes emails and drafts smart replies.', icon: Mail },
-  { name: 'Document Analyst', desc: 'Analyzes and extracts key insights from files.', icon: Paperclip },
-  { name: 'Web Monitor', desc: 'Monitors websites and alerts you on changes.', icon: Globe },
-];
-
-const activity = [
-  { text: 'Research Agent completed “Market analysis Q1 2024”', time: '2h ago', icon: Search },
-  { text: 'Planner Agent updated your daily plan', time: '3h ago', icon: ListChecks },
-  { text: 'Money Agent found a new saving opportunity', time: '5h ago', icon: CircleDollarSign },
-];
-
-export default function AgentsPage() {
-  const [railOpen, setRailOpen] = useState(true);
-
-  return (
-    <main className="min-h-screen overflow-x-hidden bg-[#FAFAFA] text-[#111318]">
-      {railOpen ? <MiniRail /> : null}
-
-      <section
-        className="min-h-screen px-5 pb-16 pt-7 transition-[padding-left] duration-300 ease-out"
-        style={{ paddingLeft: railOpen ? RAIL_WIDTH + 24 : 20 }}
-      >
-        <div className="mx-auto w-full max-w-[480px]">
-          <header className="mb-10 flex items-center justify-between">
-            <button
-              type="button"
-              onClick={() => setRailOpen((open) => !open)}
-              className="flex h-10 w-10 items-center justify-center rounded-full hover:bg-black/[0.04] active:scale-[0.96]"
-              aria-label="Toggle sidebar"
-            >
-              <Menu className="h-5 w-5" />
-            </button>
-
-            <div className="flex items-center gap-1.5 text-[15px] font-semibold">
-              <Zap className="h-4 w-4" />
-              Free
-            </div>
-          </header>
-
-          <div className="mb-8 flex items-start justify-between gap-4">
-            <div>
-              <h1 className="font-serif text-[42px] leading-none tracking-[-0.06em] text-[#15171C] sm:text-[44px]">
-                Agents
-              </h1>
-              <p className="mt-3 text-[15px] text-[#666C76]">
-                AI agents that work for you.
-              </p>
-            </div>
-
-            <button className="mt-2 inline-flex items-center gap-2 rounded-[16px] bg-[#111318] px-5 py-3 text-[14px] font-medium text-white shadow-[0_12px_30px_rgba(17,19,24,0.16)] active:scale-[0.98]">
-              <Plus className="h-4 w-4" />
-              New agent
-            </button>
-          </div>
-
-          <div className="mb-8 grid grid-cols-2 gap-4">
-            <StatCard icon={<Activity />} label="Active agents" value="5" sub="Running tasks" />
-            <StatCard icon={<CheckCircle2 />} label="Tasks completed" value="128" sub="This week" />
-          </div>
-
-          <SectionTitle>My agents</SectionTitle>
-
-          <div className="mb-10 overflow-hidden rounded-[24px] border border-black/[0.055] bg-white shadow-[0_12px_36px_rgba(15,23,42,0.035)]">
-            {agents.map((agent, index) => (
-              <AgentRow key={agent.name} {...agent} isLast={index === agents.length - 1} />
-            ))}
-          </div>
-
-          <SectionHeader title="Recommended for you" />
-
-          <div className="mb-10 grid grid-cols-3 gap-4">
-            {recommended.map((item) => (
-              <RecommendedCard key={item.name} {...item} />
-            ))}
-          </div>
-
-          <SectionHeader title="Recent activity" />
-
-          <div className="overflow-hidden rounded-[22px] border border-black/[0.055] bg-white shadow-[0_10px_30px_rgba(15,23,42,0.03)]">
-            {activity.map((item, index) => (
-              <ActivityRow key={item.text} {...item} isLast={index === activity.length - 1} />
-            ))}
-          </div>
-        </div>
-      </section>
-    </main>
+function Sidebar() {
+  const Item = ({ active = false, children }: any) => (
+    <button
+      className={`flex h-12 w-12 items-center justify-center rounded-2xl transition ${
+        active ? 'bg-black/5' : 'hover:bg-black/5'
+      }`}
+    >
+      {children}
+    </button>
   );
-}
 
-function MiniRail() {
   return (
-    <aside className="fixed inset-y-0 left-0 z-30 flex w-[72px] flex-col items-center border-r border-black/[0.06] bg-white/78 px-3 py-5 backdrop-blur-xl">
-      <div className="flex h-10 w-10 items-center justify-center rounded-full bg-[#7B5342] text-[18px] font-medium text-white">
+    <aside className="fixed left-0 top-0 z-20 flex h-screen w-[82px] flex-col items-center border-r border-black/5 bg-[#f7f7f5] pt-6">
+      <div className="mb-10 flex h-12 w-12 items-center justify-center rounded-full bg-[#7a5441] text-xl text-white">
         M
       </div>
 
-      <div className="mt-16 flex flex-1 flex-col items-center gap-5">
-        <Plus className="h-5 w-5" />
-        <Search className="h-5 w-5" />
-        <div className="rounded-2xl bg-black/[0.055] p-3">
-          <MessageCircle className="h-5 w-5" />
-        </div>
-        <Sparkles className="h-5 w-5" />
-        <CalendarDays className="h-5 w-5" />
-        <div className="relative">
-          <Bell className="h-5 w-5" />
-          <span className="absolute -right-2 -top-2 grid h-5 w-5 place-items-center rounded-full bg-[#111318] text-[11px] font-semibold text-white">
-            2
-          </span>
-        </div>
-        <Settings2 className="h-5 w-5" />
+      <div className="flex flex-col gap-3">
+        <Item>+</Item>
+        <Item>
+          <Search className="h-5 w-5" />
+        </Item>
+        <Item active>💬</Item>
+        <Item>✦</Item>
+        <Item>📅</Item>
+        <Item>🔔</Item>
+        <Item>⚙️</Item>
       </div>
 
-      <div className="text-center text-[11px] font-medium text-[#8A8F98]">
-        <div className="text-[24px] font-bold leading-none">K</div>
-        Kivo
+      <div className="mt-auto pb-6 text-center text-sm text-black/50">
+        <div className="text-3xl font-semibold">K</div>
+        <div>Kivo</div>
       </div>
     </aside>
   );
 }
 
-function SectionTitle({
-  children,
-  className = '',
-}: {
-  children: ReactNode;
-  className?: string;
-}) {
-  return (
-    <h2 className={`mb-5 text-[16px] font-semibold tracking-[-0.03em] ${className}`}>
-      {children}
-    </h2>
-  );
-}
-
-function SectionHeader({ title }: { title: string }) {
-  return (
-    <div className="mb-5 flex items-center justify-between">
-      <SectionTitle className="mb-0">{title}</SectionTitle>
-      <button className="inline-flex items-center gap-1 text-[14px] font-medium text-[#555B65]">
-        See all
-        <ChevronRight className="h-4 w-4" />
-      </button>
-    </div>
-  );
-}
-
 function StatCard({
-  icon,
-  label,
+  title,
   value,
   sub,
+  icon,
 }: {
-  icon: ReactNode;
-  label: string;
+  title: string;
   value: string;
   sub: string;
+  icon: React.ReactNode;
 }) {
   return (
-    <button className="flex min-w-0 items-center gap-4 rounded-[22px] border border-black/[0.055] bg-white px-5 py-5 text-left shadow-[0_10px_28px_rgba(15,23,42,0.035)] active:scale-[0.99]">
-      <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-[18px] bg-[#F4F4F5] text-[#111318]">
-        <div className="h-6 w-6">{icon}</div>
-      </div>
-
-      <div className="min-w-0 flex-1">
-        <div className="text-[13px] font-medium text-[#6B7280]">{label}</div>
-        <div className="mt-1 font-serif text-[34px] leading-none tracking-[-0.06em]">
-          {value}
+    <div className="rounded-[26px] border border-black/5 bg-white px-5 py-5 shadow-sm">
+      <div className="flex items-center gap-4">
+        <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-black/[0.03]">
+          {icon}
         </div>
-        <div className="mt-2 text-[13px] text-[#6B7280]">{sub}</div>
-      </div>
 
-      <ChevronRight className="h-5 w-5 shrink-0 text-[#777D86]" />
-    </button>
+        <div className="min-w-0 flex-1">
+          <div className="text-[13px] text-black/45">{title}</div>
+          <div className="text-3xl font-semibold tracking-tight">{value}</div>
+          <div className="text-[13px] text-black/45">{sub}</div>
+        </div>
+
+        <ChevronRight className="h-5 w-5 text-black/25" />
+      </div>
+    </div>
   );
 }
 
 function AgentRow({
   name,
   desc,
-  icon: Icon,
   tasks,
-  isLast,
 }: {
   name: string;
   desc: string;
-  icon: typeof Search;
   tasks: string;
-  isLast: boolean;
 }) {
   return (
-    <div
-      className={`flex items-center gap-4 px-5 py-5 ${
-        isLast ? '' : 'border-b border-black/[0.045]'
-      }`}
-    >
-      <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-[18px] bg-[#F4F4F5] text-[#111318]">
-        <Icon className="h-6 w-6" strokeWidth={2} />
+    <div className="grid grid-cols-[54px_1fr_auto] items-center gap-4 border-t border-black/5 px-5 py-5 first:border-t-0">
+      <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-black/[0.03]">
+        <Search className="h-6 w-6" />
       </div>
 
-      <div className="min-w-0 flex-1">
-        <div className="text-[16px] font-semibold tracking-[-0.03em]">{name}</div>
-        <p className="mt-1 max-w-[360px] text-[14px] leading-[1.45] text-[#5F6672]">
-          {desc}
-        </p>
-        <div className="mt-3 flex items-center gap-2 text-[13px] text-[#333840]">
-          <span className="h-2 w-2 rounded-full bg-[#111318]" />
+      <div className="min-w-0">
+        <div className="text-[18px] font-semibold tracking-tight">{name}</div>
+        <div className="mt-1 text-[14px] leading-5 text-black/50">{desc}</div>
+        <div className="mt-2 flex items-center gap-2 text-[13px] text-black/55">
+          <span className="h-2 w-2 rounded-full bg-black" />
           Active
         </div>
       </div>
 
-      <div className="flex shrink-0 items-center gap-4">
-        <span className="rounded-[12px] bg-[#F4F4F5] px-3 py-2 text-[13px] font-medium">
+      <div className="flex items-center gap-3">
+        <span className="rounded-full bg-black/[0.04] px-3 py-1 text-[13px] font-medium">
           {tasks}
         </span>
 
-        <button className="relative h-6 w-10 rounded-full bg-[#111318]">
-          <span className="absolute right-1 top-1 h-4 w-4 rounded-full bg-white" />
+        <button className="relative h-7 w-12 rounded-full bg-black">
+          <span className="absolute right-1 top-1 h-5 w-5 rounded-full bg-white" />
         </button>
 
-        <button className="text-[#6B7280]">•••</button>
-        <ChevronRight className="h-5 w-5 text-[#777D86]" />
+        <button className="p-1 text-black/45">
+          <MoreHorizontal className="h-5 w-5" />
+        </button>
+
+        <ChevronRight className="h-5 w-5 text-black/25" />
       </div>
     </div>
   );
 }
 
-function RecommendedCard({
-  name,
-  desc,
-  icon: Icon,
-}: {
-  name: string;
-  desc: string;
-  icon: typeof Mail;
-}) {
+export default function AgentsPage() {
   return (
-    <div className="rounded-[20px] border border-black/[0.055] bg-white p-4 shadow-[0_8px_26px_rgba(15,23,42,0.025)]">
-      <div className="mb-5 flex h-10 w-10 items-center justify-center rounded-[14px] bg-[#F4F4F5]">
-        <Icon className="h-5 w-5" />
+    <main className="min-h-screen bg-[#f6f6f4] text-[#111]">
+      <Sidebar />
+
+      <div className="pl-[96px] pr-4">
+        <div className="mx-auto w-full max-w-[760px] py-6 scale-[0.85] origin-top">
+          {/* top bar */}
+          <div className="mb-8 flex items-start justify-between gap-4">
+            <div>
+              <button className="mb-5 rounded-xl p-2 hover:bg-black/5">☰</button>
+              <h1 className="text-[44px] font-semibold tracking-tight">Agents</h1>
+              <p className="mt-1 text-[18px] text-black/50">
+                AI agents that work for you.
+              </p>
+            </div>
+
+            <div className="flex flex-col items-end gap-5">
+              <div className="flex items-center gap-2 text-sm font-medium text-black/70">
+                <Zap className="h-4 w-4" />
+                Free
+              </div>
+
+              <button className="inline-flex items-center gap-2 rounded-2xl bg-[#0d0d14] px-5 py-3 text-white shadow-lg">
+                <Plus className="h-4 w-4" />
+                New agent
+              </button>
+            </div>
+          </div>
+
+          {/* stats */}
+          <div className="grid grid-cols-2 gap-4">
+            <StatCard
+              title="Active agents"
+              value="5"
+              sub="Running tasks"
+              icon={<Zap className="h-6 w-6" />}
+            />
+            <StatCard
+              title="Tasks completed"
+              value="128"
+              sub="This week"
+              icon={<CheckCircle2 className="h-6 w-6" />}
+            />
+          </div>
+
+          {/* agents */}
+          <section className="mt-7">
+            <h2 className="mb-4 text-[28px] font-semibold tracking-tight">My agents</h2>
+
+            <div className="overflow-hidden rounded-[30px] border border-black/5 bg-white shadow-sm">
+              {agents.map((agent) => (
+                <AgentRow key={agent.name} {...agent} />
+              ))}
+            </div>
+          </section>
+        </div>
       </div>
-
-      <div className="text-[15px] font-semibold tracking-[-0.03em]">{name}</div>
-      <p className="mt-2 min-h-[42px] text-[13px] leading-[1.35] text-[#606773]">
-        {desc}
-      </p>
-
-      <button className="mt-4 w-full rounded-[12px] bg-[#F4F4F5] py-2.5 text-[13px] font-medium">
-        Add
-      </button>
-    </div>
-  );
-}
-
-function ActivityRow({
-  text,
-  time,
-  icon: Icon,
-  isLast,
-}: {
-  text: string;
-  time: string;
-  icon: typeof Search;
-  isLast: boolean;
-}) {
-  return (
-    <div
-      className={`flex items-center gap-4 px-5 py-4 ${
-        isLast ? '' : 'border-b border-black/[0.045]'
-      }`}
-    >
-      <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-[14px] bg-[#F4F4F5]">
-        <Icon className="h-5 w-5" />
-      </div>
-
-      <div className="min-w-0 flex-1">
-        <div className="truncate text-[14px] font-medium text-[#343941]">{text}</div>
-        <div className="mt-1 text-[13px] text-[#8A8F98]">{time}</div>
-      </div>
-
-      <CheckCircle2 className="h-5 w-5 shrink-0 text-[#525861]" />
-    </div>
+    </main>
   );
 }
