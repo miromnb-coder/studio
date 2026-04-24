@@ -12,7 +12,6 @@ import { KivoChatScreenScrollToLatestButton } from './KivoChatScreenScrollToLate
 import { KivoComposerDock } from './KivoComposerDock';
 import {
   KivoChatSidebarArea,
-  KIVO_CHAT_SIDEBAR_OPEN_WIDTH,
   KIVO_CHAT_SIDEBAR_RAIL_WIDTH,
 } from './KivoChatSidebarArea';
 import { KivoReferralSuccessToast } from './KivoReferralSuccessToast';
