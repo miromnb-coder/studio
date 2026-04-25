@@ -1,4 +1,4 @@
-diff --git a/src/app/layout.tsx b/src/app/layout.tsx
+
 index 81498eef6767305488fcd5013f87189de350fac1..ec685a53136d57e043e44bb776f350361f27d2b5 100644
 --- a/src/app/layout.tsx
 +++ b/src/app/layout.tsx
