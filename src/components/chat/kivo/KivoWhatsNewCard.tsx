@@ -189,7 +189,7 @@ function KivoDotStyles() {
         }
 
         .kivo-dot-spin {
-          animation: kivoDotSpin 32s linear infinite;
+          animation: kivoDotSpin 60s linear infinite;
           transform-origin: center;
           will-change: transform;
         }
