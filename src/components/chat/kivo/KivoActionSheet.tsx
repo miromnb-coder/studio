@@ -111,7 +111,7 @@ export function KivoActionSheet({
     _: MouseEvent | TouchEvent | PointerEvent,
     info: PanInfo,
   ) => {
-    if (info.offset.y > 90 || info.velocity.y > 520) {
+    if (info.offset.y > 70 || info.velocity.y > 420) {
       onClose();
     }
   };
@@ -127,33 +127,33 @@ export function KivoActionSheet({
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            transition={{ duration: 0.18, ease: 'easeOut' }}
+            transition={{ duration: 0.12, ease: 'easeOut' }}
             onClick={onClose}
           />
 
           <motion.aside
-            className="fixed inset-x-0 bottom-0 z-50 mx-auto flex max-h-[74dvh] w-full max-w-[560px] flex-col overflow-hidden rounded-t-[26px] bg-white shadow-[0_-18px_48px_rgba(0,0,0,0.16)]"
+            className="fixed inset-x-0 bottom-0 z-50 mx-auto flex max-h-[68dvh] w-full max-w-[560px] flex-col overflow-hidden rounded-t-[28px] bg-white shadow-[0_-18px_48px_rgba(0,0,0,0.16)]"
             initial={{ y: '100%' }}
             animate={{ y: 0 }}
             exit={{ y: '100%' }}
-            transition={{ type: 'spring', stiffness: 360, damping: 38 }}
+            transition={{ type: 'spring', stiffness: 560, damping: 44, mass: 0.75 }}
             drag="y"
             dragControls={dragControls}
             dragListener={false}
             dragConstraints={{ top: 0, bottom: 0 }}
-            dragElastic={{ top: 0, bottom: 0.14 }}
+            dragElastic={{ top: 0, bottom: 0.12 }}
             onDragEnd={handleDragEnd}
           >
             <button
               type="button"
               onPointerDown={(event) => dragControls.start(event)}
               aria-label="Drag to dismiss"
-              className="shrink-0 touch-none cursor-grab px-4 pb-4 pt-3 active:cursor-grabbing"
+              className="shrink-0 touch-none cursor-grab px-4 pb-5 pt-4 active:cursor-grabbing"
             >
-              <span className="mx-auto block h-1.5 w-16 rounded-full bg-black/20" />
+              <span className="mx-auto block h-1.5 w-[72px] rounded-full bg-black/20" />
             </button>
 
-            <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-6 pb-[calc(env(safe-area-inset-bottom,0px)+92px)]">
+            <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-6 pb-[calc(env(safe-area-inset-bottom,0px)+96px)] [-webkit-overflow-scrolling:touch]">
               <section className="border-b border-black/[0.08] pb-5">
                 <div className="mb-4 flex items-center justify-between">
                   <h2 className="text-[24px] font-semibold tracking-[-0.035em] text-[#222]">
@@ -169,7 +169,7 @@ export function KivoActionSheet({
                   </button>
                 </div>
 
-                <div className="-mx-1 flex gap-4 overflow-x-auto px-1 pb-1 [-webkit-overflow-scrolling:touch] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+                <div className="-mx-1 flex gap-4 overflow-x-auto px-1 pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
                   <button
                     type="button"
                     onClick={() => closeAfter(onAddImages)}
@@ -201,6 +201,7 @@ export function KivoActionSheet({
                     label="Files"
                     onClick={() => closeAfter(onAddFiles)}
                   />
+
                   <MiniPhotoButton
                     icon={Link2}
                     label="Link"
@@ -210,95 +211,20 @@ export function KivoActionSheet({
               </section>
 
               <section className="pt-4">
-                <SheetRow
-                  icon={FileText}
-                  title="Add files"
-                  onClick={() => closeAfter(onAddFiles)}
-                />
-
-                <SheetRow
-                  icon={Mail}
-                  title={toolState.gmail.connected ? 'Open Gmail' : 'Connect Gmail'}
-                  onClick={() => closeAfter(() => onToolAction('gmail'))}
-                />
-
-                <SheetRow
-                  icon={CalendarClock}
-                  title={
-                    toolState.calendar.connected
-                      ? 'Open Calendar'
-                      : 'Connect Calendar'
-                  }
-                  onClick={() => closeAfter(() => onToolAction('calendar'))}
-                />
-
-                <SheetRow
-                  icon={Workflow}
-                  title="Connect tools"
-                  onClick={() => closeAfter(() => onToolAction('tasks'))}
-                />
-
-                <SheetRow
-                  icon={Target}
-                  title="Find priorities"
-                  onClick={() => closeAfter(() => onAiAction('find-priorities'))}
-                />
-
-                <SheetRow
-                  icon={Sparkles}
-                  title="Plan my day"
-                  onClick={() => closeAfter(() => onAiAction('summarize-day'))}
-                />
-
-                <SheetRow
-                  icon={Search}
-                  title="Deep research"
-                  onClick={() => closeAfter(() => onAiAction('deep-research'))}
-                />
-
-                <SheetRow
-                  icon={Globe}
-                  title="Live web search"
-                  onClick={() => closeAfter(() => onAiAction('live-search'))}
-                />
-
-                <SheetRow
-                  icon={PiggyBank}
-                  title="Money leak scan"
-                  badge="Kivo Pro"
-                  onClick={() => closeAfter(() => onToolAction('money-saver'))}
-                />
-
-                <SheetRow
-                  icon={Brain}
-                  title="Memory search"
-                  onClick={() => closeAfter(() => onToolAction('tasks'))}
-                />
-
-                <SheetRow
-                  icon={Zap}
-                  title="Automation builder"
-                  badge="Pro"
-                  onClick={() => closeAfter(() => onToolAction('tasks'))}
-                />
-
-                <SheetRow
-                  icon={BotMessageSquare}
-                  title="Chat mode"
-                  onClick={() => closeAfter(() => onToolAction('tasks'))}
-                />
-
-                <SheetRow
-                  icon={CalendarClock}
-                  title="Scheduled tasks"
-                  onClick={() => closeAfter(() => onToolAction('calendar'))}
-                />
-
-                <SheetRow
-                  icon={Mic}
-                  title={isListening ? 'Voice input on' : 'Voice input'}
-                  onClick={() => closeAfter(onVoiceInput)}
-                />
+                <SheetRow icon={FileText} title="Add files" onClick={() => closeAfter(onAddFiles)} />
+                <SheetRow icon={Mail} title={toolState.gmail.connected ? 'Open Gmail' : 'Connect Gmail'} onClick={() => closeAfter(() => onToolAction('gmail'))} />
+                <SheetRow icon={CalendarClock} title={toolState.calendar.connected ? 'Open Calendar' : 'Connect Calendar'} onClick={() => closeAfter(() => onToolAction('calendar'))} />
+                <SheetRow icon={Workflow} title="Connect tools" onClick={() => closeAfter(() => onToolAction('tasks'))} />
+                <SheetRow icon={Target} title="Find priorities" onClick={() => closeAfter(() => onAiAction('find-priorities'))} />
+                <SheetRow icon={Sparkles} title="Plan my day" onClick={() => closeAfter(() => onAiAction('summarize-day'))} />
+                <SheetRow icon={Search} title="Deep research" onClick={() => closeAfter(() => onAiAction('deep-research'))} />
+                <SheetRow icon={Globe} title="Live web search" onClick={() => closeAfter(() => onAiAction('live-search'))} />
+                <SheetRow icon={PiggyBank} title="Money leak scan" badge="Kivo Pro" onClick={() => closeAfter(() => onToolAction('money-saver'))} />
+                <SheetRow icon={Brain} title="Memory search" onClick={() => closeAfter(() => onToolAction('tasks'))} />
+                <SheetRow icon={Zap} title="Automation builder" badge="Pro" onClick={() => closeAfter(() => onToolAction('tasks'))} />
+                <SheetRow icon={BotMessageSquare} title="Chat mode" onClick={() => closeAfter(() => onToolAction('tasks'))} />
+                <SheetRow icon={CalendarClock} title="Scheduled tasks" onClick={() => closeAfter(() => onToolAction('calendar'))} />
+                <SheetRow icon={Mic} title={isListening ? 'Voice input on' : 'Voice input'} onClick={() => closeAfter(onVoiceInput)} />
               </section>
             </div>
           </motion.aside>
