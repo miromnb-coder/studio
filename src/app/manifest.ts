@@ -1,4 +1,4 @@
-diff --git a/src/app/manifest.ts b/src/app/manifest.ts
+
 index 4d5df5655ca7e17d837fa382230f8069707c2758..af1ec907a74173ce57e96b7b067d87c2d4b6b97d 100644
 --- a/src/app/manifest.ts
 +++ b/src/app/manifest.ts
