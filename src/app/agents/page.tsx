@@ -1,21 +1,19 @@
 'use client';
 
-import { useState, type ReactNode } from 'react';
+import { useMemo, useState, type ReactNode } from 'react';
 import { useRouter } from 'next/navigation';
 import {
-  Activity,
-  CheckCircle2,
+  Brain,
   ChevronRight,
   CircleDollarSign,
   Eye,
-  Globe,
+  ListChecks,
   Mail,
-  MoreHorizontal,
-  Paperclip,
   Plus,
   Search,
+  ShieldCheck,
+  Sparkles,
   Zap,
-  ListChecks,
 } from 'lucide-react';
 
 import KivoChatHeader from '@/components/chat/kivo/KivoChatHeader';
@@ -26,29 +24,123 @@ import {
 
 const SIDEBAR_GAP = 12;
 
-const agents = [
-  { name: 'Research Agent', desc: 'Finds information, analyzes data, and delivers insights.', icon: Search, tasks: '3 tasks' },
-  { name: 'Planner Agent', desc: 'Plans your day, sets priorities, and keeps you on track.', icon: ListChecks, tasks: '2 tasks' },
-  { name: 'Money Agent', desc: 'Monitors spending, finds savings, and optimizes finances.', icon: CircleDollarSign, tasks: '4 tasks' },
-  { name: 'Automation Agent', desc: 'Automates workflows and repetitive tasks.', icon: Zap, tasks: '5 tasks' },
-  { name: 'Vision Agent', desc: 'Understands images, documents, and visual data.', icon: Eye, tasks: '1 task' },
-];
-
-const recommended = [
-  { name: 'Email Assistant', desc: 'Summarizes emails and drafts smart replies.', icon: Mail },
-  { name: 'Document Analyst', desc: 'Analyzes and extracts key insights from files.', icon: Paperclip },
-  { name: 'Web Monitor', desc: 'Monitors websites and alerts you on changes.', icon: Globe },
-];
-
 export default function AgentsPage() {
   const router = useRouter();
-
-  // Sidebar oletuksena pois
   const [showSidebarRail, setShowSidebarRail] = useState(false);
 
   const contentLeftOffset = showSidebarRail
     ? KIVO_CHAT_SIDEBAR_RAIL_WIDTH + SIDEBAR_GAP
     : 0;
+
+  /**
+   * USER DATA (replace later with real profile/integrations data)
+   * Only page content changed. Header + sidebar untouched.
+   */
+  const user = {
+    name: 'Miro',
+    plan: 'Free',
+    gmailConnected: false,
+    calendarConnected: false,
+    memoryEnabled: false,
+    recentRuns: 2,
+  };
+
+  const readiness = useMemo(() => {
+    let score = 20;
+    if (user.plan !== 'Free') score += 20;
+    if (user.gmailConnected) score += 20;
+    if (user.calendarConnected) score += 20;
+    if (user.memoryEnabled) score += 20;
+    return score;
+  }, [user]);
+
+  const nextAction = !user.calendarConnected
+    ? 'Connect Calendar'
+    : !user.gmailConnected
+      ? 'Connect Gmail'
+      : !user.memoryEnabled
+        ? 'Enable Memory'
+        : user.plan === 'Free'
+          ? 'Upgrade for Automation'
+          : 'Run Smart Operator';
+
+  const agents = [
+    {
+      name: 'Smart Operator',
+      desc: 'Coordinates all systems and chooses the best next action.',
+      icon: Brain,
+      status: 'Ready',
+      chips: ['Core', 'Routing'],
+    },
+    {
+      name: 'Research Agent',
+      desc: 'Searches, compares, summarizes, and explains information.',
+      icon: Search,
+      status: 'Ready',
+      chips: ['Search', 'Analysis'],
+    },
+    {
+      name: 'Planner Agent',
+      desc: 'Builds daily plans and smarter schedules.',
+      icon: ListChecks,
+      status: user.calendarConnected ? 'Ready' : 'Needs Calendar',
+      chips: ['Planning', 'Focus'],
+    },
+    {
+      name: 'Money Agent',
+      desc: 'Finds savings, subscriptions, and money leaks.',
+      icon: CircleDollarSign,
+      status: user.gmailConnected ? 'Ready' : 'Needs Data',
+      chips: ['Finance', 'Savings'],
+    },
+    {
+      name: 'Email Agent',
+      desc: 'Summarizes inbox and drafts replies.',
+      icon: Mail,
+      status: user.gmailConnected ? 'Ready' : 'Needs Gmail',
+      chips: ['Inbox', 'Reply'],
+    },
+    {
+      name: 'Vision Agent',
+      desc: 'Understands images, files, and screenshots.',
+      icon: Eye,
+      status: 'Ready',
+      chips: ['Vision', 'Files'],
+    },
+    {
+      name: 'Memory Agent',
+      desc: 'Remembers goals, preferences, and recurring tasks.',
+      icon: ShieldCheck,
+      status: user.memoryEnabled ? 'Full' : 'Limited',
+      chips: ['Memory', 'Context'],
+    },
+  ];
+
+  const setup = [
+    {
+      title: 'Connect Email',
+      value: user.gmailConnected ? 'Connected' : 'Not connected',
+    },
+    {
+      title: 'Connect Calendar',
+      value: user.calendarConnected ? 'Connected' : 'Not connected',
+    },
+    {
+      title: 'Enable Memory',
+      value: user.memoryEnabled ? 'Enabled' : 'Limited',
+    },
+    {
+      title: 'Automation',
+      value: user.plan === 'Free' ? 'Premium' : 'Unlocked',
+    },
+  ];
+
+  const ideas = [
+    'Plan my day',
+    'Find money leaks',
+    'Summarize important emails',
+    'Watch for changes',
+  ];
 
   return (
     <main className="relative min-h-[100dvh] overflow-x-hidden bg-[#F8F8F7] text-[#111318]">
@@ -87,42 +179,78 @@ export default function AgentsPage() {
           />
         </div>
 
-        <section className="px-4 pb-14 pt-7 sm:px-5">
-          <div className="origin-top-left w-[138%] max-w-[1120px] scale-[0.72]">
-            <div className="mb-7 flex items-start justify-between gap-6">
+        <section className="px-4 pb-24 pt-7 sm:px-5">
+          <div className="mx-auto max-w-[720px]">
+            {/* HERO */}
+            <div className="mb-6 flex items-start justify-between gap-4">
               <div>
-                <h1 className="font-serif text-[44px] leading-none tracking-[-0.06em]">
+                <h1 className="font-serif text-[42px] leading-none tracking-[-0.06em]">
                   Agents
                 </h1>
-                <p className="mt-2 text-[16px] text-black/50">
-                  AI agents that work for you.
+                <p className="mt-2 text-[15px] text-black/52">
+                  Control what Kivo can do for you.
                 </p>
+
+                <div className="mt-3 inline-flex items-center gap-2 rounded-full border border-black/[0.06] bg-white px-3 py-1.5 text-[13px] font-medium">
+                  <span className="h-2 w-2 rounded-full bg-emerald-500" />
+                  {readiness}% ready
+                </div>
               </div>
 
-              <button className="inline-flex items-center gap-2 rounded-[18px] bg-[#111318] px-5 py-3 text-[14px] font-medium text-white shadow-[0_12px_28px_rgba(17,19,24,0.15)]">
+              <button className="inline-flex items-center gap-2 rounded-[18px] bg-[#111318] px-4 py-3 text-[14px] font-medium text-white shadow-[0_12px_28px_rgba(17,19,24,0.14)]">
                 <Plus className="h-4 w-4" />
-                New agent
+                New
               </button>
             </div>
 
-            <div className="mb-7 grid grid-cols-2 gap-5">
-              <StatCard icon={<Activity className="h-6 w-6" />} label="Active agents" value="5" sub="Running tasks" />
-              <StatCard icon={<CheckCircle2 className="h-6 w-6" />} label="Tasks completed" value="128" sub="This week" />
+            {/* INTELLIGENCE CARD */}
+            <div className="mb-6 rounded-[28px] border border-black/[0.055] bg-white p-5 shadow-[0_14px_34px_rgba(15,23,42,0.035)]">
+              <div className="flex items-center gap-2 text-[13px] font-medium text-black/55">
+                <Sparkles className="h-4 w-4" />
+                Operator Intelligence
+              </div>
+
+              <div className="mt-4 grid grid-cols-2 gap-4">
+                <MiniStat label="Mode" value="Manual approval" />
+                <MiniStat label="Plan" value={user.plan} />
+                <MiniStat label="Recent runs" value={`${user.recentRuns}`} />
+                <MiniStat label="Next action" value={nextAction} />
+              </div>
             </div>
 
-            <SectionTitle>My agents</SectionTitle>
+            {/* SETUP */}
+            <SectionTitle>Setup progress</SectionTitle>
 
-            <div className="mb-8 overflow-hidden rounded-[26px] border border-black/[0.055] bg-white shadow-[0_12px_34px_rgba(15,23,42,0.032)]">
-              {agents.map((agent, index) => (
-                <AgentRow key={agent.name} {...agent} isLast={index === agents.length - 1} />
+            <div className="mb-6 grid grid-cols-2 gap-3">
+              {setup.map((item) => (
+                <InfoCard
+                  key={item.title}
+                  title={item.title}
+                  value={item.value}
+                />
               ))}
             </div>
 
-            <SectionTitle>Recommended for you</SectionTitle>
+            {/* AGENTS */}
+            <SectionTitle>Core agents</SectionTitle>
 
-            <div className="grid grid-cols-3 gap-5">
-              {recommended.map((item) => (
-                <RecommendedCard key={item.name} {...item} />
+            <div className="mb-6 space-y-3">
+              {agents.map((agent) => (
+                <AgentCard key={agent.name} {...agent} />
+              ))}
+            </div>
+
+            {/* IDEAS */}
+            <SectionTitle>Automation ideas</SectionTitle>
+
+            <div className="grid grid-cols-2 gap-3">
+              {ideas.map((idea) => (
+                <button
+                  key={idea}
+                  className="rounded-[20px] border border-black/[0.055] bg-white px-4 py-4 text-left text-[14px] font-medium shadow-[0_8px_20px_rgba(15,23,42,0.025)]"
+                >
+                  {idea}
+                </button>
               ))}
             </div>
           </div>
@@ -133,84 +261,94 @@ export default function AgentsPage() {
 }
 
 function SectionTitle({ children }: { children: ReactNode }) {
-  return <h2 className="mb-4 text-[22px] font-semibold tracking-[-0.04em]">{children}</h2>;
+  return (
+    <h2 className="mb-3 text-[22px] font-semibold tracking-[-0.04em]">
+      {children}
+    </h2>
+  );
 }
 
-function StatCard({ icon, label, value, sub }: { icon: ReactNode; label: string; value: string; sub: string }) {
+function MiniStat({
+  label,
+  value,
+}: {
+  label: string;
+  value: string;
+}) {
   return (
-    <div className="flex items-center gap-4 rounded-[24px] border border-black/[0.055] bg-white px-5 py-4 shadow-[0_10px_26px_rgba(15,23,42,0.028)]">
-      <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-[18px] bg-black/[0.035]">
-        {icon}
+    <div className="rounded-[20px] bg-black/[0.03] px-4 py-3">
+      <div className="text-[12px] text-black/45">{label}</div>
+      <div className="mt-1 text-[14px] font-semibold tracking-[-0.02em]">
+        {value}
       </div>
-      <div className="min-w-0 flex-1">
-        <div className="text-[14px] leading-tight text-black/45">{label}</div>
-        <div className="font-serif text-[34px] leading-none tracking-[-0.06em]">{value}</div>
-        <div className="mt-1 text-[14px] leading-tight text-black/45">{sub}</div>
-      </div>
-      <ChevronRight className="h-5 w-5 shrink-0 text-black/25" />
     </div>
   );
 }
 
-function AgentRow({
+function InfoCard({
+  title,
+  value,
+}: {
+  title: string;
+  value: string;
+}) {
+  return (
+    <div className="rounded-[22px] border border-black/[0.055] bg-white p-4 shadow-[0_8px_20px_rgba(15,23,42,0.025)]">
+      <div className="text-[13px] text-black/45">{title}</div>
+      <div className="mt-2 text-[15px] font-semibold">{value}</div>
+    </div>
+  );
+}
+
+function AgentCard({
   name,
   desc,
   icon: Icon,
-  tasks,
-  isLast,
+  status,
+  chips,
 }: {
   name: string;
   desc: string;
-  icon: typeof Search;
-  tasks: string;
-  isLast: boolean;
+  icon: any;
+  status: string;
+  chips: string[];
 }) {
   return (
-    <div
-      className={`grid grid-cols-[56px_1fr_auto] items-center gap-4 px-5 py-4 ${
-        isLast ? '' : 'border-b border-black/[0.045]'
-      }`}
-    >
-      <div className="flex h-13 w-13 items-center justify-center rounded-[17px] bg-black/[0.035]">
-        <Icon className="h-6 w-6" />
-      </div>
-
-      <div className="min-w-0">
-        <div className="text-[17px] font-semibold tracking-[-0.035em]">{name}</div>
-        <p className="mt-1 max-w-[620px] text-[14px] leading-[1.35] text-black/50">
-          {desc}
-        </p>
-        <div className="mt-2 flex items-center gap-2 text-[13px] text-black/55">
-          <span className="h-1.5 w-1.5 rounded-full bg-black" />
-          Active
+    <div className="rounded-[24px] border border-black/[0.055] bg-white p-4 shadow-[0_10px_24px_rgba(15,23,42,0.028)]">
+      <div className="flex items-start gap-4">
+        <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-[16px] bg-black/[0.035]">
+          <Icon className="h-5 w-5" />
         </div>
-      </div>
 
-      <div className="flex shrink-0 items-center gap-3">
-        <span className="rounded-full bg-black/[0.04] px-3 py-1.5 text-[13px] font-medium">
-          {tasks}
-        </span>
-        <button className="relative h-6 w-11 rounded-full bg-black">
-          <span className="absolute right-1 top-1 h-4 w-4 rounded-full bg-white" />
-        </button>
-        <MoreHorizontal className="h-5 w-5 text-black/45" />
-        <ChevronRight className="h-5 w-5 text-black/25" />
-      </div>
-    </div>
-  );
-}
+        <div className="min-w-0 flex-1">
+          <div className="flex items-center justify-between gap-3">
+            <div className="text-[16px] font-semibold tracking-[-0.03em]">
+              {name}
+            </div>
 
-function RecommendedCard({ name, desc, icon: Icon }: { name: string; desc: string; icon: typeof Mail }) {
-  return (
-    <div className="rounded-[22px] border border-black/[0.055] bg-white p-4 shadow-[0_8px_22px_rgba(15,23,42,0.025)]">
-      <div className="mb-4 flex h-11 w-11 items-center justify-center rounded-[15px] bg-black/[0.035]">
-        <Icon className="h-5 w-5" />
+            <span className="rounded-full bg-black/[0.04] px-3 py-1 text-[12px] font-medium">
+              {status}
+            </span>
+          </div>
+
+          <p className="mt-1 text-[14px] leading-[1.35] text-black/52">
+            {desc}
+          </p>
+
+          <div className="mt-3 flex flex-wrap gap-2">
+            {chips.map((chip) => (
+              <span
+                key={chip}
+                className="rounded-full bg-black/[0.035] px-2.5 py-1 text-[12px] font-medium"
+              >
+                {chip}
+              </span>
+            ))}
+          </div>
+        </div>
+
+        <ChevronRight className="mt-1 h-5 w-5 text-black/25" />
       </div>
-      <div className="text-[15px] font-semibold tracking-[-0.03em]">{name}</div>
-      <p className="mt-2 min-h-[40px] text-[13px] leading-[1.35] text-black/50">{desc}</p>
-      <button className="mt-4 w-full rounded-[12px] bg-black/[0.04] py-2.5 text-[13px] font-medium">
-        Add
-      </button>
     </div>
   );
 }
