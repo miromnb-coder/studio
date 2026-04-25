@@ -181,8 +181,7 @@ export function KivoChatScreenLayout({
   };
 
   return (
-    <div className="relative h-[100dvh] overflow-hidden bg-transparent text-[#2f3640]">
-      <KivoChatScreenBackground />
+  <div className="relative h-[100dvh] overflow-hidden bg-gradient-to-b from-[#f7f7f5] via-[#f5f5f3] to-[#f2f2f0] text-[#2f3640]">
 
       {showSidebarRail ? (
         <KivoChatSidebarArea
