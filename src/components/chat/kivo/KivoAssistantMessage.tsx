@@ -5,7 +5,6 @@ import Image from 'next/image';
 import type { Message } from '@/app/store/app-store';
 import { ResponseRenderer } from '@/components/chat/ResponseRenderer';
 import { KivoWebSourceCards } from './KivoWebSourceCards';
-import { KivoExecutionTimeline } from './execution/KivoExecutionTimeline';
 
 function KivoBrandHeader() {
   return (
@@ -36,7 +35,6 @@ export function KivoAssistantMessage({ message, latestUserContent }: { message: 
     <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.24, ease: 'easeOut' }} className="w-full max-w-[840px]">
       <KivoBrandHeader />
       <AnimatePresence initial={false}>{isStreaming ? <StreamingState /> : null}</AnimatePresence>
-      <KivoExecutionTimeline toolResults={message.toolResults as Array<Record<string, unknown>>} isStreaming={isStreaming} />
       {!showStreamingOnly ? <motion.div layout className="max-w-[760px] rounded-[26px] border border-black/[0.05] bg-white/70 px-4 py-3.5 shadow-[0_10px_30px_rgba(15,23,42,0.04)] backdrop-blur-xl"><div className="text-[15px] leading-[1.56] tracking-[-0.01em] text-[#1b1b1f]"><ResponseRenderer message={message} latestUserContent={latestUserContent} /></div><KivoWebSourceCards sources={webSources} /></motion.div> : null}
     </motion.div>
   );
