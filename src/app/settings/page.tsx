@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useState, type ReactNode } from 'react';
+import { useEffect, useState, type ReactNode } from 'react';
 import { useRouter } from 'next/navigation';
 import {
   Bell,
@@ -100,7 +100,7 @@ export default function SettingsPage() {
       setLanguage(localStorage.getItem('kivo.settings.language') || 'English');
       setWeekStart(localStorage.getItem('kivo.settings.weekStart') || 'Monday');
     } catch {
-      // safe fallback
+      // Safe fallback.
     }
   }, []);
 
@@ -113,58 +113,17 @@ export default function SettingsPage() {
   const planLabel = user.plan === 'premium' ? 'Premium plan' : 'Free plan';
 
   const integrations: Integration[] = [
-    {
-      key: 'gmail',
-      title: 'Gmail',
-      subtitle: 'Smart inbox access',
-      connected: connected.gmail,
-      href: '/actions?tool=gmail',
-      icon: <GmailIcon />,
-    },
-    {
-      key: 'googleCalendar',
-      title: 'Google Calendar',
-      subtitle: 'Schedule and planning',
-      connected: connected.googleCalendar,
-      href: '/actions?tool=google-calendar',
-      icon: <GoogleCalendarIcon />,
-    },
-    {
-      key: 'browserSearch',
-      title: 'Browser Search',
-      subtitle: 'Live web research',
-      connected: connected.browserSearch,
-      href: '/tools?tool=browser-search',
-      icon: <BrowserIcon />,
-    },
-    {
-      key: 'googleDrive',
-      title: 'Google Drive',
-      subtitle: 'Files and documents',
-      connected: connected.googleDrive,
-      href: '/tools?source=drive',
-      icon: <GoogleDriveIcon />,
-    },
-    {
-      key: 'github',
-      title: 'GitHub',
-      subtitle: 'Code and repositories',
-      connected: connected.github,
-      href: '/tools?tool=github',
-      icon: <GitHubIcon />,
-    },
-    {
-      key: 'outlook',
-      title: 'Outlook',
-      subtitle: 'Email and calendar',
-      connected: connected.outlook,
-      href: '/tools?tool=outlook',
-      icon: <OutlookIcon />,
-    },
+    { key: 'gmail', title: 'Gmail', subtitle: 'Smart inbox access', connected: connected.gmail, href: '/actions?tool=gmail', icon: <GmailIcon /> },
+    { key: 'googleCalendar', title: 'Google Calendar', subtitle: 'Schedule and planning', connected: connected.googleCalendar, href: '/actions?tool=google-calendar', icon: <GoogleCalendarIcon /> },
+    { key: 'browserSearch', title: 'Browser Search', subtitle: 'Live web research', connected: connected.browserSearch, href: '/tools?tool=browser-search', icon: <BrowserIcon /> },
+    { key: 'googleDrive', title: 'Google Drive', subtitle: 'Files and documents', connected: connected.googleDrive, href: '/tools?source=drive', icon: <GoogleDriveIcon /> },
+    { key: 'github', title: 'GitHub', subtitle: 'Code and repositories', connected: connected.github, href: '/tools?tool=github', icon: <GitHubIcon /> },
+    { key: 'outlook', title: 'Outlook', subtitle: 'Email and calendar', connected: connected.outlook, href: '/tools?tool=outlook', icon: <OutlookIcon /> },
   ];
 
   function updateSetting(key: string, value: string) {
     localStorage.setItem(`kivo.settings.${key}`, value);
+
     if (key === 'theme') setTheme(value);
     if (key === 'language') setLanguage(value);
     if (key === 'weekStart') setWeekStart(value);
@@ -185,9 +144,11 @@ export default function SettingsPage() {
 
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
+
     link.href = url;
     link.download = 'kivo-data-export.json';
     link.click();
+
     URL.revokeObjectURL(url);
   }
 
@@ -272,7 +233,9 @@ export default function SettingsPage() {
                     <div className="text-[25px] font-semibold tracking-[-0.04em]">
                       {displayName}
                     </div>
-                    <div className="mt-1 text-[14px] text-black/45">{user.email}</div>
+                    <div className="mt-1 text-[14px] text-black/45">
+                      {user.email}
+                    </div>
                     <div className="mt-1 flex items-center gap-1.5 text-[13px] text-black/50">
                       <span className={user.emailVerified ? 'h-2 w-2 rounded-full bg-emerald-500' : 'h-2 w-2 rounded-full bg-black/20'} />
                       {user.emailVerified ? 'Email verified' : 'Email not verified'}
@@ -294,7 +257,7 @@ export default function SettingsPage() {
                 <div className="grid grid-cols-3 gap-3 border-black/[0.055] lg:border-l lg:pl-8">
                   <ProfileStat icon={<MessageCircle />} value={stats.conversations} label="Conversations" sub="Total" />
                   <ProfileStat icon={<CheckCircle2 />} value={stats.tasks} label="Tasks" sub="Completed" />
-                  <ProfileStat icon={<ClockIcon />} value={stats.timeSaved} label="Time saved" sub="Estimated" />
+                  <ProfileStat icon={<Clock3 />} value={stats.timeSaved} label="Time saved" sub="Estimated" />
                 </div>
               </div>
             </Card>
@@ -302,7 +265,8 @@ export default function SettingsPage() {
             <div className="grid gap-6 lg:grid-cols-[1fr_1.25fr]">
               <div>
                 <SectionTitle>Preferences</SectionTitle>
-                <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-2">
+
+                <div className="grid gap-5 sm:grid-cols-2">
                   <Card>
                     <SettingsRow onClick={() => router.push('/settings/general')} icon={<Settings />} title="General" subtitle="Language, time zone, and app settings" />
                     <SettingsRow onClick={() => router.push('/settings/appearance')} icon={<Palette />} title="Appearance" subtitle="Theme, color, and display options" />
@@ -555,7 +519,7 @@ function IntegrationRow({
       onClick={onClick}
       className="flex items-center gap-4 rounded-[20px] border border-black/[0.045] bg-white px-4 py-4 text-left shadow-[0_8px_22px_rgba(15,23,42,0.018)]"
     >
-      <div className="flex h-13 w-13 items-center justify-center rounded-[16px] border border-black/[0.055] bg-white shadow-[0_8px_18px_rgba(15,23,42,0.035)]">
+      <div className="flex h-12 w-12 items-center justify-center rounded-[16px] border border-black/[0.055] bg-white shadow-[0_8px_18px_rgba(15,23,42,0.035)]">
         {icon}
       </div>
 
@@ -623,10 +587,6 @@ function ConfirmModal({
       </div>
     </div>
   );
-}
-
-function ClockIcon() {
-  return <Clock3 />;
 }
 
 function KivoIcon() {
