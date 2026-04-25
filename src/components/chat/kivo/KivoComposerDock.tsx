@@ -56,7 +56,10 @@ export function KivoComposerDock({
       className="pointer-events-none fixed inset-x-0 z-40 mx-auto w-full max-w-none px-[8px] pb-2 md:translate-x-[var(--kivo-composer-shift-x)]"
       style={{
         ['--kivo-composer-shift-x' as string]: `${desktopShiftX}px`,
-        bottom: `calc(env(safe-area-inset-bottom, 0px) + ${Math.max(0, keyboardOffset)}px)`,
+        bottom:
+          keyboardOffset > 0
+            ? `${keyboardOffset + 10}px`
+            : 'calc(env(safe-area-inset-bottom, 0px) + 8px)',
       }}
     >
       <div className="pointer-events-auto rounded-[31px] border border-black/[0.018] bg-white px-[13px] pb-[8px] pt-[12px] shadow-[0_10px_30px_rgba(15,23,42,0.035)]">

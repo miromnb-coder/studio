@@ -211,13 +211,15 @@ export function KivoChatScreenLayout({
         style={{ paddingLeft: `${contentLeftOffset}px` }}
       >
         <div className="mx-auto flex h-full w-full max-w-[560px] flex-col">
-          <KivoChatHeader
-            hasMessages={hasMessages}
-            isSidebarOpen={showSidebarRail}
-            onSidebarToggle={handleSidebarToggle}
-            onSummarize={handleHeaderSummarize}
-            onCreateTask={handleHeaderCreateTask}
-          />
+          <div className="sticky top-0 z-30 bg-[#f7f7f5]/90 backdrop-blur-xl">
+            <KivoChatHeader
+              hasMessages={hasMessages}
+              isSidebarOpen={showSidebarRail}
+              onSidebarToggle={handleSidebarToggle}
+              onSummarize={handleHeaderSummarize}
+              onCreateTask={handleHeaderCreateTask}
+            />
+          </div>
 
           <KivoChatScreenMainContent
             mainScrollRef={mainScrollRef}

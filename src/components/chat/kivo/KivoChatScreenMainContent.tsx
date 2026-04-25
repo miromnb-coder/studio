@@ -30,7 +30,7 @@ export function KivoChatScreenMainContent({
   return (
     <main
       ref={mainScrollRef}
-      className="relative flex min-h-0 flex-1 flex-col overflow-y-auto overscroll-contain [scrollbar-gutter:stable] [-webkit-overflow-scrolling:touch]"
+      className="relative flex-1 min-h-0 flex flex-col overflow-y-auto overscroll-contain [scrollbar-gutter:stable] [-webkit-overflow-scrolling:touch]"
       style={{ paddingBottom: scrollBottomPadding }}
     >
       <AnimatePresence initial={false}>
