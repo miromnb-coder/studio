@@ -11,6 +11,11 @@ import {
 } from './KivoChatScreenHooks';
 import { useKivoChatScreenActions } from './KivoChatScreenActions';
 
+export type KivoConnectedService = {
+  id: 'gmail' | 'calendar' | 'drive' | 'github' | 'web' | 'outlook';
+  label: string;
+};
+
 export function KivoChatScreen() {
   const router = useRouter();
   const pathname = usePathname();
@@ -34,29 +39,10 @@ export function KivoChatScreen() {
   const [referralToastOpen, setReferralToastOpen] = useState(false);
   const [referralToastTitle, setReferralToastTitle] = useState('');
   const [referralToastDetail, setReferralToastDetail] = useState('');
+  const [localConnectedServices, setLocalConnectedServices] = useState<KivoConnectedService[]>([]);
 
   const fileInputRef = useRef<HTMLInputElement | null>(null);
-
   const hasMessages = messages.length > 0;
-
-  useEffect(() => {
-    if (hasMessages) {
-      setShowSidebarRail(false);
-    }
-  }, [hasMessages]);
-
-  const showNotice = useCallback((title: string, detail: string) => {
-    setNotice({ title, detail });
-  }, []);
-
-  const focusComposer = useCallback(() => {
-    requestAnimationFrame(() => {
-      const textarea = document.getElementById(
-        'kivo-composer-textarea',
-      ) as HTMLTextAreaElement | null;
-      textarea?.focus();
-    });
-  }, []);
 
   const actions = useKivoChatScreenActions({
     userId: user?.id,
@@ -69,13 +55,80 @@ export function KivoChatScreen() {
     createConversation,
     openConversation,
     isAgentResponding,
-    focusComposer,
-    showNotice,
+    focusComposer: () => {
+      requestAnimationFrame(() => {
+        const textarea = document.getElementById(
+          'kivo-composer-textarea',
+        ) as HTMLTextAreaElement | null;
+        textarea?.focus();
+      });
+    },
+    showNotice: (title, detail) => setNotice({ title, detail }),
   });
+
+  useEffect(() => {
+    if (!hydrated) hydrate();
+  }, [hydrate, hydrated]);
+
+  useEffect(() => {
+    if (hasMessages) setShowSidebarRail(false);
+  }, [hasMessages]);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+
+    const readEnabled = (keys: string[]) =>
+      keys.some((key) => window.localStorage.getItem(key) === 'true');
+
+    const services: KivoConnectedService[] = [];
+
+    if (actions.gmailConnected || readEnabled(['kivo_gmail_enabled', 'gmailConnected'])) {
+      services.push({ id: 'gmail', label: 'Gmail' });
+    }
+
+    if (
+      actions.calendarConnected ||
+      readEnabled(['kivo_calendar_enabled', 'calendarConnected'])
+    ) {
+      services.push({ id: 'calendar', label: 'Calendar' });
+    }
+
+    if (readEnabled(['kivo_drive_enabled', 'driveConnected'])) {
+      services.push({ id: 'drive', label: 'Drive' });
+    }
+
+    if (readEnabled(['kivo_github_enabled', 'githubConnected'])) {
+      services.push({ id: 'github', label: 'GitHub' });
+    }
+
+    if (readEnabled(['kivo_browser_search_enabled', 'browserSearchConnected'])) {
+      services.push({ id: 'web', label: 'Web' });
+    }
+
+    if (readEnabled(['kivo_outlook_enabled', 'outlookConnected'])) {
+      services.push({ id: 'outlook', label: 'Outlook' });
+    }
+
+    setLocalConnectedServices(services);
+  }, [actions.gmailConnected, actions.calendarConnected]);
 
   const hasAttachments = actions.attachments.length > 0;
   const canSend = draftPrompt.trim().length > 0 || hasAttachments;
   const isBusy = actions.isSending || isAgentResponding;
+
+  const placeholder = useMemo(() => {
+    if (hasAttachments && !draftPrompt.trim()) return 'Add a message or send attachments';
+    return 'Assign a task or ask anything';
+  }, [hasAttachments, draftPrompt]);
+
+  const refinedStreamError = useMemo(() => {
+    const raw = (streamError || '').trim();
+    if (!raw) return '';
+    if (raw.startsWith('AUTH_REQUIRED:')) return 'Please sign in to continue.';
+    if (raw.toLowerCase().includes('gmail')) return 'Could not access Gmail right now.';
+    if (raw.toLowerCase().includes('calendar')) return 'Calendar is unavailable right now.';
+    return 'Something went wrong. Please try again.';
+  }, [streamError]);
 
   const lastMessageKey = useMemo(() => {
     const lastMessage = messages[messages.length - 1];
@@ -96,70 +149,16 @@ export function KivoChatScreen() {
     notice,
     setNotice,
     setDraftPrompt,
-    showNotice,
-    focusComposer,
+    showNotice: (title, detail) => setNotice({ title, detail }),
+    focusComposer: () => {
+      requestAnimationFrame(() => {
+        const textarea = document.getElementById(
+          'kivo-composer-textarea',
+        ) as HTMLTextAreaElement | null;
+        textarea?.focus();
+      });
+    },
   });
-
-  useEffect(() => {
-    if (!hydrated) hydrate();
-  }, [hydrate, hydrated]);
-
-  useEffect(() => {
-    if (typeof window === 'undefined') return;
-
-    const url = new URL(window.location.href);
-    const referral = url.searchParams.get('referral');
-    const rewardType = url.searchParams.get('referralRewardType');
-    const rewardAmount = url.searchParams.get('referralRewardAmount');
-    const rewardLabel = url.searchParams.get('referralRewardLabel');
-
-    if (referral !== 'success') return;
-
-    let detail = 'Your referral reward was added successfully.';
-
-    if (rewardLabel?.trim()) {
-      detail = rewardLabel;
-    } else if (rewardType === 'bonus_runs' && rewardAmount) {
-      detail = `+${rewardAmount} bonus runs added`;
-    } else if (rewardType === 'plus_days' && rewardAmount) {
-      detail = `${rewardAmount} days of Plus were added`;
-    }
-
-    setReferralToastTitle('Invite successful');
-    setReferralToastDetail(detail);
-    setReferralToastOpen(true);
-
-    const timeout = window.setTimeout(() => {
-      setReferralToastOpen(false);
-    }, 3200);
-
-    url.searchParams.delete('referral');
-    url.searchParams.delete('referralRewardType');
-    url.searchParams.delete('referralRewardAmount');
-    url.searchParams.delete('referralRewardLabel');
-
-    router.replace(`${url.pathname}${url.search}${url.hash}`, { scroll: false });
-
-    return () => {
-      window.clearTimeout(timeout);
-    };
-  }, [router]);
-
-  const placeholder = useMemo(() => {
-    if (hasAttachments && !draftPrompt.trim()) {
-      return 'Add a message or send attachments';
-    }
-    return 'Assign a task or ask anything';
-  }, [hasAttachments, draftPrompt]);
-
-  const refinedStreamError = useMemo(() => {
-    const raw = (streamError || '').trim();
-    if (!raw) return '';
-    if (raw.startsWith('AUTH_REQUIRED:')) return 'Please sign in to continue.';
-    if (raw.toLowerCase().includes('gmail')) return 'Could not access Gmail right now.';
-    if (raw.toLowerCase().includes('calendar')) return 'Calendar is unavailable right now.';
-    return 'Something went wrong. Please try again.';
-  }, [streamError]);
 
   const sidebarRecentChats = useMemo<KivoSidebarRecentChat[]>(() => {
     if (!activeConversationId) return [];
@@ -185,6 +184,7 @@ export function KivoChatScreen() {
     <KivoChatScreenLayout
       userName={user?.name || 'Miro'}
       hasMessages={hasMessages}
+      connectedServices={localConnectedServices}
       sidebarRecentChats={sidebarRecentChats}
       showSidebarRail={showSidebarRail}
       setShowSidebarRail={setShowSidebarRail}
