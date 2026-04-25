@@ -22,7 +22,7 @@ export const metadata: Metadata = {
     shortcut: ['/favicon.svg'],
     apple: [{ url: '/apple-icon', sizes: '180x180', type: 'image/png' }],
   },
-  manifest: '/manifest.json',
+  manifest: '/manifest.webmanifest',
   openGraph: {
     title: PRODUCT_NAME,
     description: PRODUCT_DESCRIPTION,
@@ -42,11 +42,7 @@ export const viewport: Viewport = {
   themeColor: '#f7f7f5',
 };
 
-export default function RootLayout({
-  children,
-}: Readonly<{
-  children: React.ReactNode;
-}>) {
+export default function RootLayout({ children }: Readonly<{ children: React.ReactNode;}>) {
   return (
     <html lang="en" className="app-bg">
       <body className="mobile-app app-bg min-h-screen text-primary antialiased">
