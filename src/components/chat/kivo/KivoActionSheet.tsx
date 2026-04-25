@@ -1,7 +1,12 @@
 'use client';
 
 import { useEffect, useMemo, type ComponentType } from 'react';
-import { AnimatePresence, motion, type PanInfo, useDragControls } from 'framer-motion';
+import {
+  AnimatePresence,
+  motion,
+  type PanInfo,
+  useDragControls,
+} from 'framer-motion';
 import {
   BotMessageSquare,
   Brain,
@@ -74,7 +79,10 @@ export function KivoActionSheet({
     if (!open || typeof document === 'undefined') return;
 
     const previousOverflow = document.body.style.overflow;
+    const previousTouchAction = document.body.style.touchAction;
+
     document.body.style.overflow = 'hidden';
+    document.body.style.touchAction = 'none';
 
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key === 'Escape') onClose();
@@ -84,6 +92,7 @@ export function KivoActionSheet({
 
     return () => {
       document.body.style.overflow = previousOverflow;
+      document.body.style.touchAction = previousTouchAction;
       window.removeEventListener('keydown', onKeyDown);
     };
   }, [open, onClose]);
@@ -93,11 +102,18 @@ export function KivoActionSheet({
     [attachments],
   );
 
+  const closeAfter = (action: () => void) => {
+    action();
+    onClose();
+  };
+
   const handleDragEnd = (
     _: MouseEvent | TouchEvent | PointerEvent,
     info: PanInfo,
   ) => {
-    if (info.offset.y > 120 || info.velocity.y > 650) onClose();
+    if (info.offset.y > 90 || info.velocity.y > 520) {
+      onClose();
+    }
   };
 
   return (
@@ -107,7 +123,7 @@ export function KivoActionSheet({
           <motion.button
             type="button"
             aria-label="Close action sheet"
-            className="fixed inset-0 z-40 bg-black/28 backdrop-blur-[1px]"
+            className="fixed inset-0 z-40 bg-black/28 backdrop-blur-[2px]"
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
@@ -116,49 +132,47 @@ export function KivoActionSheet({
           />
 
           <motion.aside
-            className="fixed inset-x-0 bottom-0 z-50 mx-auto flex max-h-[86dvh] w-full max-w-[560px] flex-col overflow-hidden rounded-t-[24px] bg-white shadow-[0_-18px_48px_rgba(0,0,0,0.16)]"
+            className="fixed inset-x-0 bottom-0 z-50 mx-auto flex max-h-[74dvh] w-full max-w-[560px] flex-col overflow-hidden rounded-t-[26px] bg-white shadow-[0_-18px_48px_rgba(0,0,0,0.16)]"
             initial={{ y: '100%' }}
             animate={{ y: 0 }}
             exit={{ y: '100%' }}
-            transition={{ type: 'spring', stiffness: 330, damping: 34 }}
+            transition={{ type: 'spring', stiffness: 360, damping: 38 }}
             drag="y"
             dragControls={dragControls}
             dragListener={false}
             dragConstraints={{ top: 0, bottom: 0 }}
-            dragElastic={{ top: 0, bottom: 0.16 }}
+            dragElastic={{ top: 0, bottom: 0.14 }}
             onDragEnd={handleDragEnd}
           >
             <button
               type="button"
               onPointerDown={(event) => dragControls.start(event)}
               aria-label="Drag to dismiss"
-              className="shrink-0 touch-none px-4 pb-3 pt-3"
+              className="shrink-0 touch-none cursor-grab px-4 pb-4 pt-3 active:cursor-grabbing"
             >
               <span className="mx-auto block h-1.5 w-16 rounded-full bg-black/20" />
             </button>
 
-            <div className="min-h-0 flex-1 overflow-y-auto px-6 pb-[max(22px,env(safe-area-inset-bottom))]">
+            <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-6 pb-[calc(env(safe-area-inset-bottom,0px)+92px)]">
               <section className="border-b border-black/[0.08] pb-5">
                 <div className="mb-4 flex items-center justify-between">
                   <h2 className="text-[24px] font-semibold tracking-[-0.035em] text-[#222]">
                     Photos
                   </h2>
+
                   <button
                     type="button"
-                    onClick={onAddImages}
-                    className="text-[19px] font-semibold tracking-[-0.02em] text-[#0a84ff]"
+                    onClick={() => closeAfter(onAddImages)}
+                    className="text-[19px] font-semibold tracking-[-0.02em] text-[#0a84ff] active:opacity-60"
                   >
                     See all
                   </button>
                 </div>
 
-                <div className="-mx-1 flex gap-4 overflow-x-auto px-1 pb-1">
+                <div className="-mx-1 flex gap-4 overflow-x-auto px-1 pb-1 [-webkit-overflow-scrolling:touch] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
                   <button
                     type="button"
-                    onClick={() => {
-                      onAddImages();
-                      onClose();
-                    }}
+                    onClick={() => closeAfter(onAddImages)}
                     className="flex h-[112px] w-[112px] shrink-0 flex-col items-center justify-center rounded-[22px] bg-[#f2f2f2] text-[#2b2b2b] transition active:scale-[0.985]"
                   >
                     <Camera className="h-8 w-8" strokeWidth={2.2} />
@@ -168,8 +182,10 @@ export function KivoActionSheet({
                   </button>
 
                   {imagePreviews.map((image) => (
-                    <div
+                    <button
                       key={image.id}
+                      type="button"
+                      onClick={() => closeAfter(onAddImages)}
                       className="h-[112px] w-[112px] shrink-0 overflow-hidden rounded-[22px] bg-[#f2f2f2]"
                     >
                       <img
@@ -177,32 +193,33 @@ export function KivoActionSheet({
                         alt={image.name}
                         className="h-full w-full object-cover"
                       />
-                    </div>
+                    </button>
                   ))}
 
-                  <MiniPhotoPlaceholder icon={FileText} />
-                  <MiniPhotoPlaceholder icon={Link2} />
-                  <MiniPhotoPlaceholder icon={Sparkles} />
+                  <MiniPhotoButton
+                    icon={FileText}
+                    label="Files"
+                    onClick={() => closeAfter(onAddFiles)}
+                  />
+                  <MiniPhotoButton
+                    icon={Link2}
+                    label="Link"
+                    onClick={() => closeAfter(onPasteLink)}
+                  />
                 </div>
               </section>
 
-              <section className="pt-5">
+              <section className="pt-4">
                 <SheetRow
                   icon={FileText}
                   title="Add files"
-                  onClick={() => {
-                    onAddFiles();
-                    onClose();
-                  }}
+                  onClick={() => closeAfter(onAddFiles)}
                 />
 
                 <SheetRow
                   icon={Mail}
                   title={toolState.gmail.connected ? 'Open Gmail' : 'Connect Gmail'}
-                  onClick={() => {
-                    onToolAction('gmail');
-                    onClose();
-                  }}
+                  onClick={() => closeAfter(() => onToolAction('gmail'))}
                 />
 
                 <SheetRow
@@ -212,111 +229,75 @@ export function KivoActionSheet({
                       ? 'Open Calendar'
                       : 'Connect Calendar'
                   }
-                  onClick={() => {
-                    onToolAction('calendar');
-                    onClose();
-                  }}
+                  onClick={() => closeAfter(() => onToolAction('calendar'))}
                 />
 
                 <SheetRow
                   icon={Workflow}
                   title="Connect tools"
-                  onClick={() => {
-                    onToolAction('tasks');
-                    onClose();
-                  }}
+                  onClick={() => closeAfter(() => onToolAction('tasks'))}
                 />
 
                 <SheetRow
                   icon={Target}
                   title="Find priorities"
-                  onClick={() => {
-                    onAiAction('find-priorities');
-                    onClose();
-                  }}
+                  onClick={() => closeAfter(() => onAiAction('find-priorities'))}
                 />
 
                 <SheetRow
                   icon={Sparkles}
                   title="Plan my day"
-                  onClick={() => {
-                    onAiAction('summarize-day');
-                    onClose();
-                  }}
+                  onClick={() => closeAfter(() => onAiAction('summarize-day'))}
                 />
 
                 <SheetRow
                   icon={Search}
                   title="Deep research"
-                  onClick={() => {
-                    onAiAction('deep-research');
-                    onClose();
-                  }}
+                  onClick={() => closeAfter(() => onAiAction('deep-research'))}
                 />
 
                 <SheetRow
                   icon={Globe}
                   title="Live web search"
-                  onClick={() => {
-                    onAiAction('live-search');
-                    onClose();
-                  }}
+                  onClick={() => closeAfter(() => onAiAction('live-search'))}
                 />
 
                 <SheetRow
                   icon={PiggyBank}
                   title="Money leak scan"
                   badge="Kivo Pro"
-                  onClick={() => {
-                    onToolAction('money-saver');
-                    onClose();
-                  }}
+                  onClick={() => closeAfter(() => onToolAction('money-saver'))}
                 />
 
                 <SheetRow
                   icon={Brain}
                   title="Memory search"
-                  onClick={() => {
-                    onToolAction('tasks');
-                    onClose();
-                  }}
+                  onClick={() => closeAfter(() => onToolAction('tasks'))}
                 />
 
                 <SheetRow
                   icon={Zap}
                   title="Automation builder"
                   badge="Pro"
-                  onClick={() => {
-                    onToolAction('tasks');
-                    onClose();
-                  }}
+                  onClick={() => closeAfter(() => onToolAction('tasks'))}
                 />
 
                 <SheetRow
                   icon={BotMessageSquare}
                   title="Chat mode"
-                  onClick={() => {
-                    onToolAction('tasks');
-                    onClose();
-                  }}
+                  onClick={() => closeAfter(() => onToolAction('tasks'))}
                 />
 
                 <SheetRow
                   icon={CalendarClock}
                   title="Scheduled tasks"
-                  onClick={() => {
-                    onToolAction('calendar');
-                    onClose();
-                  }}
+                  onClick={() => closeAfter(() => onToolAction('calendar'))}
                 />
 
                 <SheetRow
                   icon={Mic}
                   title={isListening ? 'Voice input on' : 'Voice input'}
-                  onClick={() => {
-                    onVoiceInput();
-                    onClose();
-                  }}
+                  onClick={() => closeAfter(onVoiceInput)}
                 />
               </section>
             </div>
@@ -327,15 +308,24 @@ export function KivoActionSheet({
   );
 }
 
-function MiniPhotoPlaceholder({
+function MiniPhotoButton({
   icon: Icon,
+  label,
+  onClick,
 }: {
   icon: ComponentType<{ className?: string; strokeWidth?: number }>;
+  label: string;
+  onClick: () => void;
 }) {
   return (
-    <div className="flex h-[112px] w-[112px] shrink-0 items-center justify-center rounded-[22px] bg-[#f7f7f7] text-[#c6c6c6]">
+    <button
+      type="button"
+      onClick={onClick}
+      className="flex h-[112px] w-[112px] shrink-0 flex-col items-center justify-center rounded-[22px] bg-[#f7f7f7] text-[#bdbdbd] transition active:scale-[0.985]"
+    >
       <Icon className="h-7 w-7" strokeWidth={1.9} />
-    </div>
+      <span className="mt-3 text-[16px] tracking-[-0.02em]">{label}</span>
+    </button>
   );
 }
 
@@ -344,14 +334,14 @@ function SheetRow({ icon: Icon, title, badge, onClick }: SheetRowProps) {
     <button
       type="button"
       onClick={onClick}
-      className="flex min-h-[64px] w-full items-center gap-6 rounded-[18px] text-left transition active:scale-[0.99]"
+      className="flex min-h-[58px] w-full items-center gap-5 rounded-[18px] text-left transition active:scale-[0.99] active:bg-black/[0.025]"
     >
       <span className="inline-flex h-10 w-10 shrink-0 items-center justify-center text-[#2f2f2f]">
-        <Icon className="h-[27px] w-[27px]" strokeWidth={2.1} />
+        <Icon className="h-[26px] w-[26px]" strokeWidth={2.05} />
       </span>
 
       <span className="flex min-w-0 flex-1 items-center gap-3">
-        <span className="truncate text-[22px] font-normal tracking-[-0.035em] text-[#303030]">
+        <span className="truncate text-[20px] font-normal tracking-[-0.035em] text-[#303030]">
           {title}
         </span>
 
