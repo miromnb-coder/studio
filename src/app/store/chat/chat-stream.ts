@@ -1,409 +1,79 @@
 'use client';
 
 import { trackEvent } from '@/app/lib/analytics-client';
-import type {
-  AgentExecutionPayload,
-  AgentResponseMetadata,
-} from '@/types/agent-response';
-import type {
-  AgentName,
-  AppState,
-  ChatStreamEvent,
-  Message,
-} from '../app-store-types';
+import type { AgentExecutionPayload, AgentResponseMetadata } from '@/types/agent-response';
+import type { AgentName, AppState, ChatStreamEvent, Message } from '../app-store-types';
 import { DEFAULT_ACTIVE_AGENT, nowIso } from '../app-store-state';
-import {
-  emitUsageUpdate,
-  getConversationWindow,
-  providerSafeErrorMessage,
-  sortConversations,
-  summarizePreview,
-} from './chat-helpers';
-import {
-  deriveActiveStepsFromMetadata,
-  mergeAgentMetadata,
-  STREAM_STEP_EVENT_TYPES,
-} from './chat-steps';
+import { emitUsageUpdate, getConversationWindow, providerSafeErrorMessage, sortConversations, summarizePreview } from './chat-helpers';
+import { deriveActiveStepsFromMetadata, mergeAgentMetadata, STREAM_STEP_EVENT_TYPES } from './chat-steps';
 
 type SetState = (updater: (prev: AppState) => AppState) => void;
 type GetState = () => AppState;
+type StreamAssistantResponseArgs = { requestId: string; assistantMessageId: string; conversationId: string; setState: SetState; getState: GetState };
 
-type StreamAssistantResponseArgs = {
-  requestId: string;
-  assistantMessageId: string;
-  conversationId: string;
-  setState: SetState;
-  getState: GetState;
-};
+function updateAssistantMessage(messages: Message[], assistantMessageId: string, updater: (message: Message) => Message): Message[] { return messages.map((message) => message.id === assistantMessageId ? updater(message) : message); }
+function latestUserMessage(messages: Message[]) { return [...messages].reverse().find((msg) => msg.role === 'user')?.content ?? ''; }
+function buildStreamPayload(messages: Message[], userId?: string) { return { message: latestUserMessage(messages), mode: 'agent', history: getConversationWindow(messages), userId: userId || 'system_anonymous' }; }
+function safeObject(value: unknown): Record<string, unknown> | undefined { if (!value || typeof value !== 'object' || Array.isArray(value)) return undefined; return value as Record<string, unknown>; }
+function safeArray(value: unknown): Array<Record<string, unknown>> | undefined { if (!Array.isArray(value)) return undefined; const items = value.filter((item) => item && typeof item === 'object') as Array<Record<string, unknown>>; return items.length ? items : undefined; }
+function fallbackStepLabel(event: any) { if (event?.label) return String(event.label); if (event?.title) return String(event.title); if (event?.tool) { const tool = String(event.tool); if (tool === 'web_search') return 'Searching web'; if (tool === 'response_generator') return 'Generating response'; return `Using ${tool}`; } switch (event?.type) { case 'tool_started': return 'Using tool'; case 'tool_completed': return 'Tool completed'; case 'tool_failed': return 'Tool failed'; case 'thinking': return 'Thinking'; case 'status': return String(event?.status || 'Processing'); default: return 'Processing'; } }
+function buildExecution(statusText: string, streamedText: string, toolCount = 0): AgentExecutionPayload { return { intent: 'general', forceMode: streamedText.trim() ? 'status' : 'thinking', statusText, toolCount }; }
 
-function updateAssistantMessage(
-  messages: Message[],
-  assistantMessageId: string,
-  updater: (message: Message) => Message,
-): Message[] {
-  return messages.map((message) =>
-    message.id === assistantMessageId ? updater(message) : message,
-  );
-}
-
-function latestUserMessage(messages: Message[]) {
-  return [...messages].reverse().find((msg) => msg.role === 'user')?.content ?? '';
-}
-
-function buildStreamPayload(messages: Message[], userId?: string) {
-  return {
-    message: latestUserMessage(messages),
-    mode: 'agent',
-    history: getConversationWindow(messages),
-    userId: userId || 'system_anonymous',
-  };
-}
-
-function safeObject(value: unknown): Record<string, unknown> | undefined {
-  if (!value || typeof value !== 'object' || Array.isArray(value)) {
-    return undefined;
-  }
-
-  return value as Record<string, unknown>;
-}
-
-function safeArray(value: unknown): Array<Record<string, unknown>> | undefined {
-  if (!Array.isArray(value)) return undefined;
-
-  const items = value.filter(
-    (item) => item && typeof item === 'object',
-  ) as Array<Record<string, unknown>>;
-
-  return items.length ? items : undefined;
-}
-
-function fallbackStepLabel(event: any) {
-  if (event?.label) return String(event.label);
-  if (event?.title) return String(event.title);
-
-  if (event?.tool) {
-    const tool = String(event.tool);
-    if (tool === 'web_search') return 'Searching web';
-    if (tool === 'response_generator') return 'Generating response';
-    return `Using ${tool}`;
-  }
-
-  switch (event?.type) {
-    case 'tool_started':
-      return 'Using tool';
-    case 'tool_completed':
-      return 'Tool completed';
-    case 'tool_failed':
-      return 'Tool failed';
-    case 'thinking':
-      return 'Thinking';
-    case 'status':
-      return String(event?.status || 'Processing');
-    default:
-      return 'Processing';
-  }
-}
-
-function buildExecution(
-  statusText: string,
-  streamedText: string,
-  toolCount = 0,
-): AgentExecutionPayload {
-  return {
-    intent: 'general',
-    forceMode: streamedText.trim() ? 'status' : 'thinking',
-    statusText,
-    toolCount,
-  };
-}
-
-export async function streamAssistantResponse({
-  requestId,
-  assistantMessageId,
-  conversationId,
-  setState,
-  getState,
-}: StreamAssistantResponseArgs) {
+export async function streamAssistantResponse({ requestId, assistantMessageId, conversationId, setState, getState }: StreamAssistantResponseArgs) {
   const currentState = getState();
   const conversationMessages = currentState.messageState[conversationId] ?? [];
+  const payload = buildStreamPayload(conversationMessages, currentState.user?.id);
 
-  const payload = buildStreamPayload(
-    conversationMessages,
-    currentState.user?.id,
-  );
+  setState((prev) => { const messages = prev.messageState[conversationId] ?? []; const execution = buildExecution('Thinking', '', 0); return { ...prev, activeAgent: DEFAULT_ACTIVE_AGENT, messageState: { ...prev.messageState, [conversationId]: updateAssistantMessage(messages, assistantMessageId, (message) => ({ ...message, isStreaming: true, content: '', structuredData: { execution }, agentMetadata: { ...mergeAgentMetadata(message.agentMetadata), execution, structuredData: { execution } } })) } }; });
 
-  setState((prev) => {
-    const messages = prev.messageState[conversationId] ?? [];
-    const execution = buildExecution('Thinking', '', 0);
-
-    return {
-      ...prev,
-      activeAgent: DEFAULT_ACTIVE_AGENT,
-      messageState: {
-        ...prev.messageState,
-        [conversationId]: updateAssistantMessage(
-          messages,
-          assistantMessageId,
-          (message) => ({
-            ...message,
-            isStreaming: true,
-            content: '',
-            structuredData: { execution },
-            agentMetadata: {
-              ...mergeAgentMetadata(message.agentMetadata),
-              execution,
-              structuredData: { execution },
-            },
-          }),
-        ),
-      },
-    };
-  });
-
-  const response = await fetch('/api/agent', {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify(payload),
-  });
-
-  if (!response.ok) {
-    const reason = await response.json().catch(() => null);
-
-    if (reason?.usage) {
-      emitUsageUpdate({
-        usage: reason.usage,
-        plan: reason?.plan,
-      });
-    }
-
-    throw new Error(
-      providerSafeErrorMessage(
-        reason?.error ||
-          reason?.message ||
-          `Request failed (${response.status})`,
-      ),
-    );
-  }
-
-  const reader = response.body?.getReader();
-
-  if (!reader) {
-    throw new Error('Missing response stream.');
-  }
+  const response = await fetch('/api/agent', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
+  if (!response.ok) { const reason = await response.json().catch(() => null); if (reason?.usage) emitUsageUpdate({ usage: reason.usage, plan: reason?.plan }); throw new Error(providerSafeErrorMessage(reason?.error || reason?.message || `Request failed (${response.status})`)); }
+  const reader = response.body?.getReader(); if (!reader) throw new Error('Missing response stream.');
 
   const decoder = new TextDecoder();
-
   let buffer = '';
-  let streamedText = '';
+  let modelText = '';
+  let visibleText = '';
   let streamComplete = false;
   let toolCount = 0;
+  let flushTimer: number | null = null;
+  let lastStatusText = 'Thinking';
+  let latestMetadata: AgentResponseMetadata | undefined;
+  let latestToolResults: Array<Record<string, unknown>> | undefined;
   const startedAt = Date.now();
 
-  const applyState = (
-    content: string,
-    statusText: string,
-    metadata?: AgentResponseMetadata,
-    toolResults?: Array<Record<string, unknown>>,
-  ) => {
-    setState((prev) => {
-      const messages = prev.messageState[conversationId] ?? [];
-      const execution = buildExecution(statusText, content, toolCount);
-
-      const structuredData = {
-        ...(safeObject(metadata?.structuredData) ?? {}),
-        execution,
-      };
-
-      return {
-        ...prev,
-        activeSteps: deriveActiveStepsFromMetadata(
-          {
-            ...metadata,
-            execution,
-            structuredData,
-          },
-          prev.activeSteps,
-        ),
-        messageState: {
-          ...prev.messageState,
-          [conversationId]: updateAssistantMessage(
-            messages,
-            assistantMessageId,
-            (message) => ({
-              ...message,
-              content,
-              isStreaming: !streamComplete,
-              structuredData,
-              toolResults,
-              agentMetadata: {
-                ...mergeAgentMetadata(message.agentMetadata),
-                ...metadata,
-                execution,
-                structuredData,
-              },
-            }),
-          ),
-        },
-      };
-    });
+  const applyState = (content: string, statusText: string, metadata?: AgentResponseMetadata, toolResults?: Array<Record<string, unknown>>) => {
+    setState((prev) => { const messages = prev.messageState[conversationId] ?? []; const execution = buildExecution(statusText, content, toolCount); const structuredData = { ...(safeObject(metadata?.structuredData) ?? {}), execution }; return { ...prev, activeSteps: deriveActiveStepsFromMetadata({ ...metadata, execution, structuredData }, prev.activeSteps), messageState: { ...prev.messageState, [conversationId]: updateAssistantMessage(messages, assistantMessageId, (message) => ({ ...message, content, isStreaming: !streamComplete, structuredData, toolResults, agentMetadata: { ...mergeAgentMetadata(message.agentMetadata), ...metadata, execution, structuredData } })) } }; });
   };
 
-  const handleStepEvent = (event: any) => {
-    const label = fallbackStepLabel(event);
-
-    if (event?.type === 'tool_started') {
-      toolCount += 1;
-    }
-
-    trackEvent('chat_phase_transition', {
-      conversationId,
-      messageId: assistantMessageId,
-      requestId,
-      properties: {
-        phase: event?.type,
-        label,
-      },
-    });
-
-    applyState(streamedText, label);
+  const clearFlushTimer = () => { if (flushTimer !== null) { window.clearTimeout(flushTimer); flushTimer = null; } };
+  const scheduleFlush = () => {
+    if (flushTimer !== null) return;
+    flushTimer = window.setTimeout(() => {
+      flushTimer = null;
+      if (visibleText === modelText) return;
+      const remaining = modelText.slice(visibleText.length);
+      const nextChunkSize = remaining.length > 90 ? 42 : remaining.length > 36 ? 24 : remaining.length;
+      visibleText += remaining.slice(0, Math.max(1, nextChunkSize));
+      applyState(visibleText, lastStatusText, latestMetadata, latestToolResults);
+      if (visibleText !== modelText) scheduleFlush();
+    }, visibleText ? 32 : 0);
   };
+  const flushAll = () => { clearFlushTimer(); visibleText = modelText; applyState(visibleText, lastStatusText, latestMetadata, latestToolResults); };
 
+  const handleStepEvent = (event: any) => { const label = fallbackStepLabel(event); lastStatusText = label; if (event?.type === 'tool_started') toolCount += 1; trackEvent('chat_phase_transition', { conversationId, messageId: assistantMessageId, requestId, properties: { phase: event?.type, label } }); applyState(visibleText, label, latestMetadata, latestToolResults); };
   const handleEvent = (event: ChatStreamEvent | any) => {
     const type = event?.type;
-
-    if (
-      STREAM_STEP_EVENT_TYPES.has(type) ||
-      type === 'status' ||
-      type === 'log' ||
-      type === 'tool_started' ||
-      type === 'tool_completed' ||
-      type === 'tool_failed'
-    ) {
-      if (type !== 'log') {
-        handleStepEvent(event);
-      }
-      return;
-    }
-
-    if (type === 'answer_delta' || type === 'delta') {
-      const delta = event?.delta || event?.content || '';
-      if (!delta) return;
-
-      streamedText += delta;
-      applyState(streamedText, 'Writing answer');
-      return;
-    }
-
-    if (type === 'answer_completed' || type === 'completed') {
-      streamComplete = true;
-
-      const content = event?.content || streamedText || 'No response generated.';
-      const metadataBase = (event?.metadata || {}) as AgentResponseMetadata;
-      const eventStructuredData = safeObject(event?.structuredData);
-      const toolResults = safeArray(event?.toolResults);
-
-      const mergedMetadata = {
-        ...metadataBase,
-        structuredData: {
-          ...(safeObject(metadataBase?.structuredData) ?? {}),
-          ...(eventStructuredData ?? {}),
-        },
-      } as AgentResponseMetadata;
-
-      applyState(content, 'Completed', mergedMetadata, toolResults);
-
-      trackEvent('chat_stream_completed', {
-        conversationId,
-        messageId: assistantMessageId,
-        requestId,
-        properties: {
-          ms:
-            typeof event?.metrics?.completionMs === 'number'
-              ? event.metrics.completionMs
-              : Date.now() - startedAt,
-          chars:
-            typeof event?.metrics?.charCount === 'number'
-              ? event.metrics.charCount
-              : content.length,
-        },
-      });
-
-      return;
-    }
-
-    if (type === 'done') {
-      return;
-    }
-
-    if (type === 'error') {
-      throw new Error(event?.error || event?.message || 'Streaming failed.');
-    }
+    if (STREAM_STEP_EVENT_TYPES.has(type) || type === 'status' || type === 'log' || type === 'tool_started' || type === 'tool_completed' || type === 'tool_failed') { if (type !== 'log') handleStepEvent(event); return; }
+    if (type === 'answer_delta' || type === 'delta') { const delta = event?.delta || event?.content || ''; if (!delta) return; modelText += delta; lastStatusText = 'Writing answer'; scheduleFlush(); return; }
+    if (type === 'answer_completed' || type === 'completed') { streamComplete = true; modelText = event?.content || modelText || 'No response generated.'; const metadataBase = (event?.metadata || {}) as AgentResponseMetadata; const eventStructuredData = safeObject(event?.structuredData); latestToolResults = safeArray(event?.toolResults); latestMetadata = { ...metadataBase, structuredData: { ...(safeObject(metadataBase?.structuredData) ?? {}), ...(eventStructuredData ?? {}) } } as AgentResponseMetadata; lastStatusText = 'Completed'; flushAll(); trackEvent('chat_stream_completed', { conversationId, messageId: assistantMessageId, requestId, properties: { ms: typeof event?.metrics?.completionMs === 'number' ? event.metrics.completionMs : Date.now() - startedAt, chars: typeof event?.metrics?.charCount === 'number' ? event.metrics.charCount : modelText.length } }); return; }
+    if (type === 'done') return;
+    if (type === 'error') throw new Error(event?.error || event?.message || 'Streaming failed.');
   };
 
-  while (true) {
-    const { done, value } = await reader.read();
+  while (true) { const { done, value } = await reader.read(); if (done) break; buffer += decoder.decode(value, { stream: true }); const lines = buffer.split('\n'); buffer = lines.pop() || ''; for (const line of lines) { if (!line.trim()) continue; try { handleEvent(JSON.parse(line) as ChatStreamEvent); } catch { } } }
+  if (buffer.trim()) { try { handleEvent(JSON.parse(buffer) as ChatStreamEvent); } catch { } }
+  if (!streamComplete) throw new Error('Streaming interrupted before completion.');
 
-    if (done) break;
-
-    buffer += decoder.decode(value, { stream: true });
-
-    const lines = buffer.split('\n');
-    buffer = lines.pop() || '';
-
-    for (const line of lines) {
-      if (!line.trim()) continue;
-
-      try {
-        const parsed = JSON.parse(line) as ChatStreamEvent;
-        handleEvent(parsed);
-      } catch {
-        // ignore malformed line
-      }
-    }
-  }
-
-  if (buffer.trim()) {
-    try {
-      const parsed = JSON.parse(buffer) as ChatStreamEvent;
-      handleEvent(parsed);
-    } catch {
-      // ignore malformed trailing line
-    }
-  }
-
-  if (!streamComplete) {
-    throw new Error('Streaming interrupted before completion.');
-  }
-
-  setState((prev) => {
-    const messages = prev.messageState[conversationId] ?? [];
-
-    return {
-      ...prev,
-      conversationList: sortConversations(
-        prev.conversationList.map((conversation) =>
-          conversation.id === conversationId
-            ? {
-                ...conversation,
-                updatedAt: nowIso(),
-                lastMessagePreview: summarizePreview(messages),
-                messageCount: messages.length,
-              }
-            : conversation,
-        ),
-      ),
-      agents: {
-        ...prev.agents,
-        [DEFAULT_ACTIVE_AGENT as AgentName]: {
-          ...prev.agents[DEFAULT_ACTIVE_AGENT as AgentName],
-          status: 'completed',
-          lastRun: nowIso(),
-        },
-      },
-      isAgentResponding: false,
-      activeRequestId: null,
-    };
-  });
+  setState((prev) => { const messages = prev.messageState[conversationId] ?? []; return { ...prev, conversationList: sortConversations(prev.conversationList.map((conversation) => conversation.id === conversationId ? { ...conversation, updatedAt: nowIso(), lastMessagePreview: summarizePreview(messages), messageCount: messages.length } : conversation)), agents: { ...prev.agents, [DEFAULT_ACTIVE_AGENT as AgentName]: { ...prev.agents[DEFAULT_ACTIVE_AGENT as AgentName], status: 'completed', lastRun: nowIso() } }, isAgentResponding: false, activeRequestId: null }; });
 }
