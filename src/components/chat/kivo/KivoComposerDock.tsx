@@ -1,7 +1,7 @@
 'use client';
 
 import { useLayoutEffect, useRef, type ReactNode, type Ref } from 'react';
-import { ArrowUp, Mic, Plus, Sparkles } from 'lucide-react';
+import { ArrowUp, BotMessageSquare, Mic, Plus, Workflow } from 'lucide-react';
 
 type KivoComposerDockProps = {
   value: string;
@@ -19,8 +19,8 @@ type KivoComposerDockProps = {
   desktopShiftX?: number;
 };
 
-const MIN_TEXTAREA_HEIGHT = 30;
-const MAX_TEXTAREA_HEIGHT = 180;
+const MIN_TEXTAREA_HEIGHT = 28;
+const MAX_TEXTAREA_HEIGHT = 150;
 
 export function KivoComposerDock({
   value,
@@ -53,57 +53,66 @@ export function KivoComposerDock({
   return (
     <div
       ref={containerRef}
-      className="pointer-events-none fixed inset-x-0 z-40 mx-auto w-full max-w-[560px] px-4 pb-4 md:translate-x-[var(--kivo-composer-shift-x)]"
+      className="pointer-events-none fixed inset-x-0 z-40 mx-auto w-full max-w-[720px] px-6 pb-4 md:translate-x-[var(--kivo-composer-shift-x)]"
       style={{
         ['--kivo-composer-shift-x' as string]: `${desktopShiftX}px`,
         bottom: `calc(env(safe-area-inset-bottom, 0px) + ${Math.max(0, keyboardOffset)}px)`,
       }}
     >
-      <div className="pointer-events-auto rounded-[34px] border border-white/60 bg-[rgba(255,255,255,0.54)] px-4 pb-3 pt-4 shadow-[0_16px_40px_rgba(15,23,42,0.05)] backdrop-blur-[22px]">
-        <div className="px-2">
-          <textarea
-            ref={textareaRef}
-            id="kivo-composer-textarea"
-            value={value}
-            onChange={(event) => onChange(event.target.value)}
-            onKeyDown={(event) => {
-              if (event.key === 'Enter' && !event.shiftKey) {
-                event.preventDefault();
-                if (canSend && !isSending) onSend();
-              }
-            }}
-            rows={1}
-            placeholder={placeholder}
-            className="w-full resize-none border-0 bg-transparent p-0 text-[15px] font-normal leading-[1.45] tracking-[-0.018em] text-[#3a404a] outline-none placeholder:text-[14px] placeholder:text-[#97a0ad]"
-            style={{
-              minHeight: `${MIN_TEXTAREA_HEIGHT}px`,
-              maxHeight: `${MAX_TEXTAREA_HEIGHT}px`,
-              overflowY: 'hidden',
-            }}
-          />
-        </div>
+      <div className="pointer-events-auto rounded-[31px] border border-black/[0.025] bg-white px-[14px] pb-[12px] pt-[18px] shadow-[0_18px_42px_rgba(15,23,42,0.045)]">
+        <textarea
+          ref={textareaRef}
+          id="kivo-composer-textarea"
+          value={value}
+          onChange={(event) => onChange(event.target.value)}
+          onKeyDown={(event) => {
+            if (event.key === 'Enter' && !event.shiftKey) {
+              event.preventDefault();
+              if (canSend && !isSending) onSend();
+            }
+          }}
+          rows={1}
+          placeholder={placeholder}
+          className="block w-full resize-none border-0 bg-transparent px-[15px] py-0 text-[18px] font-normal leading-[1.35] tracking-[-0.02em] text-[#25272d] outline-none placeholder:text-[#bfc2c7]"
+          style={{
+            minHeight: `${MIN_TEXTAREA_HEIGHT}px`,
+            maxHeight: `${MAX_TEXTAREA_HEIGHT}px`,
+            overflowY: 'hidden',
+          }}
+        />
 
-        <div className="mt-4 flex items-center justify-between">
-          <div className="flex items-center gap-2.5">
-            <DockIconButton
+        <div className="mt-[18px] flex items-center justify-between gap-3">
+          <div className="flex items-center gap-[10px]">
+            <DockCircleButton
               ariaLabel="Add attachment"
               onClick={onPlusClick}
-              icon={<Plus className="h-[17px] w-[17px]" strokeWidth={2.2} />}
+              icon={<Plus className="h-[25px] w-[25px]" strokeWidth={2.05} />}
             />
 
-            <DockIconButton
-              ariaLabel="Open quick actions"
+            <DockCircleButton
+              ariaLabel="Connect tools"
               onClick={onQuickActionClick}
-              icon={<MagicGlyph />}
+              icon={<Workflow className="h-[24px] w-[24px]" strokeWidth={2.05} />}
             />
           </div>
 
-          <div className="flex items-center gap-2.5">
-            <DockIconButton
+          <div className="flex items-center gap-[10px]">
+            <DockCircleButton
+              ariaLabel="Open voice assistant"
+              onClick={onQuickActionClick}
+              icon={
+                <BotMessageSquare
+                  className="h-[24px] w-[24px]"
+                  strokeWidth={2.05}
+                />
+              }
+            />
+
+            <DockCircleButton
               ariaLabel={isListening ? 'Stop voice input' : 'Start voice input'}
               onClick={onMicClick}
               active={isListening}
-              icon={<Mic className="h-[16px] w-[16px]" strokeWidth={2.1} />}
+              icon={<Mic className="h-[24px] w-[24px]" strokeWidth={2.05} />}
             />
 
             <button
@@ -111,13 +120,13 @@ export function KivoComposerDock({
               onClick={onSend}
               aria-label="Send message"
               disabled={!canSend || isSending}
-              className={`inline-flex h-[46px] w-[46px] items-center justify-center rounded-full border transition-all duration-200 ease-out active:scale-[0.985] ${
+              className={`inline-flex h-[52px] w-[52px] shrink-0 items-center justify-center rounded-full transition-all duration-200 ease-out active:scale-[0.96] ${
                 canSend && !isSending
-                  ? 'border-white/75 bg-[rgba(255,255,255,0.78)] text-[#5d6674] shadow-[0_8px_20px_rgba(15,23,42,0.06)] hover:bg-[rgba(255,255,255,0.92)]'
-                  : 'border-white/50 bg-[rgba(245,247,250,0.58)] text-[#b1b8c3]'
+                  ? 'bg-[#1f2329] text-white shadow-[0_10px_22px_rgba(15,23,42,0.16)]'
+                  : 'bg-[#f3f3f3] text-[#d0d0d0]'
               }`}
             >
-              <ArrowUp className="h-[17px] w-[17px]" strokeWidth={2.35} />
+              <ArrowUp className="h-[25px] w-[25px]" strokeWidth={2.25} />
             </button>
           </div>
         </div>
@@ -126,42 +135,31 @@ export function KivoComposerDock({
   );
 }
 
-type DockIconButtonProps = {
+type DockCircleButtonProps = {
   ariaLabel: string;
   onClick: () => void;
   icon: ReactNode;
   active?: boolean;
 };
 
-function DockIconButton({
+function DockCircleButton({
   ariaLabel,
   onClick,
   icon,
   active = false,
-}: DockIconButtonProps) {
+}: DockCircleButtonProps) {
   return (
     <button
       type="button"
       onClick={onClick}
       aria-label={ariaLabel}
-      className={`inline-flex h-[44px] w-[44px] items-center justify-center rounded-full border transition-all duration-200 ease-out active:scale-[0.985] ${
+      className={`inline-flex h-[52px] w-[52px] shrink-0 items-center justify-center rounded-full border transition-all duration-200 ease-out active:scale-[0.96] ${
         active
-          ? 'border-[#d7e3f4] bg-[rgba(239,245,255,0.84)] text-[#4d6b9a] shadow-[0_6px_14px_rgba(77,107,154,0.08)]'
-          : 'border-white/70 bg-[rgba(255,255,255,0.56)] text-[#6d7685] shadow-[0_6px_16px_rgba(15,23,42,0.04)] hover:bg-[rgba(255,255,255,0.78)]'
+          ? 'border-black/[0.06] bg-[#f0f5ff] text-[#1f2937] shadow-[0_5px_14px_rgba(15,23,42,0.06)]'
+          : 'border-black/[0.035] bg-white text-[#25272d] shadow-[0_5px_14px_rgba(15,23,42,0.035)]'
       }`}
     >
       {icon}
     </button>
-  );
-}
-
-function MagicGlyph() {
-  return (
-    <div className="relative h-[17px] w-[17px]">
-      <Sparkles
-        className="absolute inset-0 h-[17px] w-[17px] text-[#697281]"
-        strokeWidth={1.95}
-      />
-    </div>
   );
 }
