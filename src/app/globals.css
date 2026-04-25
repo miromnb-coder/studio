@@ -8,23 +8,23 @@
   --chat-border: #e6eaf0;
   --chat-text: #4b5563;
   --chat-muted: #8a94a6;
-
   --control-bg: #f4f5f7;
   --control-surface: #ffffff;
   --control-border: #e4e7ed;
   --control-text: #1c1c1e;
   --control-muted: #616773;
   --control-accent: #111111;
-
   --radius-xs: 12px;
   --radius-sm: 16px;
   --radius-md: 20px;
   --radius-lg: 24px;
   --radius-xl: 30px;
-
   --shadow-soft: 0 8px 24px rgba(17, 24, 39, 0.06);
   --shadow-float: 0 18px 34px rgba(17, 24, 39, 0.1);
-
+  --motion-fast: 140ms;
+  --motion-base: 220ms;
+  --motion-slow: 320ms;
+  --ease-premium: cubic-bezier(0.22, 1, 0.36, 1);
   --screen-x: 0.9rem;
   --screen-y: 0.8rem;
 }
@@ -47,6 +47,7 @@ body {
   -webkit-font-smoothing: antialiased;
   background: var(--chat-bg);
   color: var(--chat-text);
+  overscroll-behavior-y: none;
 }
 
 button,
@@ -54,6 +55,12 @@ input,
 textarea,
 select {
   font: inherit;
+}
+
+button,
+a,
+[role='button'] {
+  touch-action: manipulation;
 }
 
 .mobile-app {
@@ -87,7 +94,8 @@ select {
 }
 
 .premium-card-hover {
-  transition: transform 0.18s ease, box-shadow 0.18s ease, border-color 0.18s ease;
+  transition: transform var(--motion-base) var(--ease-premium), box-shadow var(--motion-base) var(--ease-premium), border-color var(--motion-base) var(--ease-premium);
+  will-change: transform;
 }
 
 .premium-card-hover:hover {
@@ -96,11 +104,43 @@ select {
 }
 
 .tap-feedback {
-  transition: transform 0.15s ease, opacity 0.15s ease, background-color 0.15s ease;
+  transform: translateZ(0);
+  transition: transform var(--motion-fast) var(--ease-premium), opacity var(--motion-fast) ease, background-color var(--motion-fast) ease, box-shadow var(--motion-fast) ease;
+  will-change: transform;
 }
 
 .tap-feedback:active {
-  transform: scale(0.98);
+  transform: scale(0.975);
+}
+
+.kivo-pressable {
+  transform: translateZ(0);
+  transition: transform var(--motion-fast) var(--ease-premium), opacity var(--motion-fast) ease, filter var(--motion-fast) ease;
+  will-change: transform;
+}
+
+.kivo-pressable:active {
+  transform: scale(0.965);
+  filter: brightness(0.985);
+}
+
+.kivo-page-reveal {
+  animation: kivoPageReveal 260ms var(--ease-premium) both;
+}
+
+.kivo-skeleton {
+  position: relative;
+  overflow: hidden;
+  background: rgba(226,232,240,0.58);
+}
+
+.kivo-skeleton::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  transform: translateX(-100%);
+  background: linear-gradient(90deg, transparent, rgba(255,255,255,0.74), transparent);
+  animation: kivoSkeletonSweep 1.45s linear infinite;
 }
 
 .dashboard-reveal {
@@ -111,30 +151,8 @@ select {
 .dashboard-reveal:nth-child(3) { animation-delay: 0.08s; }
 .dashboard-reveal:nth-child(4) { animation-delay: 0.12s; }
 
-@keyframes dashboardReveal {
-  from {
-    opacity: 0;
-    transform: translateY(7px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
-}
-
 .message-appear {
   animation: messageIn 0.2s ease;
-}
-
-@keyframes messageIn {
-  from {
-    opacity: 0;
-    transform: translateY(5px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
 }
 
 .composer-action-btn {
@@ -147,11 +165,13 @@ select {
   border: 1px solid #e6eaf0;
   background: #f8f9fb;
   color: #667085;
-  transition: transform 0.15s ease, background-color 0.15s ease, color 0.15s ease;
+  transform: translateZ(0);
+  transition: transform var(--motion-fast) var(--ease-premium), background-color var(--motion-fast) ease, color var(--motion-fast) ease, box-shadow var(--motion-fast) ease;
+  will-change: transform;
 }
 
 .composer-action-btn:active {
-  transform: scale(0.96);
+  transform: scale(0.955);
 }
 
 .composer-action-btn:disabled {
@@ -167,4 +187,38 @@ select {
 .composer-action-btn-plus {
   background: #edf2f8;
   color: #4b5563;
+}
+
+@keyframes kivoPageReveal {
+  from { opacity: 0; transform: translateY(6px) scale(0.998); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+@keyframes kivoSkeletonSweep {
+  100% { transform: translateX(100%); }
+}
+
+@keyframes dashboardReveal {
+  from { opacity: 0; transform: translateY(7px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes messageIn {
+  from { opacity: 0; transform: translateY(5px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html,
+  body {
+    scroll-behavior: auto;
+  }
+
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+  }
 }
