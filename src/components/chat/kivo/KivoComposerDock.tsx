@@ -53,7 +53,7 @@ export function KivoComposerDock({
   return (
     <div
       ref={containerRef}
-      className="pointer-events-none fixed inset-x-0 z-40 mx-auto w-full max-w-none px-3 pb-2 md:translate-x-[var(--kivo-composer-shift-x)]"
+      className="pointer-events-none fixed inset-x-0 z-40 mx-auto w-full max-w-none px-[8px] pb-2 md:translate-x-[var(--kivo-composer-shift-x)]"
       style={{
         ['--kivo-composer-shift-x' as string]: `${desktopShiftX}px`,
         bottom: `calc(env(safe-area-inset-bottom, 0px) + ${Math.max(0, keyboardOffset)}px)`,
