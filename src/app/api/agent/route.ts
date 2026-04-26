@@ -1,37 +1,7 @@
 import { NextRequest } from "next/server";
-import {
-  runKernelStream,
-  serializeKernelStreamEvent,
-  createErrorEvent,
-} from "@/agent/kernel";
-import { chargeCredits, estimateCreditCost } from '@/lib/credits';
-
-export const dynamic = "force-dynamic";
-function resolveMessage(body:any){const candidates=[body?.message,body?.prompt,body?.input,body?.text,body?.query];for(const v of candidates){if(typeof v==='string'&&v.trim())return v.trim();}return ''}
-function resolveMode(body:any):"fast"|"agent"{return body?.mode==='agent'?'agent':'fast'}
-export async function POST(req: NextRequest) {
-  try {
-    const body = await req.json();
-    const message = resolveMessage(body);
-    const mode = resolveMode(body);
-    if (!message) return Response.json({ error:'No message provided in request body.'},{status:400});
-
-    const estimate = estimateCreditCost({ message, mode });
-    const charged = chargeCredits({ amount: estimate.cost, action: estimate.action, title: estimate.title });
-    if (!charged.ok) {
-      return Response.json({ error:'not_enough_credits', credits: charged.account.credits, upgrade:true }, { status: 402 });
-    }
-
-    const stream = new ReadableStream({ async start(controller) { const encoder = new TextEncoder(); try {
-      for await (const event of runKernelStream({ message, mode })) {
-        controller.enqueue(encoder.encode(serializeKernelStreamEvent(event)));
-      }
-    } catch (error) {
-      controller.enqueue(encoder.encode(serializeKernelStreamEvent(createErrorEvent(error instanceof Error ? error.message : 'Unknown stream error'))));
-    } finally { controller.close(); } } });
-
-    return new Response(stream, { headers: { 'Content-Type':'application/x-ndjson; charset=utf-8', 'Cache-Control':'no-cache, no-transform', Connection:'keep-alive', 'X-Credits-Remaining': String(charged.account.credits) } });
-  } catch (error) {
-    return Response.json({ error: error instanceof Error ? error.message : 'Kernel route failed.' }, { status: 500 });
-  }
-}
+import { runKernelStream, serializeKernelStreamEvent, createErrorEvent } from "@/agent/kernel";
+import { chargeEstimatedCredits } from '@/lib/credits';
+export const dynamic="force-dynamic";
+const resolveMessage=(b:any)=>[b?.message,b?.prompt,b?.input,b?.text,b?.query].find((v:any)=>typeof v==='string'&&v.trim())?.trim()||'';
+const resolveMode=(b:any):"fast"|"agent"=>b?.mode==='agent'?'agent':'fast';
+export async function POST(req:NextRequest){try{const body=await req.json();const message=resolveMessage(body);const mode=resolveMode(body);if(!message)return Response.json({error:'No message provided in request body.'},{status:400});const charged=chargeEstimatedCredits({message,mode,hasFile:!!body?.file,usesWeb:!!body?.usesWeb});if(!charged.ok)return Response.json({error:'not_enough_credits',credits:charged.account.credits,required:charged.required,estimate:charged.estimate,upgrade:true},{status:402});const stream=new ReadableStream({async start(controller){const encoder=new TextEncoder();try{for await(const event of runKernelStream({message,mode})){controller.enqueue(encoder.encode(serializeKernelStreamEvent(event)));}}catch(error){controller.enqueue(encoder.encode(serializeKernelStreamEvent(createErrorEvent(error instanceof Error?error.message:'Unknown stream error'))));}finally{controller.close();}}});return new Response(stream,{headers:{'Content-Type':'application/x-ndjson; charset=utf-8','Cache-Control':'no-cache, no-transform',Connection:'keep-alive','X-Credits-Remaining':String(charged.account.credits),'X-Credits-Cost':String(charged.estimate?.cost||0)}});}catch(error){return Response.json({error:error instanceof Error?error.message:'Kernel route failed.'},{status:500});}}
