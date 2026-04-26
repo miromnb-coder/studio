@@ -73,13 +73,13 @@ export const KivoComposerDock = memo(function KivoComposerDock({
   return (
     <div
       ref={containerRef}
-      className="pointer-events-none fixed inset-x-0 z-40 mx-auto w-full max-w-none px-[8px] pb-2 md:translate-x-[var(--kivo-composer-shift-x)]"
+      className="pointer-events-none fixed inset-x-0 z-40 mx-auto w-full max-w-none px-[8px] pb-2 transition-[bottom] duration-[260ms] ease-[cubic-bezier(0.22,1,0.36,1)] md:translate-x-[var(--kivo-composer-shift-x)]"
       style={{
         ['--kivo-composer-shift-x' as string]: `${desktopShiftX}px`,
         bottom: keyboardOffset > 0 ? `${keyboardOffset + 10}px` : 'calc(env(safe-area-inset-bottom, 0px) + 8px)',
       }}
     >
-      <div className="pointer-events-auto rounded-[31px] border border-black/[0.018] bg-white px-[13px] pb-[8px] pt-[12px] shadow-[0_10px_30px_rgba(15,23,42,0.035)] transition-[transform,box-shadow] duration-200 ease-out [contain:layout_paint] focus-within:shadow-[0_14px_36px_rgba(15,23,42,0.055)]">
+      <div className="pointer-events-auto rounded-[31px] border border-black/[0.018] bg-white px-[13px] pb-[8px] pt-[12px] shadow-[0_10px_30px_rgba(15,23,42,0.035)] transition-[box-shadow] duration-200 ease-out [contain:layout_paint] focus-within:shadow-[0_14px_36px_rgba(15,23,42,0.055)]">
         <textarea
           ref={textareaRef}
           id="kivo-composer-textarea"
