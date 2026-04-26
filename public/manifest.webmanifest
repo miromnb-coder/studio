@@ -2,7 +2,7 @@
   "id": "/chat",
   "name": "Kivo",
   "short_name": "Kivo",
-  "description": "Personal AI OS for planning, decisions, memory, calendar, Gmail, and agent workflows.",
+  "description": "Personal AI Agent for memory, calendar, Gmail, tasks, decisions, and daily help.",
   "start_url": "/chat?source=pwa",
   "scope": "/",
   "display": "standalone",
