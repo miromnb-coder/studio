@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="Kivo">
+  <rect width="512" height="512" rx="116" fill="#f7f7f5"/>
+  <circle cx="256" cy="256" r="168" fill="#ffffff" stroke="#e8e8e4" stroke-width="6"/>
+  <path d="M169 337V175h42v66l63-66h52l-75 78 81 84h-55l-66-70v70h-42Z" fill="#171a21"/>
+  <circle cx="365" cy="158" r="24" fill="#171a21" opacity="0.95"/>
+</svg>
