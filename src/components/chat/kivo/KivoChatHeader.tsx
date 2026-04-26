@@ -1,6 +1,8 @@
 'use client';
 
+import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
+import { Sparkles } from 'lucide-react';
 
 type Props = {
   hasMessages?: boolean;
@@ -12,6 +14,30 @@ type Props = {
 
 export default function KivoChatHeader({ hasMessages = false, onSidebarToggle }: Props) {
   const router = useRouter();
+  const [credits, setCredits] = useState<number>(0);
+
+  useEffect(() => {
+    let mounted = true;
+
+    const loadCredits = async () => {
+      try {
+        const response = await fetch('/api/credits', { cache: 'no-store' });
+        if (!response.ok) return;
+        const data = await response.json();
+        if (mounted) setCredits(Number(data?.credits ?? 0));
+      } catch {
+        // Keep the header quiet if credits are unavailable.
+      }
+    };
+
+    loadCredits();
+    const intervalId = window.setInterval(loadCredits, 15000);
+
+    return () => {
+      mounted = false;
+      window.clearInterval(intervalId);
+    };
+  }, []);
 
   return (
     <header className="relative z-30 border-b border-black/[0.035] bg-white/82 backdrop-blur-2xl" style={{ paddingTop: 'env(safe-area-inset-top, 0px)' }}>
@@ -20,7 +46,14 @@ export default function KivoChatHeader({ hasMessages = false, onSidebarToggle }:
           <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none"><path d="M4 7h16M4 12h16M4 17h10" stroke="currentColor" strokeWidth="2" strokeLinecap="round" /></svg>
         </button>
         <div className="flex-1 text-center text-[17px] font-semibold tracking-[-0.04em] text-[#131A25]">{hasMessages ? 'Kivo 1.6' : 'Kivo Lite'}</div>
-        <div className="h-10 w-10" aria-hidden="true" />
+        <button
+          type="button"
+          aria-label="Credits balance"
+          className="inline-flex h-[46px] min-w-[92px] items-center justify-center gap-2 rounded-full border border-black/[0.085] bg-[#F7F7F6]/90 px-4 text-[17px] font-semibold tracking-[-0.04em] text-[#2A2D31] shadow-[inset_0_1px_0_rgba(255,255,255,0.9),0_1px_2px_rgba(15,23,42,0.04)] backdrop-blur-xl transition-transform duration-150 active:scale-[0.97]"
+        >
+          <Sparkles className="h-[24px] w-[24px] text-[#17191D]" strokeWidth={2.15} />
+          <span>{credits}</span>
+        </button>
       </div>
     </header>
   );
