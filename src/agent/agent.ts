@@ -1,9 +1,9 @@
-import { runAgentVNext } from './vNext/orchestrator';
+import { runKernel } from './kernel';
 import { createClient as createSupabaseServerClient } from '@/lib/supabase/server';
 
 /**
  * @fileOverview Legacy Agent Entry Point.
- * Keeps backward compatibility while delegating runtime intelligence to vNext.
+ * Keeps older routes working while delegating runtime intelligence to Kernel.
  */
 export async function runAgent(input: string, history: any[] = [], memory: any = null, _imageUri?: string) {
   const supabase = await createSupabaseServerClient();
@@ -18,13 +18,13 @@ export async function runAgent(input: string, history: any[] = [], memory: any =
       content: m.content.trim(),
     }));
 
-  const execution = await runAgentVNext({
-    requestId: crypto.randomUUID(),
+  const response = await runKernel({
     userId,
     message: input || 'Analysis Request',
-    conversation: safeHistory,
+    mode: 'agent',
     metadata: {
       memory: memory || null,
+      conversation: safeHistory,
       productState: {
         plan: 'FREE',
         usage: { current: 0, limit: 10, remaining: 10 },
@@ -33,18 +33,16 @@ export async function runAgent(input: string, history: any[] = [], memory: any =
     },
   });
 
-  const response = execution.response;
-
   return {
-    content: response?.answer.text || 'Analysis finalized.',
+    content: response.answer || 'Analysis finalized.',
     data: {
-      title: String(response?.route.intent || 'general').toUpperCase() + ' Audit',
-      strategy: response?.plan.summary || 'Proceed with caution.',
-      steps: response?.plan.steps || [],
-      structuredData: response?.answer.structuredData || {},
+      title: String(response.mode || 'agent').toUpperCase() + ' Audit',
+      strategy: response.summary || 'Kernel analysis completed.',
+      steps: [],
+      structuredData: response.metadata || {},
     },
-    intent: response?.route.intent,
-    mode: response?.route.intent === 'unknown' ? 'general' : 'analyst',
+    intent: response.mode,
+    mode: response.mode === 'fast' ? 'general' : 'analyst',
     isActionable: true,
   };
 }
