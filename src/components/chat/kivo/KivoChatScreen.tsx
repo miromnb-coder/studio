@@ -5,10 +5,7 @@ import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { useAppStore } from '@/app/store/app-store';
 import { type KivoSidebarRecentChat } from './KivoSidebar';
 import { KivoChatScreenLayout } from './KivoChatScreenLayout';
-import {
-  type KivoChatNotice,
-  useKivoChatScreenHooks,
-} from './KivoChatScreenHooks';
+import { useKivoChatScreenHooks } from './KivoChatScreenHooks';
 import { useKivoChatScreenActions } from './KivoChatScreenActions';
 
 export type KivoConnectedService = {
@@ -34,7 +31,6 @@ export function KivoChatScreen() {
   const streamError = useAppStore((s) => s.streamError);
   const activeConversationId = useAppStore((s) => s.activeConversationId);
 
-  const [notice, setNotice] = useState<KivoChatNotice | null>(null);
   const [showSidebarRail, setShowSidebarRail] = useState(false);
   const [referralToastOpen, setReferralToastOpen] = useState(false);
   const [referralToastTitle, setReferralToastTitle] = useState('');
@@ -43,6 +39,8 @@ export function KivoChatScreen() {
 
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const hasMessages = messages.length > 0;
+  const disabledNotice = null;
+  const disableNotice = useCallback(() => {}, []);
 
   const actions = useKivoChatScreenActions({
     userId: user?.id,
@@ -57,13 +55,11 @@ export function KivoChatScreen() {
     isAgentResponding,
     focusComposer: () => {
       requestAnimationFrame(() => {
-        const textarea = document.getElementById(
-          'kivo-composer-textarea',
-        ) as HTMLTextAreaElement | null;
+        const textarea = document.getElementById('kivo-composer-textarea') as HTMLTextAreaElement | null;
         textarea?.focus();
       });
     },
-    showNotice: (title, detail) => setNotice({ title, detail }),
+    showNotice: disableNotice,
   });
 
   useEffect(() => {
@@ -76,39 +72,14 @@ export function KivoChatScreen() {
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
-
-    const readEnabled = (keys: string[]) =>
-      keys.some((key) => window.localStorage.getItem(key) === 'true');
-
+    const readEnabled = (keys: string[]) => keys.some((key) => window.localStorage.getItem(key) === 'true');
     const services: KivoConnectedService[] = [];
-
-    if (actions.gmailConnected || readEnabled(['kivo_gmail_enabled', 'gmailConnected'])) {
-      services.push({ id: 'gmail', label: 'Gmail' });
-    }
-
-    if (
-      actions.calendarConnected ||
-      readEnabled(['kivo_calendar_enabled', 'calendarConnected'])
-    ) {
-      services.push({ id: 'calendar', label: 'Calendar' });
-    }
-
-    if (readEnabled(['kivo_drive_enabled', 'driveConnected'])) {
-      services.push({ id: 'drive', label: 'Drive' });
-    }
-
-    if (readEnabled(['kivo_github_enabled', 'githubConnected'])) {
-      services.push({ id: 'github', label: 'GitHub' });
-    }
-
-    if (readEnabled(['kivo_browser_search_enabled', 'browserSearchConnected'])) {
-      services.push({ id: 'web', label: 'Web' });
-    }
-
-    if (readEnabled(['kivo_outlook_enabled', 'outlookConnected'])) {
-      services.push({ id: 'outlook', label: 'Outlook' });
-    }
-
+    if (actions.gmailConnected || readEnabled(['kivo_gmail_enabled', 'gmailConnected'])) services.push({ id: 'gmail', label: 'Gmail' });
+    if (actions.calendarConnected || readEnabled(['kivo_calendar_enabled', 'calendarConnected'])) services.push({ id: 'calendar', label: 'Calendar' });
+    if (readEnabled(['kivo_drive_enabled', 'driveConnected'])) services.push({ id: 'drive', label: 'Drive' });
+    if (readEnabled(['kivo_github_enabled', 'githubConnected'])) services.push({ id: 'github', label: 'GitHub' });
+    if (readEnabled(['kivo_browser_search_enabled', 'browserSearchConnected'])) services.push({ id: 'web', label: 'Web' });
+    if (readEnabled(['kivo_outlook_enabled', 'outlookConnected'])) services.push({ id: 'outlook', label: 'Outlook' });
     setLocalConnectedServices(services);
   }, [actions.gmailConnected, actions.calendarConnected]);
 
@@ -146,39 +117,24 @@ export function KivoChatScreen() {
     isSending: actions.isSending,
     attachmentsLength: actions.attachments.length,
     draftPrompt,
-    notice,
-    setNotice,
+    notice: disabledNotice,
+    setNotice: disableNotice,
     setDraftPrompt,
-    showNotice: (title, detail) => setNotice({ title, detail }),
+    showNotice: disableNotice,
     focusComposer: () => {
       requestAnimationFrame(() => {
-        const textarea = document.getElementById(
-          'kivo-composer-textarea',
-        ) as HTMLTextAreaElement | null;
+        const textarea = document.getElementById('kivo-composer-textarea') as HTMLTextAreaElement | null;
         textarea?.focus();
       });
     },
   });
 
-  const sidebarRecentChats = useMemo<KivoSidebarRecentChat[]>(() => {
+  const sidebarRecentChats = useMemo<KivoSidebarRecentChat[]>((() => {
     if (!activeConversationId) return [];
-
-    const firstUserMessage = messages.find(
-      (message) => message.role === 'user' && message.content.trim().length > 0,
-    );
+    const firstUserMessage = messages.find((message) => message.role === 'user' && message.content.trim().length > 0);
     const lastMessage = messages[messages.length - 1];
-
-    return [
-      {
-        id: activeConversationId,
-        title:
-          firstUserMessage?.content.trim().slice(0, 42) ||
-          (hasMessages ? 'Current conversation' : 'New conversation'),
-        preview: lastMessage?.content?.trim().slice(0, 72) || 'Continue working',
-        timestamp: hasMessages ? 'Now' : '',
-      },
-    ];
-  }, [activeConversationId, hasMessages, messages]);
+    return [{ id: activeConversationId, title: firstUserMessage?.content.trim().slice(0, 42) || (hasMessages ? 'Current conversation' : 'New conversation'), preview: lastMessage?.content?.trim().slice(0, 72) || 'Continue working', timestamp: hasMessages ? 'Now' : '' }];
+  }), [activeConversationId, hasMessages, messages]);
 
   return (
     <KivoChatScreenLayout
@@ -222,7 +178,7 @@ export function KivoChatScreen() {
       keyboardOffset={hooks.keyboardOffset}
       attachmentTrayRef={hooks.attachmentTrayRef}
       removeAttachment={actions.removeAttachment}
-      notice={notice}
+      notice={disabledNotice}
       draftPrompt={draftPrompt}
       setDraftPrompt={setDraftPrompt}
       handleSend={actions.handleSend}
