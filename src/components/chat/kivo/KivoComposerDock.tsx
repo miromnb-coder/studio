@@ -20,7 +20,7 @@ type KivoComposerDockProps = {
   desktopShiftX?: number;
 };
 
-const MIN_TEXTAREA_HEIGHT = 26;
+const MIN_TEXTAREA_HEIGHT = 30;
 const MAX_TEXTAREA_HEIGHT = 140;
 
 export const KivoComposerDock = memo(function KivoComposerDock({
@@ -79,7 +79,7 @@ export const KivoComposerDock = memo(function KivoComposerDock({
         transform: `translate3d(${desktopShiftX}px, ${keyboardOffset > 0 ? -keyboardOffset : 0}px, 0)`,
       }}
     >
-      <div className="pointer-events-auto rounded-[31px] border border-black/[0.018] bg-white px-[13px] pb-[8px] pt-[12px] shadow-[0_10px_30px_rgba(15,23,42,0.035)] transition-[box-shadow] duration-200 ease-out [contain:layout_paint] focus-within:shadow-[0_14px_36px_rgba(15,23,42,0.055)]">
+      <div className="pointer-events-auto rounded-[34px] border border-white/70 bg-[#fbfbfa]/96 px-[14px] pb-[9px] pt-[14px] shadow-[0_18px_42px_rgba(15,23,42,0.055),inset_0_1px_0_rgba(255,255,255,0.98)] backdrop-blur-2xl transition-[box-shadow,transform] duration-200 ease-out [contain:layout_paint] focus-within:shadow-[0_22px_50px_rgba(15,23,42,0.075),inset_0_1px_0_rgba(255,255,255,1)]">
         <textarea
           ref={textareaRef}
           id="kivo-composer-textarea"
@@ -93,27 +93,27 @@ export const KivoComposerDock = memo(function KivoComposerDock({
           }}
           rows={1}
           placeholder={placeholder}
-          className="block w-full resize-none border-0 bg-transparent px-[14px] py-0 text-[16px] font-normal leading-[1.35] tracking-[-0.02em] text-[#25272d] outline-none placeholder:text-[#cfcfcf]"
+          className="block w-full resize-none border-0 bg-transparent px-[16px] py-0 text-[18px] font-medium leading-[1.32] tracking-[-0.025em] text-[#22252b] outline-none placeholder:text-black/20"
           style={{ minHeight: `${MIN_TEXTAREA_HEIGHT}px`, maxHeight: `${MAX_TEXTAREA_HEIGHT}px`, overflowY: 'hidden' }}
         />
 
-        <div className="mt-[12px] flex items-center justify-between gap-3">
-          <div className="flex items-center gap-[8px]">
-            <DockCircleButton ariaLabel="Add attachment" onClick={handlePlus} icon={<Plus className="h-[21px] w-[21px]" strokeWidth={2.15} />} />
-            <DockCircleButton ariaLabel="Connect tools" onClick={handleQuick} icon={<Workflow className="h-[20px] w-[20px]" strokeWidth={2.15} />} />
+        <div className="mt-[13px] flex items-center justify-between gap-3">
+          <div className="flex items-center gap-[10px]">
+            <DockCircleButton ariaLabel="Add attachment" onClick={handlePlus} icon={<Plus className="h-[22px] w-[22px]" strokeWidth={2.2} />} />
+            <DockCircleButton ariaLabel="Connect tools" onClick={handleQuick} icon={<Workflow className="h-[21px] w-[21px]" strokeWidth={2.2} />} />
           </div>
 
-          <div className="flex items-center gap-[8px]">
-            <DockCircleButton ariaLabel="Open voice assistant" onClick={handleQuick} icon={<BotMessageSquare className="h-[20px] w-[20px]" strokeWidth={2.15} />} />
-            <DockCircleButton ariaLabel={isListening ? 'Stop voice input' : 'Start voice input'} onClick={handleMic} active={isListening} icon={<Mic className="h-[20px] w-[20px]" strokeWidth={2.15} />} />
+          <div className="flex items-center gap-[10px]">
+            <DockCircleButton ariaLabel="Open voice assistant" onClick={handleQuick} icon={<BotMessageSquare className="h-[21px] w-[21px]" strokeWidth={2.2} />} />
+            <DockCircleButton ariaLabel={isListening ? 'Stop voice input' : 'Start voice input'} onClick={handleMic} active={isListening} icon={<Mic className="h-[21px] w-[21px]" strokeWidth={2.2} />} />
             <button
               type="button"
               onClick={send}
               aria-label="Send message"
               disabled={!canSend || isSending}
-              className={`kivo-pressable inline-flex h-[42px] w-[42px] shrink-0 items-center justify-center rounded-full transition-all duration-200 ease-out ${canSend && !isSending ? 'bg-[#1f2329] text-white shadow-[0_10px_22px_rgba(15,23,42,0.16)]' : 'bg-[#ededed] text-[#d4d4d4]'}`}
+              className={`kivo-pressable inline-flex h-[50px] w-[50px] shrink-0 items-center justify-center rounded-full transition-all duration-200 ease-out active:scale-[0.95] ${canSend && !isSending ? 'bg-[#1f2329] text-white shadow-[0_12px_24px_rgba(15,23,42,0.18),inset_0_1px_0_rgba(255,255,255,0.12)]' : 'bg-[#eeeeee] text-[#cfcfcf] shadow-[inset_0_1px_0_rgba(255,255,255,0.65)]'}`}
             >
-              <ArrowUp className="h-[20px] w-[20px]" strokeWidth={2.35} />
+              <ArrowUp className="h-[22px] w-[22px]" strokeWidth={2.4} />
             </button>
           </div>
         </div>
@@ -130,7 +130,7 @@ const DockCircleButton = memo(function DockCircleButton({ ariaLabel, onClick, ic
       type="button"
       onClick={onClick}
       aria-label={ariaLabel}
-      className={`kivo-pressable inline-flex h-[42px] w-[42px] shrink-0 items-center justify-center rounded-full border transition-all duration-200 ease-out ${active ? 'border-black/[0.055] bg-[#f0f5ff] text-[#1f2937] shadow-[0_5px_14px_rgba(15,23,42,0.05)]' : 'border-black/[0.03] bg-white text-[#25272d] shadow-[0_5px_14px_rgba(15,23,42,0.03)]'}`}
+      className={`kivo-pressable inline-flex h-[50px] w-[50px] shrink-0 items-center justify-center rounded-full border transition-all duration-200 ease-out active:scale-[0.95] ${active ? 'border-black/[0.045] bg-[#f2f6ff] text-[#20242b] shadow-[0_8px_18px_rgba(15,23,42,0.055),inset_0_1px_0_rgba(255,255,255,0.98)]' : 'border-black/[0.025] bg-white/92 text-[#25272d] shadow-[0_8px_18px_rgba(15,23,42,0.045),inset_0_1px_0_rgba(255,255,255,0.98)]'}`}
     >
       {icon}
     </button>
