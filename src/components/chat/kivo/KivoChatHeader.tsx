@@ -49,7 +49,6 @@ function useAnimatedNumber(value: number) {
         const progress = Math.min(1, (now - startedAt) / duration);
         const eased = 1 - Math.pow(1 - progress, 3);
         setDisplayValue(Math.round(startValue + diff * eased));
-
         if (progress < 1) frameRef.current = window.requestAnimationFrame(tick);
       };
 
@@ -98,16 +97,27 @@ function buildChart(history: CreditHistoryItem[]) {
   }));
 }
 
+function rubberBand(distance: number) {
+  if (distance <= 0) return 0;
+  if (distance <= 120) return distance;
+  return 120 + (distance - 120) * 0.38;
+}
+
 export default function KivoChatHeader({ hasMessages = false, onSidebarToggle }: Props) {
   const router = useRouter();
   const [snapshot, setSnapshot] = useState<CreditSnapshot | null>(null);
   const [credits, setCredits] = useState<number>(0);
   const [creditPulse, setCreditPulse] = useState(false);
   const [sheetOpen, setSheetOpen] = useState(false);
+  const [sheetClosing, setSheetClosing] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [dragY, setDragY] = useState(0);
   const [isDragging, setIsDragging] = useState(false);
   const dragStartYRef = useRef(0);
+  const lastDragYRef = useRef(0);
+  const lastDragTimeRef = useRef(0);
+  const velocityRef = useRef(0);
+  const closeTimerRef = useRef<ReturnType<typeof window.setTimeout> | null>(null);
   const previousCreditsRef = useRef<number | null>(null);
   const animatedCredits = useAnimatedNumber(credits);
 
@@ -126,6 +136,8 @@ export default function KivoChatHeader({ hasMessages = false, onSidebarToggle }:
   const chartItems = useMemo(() => buildChart(history), [history]);
   const spentTotal = history.filter((item) => item.amount < 0).reduce((sum, item) => sum + Math.abs(item.amount), 0);
   const earnedTotal = history.filter((item) => item.amount > 0).reduce((sum, item) => sum + item.amount, 0);
+  const sheetScale = isDragging ? Math.max(0.985, 1 - dragY / 9000) : 1;
+  const backdropOpacity = Math.max(0.08, 0.26 - dragY / 900);
 
   const glowClass = useMemo(() => {
     if (credits >= 1000) return 'shadow-[0_0_0_1px_rgba(0,0,0,0.035),0_8px_24px_rgba(124,58,237,0.18)]';
@@ -167,46 +179,82 @@ export default function KivoChatHeader({ hasMessages = false, onSidebarToggle }:
       mounted = false;
       window.clearInterval(intervalId);
       if (pulseTimer) window.clearTimeout(pulseTimer);
+      if (closeTimerRef.current) window.clearTimeout(closeTimerRef.current);
     };
   }, []);
 
   const closeSheet = () => {
-    setDragY(0);
     setIsDragging(false);
-    setSheetOpen(false);
-    setSearchQuery('');
+    setSheetClosing(true);
+    setDragY(520);
+    window.navigator.vibrate?.(6);
+    if (closeTimerRef.current) window.clearTimeout(closeTimerRef.current);
+    closeTimerRef.current = window.setTimeout(() => {
+      setSheetOpen(false);
+      setSheetClosing(false);
+      setSearchQuery('');
+      setDragY(0);
+    }, 220);
   };
 
   const openCreditSheet = () => {
     window.navigator.vibrate?.(8);
+    if (closeTimerRef.current) window.clearTimeout(closeTimerRef.current);
+    setSheetClosing(false);
+    setDragY(0);
     setSheetOpen(true);
   };
 
   const handlePointerDown = (event: React.PointerEvent<HTMLElement>) => {
+    if (sheetClosing) return;
     dragStartYRef.current = event.clientY;
+    lastDragYRef.current = event.clientY;
+    lastDragTimeRef.current = performance.now();
+    velocityRef.current = 0;
     setIsDragging(true);
     event.currentTarget.setPointerCapture(event.pointerId);
   };
 
   const handlePointerMove = (event: React.PointerEvent<HTMLElement>) => {
     if (!isDragging) return;
-    setDragY(Math.max(0, event.clientY - dragStartYRef.current));
+    const now = performance.now();
+    const dt = Math.max(1, now - lastDragTimeRef.current);
+    const dy = event.clientY - lastDragYRef.current;
+    velocityRef.current = dy / dt;
+    lastDragYRef.current = event.clientY;
+    lastDragTimeRef.current = now;
+    setDragY(rubberBand(event.clientY - dragStartYRef.current));
   };
 
   const handlePointerUp = () => {
     if (!isDragging) return;
-    if (dragY > 110) closeSheet();
-    else setDragY(0);
+    const projectedDistance = dragY + velocityRef.current * 260;
+    const shouldClose = dragY > 145 || velocityRef.current > 0.62 || projectedDistance > 190;
+
     setIsDragging(false);
+
+    if (shouldClose) {
+      closeSheet();
+      return;
+    }
+
+    window.navigator.vibrate?.(3);
+    setDragY(0);
   };
 
   return (
     <>
       <style>{`
         @keyframes kivoSheetSpringIn {
-          0% { transform: translateY(108%) scale(.985); opacity: .76; }
-          62% { transform: translateY(-10px) scale(1.002); opacity: 1; }
+          0% { transform: translateY(112%) scale(.982); opacity: .7; filter: blur(2px); }
+          58% { transform: translateY(-12px) scale(1.003); opacity: 1; filter: blur(0); }
+          82% { transform: translateY(3px) scale(.999); opacity: 1; }
           100% { transform: translateY(0) scale(1); opacity: 1; }
+        }
+        @keyframes kivoGlassSweep {
+          0% { transform: translateX(-130%) rotate(12deg); opacity: 0; }
+          42% { opacity: .5; }
+          100% { transform: translateX(160%) rotate(12deg); opacity: 0; }
         }
       `}</style>
       <header className="relative z-30 border-b border-black/[0.035] bg-white/82 backdrop-blur-2xl" style={{ paddingTop: 'env(safe-area-inset-top, 0px)' }}>
@@ -232,24 +280,32 @@ export default function KivoChatHeader({ hasMessages = false, onSidebarToggle }:
       </header>
 
       {sheetOpen ? (
-        <div className="fixed inset-0 z-50 flex items-end justify-center bg-[#101827]/26 px-0 backdrop-blur-[2px]" onClick={closeSheet}>
+        <div
+          className="fixed inset-0 z-50 flex items-end justify-center px-0 backdrop-blur-[2.5px] transition-colors duration-300"
+          onClick={closeSheet}
+          style={{ backgroundColor: `rgba(16, 24, 39, ${backdropOpacity})` }}
+        >
           <section
-            className="relative max-h-[calc(100dvh-68px)] w-full max-w-[560px] overflow-hidden rounded-t-[34px] border border-white/60 bg-[#F7F8FB]/96 text-[#131A25] shadow-[0_-24px_90px_rgba(15,23,42,0.20)] backdrop-blur-2xl"
+            className="relative max-h-[calc(100dvh-68px)] w-full max-w-[560px] overflow-hidden rounded-t-[36px] border border-white/65 bg-[#F8FAFE]/96 text-[#131A25] shadow-[0_-28px_100px_rgba(15,23,42,0.22)] backdrop-blur-2xl will-change-transform"
             onClick={(event) => event.stopPropagation()}
-            onPointerDown={handlePointerDown}
-            onPointerMove={handlePointerMove}
-            onPointerUp={handlePointerUp}
-            onPointerCancel={handlePointerUp}
             style={{
               paddingBottom: 'env(safe-area-inset-bottom, 12px)',
-              transform: `translateY(${dragY}px)`,
-              transition: isDragging ? 'none' : 'transform 520ms cubic-bezier(.18,1.18,.22,1)',
-              animation: 'kivoSheetSpringIn 520ms cubic-bezier(.18,1.18,.22,1)',
+              transform: `translateY(${dragY}px) scale(${sheetScale})`,
+              transformOrigin: 'bottom center',
+              transition: isDragging ? 'none' : sheetClosing ? 'transform 220ms cubic-bezier(.32,.72,.38,1), opacity 180ms ease-out' : 'transform 620ms cubic-bezier(.16,1.18,.22,1)',
+              animation: sheetClosing ? 'none' : 'kivoSheetSpringIn 620ms cubic-bezier(.16,1.18,.22,1)',
+              opacity: sheetClosing ? 0.86 : 1,
             }}
           >
-            <div className="absolute inset-x-8 top-[-18px] h-[26px] rounded-t-[26px] bg-white/50 blur-[1px]" />
-            <div className="sticky top-0 z-10 border-b border-black/[0.035] bg-[#F7F8FB]/90 px-5 pb-4 pt-3 backdrop-blur-2xl">
-              <div className="mx-auto mb-3 h-1.5 w-11 rounded-full bg-black/14" />
+            <div className="pointer-events-none absolute inset-x-8 top-[-18px] h-[26px] rounded-t-[26px] bg-white/55 blur-[1px]" />
+            <div
+              className="sticky top-0 z-10 cursor-grab touch-none select-none border-b border-black/[0.035] bg-[#F8FAFE]/92 px-5 pb-4 pt-3 backdrop-blur-2xl active:cursor-grabbing"
+              onPointerDown={handlePointerDown}
+              onPointerMove={handlePointerMove}
+              onPointerUp={handlePointerUp}
+              onPointerCancel={handlePointerUp}
+            >
+              <div className={`mx-auto mb-3 h-1.5 rounded-full bg-black/14 transition-all duration-300 ${isDragging ? 'w-16 bg-black/20' : 'w-11'}`} />
               <div className="grid grid-cols-[44px_1fr_44px] items-center">
                 <button type="button" onClick={closeSheet} className="inline-flex h-11 w-11 items-center justify-center rounded-full text-[#202833] active:scale-95">
                   <X className="h-7 w-7" strokeWidth={2.15} />
@@ -259,21 +315,22 @@ export default function KivoChatHeader({ hasMessages = false, onSidebarToggle }:
               </div>
             </div>
 
-            <div className="max-h-[calc(100dvh-146px)] overflow-y-auto px-4 pb-8 pt-5">
-              <div className="rounded-[29px] border border-black/[0.055] bg-gradient-to-br from-[#EEF3FA] via-[#F4F6FA] to-[#ECEFF5] p-5 shadow-[inset_0_1px_0_rgba(255,255,255,0.82),0_18px_50px_rgba(31,41,55,0.06)]">
-                <div className="flex items-start justify-between gap-4">
+            <div className="max-h-[calc(100dvh-146px)] overflow-y-auto px-4 pb-8 pt-5 [-webkit-overflow-scrolling:touch]">
+              <div className="relative overflow-hidden rounded-[31px] border border-white/70 bg-gradient-to-br from-[#EEF3FA] via-[#F8FAFE] to-[#E8EDF7] p-5 shadow-[inset_0_1px_0_rgba(255,255,255,0.9),0_20px_58px_rgba(31,41,55,0.07)]">
+                <div className="pointer-events-none absolute -inset-y-10 left-0 w-24 bg-white/45 blur-2xl [animation:kivoGlassSweep_4.6s_ease-in-out_infinite]" />
+                <div className="relative flex items-start justify-between gap-4">
                   <div>
                     <h3 className="font-serif text-[28px] font-bold tracking-[-0.045em] text-[#20242C]">{formatPlan(snapshot?.plan)}</h3>
                     <p className="mt-1 text-[15px] font-medium text-[#6D7480]">Next refresh&nbsp;&nbsp;<span className="text-[#343B46]">Auto monthly</span></p>
                   </div>
-                  <button type="button" onClick={() => router.push('/upgrade')} className="rounded-full bg-black/[0.075] px-5 py-2.5 text-[16px] font-semibold tracking-[-0.03em] text-[#2E3440] active:scale-[0.97]">
+                  <button type="button" onClick={() => router.push('/upgrade')} className="rounded-full bg-black/[0.075] px-5 py-2.5 text-[16px] font-semibold tracking-[-0.03em] text-[#2E3440] shadow-[inset_0_1px_0_rgba(255,255,255,0.45)] active:scale-[0.97]">
                     Upgrade
                   </button>
                 </div>
 
-                <div className="my-5 border-t border-dashed border-black/[0.09]" />
+                <div className="relative my-5 border-t border-dashed border-black/[0.09]" />
 
-                <div className="space-y-3.5">
+                <div className="relative space-y-3.5">
                   <div className="flex items-center justify-between gap-4">
                     <div className="flex items-center gap-2.5 text-[20px] font-semibold tracking-[-0.045em]">
                       <Sparkles className="h-7 w-7 text-[#151A22]" strokeWidth={2.08} />
@@ -297,7 +354,7 @@ export default function KivoChatHeader({ hasMessages = false, onSidebarToggle }:
                 </div>
               </div>
 
-              <div className="mt-4 rounded-[26px] border border-black/[0.055] bg-white/70 p-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.8)]">
+              <div className="mt-4 rounded-[28px] border border-white/70 bg-white/72 p-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.88),0_14px_38px_rgba(31,41,55,0.045)] backdrop-blur-xl">
                 <div className="flex items-center justify-between">
                   <div>
                     <p className="text-[13px] font-medium text-[#8A919C]">Recent flow</p>
@@ -305,14 +362,10 @@ export default function KivoChatHeader({ hasMessages = false, onSidebarToggle }:
                   </div>
                   <Sparkles className="h-6 w-6 text-[#6274A2]" strokeWidth={2.05} />
                 </div>
-                <div className="mt-4 flex h-[104px] items-end gap-2 rounded-[22px] bg-gradient-to-b from-[#F5F7FB] to-[#EEF2F8] px-3 pb-3 pt-4">
+                <div className="mt-4 flex h-[104px] items-end gap-2 rounded-[23px] bg-gradient-to-b from-[#F7F9FD] to-[#EEF2F8] px-3 pb-3 pt-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.78)]">
                   {chartItems.length ? chartItems.map((item) => (
                     <div key={item.id} className="flex flex-1 flex-col items-center gap-2">
-                      <div
-                        className={`w-full max-w-[24px] rounded-full ${item.amount > 0 ? 'bg-[#9CE4C1]' : 'bg-[#B9C7EA]'}`}
-                        style={{ height: `${item.height}px` }}
-                        title={`${item.label}: ${item.amount}`}
-                      />
+                      <div className={`w-full max-w-[24px] rounded-full shadow-[inset_0_1px_0_rgba(255,255,255,0.5)] ${item.amount > 0 ? 'bg-[#9CE4C1]' : 'bg-[#B9C7EA]'}`} style={{ height: `${item.height}px` }} title={`${item.label}: ${item.amount}`} />
                     </div>
                   )) : <div className="flex h-full w-full items-center justify-center text-[14px] font-medium text-[#8A919C]">No chart data yet</div>}
                 </div>
@@ -323,14 +376,9 @@ export default function KivoChatHeader({ hasMessages = false, onSidebarToggle }:
                 <div className="flex items-center gap-1.5 text-[16px] font-medium text-[#8A919C]"><span>UTC+3</span><HelpCircle className="h-5 w-5" strokeWidth={2.1} /></div>
               </div>
 
-              <label className="mt-4 flex h-12 items-center gap-2 rounded-full border border-black/[0.055] bg-white/72 px-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.8)]">
+              <label className="mt-4 flex h-12 items-center gap-2 rounded-full border border-white/70 bg-white/76 px-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.9),0_10px_28px_rgba(31,41,55,0.035)] backdrop-blur-xl">
                 <Search className="h-5 w-5 text-[#8A919C]" strokeWidth={2.05} />
-                <input
-                  value={searchQuery}
-                  onChange={(event) => setSearchQuery(event.target.value)}
-                  placeholder="Search credit history"
-                  className="h-full flex-1 bg-transparent text-[16px] font-medium tracking-[-0.03em] text-[#252B35] outline-none placeholder:text-[#9AA1AB]"
-                />
+                <input value={searchQuery} onChange={(event) => setSearchQuery(event.target.value)} placeholder="Search credit history" className="h-full flex-1 bg-transparent text-[16px] font-medium tracking-[-0.03em] text-[#252B35] outline-none placeholder:text-[#9AA1AB]" />
               </label>
 
               <div className="mt-4 space-y-5 px-1">
@@ -349,7 +397,7 @@ export default function KivoChatHeader({ hasMessages = false, onSidebarToggle }:
                     </section>
                   ))
                 ) : (
-                  <div className="rounded-[24px] border border-black/[0.055] bg-white/65 p-5 text-center text-[15px] font-medium text-[#7B8491]">
+                  <div className="rounded-[24px] border border-white/70 bg-white/68 p-5 text-center text-[15px] font-medium text-[#7B8491] shadow-[inset_0_1px_0_rgba(255,255,255,0.86)]">
                     {searchQuery ? 'No matching credit history.' : 'No credit history yet.'}
                   </div>
                 )}
