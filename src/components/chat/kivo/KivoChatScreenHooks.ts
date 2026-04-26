@@ -5,114 +5,23 @@ import type { MessageAttachment } from '@/app/store/app-store';
 const NEAR_BOTTOM_THRESHOLD = 140;
 const SCROLL_MEMORY_KEY = 'kivo-chat-scroll-memory-v1';
 const MIN_SCROLL_SAFETY_SPACE = 28;
+const MAX_KEYBOARD_OFFSET_RATIO = 0.62;
+const MAX_KEYBOARD_OFFSET_ABSOLUTE = 430;
 
-export type KivoChatNotice = {
-  title: string;
-  detail: string;
-};
+export type KivoChatNotice = { title: string; detail: string };
+type SpeechRecognitionEventLike = Event & { results: ArrayLike<ArrayLike<{ transcript: string }>> };
+type SpeechRecognitionLike = { continuous: boolean; interimResults: boolean; lang: string; start: () => void; stop: () => void; onresult: ((event: SpeechRecognitionEventLike) => void) | null; onerror: ((event: Event) => void) | null; onend: (() => void) | null };
+declare global { interface Window { webkitSpeechRecognition?: new () => SpeechRecognitionLike; SpeechRecognition?: new () => SpeechRecognitionLike } }
 
-type SpeechRecognitionEventLike = Event & {
-  results: ArrayLike<ArrayLike<{ transcript: string }>>;
-};
+type UseKivoChatScreenHooksParams = { activeConversationId: string; hasMessages: boolean; messagesLength: number; messagesLastRole?: string; lastMessageKey: string; isAgentResponding: boolean; isSending: boolean; attachmentsLength: number; draftPrompt: string; notice: KivoChatNotice | null; setNotice: (notice: KivoChatNotice | null) => void; setDraftPrompt: (value: string) => void; showNotice: (title: string, detail: string) => void; focusComposer: () => void };
 
-type SpeechRecognitionLike = {
-  continuous: boolean;
-  interimResults: boolean;
-  lang: string;
-  start: () => void;
-  stop: () => void;
-  onresult: ((event: SpeechRecognitionEventLike) => void) | null;
-  onerror: ((event: Event) => void) | null;
-  onend: (() => void) | null;
-};
+export function useSidebarAutoToggle(hasMessages: boolean, setIsSidebarOpen: Dispatch<SetStateAction<boolean>>) { const previousHasMessagesRef = useRef(hasMessages); useEffect(() => { const previousHasMessages = previousHasMessagesRef.current; if (hasMessages && !previousHasMessages) setIsSidebarOpen(false); else if (!hasMessages && previousHasMessages) setIsSidebarOpen(true); previousHasMessagesRef.current = hasMessages; }, [hasMessages, setIsSidebarOpen]); }
+export function useNoticeTimeout(notice: KivoChatNotice | null, setNotice: (notice: KivoChatNotice | null) => void) { const noticeTimeoutRef = useRef<number | null>(null); useEffect(() => { if (noticeTimeoutRef.current) { window.clearTimeout(noticeTimeoutRef.current); noticeTimeoutRef.current = null; } if (!notice) return; noticeTimeoutRef.current = window.setTimeout(() => { setNotice(null); noticeTimeoutRef.current = null; }, 2400); return () => { if (noticeTimeoutRef.current) { window.clearTimeout(noticeTimeoutRef.current); noticeTimeoutRef.current = null; } }; }, [notice, setNotice]); }
 
-declare global {
-  interface Window {
-    webkitSpeechRecognition?: new () => SpeechRecognitionLike;
-    SpeechRecognition?: new () => SpeechRecognitionLike;
-  }
-}
+function clampKeyboardOffset(rawOffset: number) { if (typeof window === 'undefined') return Math.max(0, rawOffset); const viewportHeight = window.visualViewport?.height ?? window.innerHeight; const maxByViewport = Math.round(viewportHeight * MAX_KEYBOARD_OFFSET_RATIO); const maxOffset = Math.max(260, Math.min(MAX_KEYBOARD_OFFSET_ABSOLUTE, maxByViewport)); if (!Number.isFinite(rawOffset)) return 0; return Math.max(0, Math.min(Math.round(rawOffset), maxOffset)); }
+function getKeyboardOffsetFromViewport() { if (typeof window === 'undefined' || !window.visualViewport) return 0; const viewport = window.visualViewport; const rawOffset = window.innerHeight - viewport.height - viewport.offsetTop; return clampKeyboardOffset(rawOffset); }
 
-type UseKivoChatScreenHooksParams = {
-  activeConversationId: string;
-  hasMessages: boolean;
-  messagesLength: number;
-  messagesLastRole?: string;
-  lastMessageKey: string;
-  isAgentResponding: boolean;
-  isSending: boolean;
-  attachmentsLength: number;
-  draftPrompt: string;
-  notice: KivoChatNotice | null;
-  setNotice: (notice: KivoChatNotice | null) => void;
-  setDraftPrompt: (value: string) => void;
-  showNotice: (title: string, detail: string) => void;
-  focusComposer: () => void;
-};
-
-export function useSidebarAutoToggle(
-  hasMessages: boolean,
-  setIsSidebarOpen: Dispatch<SetStateAction<boolean>>,
-) {
-  const previousHasMessagesRef = useRef(hasMessages);
-
-  useEffect(() => {
-    const previousHasMessages = previousHasMessagesRef.current;
-
-    if (hasMessages && !previousHasMessages) {
-      setIsSidebarOpen(false);
-    } else if (!hasMessages && previousHasMessages) {
-      setIsSidebarOpen(true);
-    }
-
-    previousHasMessagesRef.current = hasMessages;
-  }, [hasMessages, setIsSidebarOpen]);
-}
-
-export function useNoticeTimeout(
-  notice: KivoChatNotice | null,
-  setNotice: (notice: KivoChatNotice | null) => void,
-) {
-  const noticeTimeoutRef = useRef<number | null>(null);
-
-  useEffect(() => {
-    if (noticeTimeoutRef.current) {
-      window.clearTimeout(noticeTimeoutRef.current);
-      noticeTimeoutRef.current = null;
-    }
-
-    if (!notice) return;
-
-    noticeTimeoutRef.current = window.setTimeout(() => {
-      setNotice(null);
-      noticeTimeoutRef.current = null;
-    }, 2400);
-
-    return () => {
-      if (noticeTimeoutRef.current) {
-        window.clearTimeout(noticeTimeoutRef.current);
-        noticeTimeoutRef.current = null;
-      }
-    };
-  }, [notice, setNotice]);
-}
-
-export function useKivoChatScreenHooks({
-  activeConversationId,
-  hasMessages,
-  messagesLength,
-  messagesLastRole,
-  lastMessageKey,
-  isAgentResponding,
-  isSending,
-  attachmentsLength,
-  draftPrompt,
-  notice,
-  setNotice,
-  setDraftPrompt,
-  showNotice,
-  focusComposer,
-}: UseKivoChatScreenHooksParams) {
+export function useKivoChatScreenHooks({ activeConversationId, hasMessages, messagesLength, messagesLastRole, lastMessageKey, isAgentResponding, isSending, attachmentsLength, draftPrompt, notice, setNotice, setDraftPrompt, showNotice, focusComposer }: UseKivoChatScreenHooksParams) {
   const recognitionRef = useRef<SpeechRecognitionLike | null>(null);
   const mainScrollRef = useRef<HTMLDivElement | null>(null);
   const lastMessageCountRef = useRef(0);
@@ -129,340 +38,28 @@ export function useKivoChatScreenHooks({
 
   useNoticeTimeout(notice, setNotice);
 
-  const measureBottomOverlayInset = useCallback(() => {
-    if (typeof window === 'undefined') return;
+  const measureBottomOverlayInset = useCallback(() => { if (typeof window === 'undefined') return; const viewportBottom = window.visualViewport ? window.visualViewport.height + window.visualViewport.offsetTop : window.innerHeight; const scrollerBottom = mainScrollRef.current?.getBoundingClientRect().bottom ?? viewportBottom; const measurementBottom = Math.min(viewportBottom, scrollerBottom); const nodes = [composerDockRef.current, attachmentTrayRef.current].filter((node): node is HTMLElement => Boolean(node)); const nextInset = nodes.reduce((maxInset, node) => { const rect = node.getBoundingClientRect(); if (rect.height <= 0 || rect.width <= 0) return maxInset; return Math.max(maxInset, Math.max(0, measurementBottom - rect.top)); }, 0); setBottomOverlayInset((current) => Math.abs(current - nextInset) < 1 ? current : nextInset); }, []);
+  const persistScrollMemory = useCallback(() => { if (typeof window === 'undefined') return; window.sessionStorage.setItem(SCROLL_MEMORY_KEY, JSON.stringify(scrollMemoryRef.current)); }, []);
+  const updateScrollState = useCallback(() => { const scroller = mainScrollRef.current; if (!scroller) return; const distanceFromBottom = scroller.scrollHeight - (scroller.scrollTop + scroller.clientHeight); const nearBottom = distanceFromBottom <= NEAR_BOTTOM_THRESHOLD; isNearBottomRef.current = nearBottom; setShowScrollToLatest(!nearBottom && hasMessages); scrollMemoryRef.current[activeConversationId] = Math.max(distanceFromBottom, 0); }, [activeConversationId, hasMessages]);
+  const scrollToLatest = useCallback((behavior: ScrollBehavior = 'smooth') => { const scroller = mainScrollRef.current; if (!scroller) return; scroller.scrollTo({ top: scroller.scrollHeight, behavior }); }, []);
 
-    const viewportBottom = window.visualViewport
-      ? window.visualViewport.height + window.visualViewport.offsetTop
-      : window.innerHeight;
-    const scrollerBottom =
-      mainScrollRef.current?.getBoundingClientRect().bottom ?? viewportBottom;
-    const measurementBottom = Math.min(viewportBottom, scrollerBottom);
-    const nodes = [composerDockRef.current, attachmentTrayRef.current].filter(
-      (node): node is HTMLElement => Boolean(node),
-    );
+  useEffect(() => { if (typeof window === 'undefined') return; try { const raw = window.sessionStorage.getItem(SCROLL_MEMORY_KEY); if (!raw) return; const parsed = JSON.parse(raw) as Record<string, number>; if (parsed && typeof parsed === 'object') scrollMemoryRef.current = parsed; } catch { scrollMemoryRef.current = {}; } }, []);
 
-    const nextInset = nodes.reduce((maxInset, node) => {
-      const rect = node.getBoundingClientRect();
-      if (rect.height <= 0 || rect.width <= 0) return maxInset;
-      return Math.max(maxInset, Math.max(0, measurementBottom - rect.top));
-    }, 0);
+  useEffect(() => { if (typeof window === 'undefined' || !window.visualViewport) return; const viewport = window.visualViewport; const applyKeyboardOffset = () => { const nextOffset = getKeyboardOffsetFromViewport(); setKeyboardOffset((current) => Math.abs(current - nextOffset) < 1 ? current : nextOffset); measureBottomOverlayInset(); }; const syncKeyboardOffset = () => { if (viewportSyncFrameRef.current !== null) window.cancelAnimationFrame(viewportSyncFrameRef.current); viewportSyncFrameRef.current = window.requestAnimationFrame(() => { viewportSyncFrameRef.current = null; applyKeyboardOffset(); }); }; applyKeyboardOffset(); const resizeObserver = new ResizeObserver(() => measureBottomOverlayInset()); if (composerDockRef.current) resizeObserver.observe(composerDockRef.current); if (attachmentTrayRef.current) resizeObserver.observe(attachmentTrayRef.current); viewport.addEventListener('resize', syncKeyboardOffset); viewport.addEventListener('scroll', syncKeyboardOffset); window.addEventListener('resize', measureBottomOverlayInset); return () => { if (viewportSyncFrameRef.current !== null) { window.cancelAnimationFrame(viewportSyncFrameRef.current); viewportSyncFrameRef.current = null; } resizeObserver.disconnect(); viewport.removeEventListener('resize', syncKeyboardOffset); viewport.removeEventListener('scroll', syncKeyboardOffset); window.removeEventListener('resize', measureBottomOverlayInset); }; }, [measureBottomOverlayInset]);
+  useEffect(() => { measureBottomOverlayInset(); }, [attachmentsLength, draftPrompt, keyboardOffset, measureBottomOverlayInset]);
+  useEffect(() => { if (!mainScrollRef.current) return; if (isNearBottomRef.current) { requestAnimationFrame(() => { scrollToLatest('auto'); updateScrollState(); }); return; } updateScrollState(); }, [bottomOverlayInset, scrollToLatest, updateScrollState]);
+  useEffect(() => { const scroller = mainScrollRef.current; if (!scroller) return; const handleScroll = () => { if (scrollTickingRef.current) return; scrollTickingRef.current = true; requestAnimationFrame(() => { updateScrollState(); scrollTickingRef.current = false; }); }; scroller.addEventListener('scroll', handleScroll, { passive: true }); updateScrollState(); return () => { scroller.removeEventListener('scroll', handleScroll); scrollTickingRef.current = false; updateScrollState(); persistScrollMemory(); }; }, [persistScrollMemory, updateScrollState]);
+  useEffect(() => { const scroller = mainScrollRef.current; if (!scroller) return; const preservedDistance = scrollMemoryRef.current[activeConversationId]; requestAnimationFrame(() => { if (typeof preservedDistance === 'number' && Number.isFinite(preservedDistance)) scroller.scrollTop = Math.max(0, scroller.scrollHeight - scroller.clientHeight - preservedDistance); else scroller.scrollTop = scroller.scrollHeight; updateScrollState(); }); lastMessageCountRef.current = messagesLength; }, [activeConversationId, messagesLength, updateScrollState]);
+  useEffect(() => { const messageCountChanged = messagesLength !== lastMessageCountRef.current; const shouldFollow = isNearBottomRef.current || (messageCountChanged && messagesLastRole === 'user'); if (!shouldFollow) { lastMessageCountRef.current = messagesLength; return; } const behavior: ScrollBehavior = messageCountChanged ? 'smooth' : 'auto'; requestAnimationFrame(() => { scrollToLatest(behavior); updateScrollState(); }); lastMessageCountRef.current = messagesLength; }, [isAgentResponding, isSending, lastMessageKey, messagesLastRole, messagesLength, scrollToLatest, updateScrollState]);
 
-    setBottomOverlayInset((current) =>
-      Math.abs(current - nextInset) < 1 ? current : nextInset,
-    );
-  }, []);
+  const ensureSpeechRecognition = useCallback(() => { if (recognitionRef.current) return recognitionRef.current; const SpeechRecognitionCtor = typeof window !== 'undefined' ? window.SpeechRecognition || window.webkitSpeechRecognition : null; if (!SpeechRecognitionCtor) return null; const recognition = new SpeechRecognitionCtor(); recognition.continuous = false; recognition.interimResults = false; recognition.lang = 'en-US'; recognition.onresult = (event) => { const transcript = event.results?.[0]?.[0]?.transcript?.trim(); if (!transcript) return; const currentDraft = typeof useAppStore.getState === 'function' ? useAppStore.getState().draftPrompt : draftPrompt; setDraftPrompt(currentDraft ? `${currentDraft} ${transcript}` : transcript); focusComposer(); }; recognition.onerror = () => { setIsListening(false); showNotice('Speech unavailable', 'Microphone input could not be captured.'); }; recognition.onend = () => setIsListening(false); recognitionRef.current = recognition; return recognition; }, [draftPrompt, focusComposer, setDraftPrompt, showNotice]);
+  const toggleMic = useCallback(() => { const recognition = ensureSpeechRecognition(); if (!recognition) { showNotice('Speech unavailable', 'This browser does not support speech recognition.'); return; } if (isListening) { recognition.stop(); setIsListening(false); return; } setIsListening(true); recognition.start(); }, [ensureSpeechRecognition, isListening, showNotice]);
 
-  const persistScrollMemory = useCallback(() => {
-    if (typeof window === 'undefined') return;
-    window.sessionStorage.setItem(
-      SCROLL_MEMORY_KEY,
-      JSON.stringify(scrollMemoryRef.current),
-    );
-  }, []);
-
-  const updateScrollState = useCallback(() => {
-    const scroller = mainScrollRef.current;
-    if (!scroller) return;
-
-    const distanceFromBottom =
-      scroller.scrollHeight - (scroller.scrollTop + scroller.clientHeight);
-    const nearBottom = distanceFromBottom <= NEAR_BOTTOM_THRESHOLD;
-
-    isNearBottomRef.current = nearBottom;
-    setShowScrollToLatest(!nearBottom && hasMessages);
-
-    scrollMemoryRef.current[activeConversationId] = Math.max(distanceFromBottom, 0);
-  }, [activeConversationId, hasMessages]);
-
-  const scrollToLatest = useCallback((behavior: ScrollBehavior = 'smooth') => {
-    const scroller = mainScrollRef.current;
-    if (!scroller) return;
-
-    scroller.scrollTo({
-      top: scroller.scrollHeight,
-      behavior,
-    });
-  }, []);
-
-  useEffect(() => {
-    if (typeof window === 'undefined') return;
-
-    try {
-      const raw = window.sessionStorage.getItem(SCROLL_MEMORY_KEY);
-      if (!raw) return;
-      const parsed = JSON.parse(raw) as Record<string, number>;
-      if (parsed && typeof parsed === 'object') {
-        scrollMemoryRef.current = parsed;
-      }
-    } catch {
-      scrollMemoryRef.current = {};
-    }
-  }, []);
-
-  useEffect(() => {
-    if (typeof window === 'undefined' || !window.visualViewport) return;
-
-    const viewport = window.visualViewport;
-
-    const syncKeyboardOffset = () => {
-      if (viewportSyncFrameRef.current !== null) {
-        window.cancelAnimationFrame(viewportSyncFrameRef.current);
-      }
-
-      viewportSyncFrameRef.current = window.requestAnimationFrame(() => {
-        viewportSyncFrameRef.current = null;
-
-        const nextOffset = Math.max(
-          0,
-          window.innerHeight - viewport.height - viewport.offsetTop,
-        );
-        setKeyboardOffset((current) =>
-          Math.abs(current - nextOffset) < 1 ? current : nextOffset,
-        );
-        measureBottomOverlayInset();
-      });
-    };
-
-    const syncViewportLayout = () => {
-      const nextOffset = Math.max(
-        0,
-        window.innerHeight - viewport.height - viewport.offsetTop,
-      );
-      setKeyboardOffset((current) =>
-        Math.abs(current - nextOffset) < 1 ? current : nextOffset,
-      );
-      measureBottomOverlayInset();
-    };
-
-    syncViewportLayout();
-
-    const resizeObserver = new ResizeObserver(() => {
-      measureBottomOverlayInset();
-    });
-
-    if (composerDockRef.current) {
-      resizeObserver.observe(composerDockRef.current);
-    }
-    if (attachmentTrayRef.current) {
-      resizeObserver.observe(attachmentTrayRef.current);
-    }
-
-    viewport.addEventListener('resize', syncKeyboardOffset);
-    viewport.addEventListener('scroll', syncKeyboardOffset);
-    window.addEventListener('resize', measureBottomOverlayInset);
-
-    return () => {
-      if (viewportSyncFrameRef.current !== null) {
-        window.cancelAnimationFrame(viewportSyncFrameRef.current);
-        viewportSyncFrameRef.current = null;
-      }
-      resizeObserver.disconnect();
-      viewport.removeEventListener('resize', syncKeyboardOffset);
-      viewport.removeEventListener('scroll', syncKeyboardOffset);
-      window.removeEventListener('resize', measureBottomOverlayInset);
-    };
-  }, [measureBottomOverlayInset]);
-
-  useEffect(() => {
-    measureBottomOverlayInset();
-  }, [attachmentsLength, draftPrompt, keyboardOffset, measureBottomOverlayInset]);
-
-  useEffect(() => {
-    if (!mainScrollRef.current) return;
-
-    if (isNearBottomRef.current) {
-      requestAnimationFrame(() => {
-        scrollToLatest('auto');
-        updateScrollState();
-      });
-      return;
-    }
-
-    updateScrollState();
-  }, [bottomOverlayInset, scrollToLatest, updateScrollState]);
-
-  useEffect(() => {
-    const scroller = mainScrollRef.current;
-    if (!scroller) return;
-
-    const handleScroll = () => {
-      if (scrollTickingRef.current) return;
-      scrollTickingRef.current = true;
-
-      requestAnimationFrame(() => {
-        updateScrollState();
-        scrollTickingRef.current = false;
-      });
-    };
-
-    scroller.addEventListener('scroll', handleScroll, { passive: true });
-    updateScrollState();
-
-    return () => {
-      scroller.removeEventListener('scroll', handleScroll);
-      scrollTickingRef.current = false;
-      updateScrollState();
-      persistScrollMemory();
-    };
-  }, [persistScrollMemory, updateScrollState]);
-
-  useEffect(() => {
-    const scroller = mainScrollRef.current;
-    if (!scroller) return;
-
-    const preservedDistance = scrollMemoryRef.current[activeConversationId];
-
-    requestAnimationFrame(() => {
-      if (
-        typeof preservedDistance === 'number' &&
-        Number.isFinite(preservedDistance)
-      ) {
-        scroller.scrollTop = Math.max(
-          0,
-          scroller.scrollHeight - scroller.clientHeight - preservedDistance,
-        );
-      } else {
-        scroller.scrollTop = scroller.scrollHeight;
-      }
-
-      updateScrollState();
-    });
-
-    lastMessageCountRef.current = messagesLength;
-  }, [activeConversationId, messagesLength, updateScrollState]);
-
-  useEffect(() => {
-    const messageCountChanged = messagesLength !== lastMessageCountRef.current;
-    const shouldFollow =
-      isNearBottomRef.current ||
-      (messageCountChanged && messagesLastRole === 'user');
-
-    if (!shouldFollow) {
-      lastMessageCountRef.current = messagesLength;
-      return;
-    }
-
-    const behavior: ScrollBehavior = messageCountChanged ? 'smooth' : 'auto';
-    requestAnimationFrame(() => {
-      scrollToLatest(behavior);
-      updateScrollState();
-    });
-
-    lastMessageCountRef.current = messagesLength;
-  }, [
-    isAgentResponding,
-    isSending,
-    lastMessageKey,
-    messagesLastRole,
-    messagesLength,
-    scrollToLatest,
-    updateScrollState,
-  ]);
-
-  const ensureSpeechRecognition = useCallback(() => {
-    if (recognitionRef.current) return recognitionRef.current;
-
-    const SpeechRecognitionCtor =
-      typeof window !== 'undefined'
-        ? window.SpeechRecognition || window.webkitSpeechRecognition
-        : null;
-
-    if (!SpeechRecognitionCtor) return null;
-
-    const recognition = new SpeechRecognitionCtor();
-    recognition.continuous = false;
-    recognition.interimResults = false;
-    recognition.lang = 'en-US';
-
-    recognition.onresult = (event) => {
-      const transcript = event.results?.[0]?.[0]?.transcript?.trim();
-      if (!transcript) return;
-
-      const currentDraft =
-        typeof useAppStore.getState === 'function'
-          ? useAppStore.getState().draftPrompt
-          : draftPrompt;
-
-      setDraftPrompt(currentDraft ? `${currentDraft} ${transcript}` : transcript);
-      focusComposer();
-    };
-
-    recognition.onerror = () => {
-      setIsListening(false);
-      showNotice('Speech unavailable', 'Microphone input could not be captured.');
-    };
-
-    recognition.onend = () => {
-      setIsListening(false);
-    };
-
-    recognitionRef.current = recognition;
-    return recognition;
-  }, [draftPrompt, focusComposer, setDraftPrompt, showNotice]);
-
-  const toggleMic = useCallback(() => {
-    const recognition = ensureSpeechRecognition();
-
-    if (!recognition) {
-      showNotice(
-        'Speech unavailable',
-        'This browser does not support speech recognition.',
-      );
-      return;
-    }
-
-    if (isListening) {
-      recognition.stop();
-      setIsListening(false);
-      return;
-    }
-
-    setIsListening(true);
-    recognition.start();
-  }, [ensureSpeechRecognition, isListening, showNotice]);
-
-  const scrollBottomPadding = Math.max(
-    MIN_SCROLL_SAFETY_SPACE,
-    bottomOverlayInset + MIN_SCROLL_SAFETY_SPACE,
-  );
+  const scrollBottomPadding = Math.max(MIN_SCROLL_SAFETY_SPACE, bottomOverlayInset + MIN_SCROLL_SAFETY_SPACE);
   const lastMessageSafetySpacer = Math.max(40, Math.round(bottomOverlayInset * 0.18));
-  const latestButtonBottom = Math.max(
-    12,
-    Math.round(bottomOverlayInset + MIN_SCROLL_SAFETY_SPACE),
-  );
-
-  return {
-    isListening,
-    keyboardOffset,
-    scrollBottomPadding,
-    lastMessageSafetySpacer,
-    latestButtonBottom,
-    showScrollToLatest,
-    mainScrollRef,
-    composerDockRef,
-    attachmentTrayRef,
-    scrollToLatest,
-    updateScrollState,
-    toggleMic,
-  };
+  const latestButtonBottom = Math.max(12, Math.round(bottomOverlayInset + MIN_SCROLL_SAFETY_SPACE));
+  return { isListening, keyboardOffset, scrollBottomPadding, lastMessageSafetySpacer, latestButtonBottom, showScrollToLatest, mainScrollRef, composerDockRef, attachmentTrayRef, scrollToLatest, updateScrollState, toggleMic };
 }
 
-export function cleanupAttachments(items: MessageAttachment[]) {
-  items.forEach((attachment) => {
-    if (attachment.previewUrl) {
-      URL.revokeObjectURL(attachment.previewUrl);
-    }
-  });
-}
-
-export function buildAttachment(file: File): MessageAttachment {
-  return {
-    id: `${Date.now()}-${Math.random().toString(16).slice(2)}`,
-    name: file.name,
-    size: file.size,
-    mimeType: file.type || 'application/octet-stream',
-    kind: file.type.startsWith('image/') ? 'image' : 'file',
-    previewUrl: file.type.startsWith('image/') ? URL.createObjectURL(file) : undefined,
-  };
-}
+export function cleanupAttachments(items: MessageAttachment[]) { items.forEach((attachment) => { if (attachment.previewUrl) URL.revokeObjectURL(attachment.previewUrl); }); }
+export function buildAttachment(file: File): MessageAttachment { return { id: `${Date.now()}-${Math.random().toString(16).slice(2)}`, name: file.name, size: file.size, mimeType: file.type || 'application/octet-stream', kind: file.type.startsWith('image/') ? 'image' : 'file', previewUrl: file.type.startsWith('image/') ? URL.createObjectURL(file) : undefined }; }
