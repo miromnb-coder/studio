@@ -14,6 +14,7 @@ import { KivoReferralSuccessToast } from './KivoReferralSuccessToast';
 import { type KivoSidebarRecentChat } from './KivoSidebar';
 
 const SIDEBAR_GAP = 12;
+type KivoNotice = KivoChatNotice;
 
 type Props = {
   userName: string; hasMessages: boolean; sidebarRecentChats: KivoSidebarRecentChat[];
@@ -28,8 +29,6 @@ type Props = {
   fileInputRef: RefObject<HTMLInputElement | null>; filePickerAccept: string; onHiddenFileInputChange: (event: ChangeEvent<HTMLInputElement>) => void;
 };
 
-type KivoNotice = KivoChatNotice;
-
 export function KivoChatScreenLayout(props: Props) {
   const { userName, hasMessages, sidebarRecentChats, showSidebarRail, setShowSidebarRail, isSidebarOpen, setIsSidebarOpen, createNewChat, handleSidebarSearch, handleOpenChatFromSidebar, onOpenSettings, onQuickTask, onAnalyzeFile, onPlanMyDay, onOpenGmail, onOpenCalendar, onOpenDrive, onOpenWeb, onUpgrade, handleHeaderSummarize, handleHeaderCreateTask, mainScrollRef, scrollBottomPadding, streamError, refinedStreamError, isAgentResponding, isSending, messages, lastMessageSafetySpacer, showScrollToLatest, latestButtonBottom, onScrollToLatest, attachments, keyboardOffset, attachmentTrayRef, removeAttachment, notice, draftPrompt, setDraftPrompt, handleSend, setActionSheetOpen, setWorkspaceOpen, toggleMic, canSend, isListening, isBusy, placeholder, composerDockRef, referralToastOpen, referralToastTitle, referralToastDetail, setReferralToastOpen, actionSheetOpen, gmailConnected, calendarConnected, closeActionSheet, openFilePicker, handlePasteLink, handleAiAction, handleActionTool, workspaceOpen, closeWorkspace, handleQuickAction, handleConnectorAction, handleToolSelect, handleRecentSelect, fileInputRef, filePickerAccept, onHiddenFileInputChange } = props;
   const sidebarWidth = showSidebarRail ? KIVO_CHAT_SIDEBAR_RAIL_WIDTH : 0;
@@ -38,11 +37,11 @@ export function KivoChatScreenLayout(props: Props) {
   const handleSidebarToggle = () => { if (showSidebarRail) { setShowSidebarRail(false); setIsSidebarOpen(false); return; } setShowSidebarRail(true); setIsSidebarOpen(false); };
 
   return (
-    <div className="fixed inset-0 h-[100dvh] w-screen overflow-hidden overscroll-none bg-gradient-to-b from-[#f7f7f5] via-[#f5f5f3] to-[#f2f2f0] text-[#2f3640] touch-none">
+    <div className="relative min-h-[100dvh] w-screen overflow-x-hidden bg-gradient-to-b from-[#f7f7f5] via-[#f5f5f3] to-[#f2f2f0] text-[#2f3640]">
       {showSidebarRail ? <KivoChatSidebarArea panelOpen={isSidebarOpen} onPanelOpenChange={setIsSidebarOpen} hasMessages={hasMessages} userName={userName} plan="free" recentChats={sidebarRecentChats} onNewChat={createNewChat} onSearch={handleSidebarSearch} onOpenChat={handleOpenChatFromSidebar} onOpenSettings={onOpenSettings} onQuickTask={onQuickTask} onAnalyzeFile={onAnalyzeFile} onPlanMyDay={onPlanMyDay} onOpenGmail={onOpenGmail} onOpenCalendar={onOpenCalendar} onOpenDrive={onOpenDrive} onOpenWeb={onOpenWeb} onUpgrade={onUpgrade} /> : null}
-      <div className="relative h-full overflow-hidden transition-[padding-left] duration-300 ease-out" style={{ paddingLeft: `${contentLeftOffset}px` }}>
-        <div className="mx-auto flex h-full min-h-0 w-full max-w-[560px] flex-col overflow-hidden touch-auto">
-          <div className="shrink-0 bg-[#f7f7f5]/90 backdrop-blur-xl"><KivoChatHeader hasMessages={hasMessages} isSidebarOpen={showSidebarRail} onSidebarToggle={handleSidebarToggle} onSummarize={handleHeaderSummarize} onCreateTask={handleHeaderCreateTask} /></div>
+      <div className="relative min-h-[100dvh] transition-[padding-left] duration-300 ease-out" style={{ paddingLeft: `${contentLeftOffset}px` }}>
+        <div className="mx-auto flex min-h-[100dvh] w-full max-w-[560px] flex-col">
+          <div className="sticky top-0 z-20 shrink-0 bg-[#f7f7f5]/90 backdrop-blur-xl"><KivoChatHeader hasMessages={hasMessages} isSidebarOpen={showSidebarRail} onSidebarToggle={handleSidebarToggle} onSummarize={handleHeaderSummarize} onCreateTask={handleHeaderCreateTask} /></div>
           <KivoChatScreenMainContent mainScrollRef={mainScrollRef} scrollBottomPadding={scrollBottomPadding} streamError={streamError} refinedStreamError={refinedStreamError} hasMessages={hasMessages} isAgentResponding={isAgentResponding} isSending={isSending} messages={messages} lastMessageSafetySpacer={lastMessageSafetySpacer} />
           <KivoChatScreenScrollToLatestButton show={showScrollToLatest} bottom={latestButtonBottom} onClick={onScrollToLatest} />
           <KivoChatScreenAttachmentTray attachments={attachments} keyboardOffset={keyboardOffset} attachmentTrayRef={attachmentTrayRef} onRemoveAttachment={removeAttachment} />
