@@ -5,8 +5,8 @@ import { AuthSync } from '@/components/auth/auth-sync';
 import { GlobalMenuProvider } from './components/global-menu-provider';
 import { KivoSplashScreen } from './components/kivo-splash-screen';
 
-const KIVO_ICON = '/kivo-logo-v8.svg?v=9';
-const KIVO_APPLE_ICON = '/apple-icon?v=9';
+const KIVO_ICON = '/kivo-logo-v8.svg?v=12';
+const KIVO_APPLE_ICON = '/apple-touch-icon.png.PNG?v=12';
 
 export const metadata: Metadata = {
   title: PRODUCT_NAME,
@@ -15,7 +15,7 @@ export const metadata: Metadata = {
   appleWebApp: { capable: true, title: PRODUCT_NAME, statusBarStyle: 'default' },
   formatDetection: { telephone: false },
   keywords: ['Kivo', 'AI', 'Assistant', 'Productivity', 'Agent'],
-  manifest: '/manifest.webmanifest?v=9',
+  manifest: '/manifest.webmanifest?v=12',
   icons: {
     icon: [{ url: KIVO_ICON, type: 'image/svg+xml' }],
     shortcut: [KIVO_ICON],
