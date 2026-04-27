@@ -32,7 +32,7 @@ export default function LibraryPage() {
   const [activeTab, setActiveTab] = useState<Tab>('Today');
 
   return (
-    <main className="relative min-h-screen bg-[#F7F7F6] text-[#202226]">
+    <main className="fixed inset-0 overflow-hidden bg-[#F7F7F6] text-[#202226]">
       <div className="fixed left-0 right-0 top-0 z-[9999] bg-[#F7F7F6]/96 backdrop-blur-2xl">
         <div
           className="mx-auto w-full max-w-[430px] px-[18px] pb-3"
@@ -53,21 +53,11 @@ export default function LibraryPage() {
             </h1>
 
             <div className="flex items-center justify-end gap-4">
-              <button
-                type="button"
-                onClick={() => router.push('/history')}
-                aria-label="History"
-                className="flex h-11 w-8 items-center justify-center text-[#17191D] active:scale-95"
-              >
+              <button type="button" onClick={() => router.push('/history')} aria-label="History" className="flex h-11 w-8 items-center justify-center text-[#17191D] active:scale-95">
                 <Library className="h-[27px] w-[27px]" strokeWidth={2.05} />
               </button>
 
-              <button
-                type="button"
-                onClick={() => router.push('/search')}
-                aria-label="Search"
-                className="flex h-11 w-9 items-center justify-center text-[#17191D] active:scale-95"
-              >
+              <button type="button" onClick={() => router.push('/search')} aria-label="Search" className="flex h-11 w-9 items-center justify-center text-[#17191D] active:scale-95">
                 <Search className="h-[30px] w-[30px]" strokeWidth={2.05} />
               </button>
             </div>
@@ -100,9 +90,11 @@ export default function LibraryPage() {
         </div>
       </div>
 
-      <div className="mx-auto min-h-screen w-full max-w-[430px] px-[26px] pb-[260px] pt-[172px]">
-        {activeTab === 'Today' ? <TodayView /> : <PlaceholderView tab={activeTab} />}
-      </div>
+      <section className="absolute inset-x-0 bottom-0 top-[172px] overflow-y-auto [-webkit-overflow-scrolling:touch]">
+        <div className="mx-auto w-full max-w-[430px] px-[26px] pb-[260px]">
+          {activeTab === 'Today' ? <TodayView /> : <PlaceholderView tab={activeTab} />}
+        </div>
+      </section>
 
       <button
         type="button"
@@ -201,21 +193,9 @@ function FocusRow({
   );
 }
 
-function UpcomingRow({
-  title,
-  time,
-  last = false,
-}: {
-  title: string;
-  time: string;
-  last?: boolean;
-}) {
+function UpcomingRow({ title, time, last = false }: { title: string; time: string; last?: boolean }) {
   return (
-    <button
-      className={`grid w-full grid-cols-[42px_1fr_22px] items-center gap-3 py-4 text-left ${
-        last ? '' : 'border-b border-black/[0.055]'
-      }`}
-    >
+    <button className={`grid w-full grid-cols-[42px_1fr_22px] items-center gap-3 py-4 text-left ${last ? '' : 'border-b border-black/[0.055]'}`}>
       <CalendarDays className="h-6 w-6 text-[#17191D]" strokeWidth={2.1} />
       <div>
         <p className="text-[17px] font-medium tracking-[-0.04em]">{title}</p>
