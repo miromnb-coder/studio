@@ -73,9 +73,9 @@ export const KivoComposerDock = memo(function KivoComposerDock({
   return (
     <div
       ref={containerRef}
-      className="pointer-events-none fixed inset-x-0 z-40 mx-auto w-full max-w-none px-[22px] pb-2 transition-transform duration-[320ms] ease-[cubic-bezier(0.22,1,0.36,1)] will-change-transform"
+      className="pointer-events-none fixed inset-x-0 z-40 mx-auto w-full max-w-none px-[10px] pb-2 transition-transform duration-[320ms] ease-[cubic-bezier(0.22,1,0.36,1)] will-change-transform"
       style={{
-        bottom: 'calc(env(safe-area-inset-bottom, 0px) + 16px)',
+        bottom: 'calc(env(safe-area-inset-bottom, 0px) + 30px)',
         transform: `translate3d(${desktopShiftX}px, ${keyboardOffset > 0 ? -keyboardOffset : 0}px, 0)`,
       }}
     >
