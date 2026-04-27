@@ -1,0 +1,2 @@
+import { Workflow } from 'lucide-react';
+export function PlaceholderView({title,description}:{title:string;description:string}){return <section className="flex min-h-[520px] flex-col items-center justify-center text-center"><div className="mb-5 flex h-[74px] w-[74px] items-center justify-center rounded-[24px] border border-dashed border-black/[0.16] bg-white/40 text-[#A7A7A7]"><Workflow className="h-8 w-8" /></div><h2 className="text-[24px] font-semibold">{title}</h2><p className="mt-2 max-w-[280px] text-[16px] text-[#858585]">{description}</p></section>}
