@@ -148,25 +148,79 @@ header.relative.z-30 {
   backdrop-filter: none !important;
 }
 
-/* Compact Manus-style credits pill in the top-right header. */
+/* Header Perfect Pass v2: alignment, type, navigation, luxury credits pill and subtle motion. */
+header.relative.z-30 > div {
+  height: 70px !important;
+  padding-left: 22px !important;
+  padding-right: 22px !important;
+  align-items: center !important;
+}
+
+header.relative.z-30 > div > button:first-child {
+  width: 42px !important;
+  height: 42px !important;
+  color: #151B26 !important;
+  border-radius: 999px !important;
+  transition: transform 180ms cubic-bezier(0.22, 1, 0.36, 1), background-color 180ms ease, opacity 180ms ease !important;
+}
+
+header.relative.z-30 > div > button:first-child:active {
+  transform: scale(0.93) !important;
+  background: rgba(15, 23, 42, 0.045) !important;
+}
+
+header.relative.z-30 > div > button:first-child svg {
+  width: 20px !important;
+  height: 20px !important;
+  stroke-width: 2.35 !important;
+}
+
+header.relative.z-30 > div > div.flex-1 {
+  transform: translateY(-0.5px) !important;
+  font-size: 18px !important;
+  font-weight: 650 !important;
+  letter-spacing: -0.052em !important;
+  color: #121722 !important;
+  font-family: Inter, -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'SF Pro Text', system-ui, sans-serif !important;
+}
+
 header.relative.z-30 button[aria-label^='Credits balance'] {
   height: 34px !important;
   min-width: 66px !important;
   gap: 5px !important;
   padding-left: 10px !important;
   padding-right: 10px !important;
+  border-radius: 999px !important;
+  border-color: rgba(20, 24, 31, 0.105) !important;
+  background: rgba(250, 250, 249, 0.82) !important;
+  color: #171A20 !important;
   font-size: 16px !important;
+  font-weight: 650 !important;
   letter-spacing: -0.045em !important;
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.96), 0 1px 2px rgba(15,23,42,0.035), 0 8px 18px rgba(15,23,42,0.045) !important;
+  -webkit-backdrop-filter: blur(18px) saturate(1.18) !important;
+  backdrop-filter: blur(18px) saturate(1.18) !important;
+  transition: transform 220ms cubic-bezier(0.22, 1, 0.36, 1), box-shadow 220ms ease, background-color 220ms ease, border-color 220ms ease !important;
+}
+
+header.relative.z-30 button[aria-label^='Credits balance']:active {
+  transform: scale(0.94) translateY(0.5px) !important;
+  background: rgba(255,255,255,0.92) !important;
+  border-color: rgba(20,24,31,0.14) !important;
+  box-shadow: inset 0 1px 0 rgba(255,255,255,1), 0 1px 1px rgba(15,23,42,0.025) !important;
 }
 
 header.relative.z-30 button[aria-label^='Credits balance'] svg {
   width: 21px !important;
   height: 21px !important;
+  stroke-width: 2.15 !important;
+  filter: drop-shadow(0 1px 0 rgba(255,255,255,0.5));
 }
 
 header.relative.z-30 button[aria-label^='Credits balance'] span {
   min-width: 22px !important;
   height: 19px !important;
+  align-items: center !important;
 }
 
 @keyframes kivoPageReveal { from { opacity: 0; transform: translateY(6px) scale(0.998); } to { opacity: 1; transform: translateY(0) scale(1); } }
