@@ -17,7 +17,7 @@ export function LibraryHeader() {
         <User className="h-[21px] w-[21px]" strokeWidth={2} />
       </button>
 
-      <h1 className="text-center font-serif text-[42px] font-bold leading-none tracking-[-0.06em] text-[#191B1F]">
+      <h1 className="text-center font-serif text-[34px] font-bold leading-none tracking-[-0.06em] text-[#191B1F]">
         Kivo
       </h1>
 
