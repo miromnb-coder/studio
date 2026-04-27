@@ -5,7 +5,7 @@ import { AuthSync } from '@/components/auth/auth-sync';
 import { GlobalMenuProvider } from './components/global-menu-provider';
 import { KivoSplashScreen } from './components/kivo-splash-screen';
 
-const KIVO_ICON = '/kivo-logo.PNG?v=3';
+const KIVO_ICON = '/kivo-logo-v8.svg?v=8';
 
 export const metadata: Metadata = {
   title: PRODUCT_NAME,
@@ -14,11 +14,11 @@ export const metadata: Metadata = {
   appleWebApp: { capable: true, title: PRODUCT_NAME, statusBarStyle: 'default' },
   formatDetection: { telephone: false },
   keywords: ['Kivo', 'AI', 'Assistant', 'Productivity', 'Agent'],
-  manifest: '/manifest.webmanifest?v=3',
+  manifest: '/manifest.webmanifest?v=8',
   icons: {
-    icon: [{ url: KIVO_ICON, type: 'image/png' }],
+    icon: [{ url: KIVO_ICON, type: 'image/svg+xml' }],
     shortcut: [KIVO_ICON],
-    apple: [{ url: KIVO_ICON, sizes: '180x180', type: 'image/png' }],
+    apple: [{ url: KIVO_ICON, sizes: '180x180', type: 'image/svg+xml' }],
   },
 };
 
@@ -38,7 +38,7 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
         <meta name="apple-mobile-web-app-title" content="Kivo" />
         <meta name="mobile-web-app-capable" content="yes" />
         <link rel="apple-touch-icon" href={KIVO_ICON} />
-        <link rel="icon" href={KIVO_ICON} type="image/png" />
+        <link rel="icon" href={KIVO_ICON} type="image/svg+xml" />
       </head>
       <body className="mobile-app app-bg min-h-screen text-primary antialiased">
         <KivoSplashScreen />
