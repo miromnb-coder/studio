@@ -148,6 +148,27 @@ header.relative.z-30 {
   backdrop-filter: none !important;
 }
 
+/* Compact Manus-style credits pill in the top-right header. */
+header.relative.z-30 button[aria-label^='Credits balance'] {
+  height: 34px !important;
+  min-width: 66px !important;
+  gap: 5px !important;
+  padding-left: 10px !important;
+  padding-right: 10px !important;
+  font-size: 16px !important;
+  letter-spacing: -0.045em !important;
+}
+
+header.relative.z-30 button[aria-label^='Credits balance'] svg {
+  width: 21px !important;
+  height: 21px !important;
+}
+
+header.relative.z-30 button[aria-label^='Credits balance'] span {
+  min-width: 22px !important;
+  height: 19px !important;
+}
+
 @keyframes kivoPageReveal { from { opacity: 0; transform: translateY(6px) scale(0.998); } to { opacity: 1; transform: translateY(0) scale(1); } }
 @keyframes kivoSkeletonSweep { 100% { transform: translateX(100%); } }
 @keyframes dashboardReveal { from { opacity: 0; transform: translateY(7px); } to { opacity: 1; transform: translateY(0); } }
