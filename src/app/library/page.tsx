@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useMemo, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import {
   BotMessageSquare,
@@ -11,6 +11,8 @@ import {
   MessageCirclePlus,
   Search,
   Sparkles,
+  Star,
+  Trash2,
   User,
   Workflow,
 } from 'lucide-react';
@@ -19,7 +21,7 @@ type Filter = 'All' | 'Agent' | 'Manual' | 'Scheduled' | 'Favorites';
 
 type LibraryItem = {
   id: string;
-  type: Exclude<Filter, 'All'>;
+  type: Exclude<Filter, 'All' | 'Favorites'>;
   icon: typeof BotMessageSquare;
   title: string;
   preview: string;
@@ -29,7 +31,7 @@ type LibraryItem = {
 
 const filters: Filter[] = ['All', 'Agent', 'Manual', 'Scheduled', 'Favorites'];
 
-const items: LibraryItem[] = [
+const initialItems: LibraryItem[] = [
   {
     id: 'agent-build',
     type: 'Agent',
@@ -84,20 +86,36 @@ const items: LibraryItem[] = [
 export default function LibraryPage() {
   const router = useRouter();
   const [activeFilter, setActiveFilter] = useState<Filter>('All');
+  const [items, setItems] = useState<LibraryItem[]>(initialItems);
+  const [openSwipeId, setOpenSwipeId] = useState<string | null>(null);
 
   const filteredItems = useMemo(() => {
     if (activeFilter === 'All') return items;
     if (activeFilter === 'Favorites') return items.filter((item) => item.favorite);
     return items.filter((item) => item.type === activeFilter);
-  }, [activeFilter]);
+  }, [activeFilter, items]);
 
   const hasItems = filteredItems.length > 0;
 
+  const toggleFavorite = (id: string) => {
+    setItems((current) =>
+      current.map((item) =>
+        item.id === id ? { ...item, favorite: !item.favorite } : item,
+      ),
+    );
+    setOpenSwipeId(null);
+  };
+
+  const deleteItem = (id: string) => {
+    setItems((current) => current.filter((item) => item.id !== id));
+    setOpenSwipeId(null);
+  };
+
   return (
-    <main className="min-h-[100dvh] overflow-x-hidden bg-[#F7F7F6] text-[#202226]">
-      <div className="mx-auto min-h-[100dvh] w-full max-w-[430px] pb-[120px]">
+    <main className="min-h-[100dvh] w-full overflow-x-hidden bg-[#F7F7F6] text-[#202226]">
+      <div className="mx-auto min-h-[100dvh] w-full max-w-[430px] overflow-x-hidden pb-[128px]">
         <div
-          className="sticky top-0 z-30 bg-[#F7F7F6]/92 px-[18px] pb-4 backdrop-blur-xl"
+          className="sticky top-0 z-50 bg-[#F7F7F6]/94 px-[18px] pb-[16px] backdrop-blur-xl"
           style={{ paddingTop: 'env(safe-area-inset-top, 16px)' }}
         >
           <header className="grid h-[72px] grid-cols-[48px_1fr_96px] items-center">
@@ -122,6 +140,7 @@ export default function LibraryPage() {
               >
                 <Library className="h-[27px] w-[27px]" strokeWidth={2.05} />
               </button>
+
               <button
                 type="button"
                 aria-label="Search"
@@ -133,38 +152,48 @@ export default function LibraryPage() {
             </div>
           </header>
 
-          <section className="-mx-[18px] flex gap-[10px] overflow-x-auto px-[18px] pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-            {filters.map((filter) => {
-              const active = activeFilter === filter;
+          <section className="w-full overflow-x-auto overscroll-x-contain [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+            <div className="flex w-max min-w-full gap-[10px] pb-1">
+              {filters.map((filter) => {
+                const active = activeFilter === filter;
 
-              return (
-                <button
-                  key={filter}
-                  type="button"
-                  onClick={() => setActiveFilter(filter)}
-                  className={`shrink-0 rounded-full border px-[25px] py-[13px] text-[17px] font-semibold tracking-[-0.04em] transition-transform active:scale-[0.97] ${
-                    active
-                      ? 'border-[#151515] bg-[#151515] text-white shadow-[0_10px_24px_rgba(0,0,0,0.16)]'
-                      : 'border-black/[0.075] bg-white/42 text-[#777B82] shadow-[inset_0_1px_0_rgba(255,255,255,0.82)]'
-                  }`}
-                >
-                  {filter}
-                </button>
-              );
-            })}
+                return (
+                  <button
+                    key={filter}
+                    type="button"
+                    onClick={() => {
+                      setActiveFilter(filter);
+                      setOpenSwipeId(null);
+                    }}
+                    className={`shrink-0 rounded-full border px-[25px] py-[13px] text-[17px] font-semibold tracking-[-0.04em] transition-transform active:scale-[0.97] ${
+                      active
+                        ? 'border-[#151515] bg-[#151515] text-white shadow-[0_10px_24px_rgba(0,0,0,0.16)]'
+                        : 'border-black/[0.075] bg-white/42 text-[#777B82] shadow-[inset_0_1px_0_rgba(255,255,255,0.82)]'
+                    }`}
+                  >
+                    {filter}
+                  </button>
+                );
+              })}
+            </div>
           </section>
         </div>
 
-        <div className="px-[18px] pt-5">
+        <div className="px-[18px] pt-[28px]">
           <AgentCard onClick={() => router.push('/agents')} />
 
           {hasItems ? (
-            <section className="mt-6">
+            <section className="mt-6 overflow-hidden">
               {filteredItems.map((item) => (
                 <LibraryRow
                   key={item.id}
                   item={item}
+                  open={openSwipeId === item.id}
+                  onOpen={() => setOpenSwipeId(item.id)}
+                  onClose={() => setOpenSwipeId(null)}
                   onClick={() => router.push(`/chat?conversation=${item.id}`)}
+                  onFavorite={() => toggleFavorite(item.id)}
+                  onDelete={() => deleteItem(item.id)}
                 />
               ))}
             </section>
@@ -200,7 +229,7 @@ function AgentCard({ onClick }: { onClick: () => void }) {
       onKeyDown={(event) => {
         if (event.key === 'Enter') onClick();
       }}
-      className="rounded-[24px] border border-black/[0.045] bg-white/52 p-[14px] shadow-[0_14px_36px_rgba(15,23,42,0.055),inset_0_1px_0_rgba(255,255,255,0.9)] backdrop-blur-xl transition-transform active:scale-[0.992]"
+      className="w-full rounded-[24px] border border-black/[0.045] bg-white/52 p-[14px] shadow-[0_14px_36px_rgba(15,23,42,0.055),inset_0_1px_0_rgba(255,255,255,0.9)] backdrop-blur-xl transition-transform active:scale-[0.992]"
     >
       <div className="grid grid-cols-[60px_1fr_24px] items-center gap-4">
         <div className="flex h-[60px] w-[60px] items-center justify-center rounded-[17px] bg-[#ECEDED] text-[#17191D]">
@@ -224,36 +253,113 @@ function AgentCard({ onClick }: { onClick: () => void }) {
 
 function LibraryRow({
   item,
+  open,
+  onOpen,
+  onClose,
   onClick,
+  onFavorite,
+  onDelete,
 }: {
   item: LibraryItem;
+  open: boolean;
+  onOpen: () => void;
+  onClose: () => void;
   onClick: () => void;
+  onFavorite: () => void;
+  onDelete: () => void;
 }) {
   const Icon = item.icon;
+  const startXRef = useRef<number | null>(null);
+  const draggingRef = useRef(false);
+
+  const handlePointerDown = (event: React.PointerEvent<HTMLDivElement>) => {
+    startXRef.current = event.clientX;
+    draggingRef.current = false;
+  };
+
+  const handlePointerMove = (event: React.PointerEvent<HTMLDivElement>) => {
+    if (startXRef.current === null) return;
+    const deltaX = event.clientX - startXRef.current;
+
+    if (Math.abs(deltaX) > 12) draggingRef.current = true;
+    if (deltaX < -36) onOpen();
+    if (deltaX > 28) onClose();
+  };
+
+  const handlePointerUp = () => {
+    startXRef.current = null;
+  };
 
   return (
-    <button
-      type="button"
-      onClick={onClick}
-      className="grid w-full grid-cols-[62px_1fr_46px] items-center gap-3 py-[13px] text-left transition-transform active:scale-[0.992]"
-    >
-      <div className="flex h-[54px] w-[54px] items-center justify-center rounded-full bg-[#ECEDED] text-[#17191D]">
-        <Icon className="h-[27px] w-[27px]" strokeWidth={2.08} />
+    <div className="relative -mx-[18px] overflow-hidden px-[18px]">
+      <div className="absolute inset-y-0 right-[18px] flex w-[152px] items-center justify-end">
+        <button
+          type="button"
+          onClick={onFavorite}
+          className="flex h-[74px] w-[76px] flex-col items-center justify-center bg-[#148BEA] text-white"
+        >
+          <Star className="mb-1 h-7 w-7" strokeWidth={2.1} />
+          <span className="text-[14px] font-semibold tracking-[-0.03em]">
+            {item.favorite ? 'Saved' : 'Favorite'}
+          </span>
+        </button>
+
+        <button
+          type="button"
+          onClick={onDelete}
+          className="flex h-[74px] w-[76px] flex-col items-center justify-center bg-[#FF3B30] text-white"
+        >
+          <Trash2 className="mb-1 h-7 w-7" strokeWidth={2.1} />
+          <span className="text-[14px] font-semibold tracking-[-0.03em]">
+            Delete
+          </span>
+        </button>
       </div>
 
-      <div className="min-w-0 border-b border-black/[0.055] pb-[14px]">
-        <h3 className="truncate text-[19px] font-semibold leading-tight tracking-[-0.052em] text-[#202226]">
-          {item.title}
-        </h3>
-        <p className="mt-[7px] truncate text-[16.5px] font-medium leading-tight tracking-[-0.038em] text-[#818181]">
-          {item.preview}
-        </p>
-      </div>
+      <div
+        role="button"
+        tabIndex={0}
+        onPointerDown={handlePointerDown}
+        onPointerMove={handlePointerMove}
+        onPointerUp={handlePointerUp}
+        onPointerCancel={handlePointerUp}
+        onClick={() => {
+          if (draggingRef.current) {
+            draggingRef.current = false;
+            return;
+          }
 
-      <div className="self-start pt-[5px] text-right text-[15px] font-medium tracking-[-0.025em] text-[#8A8A8A]">
-        {item.date}
+          if (open) {
+            onClose();
+            return;
+          }
+
+          onClick();
+        }}
+        onKeyDown={(event) => {
+          if (event.key === 'Enter') onClick();
+        }}
+        className="relative z-10 grid w-full grid-cols-[62px_1fr_46px] items-center gap-3 bg-[#F7F7F6] py-[13px] text-left transition-transform duration-200 ease-out active:scale-[0.992]"
+        style={{ transform: open ? 'translateX(-152px)' : 'translateX(0)' }}
+      >
+        <div className="flex h-[54px] w-[54px] items-center justify-center rounded-full bg-[#ECEDED] text-[#17191D]">
+          <Icon className="h-[27px] w-[27px]" strokeWidth={2.08} />
+        </div>
+
+        <div className="min-w-0 border-b border-black/[0.055] pb-[14px]">
+          <h3 className="truncate text-[19px] font-semibold leading-tight tracking-[-0.052em] text-[#202226]">
+            {item.title}
+          </h3>
+          <p className="mt-[7px] truncate text-[16.5px] font-medium leading-tight tracking-[-0.038em] text-[#818181]">
+            {item.preview}
+          </p>
+        </div>
+
+        <div className="self-start pt-[5px] text-right text-[15px] font-medium tracking-[-0.025em] text-[#8A8A8A]">
+          {item.date}
+        </div>
       </div>
-    </button>
+    </div>
   );
 }
 
