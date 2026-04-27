@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { ChevronLeft, Sparkles } from 'lucide-react';
+import { KivoUsageSheet } from './KivoUsageSheet';
 
 type Props = {
   hasMessages?: boolean;
@@ -57,6 +58,8 @@ function useAnimatedNumber(value: number) {
 export default function KivoChatHeader({ hasMessages = false }: Props) {
   const router = useRouter();
   const [credits, setCredits] = useState(0);
+  const [creditSnapshot, setCreditSnapshot] = useState<CreditSnapshot>({});
+  const [isUsageSheetOpen, setIsUsageSheetOpen] = useState(false);
   const [pulse, setPulse] = useState(false);
   const previousCreditsRef = useRef<number | null>(null);
   const animatedCredits = useAnimatedNumber(credits);
@@ -73,6 +76,7 @@ export default function KivoChatHeader({ hasMessages = false }: Props) {
         const nextCredits = Number(data?.credits ?? 0);
         if (!mounted) return;
 
+        setCreditSnapshot(data ?? {});
         setCredits(nextCredits);
 
         if (previousCreditsRef.current !== null && previousCreditsRef.current !== nextCredits) {
@@ -99,6 +103,7 @@ export default function KivoChatHeader({ hasMessages = false }: Props) {
 
   const openUsageSheet = () => {
     window.navigator.vibrate?.(8);
+    setIsUsageSheetOpen((currentState) => !currentState);
   };
 
   return (
@@ -129,6 +134,19 @@ export default function KivoChatHeader({ hasMessages = false }: Props) {
           </span>
         </button>
       </div>
+
+      <KivoUsageSheet
+        isOpen={isUsageSheetOpen}
+        onClose={() => setIsUsageSheetOpen(false)}
+        usage={{
+          credits,
+          dailyUsed: Number(creditSnapshot.freeCredits ?? credits),
+          dailyLimit: Number(creditSnapshot.freeCredits ?? 25),
+          monthlyUsed: Number(creditSnapshot.monthlyUsed ?? credits),
+          monthlyLimit: Number(creditSnapshot.monthlyCredits ?? 200),
+          bonusCredits: 0,
+        }}
+      />
     </header>
   );
 }

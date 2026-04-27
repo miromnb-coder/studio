@@ -1,102 +1,323 @@
 'use client';
 
-import { CalendarDays, HelpCircle, Sparkles, X } from 'lucide-react';
+import { useEffect } from 'react';
+import {
+  AnimatePresence,
+  motion,
+  type PanInfo,
+  useDragControls,
+} from 'framer-motion';
+import {
+  Calendar,
+  CircleSlash,
+  Diamond,
+  Gift,
+  Info,
+  Sparkles,
+  X,
+} from 'lucide-react';
 
-type LedgerItem = { id?: string; createdAt?: string; title: string; amount: number };
-type CreditAccount = {
-  plan?: 'free' | 'plus' | 'pro';
-  credits?: number;
-  dailyRefreshCredits?: number;
-  monthlyCredits?: number;
-  monthlyUsed?: number;
-  nextRefreshType?: 'daily' | 'monthly';
-  history?: LedgerItem[];
+type UsageMetric = {
+  credits: number;
+  dailyUsed: number;
+  dailyLimit: number;
+  dailyResetsIn: string;
+  monthlyUsed: number;
+  monthlyLimit: number;
+  monthlyResetsIn: string;
+  bonusCredits: number;
 };
 
-type Props = { open: boolean; onClose: () => void; onUpgrade: () => void; account?: CreditAccount | null; credits?: number };
+type CreditHistoryEntry = {
+  label: string;
+  amount: number;
+};
 
-function planTitle(plan?: string) {
-  if (plan === 'pro') return 'Kivo Pro';
-  if (plan === 'plus') return 'Kivo Plus';
-  return 'Kivo Free';
-}
+type CreditHistoryDay = {
+  date: string;
+  entries: CreditHistoryEntry[];
+};
 
-function dateLabel(value?: string) {
-  if (!value) return 'Today';
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return 'Today';
-  return date.toLocaleDateString('en-GB', { day: '2-digit', month: 'short' });
-}
+type KivoUsageSheetProps = {
+  isOpen: boolean;
+  onClose: () => void;
+  onUpgrade?: () => void;
+  planName?: string;
+  planBadge?: string;
+  planSubtitle?: string;
+  timezoneLabel?: string;
+  usage?: Partial<UsageMetric>;
+  history?: CreditHistoryDay[];
+};
 
-export function KivoUsageSheet({ open, onClose, onUpgrade, account, credits = 77 }: Props) {
-  if (!open) return null;
-  const balance = account?.credits ?? credits;
-  const plan = account?.plan ?? 'free';
-  const monthlyCredits = account?.monthlyCredits ?? (plan === 'pro' ? 8000 : plan === 'plus' ? 3000 : 0);
-  const monthlyUsed = account?.monthlyUsed ?? 0;
-  const dailyRefresh = account?.dailyRefreshCredits ?? 100;
-  const history = account?.history?.length ? account.history : [
-    { title: 'Daily refresh credits', amount: dailyRefresh, createdAt: new Date().toISOString() },
-  ];
+const DEFAULT_USAGE: UsageMetric = {
+  credits: 25,
+  dailyUsed: 25,
+  dailyLimit: 25,
+  dailyResetsIn: '14h 18m',
+  monthlyUsed: 25,
+  monthlyLimit: 200,
+  monthlyResetsIn: '12 days',
+  bonusCredits: 0,
+};
+
+const DEFAULT_HISTORY: CreditHistoryDay[] = [
+  {
+    date: '26. Apr 2026',
+    entries: [
+      { label: 'Asked Kivo', amount: -4 },
+      { label: 'Used Research Agent', amount: -12 },
+      { label: 'Daily credits', amount: 25 },
+    ],
+  },
+  {
+    date: '25. Apr 2026',
+    entries: [
+      { label: 'Asked Kivo', amount: -3 },
+      { label: 'Used Calendar Agent', amount: -8 },
+    ],
+  },
+];
+
+export function KivoUsageSheet({
+  isOpen,
+  onClose,
+  onUpgrade,
+  planName = 'Kivo Free',
+  planBadge = 'Free',
+  planSubtitle = 'Upgrade anytime to Kivo Pro',
+  timezoneLabel = 'UTC+3',
+  usage,
+  history = DEFAULT_HISTORY,
+}: KivoUsageSheetProps) {
+  const dragControls = useDragControls();
+  const metric = { ...DEFAULT_USAGE, ...usage };
+
+  useEffect(() => {
+    if (!isOpen) return;
+
+    const previousOverflow = document.body.style.overflow;
+    const previousTouchAction = document.body.style.touchAction;
+
+    document.body.style.overflow = 'hidden';
+    document.body.style.touchAction = 'none';
+
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') onClose();
+    };
+
+    window.addEventListener('keydown', onKeyDown);
+
+    return () => {
+      document.body.style.overflow = previousOverflow;
+      document.body.style.touchAction = previousTouchAction;
+      window.removeEventListener('keydown', onKeyDown);
+    };
+  }, [isOpen, onClose]);
+
+  const handleDragEnd = (
+    _: MouseEvent | TouchEvent | PointerEvent,
+    info: PanInfo,
+  ) => {
+    if (info.offset.y > 90 || info.velocity.y > 560) {
+      onClose();
+    }
+  };
 
   return (
-    <div className="fixed inset-0 z-[90] flex items-end justify-center bg-black/35 backdrop-blur-[2px]" role="dialog" aria-modal="true">
-      <button aria-label="Close usage" className="absolute inset-0" onClick={onClose} />
-      <div className="relative z-[91] w-full max-w-[560px] overflow-hidden rounded-t-[28px] bg-[#eeeeee] pb-[calc(18px+env(safe-area-inset-bottom))] shadow-[0_-18px_70px_rgba(0,0,0,0.22)]">
-        <div className="absolute left-8 right-8 top-[-18px] h-8 rounded-t-[18px] bg-white/65" />
-        <header className="relative flex h-[72px] items-center justify-center px-5">
-          <button type="button" onClick={onClose} aria-label="Close" className="absolute left-4 inline-flex h-11 w-11 items-center justify-center rounded-full text-[#242424] active:scale-95">
-            <X className="h-7 w-7" strokeWidth={2.2} />
-          </button>
-          <h2 className="text-[20px] font-semibold tracking-[-0.035em] text-[#111]">Usage</h2>
-        </header>
+    <AnimatePresence>
+      {isOpen ? (
+        <>
+          <motion.button
+            type="button"
+            aria-label="Close usage sheet"
+            className="fixed inset-0 z-40 bg-black/22 backdrop-blur-[3px]"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.16, ease: 'easeOut' }}
+            onClick={onClose}
+          />
 
-        <main className="max-h-[calc(100dvh-120px)] overflow-y-auto px-4 pb-4">
-          <section className="rounded-[22px] bg-[#dedede] p-5 text-[#242424]">
-            <div className="flex items-start justify-between gap-4">
-              <div>
-                <h3 className="font-serif text-[25px] font-semibold tracking-[-0.035em]">{planTitle(plan)}</h3>
-                <p className="mt-1 text-[15px] text-black/55">{plan === 'free' ? 'Daily refresh' : 'Monthly credits'} · live balance</p>
-              </div>
-              <button type="button" onClick={onUpgrade} className="rounded-full bg-black/10 px-5 py-2 text-[17px] font-medium text-[#242424] active:scale-95">Upgrade</button>
-            </div>
+          <motion.aside
+            className="fixed inset-x-0 bottom-0 z-50 mx-auto flex h-[78dvh] w-full max-w-[560px] flex-col overflow-hidden rounded-t-[34px] border border-black/[0.05] bg-[rgba(250,250,250,0.98)] shadow-[0_-24px_70px_rgba(0,0,0,0.18)] backdrop-blur-2xl"
+            initial={{ y: '100%' }}
+            animate={{ y: 0 }}
+            exit={{ y: '100%' }}
+            transition={{ type: 'spring', stiffness: 500, damping: 40, mass: 0.78 }}
+            drag="y"
+            dragControls={dragControls}
+            dragListener={false}
+            dragConstraints={{ top: 0, bottom: 0 }}
+            dragElastic={{ top: 0, bottom: 0.16 }}
+            onDragEnd={handleDragEnd}
+          >
+            <button
+              type="button"
+              aria-label="Drag to dismiss"
+              onPointerDown={(event) => dragControls.start(event)}
+              className="touch-none cursor-grab px-4 pb-3 pt-3 active:cursor-grabbing"
+            >
+              <span className="mx-auto block h-[6px] w-[74px] rounded-full bg-black/[0.12]" />
+            </button>
 
-            <div className="my-5 border-t border-dashed border-black/10" />
-
-            <div className="space-y-4 text-[17px]">
+            <div className="shrink-0 px-6 pb-3">
               <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2 font-medium"><Sparkles className="h-6 w-6" />Credits <HelpCircle className="h-4 w-4 text-black/35" /></div>
-                <span className="font-semibold">{balance}</span>
-              </div>
-              <div className="flex items-center justify-between text-black/55"><span>Free credits</span><span>{plan === 'free' ? balance : 0}</span></div>
-              <div className="flex items-center justify-between text-black/55"><span>Monthly credits</span><span>{monthlyCredits ? `${Math.max(0, monthlyCredits - monthlyUsed)} / ${monthlyCredits}` : '0'}</span></div>
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2 font-medium"><CalendarDays className="h-6 w-6" />Daily refresh credits <HelpCircle className="h-4 w-4 text-black/35" /></div>
-                <span className="font-semibold">{plan === 'free' ? dailyRefresh : 0}</span>
+                <h2 className="text-[40px] font-semibold tracking-[-0.048em] text-[#121212]">Usage</h2>
+
+                <button
+                  type="button"
+                  onClick={onClose}
+                  aria-label="Close"
+                  className="inline-flex h-12 w-12 items-center justify-center rounded-full border border-black/[0.06] bg-[#f3f3f3] text-black/85 transition active:scale-[0.95]"
+                >
+                  <X className="h-[26px] w-[26px]" strokeWidth={2.2} />
+                </button>
               </div>
             </div>
-          </section>
 
-          <section className="mt-7">
-            <div className="flex items-center justify-between">
-              <h3 className="text-[25px] font-semibold tracking-[-0.045em] text-[#242424]">Credits history</h3>
-              <span className="text-[16px] text-black/45">UTC+3</span>
-            </div>
+            <div className="min-h-0 flex-1 space-y-4 overflow-y-auto px-4 pb-[calc(env(safe-area-inset-bottom,0px)+16px)] [-webkit-overflow-scrolling:touch]">
+              <section className="rounded-[28px] border border-black/[0.07] bg-white/90 p-4 shadow-[0_12px_28px_rgba(0,0,0,0.04)]">
+                <div className="flex items-start justify-between gap-4">
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <h3 className="text-[16px] font-semibold tracking-[-0.04em] text-[#111111]">{planName}</h3>
+                      <span className="rounded-full bg-black/[0.06] px-3 py-1 text-[14px] font-medium tracking-[-0.03em] text-black/75">
+                        {planBadge}
+                      </span>
+                    </div>
+                    <p className="mt-1 text-[14px] tracking-[-0.02em] text-black/55">{planSubtitle}</p>
+                  </div>
 
-            <div className="mt-4 space-y-5">
-              {history.map((item, index) => (
-                <div key={item.id ?? `${item.title}-${index}`} className="border-b border-black/[0.07] pb-4 last:border-b-0">
-                  <p className="mb-3 text-[16px] text-black/38">{dateLabel(item.createdAt)}</p>
-                  <div className="flex items-center justify-between gap-3 text-[18px] tracking-[-0.02em] text-[#242424]">
-                    <span className="min-w-0 truncate">{item.title}</span>
-                    <span>{item.amount > 0 ? `+${item.amount}` : item.amount}</span>
+                  <button
+                    type="button"
+                    onClick={onUpgrade}
+                    className="mt-1 inline-flex h-12 items-center justify-center rounded-full bg-black/[0.10] px-6 text-[16px] font-semibold tracking-[-0.02em] text-[#101010] transition active:scale-[0.97]"
+                  >
+                    Upgrade
+                  </button>
+                </div>
+
+                <div className="my-4 h-px bg-black/[0.08]" />
+
+                <MetricRow icon={Sparkles} label="Credits" value={String(metric.credits)} />
+                <MetricRow
+                  icon={Calendar}
+                  label="Daily credits"
+                  value={`${metric.dailyUsed} / ${metric.dailyLimit}`}
+                  subValue={`Resets in ${metric.dailyResetsIn}`}
+                />
+                <MetricRow
+                  icon={CircleSlash}
+                  label="Monthly credits"
+                  value={`${metric.monthlyUsed} / ${metric.monthlyLimit}`}
+                  subValue={`Resets in ${metric.monthlyResetsIn}`}
+                />
+                <MetricRow icon={Gift} label="Bonus credits" value={String(metric.bonusCredits)} />
+              </section>
+
+              <section className="rounded-[28px] border border-black/[0.07] bg-white/90 p-4 shadow-[0_12px_28px_rgba(0,0,0,0.04)]">
+                <div className="flex items-center justify-between gap-3 border-b border-black/[0.08] pb-3">
+                  <h3 className="text-[17px] font-semibold tracking-[-0.03em] text-[#111111]">Credits history</h3>
+                  <span className="inline-flex items-center gap-1 text-[17px] text-black/60">
+                    {timezoneLabel}
+                    <Info className="h-[20px] w-[20px]" strokeWidth={2.1} />
+                  </span>
+                </div>
+
+                <div className="space-y-4 pt-4">
+                  {history.map((day, dayIndex) => (
+                    <div key={day.date}>
+                      {dayIndex > 0 ? <div className="mb-4 h-px bg-black/[0.08]" /> : null}
+
+                      <p className="mb-2 text-[14px] tracking-[-0.01em] text-black/55">{day.date}</p>
+
+                      <div className="space-y-1.5">
+                        {day.entries.map((entry) => (
+                          <HistoryRow
+                            key={`${day.date}-${entry.label}-${entry.amount}`}
+                            label={entry.label}
+                            amount={entry.amount}
+                          />
+                        ))}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+
+                <div className="mt-4 rounded-[22px] bg-black/[0.03] p-4">
+                  <div className="flex gap-3">
+                    <span className="inline-flex h-10 w-10 shrink-0 items-center justify-center text-black/80">
+                      <Diamond className="h-8 w-8" strokeWidth={1.9} />
+                    </span>
+
+                    <div>
+                      <p className="text-[18px] font-semibold tracking-[-0.02em] text-[#101010]">
+                        Credits power everything
+                      </p>
+                      <p className="mt-1 text-[14px] leading-[1.45] tracking-[-0.01em] text-black/62">
+                        Each question, agent run and automation uses credits.
+                        <br />
+                        Upgrade to get more every month.
+                      </p>
+                    </div>
                   </div>
                 </div>
-              ))}
+              </section>
             </div>
-          </section>
-        </main>
+          </motion.aside>
+        </>
+      ) : null}
+    </AnimatePresence>
+  );
+}
+
+function MetricRow({
+  icon: Icon,
+  label,
+  value,
+  subValue,
+}: {
+  icon: typeof Sparkles;
+  label: string;
+  value: string;
+  subValue?: string;
+}) {
+  return (
+    <div className="flex min-h-12 items-start justify-between py-1.5">
+      <div className="flex min-w-0 items-start gap-3">
+        <span className="mt-0.5 text-black/90">
+          <Icon className="h-6 w-6" strokeWidth={2} />
+        </span>
+        <div className="min-w-0">
+          <span className="inline-flex items-center gap-1.5 text-[17px] tracking-[-0.03em] text-[#151515]">
+            {label}
+            <Info className="h-[18px] w-[18px] text-black/45" strokeWidth={2} />
+          </span>
+          {subValue ? (
+            <p className="mt-0.5 text-[14px] tracking-[-0.01em] text-black/52">{subValue}</p>
+          ) : null}
+        </div>
       </div>
+
+      <div className="min-w-[110px] text-right">
+        <p className="text-[17px] font-medium tracking-[-0.03em] text-[#111111]">{value}</p>
+      </div>
+    </div>
+  );
+}
+
+function HistoryRow({ label, amount }: { label: string; amount: number }) {
+  const amountLabel = `${amount > 0 ? '+' : ''}${amount}`;
+
+  return (
+    <div className="flex items-center justify-between gap-2">
+      <p className="text-[17px] tracking-[-0.03em] text-[#181818]">{label}</p>
+      <p
+        className={`text-[17px] font-medium tracking-[-0.03em] ${amount > 0 ? 'text-[#202020]' : 'text-[#1a1a1a]'}`}
+      >
+        {amountLabel}
+      </p>
     </div>
   );
 }
