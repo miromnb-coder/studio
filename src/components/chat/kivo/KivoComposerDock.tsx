@@ -20,8 +20,8 @@ type KivoComposerDockProps = {
   desktopShiftX?: number;
 };
 
-const MIN_TEXTAREA_HEIGHT = 27;
-const MAX_TEXTAREA_HEIGHT = 120;
+const MIN_TEXTAREA_HEIGHT = 25;
+const MAX_TEXTAREA_HEIGHT = 112;
 
 export const KivoComposerDock = memo(function KivoComposerDock({
   value,
@@ -79,7 +79,7 @@ export const KivoComposerDock = memo(function KivoComposerDock({
         transform: `translate3d(${desktopShiftX}px, ${keyboardOffset > 0 ? -keyboardOffset : 0}px, 0)`,
       }}
     >
-      <div className="pointer-events-auto overflow-hidden rounded-[31px] border border-white/80 bg-white/88 px-[12px] pb-[10px] pt-[14px] shadow-[0_18px_48px_rgba(15,23,42,0.075),inset_0_1px_0_rgba(255,255,255,0.96)] backdrop-blur-2xl transition-[box-shadow,transform,background-color] duration-300 ease-[cubic-bezier(0.22,1,0.36,1)] [contain:layout_paint] focus-within:bg-white/94 focus-within:shadow-[0_22px_58px_rgba(15,23,42,0.105),inset_0_1px_0_rgba(255,255,255,1)]">
+      <div className="pointer-events-auto overflow-hidden rounded-[29px] border border-white/85 bg-white/90 px-[10px] pb-[9px] pt-[11px] shadow-[0_14px_38px_rgba(15,23,42,0.068),inset_0_1px_0_rgba(255,255,255,0.98)] backdrop-blur-2xl transition-[box-shadow,transform,background-color] duration-300 ease-[cubic-bezier(0.22,1,0.36,1)] [contain:layout_paint] focus-within:bg-white/96 focus-within:shadow-[0_18px_48px_rgba(15,23,42,0.092),inset_0_1px_0_rgba(255,255,255,1)]">
         <textarea
           ref={textareaRef}
           id="kivo-composer-textarea"
@@ -93,27 +93,27 @@ export const KivoComposerDock = memo(function KivoComposerDock({
           }}
           rows={1}
           placeholder={placeholder}
-          className="block w-full resize-none border-0 bg-transparent px-[16px] py-0 text-[18px] font-normal leading-[1.33] tracking-[-0.028em] text-[#1F2530] outline-none placeholder:text-[#B8BBC0]"
+          className="block w-full resize-none border-0 bg-transparent px-[15px] py-0 text-[17.5px] font-normal leading-[1.28] tracking-[-0.026em] text-[#1F2530] outline-none placeholder:text-[#B8BBC0]"
           style={{ minHeight: `${MIN_TEXTAREA_HEIGHT}px`, maxHeight: `${MAX_TEXTAREA_HEIGHT}px`, overflowY: 'hidden' }}
         />
 
-        <div className="mt-[15px] flex items-center justify-between gap-3">
-          <div className="flex items-center gap-[8px]">
-            <DockCircleButton ariaLabel="Add attachment" onClick={handlePlus} icon={<Plus className="h-[22px] w-[22px]" strokeWidth={2.2} />} />
-            <DockCircleButton ariaLabel="Connect tools" onClick={handleQuick} icon={<Workflow className="h-[20px] w-[20px]" strokeWidth={2.2} />} />
+        <div className="mt-[11px] flex items-center justify-between gap-3">
+          <div className="flex items-center gap-[7px]">
+            <DockCircleButton ariaLabel="Add attachment" onClick={handlePlus} icon={<Plus className="h-[21px] w-[21px]" strokeWidth={2.2} />} />
+            <DockCircleButton ariaLabel="Connect tools" onClick={handleQuick} icon={<Workflow className="h-[19px] w-[19px]" strokeWidth={2.2} />} />
           </div>
 
-          <div className="flex items-center gap-[8px]">
-            <DockCircleButton ariaLabel="Open voice assistant" onClick={handleQuick} icon={<BotMessageSquare className="h-[20px] w-[20px]" strokeWidth={2.2} />} />
-            <DockCircleButton ariaLabel={isListening ? 'Stop voice input' : 'Start voice input'} onClick={handleMic} active={isListening} icon={<Mic className="h-[20px] w-[20px]" strokeWidth={2.2} />} />
+          <div className="flex items-center gap-[7px]">
+            <DockCircleButton ariaLabel="Open voice assistant" onClick={handleQuick} icon={<BotMessageSquare className="h-[19px] w-[19px]" strokeWidth={2.2} />} />
+            <DockCircleButton ariaLabel={isListening ? 'Stop voice input' : 'Start voice input'} onClick={handleMic} active={isListening} icon={<Mic className="h-[19px] w-[19px]" strokeWidth={2.2} />} />
             <button
               type="button"
               onClick={send}
               aria-label="Send message"
               disabled={!canSend || isSending}
-              className={`kivo-pressable inline-flex h-[43px] w-[43px] shrink-0 items-center justify-center rounded-full transition-[transform,background-color,color,box-shadow,opacity] duration-220 ease-[cubic-bezier(0.22,1,0.36,1)] active:scale-[0.94] ${canSend && !isSending ? 'bg-[#171A20] text-white shadow-[0_10px_22px_rgba(15,23,42,0.20),inset_0_1px_0_rgba(255,255,255,0.18)]' : 'bg-[#EEF0F2] text-[#D3D5D8] shadow-[inset_0_1px_0_rgba(255,255,255,0.75)]'}`}
+              className={`kivo-pressable inline-flex h-[41px] w-[41px] shrink-0 items-center justify-center rounded-full transition-[transform,background-color,color,box-shadow,opacity] duration-220 ease-[cubic-bezier(0.22,1,0.36,1)] active:scale-[0.94] ${canSend && !isSending ? 'bg-[#171A20] text-white shadow-[0_9px_20px_rgba(15,23,42,0.20),inset_0_1px_0_rgba(255,255,255,0.18)]' : 'bg-[#EEF0F2] text-[#D3D5D8] shadow-[inset_0_1px_0_rgba(255,255,255,0.78)]'}`}
             >
-              <ArrowUp className="h-[20px] w-[20px]" strokeWidth={2.45} />
+              <ArrowUp className="h-[19px] w-[19px]" strokeWidth={2.45} />
             </button>
           </div>
         </div>
@@ -130,7 +130,7 @@ const DockCircleButton = memo(function DockCircleButton({ ariaLabel, onClick, ic
       type="button"
       onClick={onClick}
       aria-label={ariaLabel}
-      className={`kivo-pressable inline-flex h-[43px] w-[43px] shrink-0 items-center justify-center rounded-full border transition-[transform,background-color,color,box-shadow,border-color] duration-220 ease-[cubic-bezier(0.22,1,0.36,1)] active:scale-[0.94] ${active ? 'border-black/[0.045] bg-[#F1F5FF] text-[#171A20] shadow-[0_7px_16px_rgba(15,23,42,0.045),inset_0_1px_0_rgba(255,255,255,0.9)]' : 'border-black/[0.035] bg-white/78 text-[#20242C] shadow-[0_7px_16px_rgba(15,23,42,0.035),inset_0_1px_0_rgba(255,255,255,0.96)] backdrop-blur-xl'}`}
+      className={`kivo-pressable inline-flex h-[41px] w-[41px] shrink-0 items-center justify-center rounded-full border transition-[transform,background-color,color,box-shadow,border-color] duration-220 ease-[cubic-bezier(0.22,1,0.36,1)] active:scale-[0.94] ${active ? 'border-black/[0.045] bg-[#F1F5FF] text-[#171A20] shadow-[0_6px_14px_rgba(15,23,42,0.042),inset_0_1px_0_rgba(255,255,255,0.9)]' : 'border-black/[0.035] bg-white/80 text-[#20242C] shadow-[0_6px_14px_rgba(15,23,42,0.032),inset_0_1px_0_rgba(255,255,255,0.96)] backdrop-blur-xl'}`}
     >
       {icon}
     </button>
