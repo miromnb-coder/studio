@@ -1,6 +1,7 @@
 'use client';
 
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
+import { createPortal } from 'react-dom';
 import {
   AnimatePresence,
   motion,
@@ -91,7 +92,12 @@ export function KivoUsageSheet({
   history = DEFAULT_HISTORY,
 }: KivoUsageSheetProps) {
   const dragControls = useDragControls();
+  const [mounted, setMounted] = useState(false);
   const metric = { ...DEFAULT_USAGE, ...usage };
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
 
   useEffect(() => {
     if (!isOpen) return;
@@ -124,14 +130,16 @@ export function KivoUsageSheet({
     }
   };
 
-  return (
+  if (!mounted) return null;
+
+  return createPortal(
     <AnimatePresence>
       {isOpen ? (
-        <>
+        <div className="fixed inset-0 z-[99999]">
           <motion.button
             type="button"
             aria-label="Close usage sheet"
-            className="fixed inset-0 z-40 bg-black/22 backdrop-blur-[3px]"
+            className="absolute inset-0 bg-black/10 backdrop-blur-[1px]"
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
@@ -140,7 +148,7 @@ export function KivoUsageSheet({
           />
 
           <motion.aside
-            className="fixed inset-x-0 bottom-0 z-50 mx-auto flex h-[78dvh] w-full max-w-[560px] flex-col overflow-hidden rounded-t-[34px] border border-black/[0.05] bg-[rgba(250,250,250,0.98)] shadow-[0_-24px_70px_rgba(0,0,0,0.18)] backdrop-blur-2xl"
+            className="fixed inset-x-0 bottom-0 z-[100000] mx-auto flex max-h-[82dvh] w-full max-w-[560px] flex-col overflow-hidden rounded-t-[34px] border border-black/[0.05] bg-[rgba(250,250,250,0.98)] shadow-[0_-24px_70px_rgba(0,0,0,0.18)] backdrop-blur-2xl"
             initial={{ y: '100%' }}
             animate={{ y: 0 }}
             exit={{ y: '100%' }}
@@ -266,9 +274,10 @@ export function KivoUsageSheet({
               </section>
             </div>
           </motion.aside>
-        </>
+        </div>
       ) : null}
-    </AnimatePresence>
+    </AnimatePresence>,
+    document.body,
   );
 }
 
