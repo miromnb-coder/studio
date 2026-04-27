@@ -35,30 +35,40 @@ export default function LibraryPage() {
     <main className="fixed inset-0 overflow-hidden bg-[#F7F7F6] text-[#202226]">
       <div className="fixed left-0 right-0 top-0 z-[9999] bg-[#F7F7F6]/96 backdrop-blur-2xl">
         <div
-          className="mx-auto w-full max-w-[430px] px-[18px] pb-3"
+          className="mx-auto w-full max-w-[430px] px-[18px] pb-2"
           style={{ paddingTop: 'env(safe-area-inset-top, 16px)' }}
         >
-          <header className="grid h-[72px] grid-cols-[48px_1fr_96px] items-center">
+          <header className="grid h-[62px] grid-cols-[44px_1fr_88px] items-center">
             <button
               type="button"
               onClick={() => router.push('/settings')}
               aria-label="Profile"
-              className="flex h-11 w-11 items-center justify-center rounded-full text-[#17191D] active:scale-95"
+              className="flex h-10 w-10 items-center justify-center rounded-full text-[#17191D] active:scale-95"
             >
-              <User className="h-[26px] w-[26px]" strokeWidth={2.05} />
+              <User className="h-[23px] w-[23px]" strokeWidth={2.05} />
             </button>
 
-            <h1 className="text-center font-serif text-[42px] font-bold leading-none tracking-[-0.06em] text-[#191B1F]">
+            <h1 className="text-center font-serif text-[38px] font-bold leading-none tracking-[-0.055em] text-[#191B1F]">
               Kivo
             </h1>
 
-            <div className="flex items-center justify-end gap-4">
-              <button type="button" onClick={() => router.push('/history')} aria-label="History" className="flex h-11 w-8 items-center justify-center text-[#17191D] active:scale-95">
-                <Library className="h-[27px] w-[27px]" strokeWidth={2.05} />
+            <div className="flex items-center justify-end gap-3">
+              <button
+                type="button"
+                onClick={() => router.push('/history')}
+                aria-label="History"
+                className="flex h-10 w-8 items-center justify-center text-[#17191D] active:scale-95"
+              >
+                <Library className="h-[24px] w-[24px]" strokeWidth={2.05} />
               </button>
 
-              <button type="button" onClick={() => router.push('/search')} aria-label="Search" className="flex h-11 w-9 items-center justify-center text-[#17191D] active:scale-95">
-                <Search className="h-[30px] w-[30px]" strokeWidth={2.05} />
+              <button
+                type="button"
+                onClick={() => router.push('/search')}
+                aria-label="Search"
+                className="flex h-10 w-8 items-center justify-center text-[#17191D] active:scale-95"
+              >
+                <Search className="h-[26px] w-[26px]" strokeWidth={2.05} />
               </button>
             </div>
           </header>
@@ -90,8 +100,8 @@ export default function LibraryPage() {
         </div>
       </div>
 
-      <section className="absolute inset-x-0 bottom-0 top-[172px] overflow-y-auto [-webkit-overflow-scrolling:touch]">
-        <div className="mx-auto w-full max-w-[430px] px-[26px] pb-[260px]">
+      <section className="absolute inset-x-0 bottom-0 top-[136px] overflow-y-auto [-webkit-overflow-scrolling:touch]">
+        <div className="mx-auto w-full max-w-[430px] px-[26px] pb-[230px]">
           {activeTab === 'Today' ? <TodayView /> : <PlaceholderView tab={activeTab} />}
         </div>
       </section>
@@ -100,7 +110,7 @@ export default function LibraryPage() {
         type="button"
         aria-label="New chat"
         onClick={() => router.push('/chat')}
-        className="fixed bottom-[calc(env(safe-area-inset-bottom,0px)+92px)] right-[24px] z-[9999] flex h-[68px] w-[68px] items-center justify-center rounded-full bg-[#171717] text-white shadow-[0_18px_38px_rgba(0,0,0,0.28)] active:scale-95"
+        className="fixed bottom-[calc(env(safe-area-inset-bottom,0px)+52px)] right-[24px] z-[9999] flex h-[68px] w-[68px] items-center justify-center rounded-full bg-[#171717] text-white shadow-[0_18px_38px_rgba(0,0,0,0.28)] active:scale-95"
       >
         <MessageCirclePlus className="h-[33px] w-[33px]" strokeWidth={2.25} />
       </button>
@@ -121,8 +131,12 @@ function TodayView() {
       </section>
 
       <section className="rounded-[24px] border border-black/[0.055] bg-white/58 p-5 shadow-[0_14px_36px_rgba(15,23,42,0.055),inset_0_1px_0_rgba(255,255,255,0.9)]">
-        <h3 className="text-[20px] font-semibold tracking-[-0.045em]">Today’s focus</h3>
-        <p className="mt-1 text-[15px] font-medium text-[#777B82]">3 tasks · 2 events</p>
+        <h3 className="text-[20px] font-semibold tracking-[-0.045em]">
+          Today’s focus
+        </h3>
+        <p className="mt-1 text-[15px] font-medium text-[#777B82]">
+          3 tasks · 2 events
+        </p>
 
         <div className="my-5 h-px bg-black/[0.055]" />
 
@@ -193,9 +207,21 @@ function FocusRow({
   );
 }
 
-function UpcomingRow({ title, time, last = false }: { title: string; time: string; last?: boolean }) {
+function UpcomingRow({
+  title,
+  time,
+  last = false,
+}: {
+  title: string;
+  time: string;
+  last?: boolean;
+}) {
   return (
-    <button className={`grid w-full grid-cols-[42px_1fr_22px] items-center gap-3 py-4 text-left ${last ? '' : 'border-b border-black/[0.055]'}`}>
+    <button
+      className={`grid w-full grid-cols-[42px_1fr_22px] items-center gap-3 py-4 text-left ${
+        last ? '' : 'border-b border-black/[0.055]'
+      }`}
+    >
       <CalendarDays className="h-6 w-6 text-[#17191D]" strokeWidth={2.1} />
       <div>
         <p className="text-[17px] font-medium tracking-[-0.04em]">{title}</p>
