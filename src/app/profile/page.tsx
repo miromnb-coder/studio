@@ -34,7 +34,7 @@ export default function ProfilePage() {
       fullName: 'Miro Saastamoinen',
       email: 'miromnbmnbmnb@gmail.com',
       avatarLetter: 'M',
-      badge: 'Kivo Pro',
+      badge: 'Kivo Free',
       route: '/settings/account',
     }),
     [],
@@ -42,20 +42,20 @@ export default function ProfilePage() {
 
   const stats = useMemo<ProfileStat[]>(
     () => [
-      { id: 'intelligence', icon: Sparkles, title: 'Intelligence score', value: '86', subtext: '+12 this week', accent: 'green' },
-      { id: 'memory', icon: BookOpen, title: 'Memory stored', value: '1.2 GB', subtext: '23% of limit', progress: 23 },
-      { id: 'tools', icon: Link, title: 'Connected tools', value: '8', subtext: 'Active', accent: 'green' },
-      { id: 'saved', icon: Clock3, title: 'Time saved', value: '14.5 h', subtext: 'This week' },
+      { id: 'intelligence', icon: Sparkles, title: 'Intelligence score', value: '42', subtext: 'Basic access' },
+      { id: 'memory', icon: BookOpen, title: 'Memory stored', value: '120 MB', subtext: 'Limited memory', progress: 12 },
+      { id: 'tools', icon: Link, title: 'Connected tools', value: '2', subtext: 'Free plan' },
+      { id: 'saved', icon: Clock3, title: 'Time saved', value: '1.5 h', subtext: 'This week' },
     ],
     [],
   );
 
   const plan = useMemo<ProPlanData>(
     () => ({
-      title: 'Kivo Pro',
-      renewsOn: 'May 03, 2026',
-      creditsUsed: 435,
-      creditsLimit: 1000,
+      title: 'Kivo Free',
+      renewsOn: 'Basic access',
+      creditsUsed: 35,
+      creditsLimit: 100,
       upgradeRoute: '/upgrade',
       detailsRoute: '/usage',
     }),
