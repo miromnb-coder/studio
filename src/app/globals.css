@@ -29,17 +29,10 @@
   --screen-y: 0.8rem;
 }
 
-* {
-  -webkit-tap-highlight-color: transparent;
-  box-sizing: border-box;
-}
+* { -webkit-tap-highlight-color: transparent; box-sizing: border-box; }
 
 html,
-body {
-  margin: 0;
-  padding: 0;
-  scroll-behavior: smooth;
-}
+body { margin: 0; padding: 0; scroll-behavior: smooth; }
 
 body {
   font-family: Inter, -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'SF Pro Display', system-ui, sans-serif;
@@ -53,32 +46,21 @@ body {
 button,
 input,
 textarea,
-select {
-  font: inherit;
-}
+select { font: inherit; }
 
 button,
 a,
-[role='button'] {
-  touch-action: manipulation;
-}
+[role='button'] { touch-action: manipulation; }
 
-.mobile-app {
-  padding-bottom: calc(12px + env(safe-area-inset-bottom));
-}
+.mobile-app { padding-bottom: calc(12px + env(safe-area-inset-bottom)); }
 
 .screen {
   @apply mx-auto min-h-screen w-full max-w-md;
   padding: max(var(--screen-y), env(safe-area-inset-top)) var(--screen-x);
 }
 
-.app-bg {
-  background: var(--chat-bg);
-}
-
-.premium-bg {
-  background: var(--control-bg);
-}
+.app-bg { background: var(--chat-bg); }
+.premium-bg { background: var(--control-bg); }
 
 .premium-card {
   border-radius: var(--radius-lg);
@@ -98,10 +80,7 @@ a,
   will-change: transform;
 }
 
-.premium-card-hover:hover {
-  transform: translateY(-1px);
-  box-shadow: var(--shadow-float);
-}
+.premium-card-hover:hover { transform: translateY(-1px); box-shadow: var(--shadow-float); }
 
 .tap-feedback {
   transform: translateZ(0);
@@ -109,9 +88,7 @@ a,
   will-change: transform;
 }
 
-.tap-feedback:active {
-  transform: scale(0.975);
-}
+.tap-feedback:active { transform: scale(0.975); }
 
 .kivo-pressable {
   transform: translateZ(0);
@@ -119,20 +96,11 @@ a,
   will-change: transform;
 }
 
-.kivo-pressable:active {
-  transform: scale(0.965);
-  filter: brightness(0.985);
-}
+.kivo-pressable:active { transform: scale(0.965); filter: brightness(0.985); }
 
-.kivo-page-reveal {
-  animation: kivoPageReveal 260ms var(--ease-premium) both;
-}
+.kivo-page-reveal { animation: kivoPageReveal 260ms var(--ease-premium) both; }
 
-.kivo-skeleton {
-  position: relative;
-  overflow: hidden;
-  background: rgba(226,232,240,0.58);
-}
+.kivo-skeleton { position: relative; overflow: hidden; background: rgba(226,232,240,0.58); }
 
 .kivo-skeleton::after {
   content: '';
@@ -143,17 +111,12 @@ a,
   animation: kivoSkeletonSweep 1.45s linear infinite;
 }
 
-.dashboard-reveal {
-  animation: dashboardReveal 0.36s ease both;
-}
-
+.dashboard-reveal { animation: dashboardReveal 0.36s ease both; }
 .dashboard-reveal:nth-child(2) { animation-delay: 0.04s; }
 .dashboard-reveal:nth-child(3) { animation-delay: 0.08s; }
 .dashboard-reveal:nth-child(4) { animation-delay: 0.12s; }
 
-.message-appear {
-  animation: messageIn 0.2s ease;
-}
+.message-appear { animation: messageIn 0.2s ease; }
 
 .composer-action-btn {
   display: inline-flex;
@@ -170,55 +133,30 @@ a,
   will-change: transform;
 }
 
-.composer-action-btn:active {
-  transform: scale(0.955);
-}
-
-.composer-action-btn:disabled {
-  opacity: 0.45;
-}
-
+.composer-action-btn:active { transform: scale(0.955); }
+.composer-action-btn:disabled { opacity: 0.45; }
 .composer-action-btn-active,
-.composer-action-btn:hover {
-  background: #eef2f7;
-  color: #4b5563;
+.composer-action-btn:hover { background: #eef2f7; color: #4b5563; }
+.composer-action-btn-plus { background: #edf2f8; color: #4b5563; }
+
+/* Kivo chat header should blend into the chat canvas like Manus: no divider, no shadow, no blur wall. */
+header.relative.z-30 {
+  border-bottom: 0 !important;
+  box-shadow: none !important;
+  background: transparent !important;
+  -webkit-backdrop-filter: none !important;
+  backdrop-filter: none !important;
 }
 
-.composer-action-btn-plus {
-  background: #edf2f8;
-  color: #4b5563;
-}
-
-@keyframes kivoPageReveal {
-  from { opacity: 0; transform: translateY(6px) scale(0.998); }
-  to { opacity: 1; transform: translateY(0) scale(1); }
-}
-
-@keyframes kivoSkeletonSweep {
-  100% { transform: translateX(100%); }
-}
-
-@keyframes dashboardReveal {
-  from { opacity: 0; transform: translateY(7px); }
-  to { opacity: 1; transform: translateY(0); }
-}
-
-@keyframes messageIn {
-  from { opacity: 0; transform: translateY(5px); }
-  to { opacity: 1; transform: translateY(0); }
-}
+@keyframes kivoPageReveal { from { opacity: 0; transform: translateY(6px) scale(0.998); } to { opacity: 1; transform: translateY(0) scale(1); } }
+@keyframes kivoSkeletonSweep { 100% { transform: translateX(100%); } }
+@keyframes dashboardReveal { from { opacity: 0; transform: translateY(7px); } to { opacity: 1; transform: translateY(0); } }
+@keyframes messageIn { from { opacity: 0; transform: translateY(5px); } to { opacity: 1; transform: translateY(0); } }
 
 @media (prefers-reduced-motion: reduce) {
   html,
-  body {
-    scroll-behavior: auto;
-  }
-
+  body { scroll-behavior: auto; }
   *,
   *::before,
-  *::after {
-    animation-duration: 0.001ms !important;
-    animation-iteration-count: 1 !important;
-    transition-duration: 0.001ms !important;
-  }
+  *::after { animation-duration: 0.001ms !important; animation-iteration-count: 1 !important; transition-duration: 0.001ms !important; }
 }
