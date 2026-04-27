@@ -10,7 +10,7 @@ export function LibraryHeader() {
     <header className="grid h-[62px] grid-cols-[42px_1fr_78px] items-center">
       <button
         type="button"
-        onClick={() => router.push('/settings')}
+        onClick={() => router.push('/profile')}
         aria-label="Profile"
         className="flex h-10 w-10 items-center justify-center rounded-full text-[#17191D] active:scale-95"
       >
