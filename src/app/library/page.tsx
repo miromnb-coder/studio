@@ -32,8 +32,8 @@ export default function LibraryPage() {
   const [activeTab, setActiveTab] = useState<Tab>('Today');
 
   return (
-    <main className="min-h-[100dvh] overflow-x-hidden bg-[#F7F7F6] text-[#202226]">
-      <div className="fixed inset-x-0 top-0 z-[9998] bg-[#F7F7F6]/96 backdrop-blur-2xl">
+    <main className="relative min-h-screen bg-[#F7F7F6] text-[#202226]">
+      <div className="fixed left-0 right-0 top-0 z-[9999] bg-[#F7F7F6]/96 backdrop-blur-2xl">
         <div
           className="mx-auto w-full max-w-[430px] px-[18px] pb-3"
           style={{ paddingTop: 'env(safe-area-inset-top, 16px)' }}
@@ -100,7 +100,7 @@ export default function LibraryPage() {
         </div>
       </div>
 
-      <div className="mx-auto min-h-[100dvh] w-full max-w-[430px] overflow-x-hidden px-[26px] pb-[240px] pt-[172px]">
+      <div className="mx-auto min-h-screen w-full max-w-[430px] px-[26px] pb-[260px] pt-[172px]">
         {activeTab === 'Today' ? <TodayView /> : <PlaceholderView tab={activeTab} />}
       </div>
 
@@ -232,7 +232,9 @@ function PlaceholderView({ tab }: { tab: Tab }) {
       <div className="mb-5 flex h-[74px] w-[74px] items-center justify-center rounded-[24px] border border-dashed border-black/[0.16] bg-white/40 text-[#A7A7A7]">
         <Workflow className="h-8 w-8" strokeWidth={2.1} />
       </div>
+
       <h2 className="text-[24px] font-semibold tracking-[-0.055em]">{tab}</h2>
+
       <p className="mt-2 max-w-[280px] text-[16px] font-medium leading-[1.35] tracking-[-0.035em] text-[#858585]">
         This section will become a smart Kivo workspace.
       </p>
