@@ -33,9 +33,9 @@ export default function LibraryPage() {
 
   return (
     <main className="min-h-[100dvh] overflow-x-hidden bg-[#F7F7F6] text-[#202226]">
-      <div className="mx-auto min-h-[100dvh] w-full max-w-[430px] overflow-x-hidden pb-[220px]">
+      <div className="fixed inset-x-0 top-0 z-[9998] bg-[#F7F7F6]/96 backdrop-blur-2xl">
         <div
-          className="sticky top-0 z-[70] bg-[#F7F7F6]/96 px-[18px] pb-4 backdrop-blur-2xl"
+          className="mx-auto w-full max-w-[430px] px-[18px] pb-3"
           style={{ paddingTop: 'env(safe-area-inset-top, 16px)' }}
         >
           <header className="grid h-[72px] grid-cols-[48px_1fr_96px] items-center">
@@ -74,7 +74,7 @@ export default function LibraryPage() {
           </header>
 
           <section className="w-full overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-            <div className="flex w-max min-w-full gap-[10px] pb-1">
+            <div className="flex w-max min-w-full gap-[9px] pb-1">
               {tabs.map((tab) => {
                 const Icon = tab.icon;
                 const active = activeTab === tab.id;
@@ -84,13 +84,13 @@ export default function LibraryPage() {
                     key={tab.id}
                     type="button"
                     onClick={() => setActiveTab(tab.id)}
-                    className={`flex shrink-0 items-center gap-2 rounded-full border px-[18px] py-[11px] text-[15px] font-semibold tracking-[-0.035em] active:scale-[0.97] ${
+                    className={`flex shrink-0 items-center gap-1.5 rounded-full border px-[15px] py-[9px] text-[14px] font-semibold tracking-[-0.03em] active:scale-[0.97] ${
                       active
-                        ? 'border-[#151515] bg-[#151515] text-white shadow-[0_10px_24px_rgba(0,0,0,0.16)]'
+                        ? 'border-[#151515] bg-[#151515] text-white shadow-[0_8px_18px_rgba(0,0,0,0.14)]'
                         : 'border-black/[0.075] bg-white/42 text-[#5F6369] shadow-[inset_0_1px_0_rgba(255,255,255,0.82)]'
                     }`}
                   >
-                    <Icon className="h-[18px] w-[18px]" strokeWidth={2.1} />
+                    <Icon className="h-[16px] w-[16px]" strokeWidth={2.1} />
                     {tab.id}
                   </button>
                 );
@@ -98,20 +98,20 @@ export default function LibraryPage() {
             </div>
           </section>
         </div>
-
-        <div className="px-[26px] pt-7">
-          {activeTab === 'Today' ? <TodayView /> : <PlaceholderView tab={activeTab} />}
-        </div>
-
-        <button
-          type="button"
-          aria-label="New chat"
-          onClick={() => router.push('/chat')}
-          className="fixed bottom-[calc(env(safe-area-inset-bottom,0px)+92px)] right-[24px] z-[80] flex h-[68px] w-[68px] items-center justify-center rounded-full bg-[#171717] text-white shadow-[0_18px_38px_rgba(0,0,0,0.28)] active:scale-95"
-        >
-          <MessageCirclePlus className="h-[33px] w-[33px]" strokeWidth={2.25} />
-        </button>
       </div>
+
+      <div className="mx-auto min-h-[100dvh] w-full max-w-[430px] overflow-x-hidden px-[26px] pb-[240px] pt-[172px]">
+        {activeTab === 'Today' ? <TodayView /> : <PlaceholderView tab={activeTab} />}
+      </div>
+
+      <button
+        type="button"
+        aria-label="New chat"
+        onClick={() => router.push('/chat')}
+        className="fixed bottom-[calc(env(safe-area-inset-bottom,0px)+92px)] right-[24px] z-[9999] flex h-[68px] w-[68px] items-center justify-center rounded-full bg-[#171717] text-white shadow-[0_18px_38px_rgba(0,0,0,0.28)] active:scale-95"
+      >
+        <MessageCirclePlus className="h-[33px] w-[33px]" strokeWidth={2.25} />
+      </button>
     </main>
   );
 }
