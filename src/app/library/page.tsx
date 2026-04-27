@@ -14,13 +14,25 @@ import { TimeView } from './views/TimeView';
 import { ChatsView } from './views/ChatsView';
 import { SavedView } from './views/SavedView';
 
-function renderTab(tab: Tab, data: ReturnType<typeof getLibraryData>) {
-  if (tab === 'Today') return <TodayView data={data} />;
-  if (tab === 'Agents') return <AgentsView data={data} />;
-  if (tab === 'Work') return <WorkView data={data} />;
-  if (tab === 'Time') return <TimeView data={data} />;
-  if (tab === 'Chats') return <ChatsView data={data} />;
-  return <SavedView data={data} />;
+type LibraryData = ReturnType<typeof getLibraryData>;
+
+function renderTab(tab: Tab, data: LibraryData) {
+  switch (tab) {
+    case 'Today':
+      return <TodayView data={data} />;
+    case 'Agents':
+      return <AgentsView data={data} />;
+    case 'Work':
+      return <WorkView data={data} />;
+    case 'Time':
+      return <TimeView data={data} />;
+    case 'Chats':
+      return <ChatsView data={data} />;
+    case 'Saved':
+      return <SavedView data={data} />;
+    default:
+      return <TodayView data={data} />;
+  }
 }
 
 export default function LibraryPage() {
@@ -53,14 +65,14 @@ export default function LibraryPage() {
       <div className="fixed left-0 right-0 top-0 z-[9999] bg-[#F6F6F5]/96 backdrop-blur-2xl">
         <div
           className="mx-auto w-full max-w-[430px] px-[14px] pb-2"
-          style={{ paddingTop: 'env(safe-area-inset-top,12px)' }}
+          style={{ paddingTop: 'env(safe-area-inset-top, 12px)' }}
         >
           <LibraryHeader />
           <LibraryTabs activeTab={activeTab} onChange={setActiveTab} />
         </div>
       </div>
 
-      <section className="absolute inset-x-0 bottom-0 top-[122px] overflow-y-auto">
+      <section className="absolute inset-x-0 bottom-0 top-[122px] overflow-y-auto [-webkit-overflow-scrolling:touch]">
         <div className="mx-auto w-full max-w-[430px] px-[14px] pb-[140px] pt-2">
           {renderTab(activeTab, data)}
         </div>
