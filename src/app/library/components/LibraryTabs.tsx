@@ -1,0 +1,5 @@
+'use client';
+import { Bot, Bookmark, CalendarDays, CheckSquare, MessageSquare, SunMedium } from 'lucide-react';
+import type { Tab } from './types';
+const tabs=[['Today',SunMedium],['Agents',Bot],['Work',CheckSquare],['Time',CalendarDays],['Chats',MessageSquare],['Saved',Bookmark]] as const;
+export function LibraryTabs({activeTab,onChange}:{activeTab:Tab;onChange:(tab:Tab)=>void}){return <section className="w-full overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"><div className="flex w-max min-w-full gap-[9px] pb-1">{tabs.map(([id,Icon])=>{const active=activeTab===id;return <button key={id} onClick={()=>onChange(id as Tab)} className={`flex shrink-0 items-center gap-1.5 rounded-full border px-[15px] py-[9px] text-[14px] font-semibold ${active?'border-[#151515] bg-[#151515] text-white':'border-black/[0.075] bg-white/42 text-[#5F6369]'}`}><Icon className="h-[16px] w-[16px]" />{id}</button>})}</div></section>}
