@@ -1,7 +1,7 @@
 import type { LiveStep } from './live-steps-types';
 
 const labelsByKind: Record<string, string> = {
-  memory: 'Used Memory',
+  memory: 'Used context',
   planning: 'Planned',
   writing: 'Wrote answer',
   search: 'Searched sources',
