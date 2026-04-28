@@ -18,6 +18,7 @@ type KivoComposerDockProps = {
   keyboardOffset?: number;
   containerRef?: Ref<HTMLDivElement>;
   desktopShiftX?: number;
+  onFocus?: () => void;
 };
 
 const MIN_TEXTAREA_HEIGHT = 25;
@@ -37,6 +38,7 @@ export const KivoComposerDock = memo(function KivoComposerDock({
   keyboardOffset = 0,
   containerRef,
   desktopShiftX = 0,
+  onFocus,
 }: KivoComposerDockProps) {
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
   const effectiveKeyboardOffset = keyboardOffset > 0 ? Math.max(0, keyboardOffset - 70) : 0;
@@ -86,6 +88,7 @@ export const KivoComposerDock = memo(function KivoComposerDock({
           id="kivo-composer-textarea"
           value={value}
           onChange={(event) => onChange(event.target.value)}
+          onFocus={onFocus}
           onKeyDown={(event) => {
             if (event.key === 'Enter' && !event.shiftKey) {
               event.preventDefault();
