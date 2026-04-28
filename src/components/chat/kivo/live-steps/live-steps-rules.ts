@@ -6,11 +6,15 @@ function looksLikeSmallTalk(input?: string) {
   if (!input) return false;
   const text = input.trim().toLowerCase();
   if (!text) return false;
-  return /^(hi|hello|hey|thanks|thank you|yo|good morning|good night|how are you)\b/.test(text);
+
+  return /^(hi|hello|hey|thanks|thank you|yo|good morning|good night|how are you|moi|hei|moikka|kiitos|okei|ok|joo)\b/.test(text);
 }
 
 export function shouldShowLiveSteps(steps: LiveStep[], context: LiveStepContext): boolean {
   if (!steps.length) return false;
+
+  const smallTalk = looksLikeSmallTalk(context.latestUserContent);
+  if (smallTalk) return false;
 
   const hasToolStep = steps.some((step) => step.kind === 'tool' || step.kind === 'search' || step.kind === 'calendar');
   const hasMemoryStep = context.memoryUsed || steps.some((step) => step.kind === 'memory');
@@ -23,8 +27,7 @@ export function shouldShowLiveSteps(steps: LiveStep[], context: LiveStepContext)
   if (!usefulSignal) return false;
 
   const shortReply = (context.contentLength || 0) > 0 && (context.contentLength || 0) < 80 && !context.isStreaming;
-  if (shortReply && !hasToolStep && !hasMemoryStep && !slowResponse) return false;
-  if (looksLikeSmallTalk(context.latestUserContent) && !hasToolStep && !hasMemoryStep) return false;
+  if (shortReply && !hasToolStep && !slowResponse) return false;
 
   return true;
 }
@@ -36,6 +39,5 @@ export function getVisibleLiveSteps(steps: LiveStep[], maxVisible = 4): LiveStep
   const completed = steps.filter((step) => step.status === 'done');
 
   const keepTailCompleted = completed.slice(-Math.max(0, maxVisible - runningOrError.length));
-  const merged = [...runningOrError, ...keepTailCompleted].slice(-maxVisible);
-  return merged;
+  return [...runningOrError, ...keepTailCompleted].slice(-maxVisible);
 }
