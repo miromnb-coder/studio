@@ -35,6 +35,13 @@ export function KivoChatScreenLayout(props: Props) {
   const contentLeftOffset = sidebarWidth ? sidebarWidth + SIDEBAR_GAP : 0;
   const composerLeftOffset = sidebarWidth ? sidebarWidth + SIDEBAR_GAP : 12;
   const handleSidebarToggle = () => { if (showSidebarRail) { setShowSidebarRail(false); setIsSidebarOpen(false); return; } setShowSidebarRail(true); setIsSidebarOpen(false); };
+  const handleComposerFocus = () => {
+    setTimeout(() => {
+      const el = mainScrollRef.current;
+      if (!el) return;
+      el.scrollTo({ top: el.scrollHeight, behavior: 'smooth' });
+    }, 180);
+  };
 
   return (
     <div className="relative min-h-[100dvh] w-screen overflow-x-hidden bg-gradient-to-b from-[#f7f7f5] via-[#f5f5f3] to-[#f2f2f0] text-[#2f3640]">
@@ -47,7 +54,7 @@ export function KivoChatScreenLayout(props: Props) {
           <KivoChatScreenAttachmentTray attachments={attachments} keyboardOffset={keyboardOffset} attachmentTrayRef={attachmentTrayRef} onRemoveAttachment={removeAttachment} />
           <KivoChatScreenNoticeToast notice={notice} />
           <div className="[&>div]:!left-[var(--kivo-composer-left)] [&>div]:!right-3 [&>div]:!mx-0 [&>div]:!w-auto [&>div]:!max-w-none [&>div]:transition-[left,right,transform] [&>div]:duration-300 [&>div]:ease-out" style={{ ['--kivo-composer-left' as string]: `${composerLeftOffset}px` } as CSSProperties}>
-            <KivoComposerDock value={draftPrompt} onChange={setDraftPrompt} onSend={handleSend} onPlusClick={() => setActionSheetOpen(true)} onQuickActionClick={() => setWorkspaceOpen(true)} onMicClick={toggleMic} canSend={canSend} isListening={isListening} isSending={isBusy} placeholder={placeholder} keyboardOffset={keyboardOffset} containerRef={composerDockRef} desktopShiftX={0} />
+            <KivoComposerDock value={draftPrompt} onChange={setDraftPrompt} onSend={handleSend} onPlusClick={() => setActionSheetOpen(true)} onQuickActionClick={() => setWorkspaceOpen(true)} onMicClick={toggleMic} canSend={canSend} isListening={isListening} isSending={isBusy} placeholder={placeholder} keyboardOffset={keyboardOffset} containerRef={composerDockRef} desktopShiftX={0} onFocus={handleComposerFocus} />
           </div>
           <KivoReferralSuccessToast open={referralToastOpen} title={referralToastTitle} detail={referralToastDetail} onClose={() => setReferralToastOpen(false)} />
           <KivoActionSheet open={actionSheetOpen} isListening={isListening} attachments={attachments} toolState={{ gmail: { connected: gmailConnected, subtitle: 'Inbox summary, urgent emails, subscriptions' }, calendar: { connected: calendarConnected, subtitle: 'Today plan, reminders, free time' }, 'money-saver': { connected: true, subtitle: 'Find leaks, subscriptions, savings' }, tasks: { connected: true, subtitle: 'Notes, todos, action items' } }} onClose={closeActionSheet} onAddImages={() => openFilePicker('image/*')} onAddFiles={() => openFilePicker()} onPasteLink={handlePasteLink} onVoiceInput={toggleMic} onAiAction={handleAiAction} onToolAction={handleActionTool} />
