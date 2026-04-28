@@ -11,12 +11,48 @@ export type ReserveCreditsResult =
   | { ok: true; reservationId: string; estimate: CreditEstimate; remainingCredits: number }
   | { ok: false; code: 'no_credits'; credits: number; required: number; estimate: CreditEstimate };
 
+type CreditAccountRow = {
+  user_id: string;
+  plan: PlanId;
+  credits_balance: number;
+  monthly_credits: number;
+  free_credits: number;
+  monthly_cycle_id: string;
+  monthly_used: number;
+};
+
 const PLAN_MONTHLY: Record<PlanId, number> = { free: 350, plus: 3200, pro: 8000 };
 const monthId = (date = new Date()) => `${date.getUTCFullYear()}-${String(date.getUTCMonth() + 1).padStart(2, '0')}`;
 
 function summarizeTitle(input: CreditEstimateInput) {
   if (input.intent) return `${input.intent.slice(0, 1).toUpperCase()}${input.intent.slice(1)} task`;
   return input.mode === 'agent' ? 'Agent task' : 'Chat request';
+}
+
+function buildDefaultCreditAccount(userId: string, plan: PlanId = 'free'): CreditAccountRow {
+  const monthly = PLAN_MONTHLY[plan] ?? PLAN_MONTHLY.free;
+  return {
+    user_id: userId,
+    plan,
+    credits_balance: monthly,
+    monthly_credits: monthly,
+    free_credits: plan === 'free' ? monthly : 0,
+    monthly_cycle_id: monthId(),
+    monthly_used: 0,
+  };
+}
+
+function normalizeCreditAccount(userId: string, row: any, fallbackPlan: PlanId = 'free'): CreditAccountRow {
+  const fallback = buildDefaultCreditAccount(userId, fallbackPlan);
+  return {
+    user_id: typeof row?.user_id === 'string' ? row.user_id : fallback.user_id,
+    plan: (row?.plan as PlanId) || fallback.plan,
+    credits_balance: Number(row?.credits_balance ?? fallback.credits_balance),
+    monthly_credits: Number(row?.monthly_credits ?? fallback.monthly_credits),
+    free_credits: Number(row?.free_credits ?? fallback.free_credits),
+    monthly_cycle_id: typeof row?.monthly_cycle_id === 'string' ? row.monthly_cycle_id : fallback.monthly_cycle_id,
+    monthly_used: Number(row?.monthly_used ?? fallback.monthly_used),
+  };
 }
 
 export function estimateCreditCost(input: CreditEstimateInput): CreditEstimate {
@@ -49,19 +85,53 @@ async function getCurrentUserId() {
   return data.user?.id ?? null;
 }
 
-async function ensureCreditAccount(userId: string) {
+async function ensureCreditAccount(userId: string): Promise<CreditAccountRow> {
   const admin = createSupabaseServerAdmin();
   const profile = await getUserBillingProfile(userId).catch(() => ({ plan: 'free' as PlanId }));
-  const plan = profile.plan || 'free';
+  const plan = (profile.plan as PlanId) || 'free';
   const currentMonth = monthId();
-  const { data: existing } = await admin.from('user_credits').select('*').eq('user_id', userId).maybeSingle();
-  if (!existing) {
-    const monthly = PLAN_MONTHLY[plan] ?? PLAN_MONTHLY.free;
-    await admin.from('user_credits').insert({ user_id: userId, plan, credits_balance: monthly, monthly_credits: monthly, free_credits: plan === 'free' ? monthly : 0, monthly_cycle_id: currentMonth, monthly_used: 0 });
+  const fallback = buildDefaultCreditAccount(userId, plan);
+
+  const { data: existing, error: readError } = await admin.from('user_credits').select('*').eq('user_id', userId).maybeSingle();
+
+  if (readError) {
+    console.error('Failed to read user credit account', { userId, error: readError.message });
   }
+
+  if (!existing) {
+    const { data: inserted, error: insertError } = await admin
+      .from('user_credits')
+      .upsert(
+        {
+          user_id: userId,
+          plan,
+          credits_balance: fallback.credits_balance,
+          monthly_credits: fallback.monthly_credits,
+          free_credits: fallback.free_credits,
+          monthly_cycle_id: currentMonth,
+          monthly_used: 0,
+        },
+        { onConflict: 'user_id' },
+      )
+      .select('*')
+      .maybeSingle();
+
+    if (insertError) {
+      console.error('Failed to initialize user credit account', { userId, error: insertError.message });
+    }
+
+    if (inserted) return normalizeCreditAccount(userId, inserted, plan);
+  }
+
   await refreshMonthlyCredits(userId);
-  const { data: row } = await admin.from('user_credits').select('*').eq('user_id', userId).single();
-  return row;
+
+  const { data: row, error: finalReadError } = await admin.from('user_credits').select('*').eq('user_id', userId).maybeSingle();
+
+  if (finalReadError) {
+    console.error('Failed to read initialized user credit account', { userId, error: finalReadError.message });
+  }
+
+  return normalizeCreditAccount(userId, row || existing || fallback, plan);
 }
 
 export async function getCreditBalance(userId?: string) {
@@ -74,11 +144,13 @@ export async function getCreditBalance(userId?: string) {
 export async function refreshMonthlyCredits(userId: string) {
   const admin = createSupabaseServerAdmin();
   const currentMonth = monthId();
-  const { data: account } = await admin.from('user_credits').select('*').eq('user_id', userId).maybeSingle();
+  const { data: account, error } = await admin.from('user_credits').select('*').eq('user_id', userId).maybeSingle();
+  if (error) console.error('Failed to refresh-read credit account', { userId, error: error.message });
   if (!account || account.monthly_cycle_id === currentMonth) return;
   const plan = (account.plan as PlanId) || 'free';
   const monthly = PLAN_MONTHLY[plan] ?? PLAN_MONTHLY.free;
-  const { data: updated } = await admin.from('user_credits').update({ credits_balance: monthly, monthly_credits: monthly, free_credits: plan === 'free' ? monthly : 0, monthly_used: 0, monthly_cycle_id: currentMonth, updated_at: new Date().toISOString() }).eq('user_id', userId).select('*').single();
+  const { data: updated, error: updateError } = await admin.from('user_credits').update({ credits_balance: monthly, monthly_credits: monthly, free_credits: plan === 'free' ? monthly : 0, monthly_used: 0, monthly_cycle_id: currentMonth, updated_at: new Date().toISOString() }).eq('user_id', userId).select('*').maybeSingle();
+  if (updateError) console.error('Failed to refresh monthly credits', { userId, error: updateError.message });
   await admin.from('credit_transactions').insert({ user_id: userId, title: `${plan === 'free' ? 'Free' : plan === 'pro' ? 'Pro' : 'Plus'} monthly credits`, amount: monthly, reason: 'Monthly refresh', agent_tool: 'system', status: 'charged', balance_after: Number(updated?.credits_balance ?? monthly) });
 }
 
@@ -87,7 +159,11 @@ export async function reserveCredits(userId: string, estimate: CreditEstimate): 
   const account = await ensureCreditAccount(userId);
   const available = Number(account.credits_balance ?? 0);
   if (available < estimate.estimated) return { ok: false, code: 'no_credits', credits: available, required: estimate.estimated, estimate };
-  const { data: reservation } = await admin.from('credit_reservations').insert({ user_id: userId, reserved_amount: estimate.estimated, title: estimate.title, reason: estimate.reason, status: 'reserved', expires_at: new Date(Date.now() + 1000 * 60 * 20).toISOString() }).select('id').single();
+  const { data: reservation, error: reservationError } = await admin.from('credit_reservations').insert({ user_id: userId, reserved_amount: estimate.estimated, title: estimate.title, reason: estimate.reason, status: 'reserved', expires_at: new Date(Date.now() + 1000 * 60 * 20).toISOString() }).select('id').maybeSingle();
+  if (reservationError || !reservation?.id) {
+    console.error('Failed to reserve credits', { userId, error: reservationError?.message });
+    return { ok: false, code: 'no_credits', credits: available, required: estimate.estimated, estimate };
+  }
   await admin.from('user_credits').update({ credits_balance: available - estimate.estimated, updated_at: new Date().toISOString() }).eq('user_id', userId);
   await admin.from('credit_transactions').insert({ user_id: userId, reservation_id: reservation.id, title: estimate.title, amount: -estimate.estimated, reason: estimate.reason, agent_tool: 'agent', status: 'reserved', balance_after: available - estimate.estimated });
   return { ok: true, reservationId: reservation.id, estimate, remainingCredits: available - estimate.estimated };
