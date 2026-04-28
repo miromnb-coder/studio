@@ -1,17 +1,7 @@
 import type { KernelRequest } from './types';
 import type { KernelToolName } from './tool-registry';
 
-export type KernelExecutionPlan = {
-  mode: 'fast' | 'agent';
-  tools: KernelToolName[];
-  reasoning: 'light' | 'structured';
-  useBuiltInWebSearch: boolean;
-  intent: KernelPlannerIntent;
-  confidence: number;
-  reasons: string[];
-};
-
-type KernelPlannerIntent =
+export type KernelPlannerIntent =
   | 'plan_today'
   | 'calendar'
   | 'gmail'
@@ -22,6 +12,24 @@ type KernelPlannerIntent =
   | 'research'
   | 'task_planning'
   | 'general';
+
+export type KernelExecutionPlan = {
+  mode: 'fast' | 'agent';
+  tools: KernelToolName[];
+  toolBatches: KernelToolName[][];
+  reasoning: 'light' | 'structured';
+  taskDepth: 'quick' | 'standard' | 'deep';
+  useBuiltInWebSearch: boolean;
+  intent: KernelPlannerIntent;
+  confidence: number;
+  reasons: string[];
+  assumptions: string[];
+  priorities: string[];
+  shouldAskClarifyingQuestion: boolean;
+  clarifyingQuestion?: string;
+  nextBestActionHint: string;
+  evaluationChecks: string[];
+};
 
 type IntentScore = {
   intent: KernelPlannerIntent;
@@ -45,8 +53,18 @@ const INTENT_KEYWORDS: Record<KernelPlannerIntent, string[]> = {
   general: [],
 };
 
+const DEEP_TASK_SIGNALS = ['comprehensive', 'deep', 'full plan', 'architecture', 'production', 'step by step', 'multi-step', 'end-to-end'];
+const QUICK_TASK_SIGNALS = ['quick', 'brief', 'short', 'tl;dr', 'one line', 'fast'];
+const CLARIFY_SIGNALS = ['this', 'that', 'it', 'fix this', 'do it', 'help me', 'what now'];
+
 function normalize(text: string) {
   return text.toLowerCase().replace(/\s+/g, ' ').trim();
+}
+
+function inferTaskDepth(text: string, mode: 'fast' | 'agent', tools: KernelToolName[]): KernelExecutionPlan['taskDepth'] {
+  if (includesAny(text, QUICK_TASK_SIGNALS)) return 'quick';
+  if (includesAny(text, DEEP_TASK_SIGNALS) || mode === 'agent' || tools.length >= 4) return 'deep';
+  return 'standard';
 }
 
 function scoreIntent(text: string, intent: KernelPlannerIntent): IntentScore {
@@ -87,9 +105,11 @@ function inferIntent(text: string): IntentScore {
     .sort((a, b) => b.score - a.score);
 
   const top = candidates[0];
-  if (!top || top.score <= 0) return { intent: 'general', score: 0.35, reasons: ['no strong specialized tool intent'] };
+  const runnerUp = candidates[1];
+  if (!top || top.score <= 0) return { intent: 'general', score: 0.34, reasons: ['no strong specialized tool intent'] };
 
-  const confidence = Math.min(0.95, Math.max(0.45, top.score / 6));
+  let confidence = Math.min(0.96, Math.max(0.42, top.score / 6));
+  if (runnerUp && Math.abs(top.score - runnerUp.score) <= 1) confidence = Math.max(0.35, confidence - 0.18);
   return { intent: top.intent, score: confidence, reasons: top.reasons };
 }
 
@@ -151,20 +171,96 @@ function buildToolsForIntent(intent: KernelPlannerIntent, text: string, mode: 'f
   return tools;
 }
 
+function buildToolBatches(tools: KernelToolName[]): KernelToolName[][] {
+  const statusTools: KernelToolName[] = tools.filter((tool) => tool.endsWith('.status'));
+  const memoryTools: KernelToolName[] = tools.filter((tool) => tool.startsWith('memory.'));
+  const planningTools: KernelToolName[] = tools.filter((tool) => tool === 'tasks.plan' || tool === 'productivity.next_action');
+  const dataTools: KernelToolName[] = tools.filter((tool) => !statusTools.includes(tool) && !memoryTools.includes(tool) && !planningTools.includes(tool));
+
+  const batches: KernelToolName[][] = [];
+  if (statusTools.length) batches.push(statusTools);
+  if (memoryTools.length) batches.push(memoryTools);
+  if (dataTools.length) batches.push(dataTools);
+  if (planningTools.length) batches.push(planningTools);
+  if (!batches.length && tools.length) batches.push([...tools]);
+  return batches;
+}
+
+function buildAssumptions(text: string, intent: KernelPlannerIntent, confidence: number): string[] {
+  const assumptions: string[] = [];
+  if (intent === 'plan_today') assumptions.push('User wants immediate prioritization for today.');
+  if (intent === 'kivo_build') assumptions.push('User prefers implementation-ready guidance over brainstorming.');
+  if (intent === 'research' || includesAny(text, ['latest', 'today', 'current'])) assumptions.push('Fresh external information may be required.');
+  if (confidence < 0.5) assumptions.push('Intent may be ambiguous; answer should include a compact confidence note.');
+  return assumptions;
+}
+
+function buildPriorities(intent: KernelPlannerIntent, taskDepth: KernelExecutionPlan['taskDepth']): string[] {
+  const priorities = ['Give a directly useful result first.', 'Avoid overexplaining internal mechanics.'];
+  if (intent === 'finance') priorities.unshift('Prioritize measurable savings opportunities.');
+  if (intent === 'plan_today') priorities.unshift('Prioritize time-sensitive commitments and one concrete first block.');
+  if (intent === 'kivo_build') priorities.unshift('Prioritize production-safe architecture and TypeScript correctness.');
+  if (taskDepth === 'deep') priorities.push('Provide explicit sequencing for multi-step execution.');
+  return priorities;
+}
+
+function resolveClarifyingQuestion(text: string, intent: KernelPlannerIntent, confidence: number, tools: KernelToolName[]): string | undefined {
+  const tokenCount = text.split(' ').filter(Boolean).length;
+  const hasConcreteSignal = includesAny(text, ['calendar', 'gmail', 'email', 'finance', 'memory', 'kivo', 'compare', 'research', 'today', 'tomorrow']);
+  const vague = tokenCount <= 3 || includesAny(text, CLARIFY_SIGNALS);
+  if (!vague || confidence >= 0.55 || hasConcreteSignal || tools.length >= 2) return undefined;
+
+  if (intent === 'calendar' || intent === 'plan_today') return 'Do you want me to optimize your schedule for today, or just summarize your calendar?';
+  if (intent === 'finance') return 'Should I focus on cutting recurring costs, or on a full spending overview?';
+  if (intent === 'kivo_build') return 'Should I propose architecture changes only, or include exact file-level implementation steps?';
+  return 'What outcome do you want first: a quick answer, or a detailed step-by-step plan?';
+}
+
+function buildNextBestActionHint(intent: KernelPlannerIntent): string {
+  switch (intent) {
+    case 'plan_today':
+      return 'Convert priorities into a time-blocked first action.';
+    case 'finance':
+      return 'Identify the highest-confidence saving and recommend the first cancellation or negotiation action.';
+    case 'kivo_build':
+      return 'Return concrete file-level changes and execution order.';
+    case 'gmail':
+      return 'Promote urgent messages into explicit follow-up actions.';
+    default:
+      return 'End with one practical next action the user can take immediately.';
+  }
+}
+
+function buildEvaluationChecks(intent: KernelPlannerIntent): string[] {
+  const checks = ['Is the answer directly actionable?', 'Did we separate known facts from missing context?', 'Did we avoid raw tool dumps?'];
+  if (intent === 'finance') checks.push('Is there at least one measurable financial recommendation?');
+  if (intent === 'kivo_build') checks.push('Are implementation steps production-safe and specific?');
+  return checks;
+}
+
 export function buildExecutionPlan(request: KernelRequest): KernelExecutionPlan {
   const text = normalize(request.message);
   const mode = request.mode === 'agent' ? 'agent' : 'fast';
   const inferred = inferIntent(text);
   const tools = buildToolsForIntent(inferred.intent, text, mode);
-  const useBuiltInWebSearch = shouldUseWeb(text, inferred.intent);
+  const taskDepth = inferTaskDepth(text, mode, tools);
+  const clarifyingQuestion = resolveClarifyingQuestion(text, inferred.intent, inferred.score, tools);
 
   return {
     mode,
     tools,
-    reasoning: mode === 'agent' || tools.length > 1 ? 'structured' : 'light',
-    useBuiltInWebSearch,
+    toolBatches: buildToolBatches(tools),
+    reasoning: mode === 'agent' || tools.length > 1 || taskDepth === 'deep' ? 'structured' : 'light',
+    taskDepth,
+    useBuiltInWebSearch: shouldUseWeb(text, inferred.intent),
     intent: inferred.intent,
     confidence: inferred.score,
     reasons: inferred.reasons,
+    assumptions: buildAssumptions(text, inferred.intent, inferred.score),
+    priorities: buildPriorities(inferred.intent, taskDepth),
+    shouldAskClarifyingQuestion: Boolean(clarifyingQuestion),
+    clarifyingQuestion,
+    nextBestActionHint: buildNextBestActionHint(inferred.intent),
+    evaluationChecks: buildEvaluationChecks(inferred.intent),
   };
 }
