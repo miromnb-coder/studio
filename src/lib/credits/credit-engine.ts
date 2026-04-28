@@ -185,6 +185,11 @@ function scoreMedia(input: CreditEstimateInput): number {
   return 0;
 }
 
+function historyKey(item: CreditHistoryItem) {
+  const date = new Date(item.createdAt).toISOString().slice(0, 10);
+  return `${date}|${item.title}|${item.amount}|${item.reason}`;
+}
+
 export function estimateCreditCost(input: CreditEstimateInput): CreditEstimate {
   const text = (input.message || '').trim();
   const words = text ? text.split(/\s+/).length : 0;
@@ -282,48 +287,18 @@ export async function refreshCreditCycles(userId: string, timeZone?: string) {
   const plan = (account.plan as PlanId) || 'free';
   const allowance = PLAN_ALLOWANCE[plan] ?? PLAN_ALLOWANCE.free;
 
-  let nextBalance = Number(account.credits_balance ?? 0);
-  let nextMonthlyCredits = Number(account.monthly_credits ?? 0);
-  let nextFreeCredits = Number(account.free_credits ?? 0);
-  let nextMonthlyCycle = account.monthly_cycle_id;
-  let nextDailyCycle = account.daily_cycle_id;
-  let shouldUpdate = false;
+  const shouldRefreshMonthly = account.monthly_cycle_id !== currentMonth;
+  const shouldRefreshDaily = account.daily_cycle_id !== currentDay;
+  if (!shouldRefreshMonthly && !shouldRefreshDaily) return;
 
-  if (account.monthly_cycle_id !== currentMonth) {
-    nextBalance += allowance.monthlyBonus;
-    nextMonthlyCredits = allowance.monthlyBonus;
-    nextMonthlyCycle = currentMonth;
-    shouldUpdate = true;
-
-    await admin.from('credit_transactions').insert({
-      user_id: userId,
-      title: `${plan === 'free' ? 'Free' : plan === 'pro' ? 'Pro' : 'Plus'} monthly bonus`,
-      amount: allowance.monthlyBonus,
-      reason: 'Monthly bonus credits refresh',
-      agent_tool: 'system',
-      status: 'charged',
-      balance_after: nextBalance,
-    });
-  }
-
-  if (account.daily_cycle_id !== currentDay) {
-    nextBalance += allowance.daily;
-    nextFreeCredits = allowance.daily;
-    nextDailyCycle = currentDay;
-    shouldUpdate = true;
-
-    await admin.from('credit_transactions').insert({
-      user_id: userId,
-      title: `${plan === 'free' ? 'Free' : plan === 'pro' ? 'Pro' : 'Plus'} daily credits`,
-      amount: allowance.daily,
-      reason: 'Daily credit refresh',
-      agent_tool: 'system',
-      status: 'charged',
-      balance_after: nextBalance,
-    });
-  }
-
-  if (!shouldUpdate) return;
+  const currentBalance = Number(account.credits_balance ?? 0);
+  const monthlyBonus = shouldRefreshMonthly ? allowance.monthlyBonus : 0;
+  const dailyBonus = shouldRefreshDaily ? allowance.daily : 0;
+  const nextBalance = currentBalance + monthlyBonus + dailyBonus;
+  const nextMonthlyCredits = shouldRefreshMonthly ? allowance.monthlyBonus : Number(account.monthly_credits ?? 0);
+  const nextFreeCredits = shouldRefreshDaily ? allowance.daily : Number(account.free_credits ?? 0);
+  const nextMonthlyCycle = shouldRefreshMonthly ? currentMonth : account.monthly_cycle_id;
+  const nextDailyCycle = shouldRefreshDaily ? currentDay : account.daily_cycle_id;
 
   const { error: updateError } = await admin
     .from('user_credits')
@@ -335,9 +310,51 @@ export async function refreshCreditCycles(userId: string, timeZone?: string) {
       daily_cycle_id: nextDailyCycle,
       updated_at: new Date().toISOString(),
     })
-    .eq('user_id', userId);
+    .eq('user_id', userId)
+    .eq('monthly_cycle_id', account.monthly_cycle_id)
+    .eq('daily_cycle_id', account.daily_cycle_id);
 
-  if (updateError) console.error('Failed to refresh credit cycles', { userId, error: updateError.message });
+  if (updateError) {
+    console.error('Failed to refresh credit cycles', { userId, error: updateError.message });
+    return;
+  }
+
+  if (shouldRefreshMonthly) {
+    await admin.from('credit_transactions').insert({
+      user_id: userId,
+      title: `${plan === 'free' ? 'Free' : plan === 'pro' ? 'Pro' : 'Plus'} monthly bonus`,
+      amount: allowance.monthlyBonus,
+      reason: `Monthly bonus credits refresh ${currentMonth}`,
+      agent_tool: 'system',
+      status: 'charged',
+      balance_after: currentBalance + monthlyBonus,
+    });
+  }
+
+  if (shouldRefreshDaily) {
+    const dailyTitle = `${plan === 'free' ? 'Free' : plan === 'pro' ? 'Pro' : 'Plus'} daily credits`;
+    const dailyReason = `Daily credit refresh ${currentDay}`;
+    const { data: existingDaily } = await admin
+      .from('credit_transactions')
+      .select('id')
+      .eq('user_id', userId)
+      .eq('title', dailyTitle)
+      .eq('amount', allowance.daily)
+      .eq('reason', dailyReason)
+      .maybeSingle();
+
+    if (!existingDaily) {
+      await admin.from('credit_transactions').insert({
+        user_id: userId,
+        title: dailyTitle,
+        amount: allowance.daily,
+        reason: dailyReason,
+        agent_tool: 'system',
+        status: 'charged',
+        balance_after: nextBalance,
+      });
+    }
+  }
 }
 
 export async function reserveCredits(userId: string, estimate: CreditEstimate, metadata?: { provider?: string; model?: string; costTier?: string; routingReason?: string; fallbackUsed?: boolean }): Promise<ReserveCreditsResult> {
@@ -391,24 +408,39 @@ export async function getCreditHistory(userId: string, input?: { page?: number; 
   const admin = createSupabaseServerAdmin();
   const page = Math.max(1, Number(input?.page ?? 1));
   const pageSize = Math.min(100, Math.max(1, Number(input?.pageSize ?? 30)));
-  const from = (page - 1) * pageSize;
-  const to = from + pageSize - 1;
+  const readLimit = pageSize * 4;
+  const from = (page - 1) * readLimit;
+  const to = from + readLimit - 1;
 
   const { data } = await admin
     .from('credit_transactions')
     .select('id,title,amount,reason,created_at,status')
     .eq('user_id', userId)
+    .in('status', ['charged', 'refunded', 'failed'])
     .order('created_at', { ascending: false })
     .range(from, to);
 
-  return (data || []).map((item: any) => ({
-    id: item.id,
-    title: item.title,
-    amount: Number(item.amount ?? 0),
-    reason: item.reason || '',
-    status: (item.status as CreditTransactionStatus) || 'charged',
-    createdAt: item.created_at,
-  }));
+  const seen = new Set<string>();
+  const items: CreditHistoryItem[] = [];
+
+  for (const item of data || []) {
+    const entry: CreditHistoryItem = {
+      id: item.id,
+      title: item.title,
+      amount: Number(item.amount ?? 0),
+      reason: item.reason || '',
+      status: (item.status as CreditTransactionStatus) || 'charged',
+      createdAt: item.created_at,
+    };
+
+    const key = entry.title.toLowerCase().includes('daily credits') ? historyKey(entry) : entry.id;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    items.push(entry);
+    if (items.length >= pageSize) break;
+  }
+
+  return items;
 }
 
 export async function applyCreditReward(userId: string, reward: 'streak_7' | 'beta_tester' | 'invite_friend') {
