@@ -1,4 +1,4 @@
-import type { KernelPlannerIntent } from './planner';
+import type { KernelPlannerIntent, KernelReasoningDepth } from './planner';
 
 export type ModelRouterProvider = 'groq' | 'openai';
 export type ModelRouterCostTier = 'low' | 'medium' | 'high';
@@ -7,6 +7,7 @@ export type ModelRouterInput = {
   message: string;
   intent: KernelPlannerIntent;
   taskDepth: 'quick' | 'standard' | 'deep';
+  reasoningDepth?: KernelReasoningDepth;
   needsTools: boolean;
   requiresHighAccuracy: boolean;
   isRepairPass: boolean;
@@ -56,6 +57,16 @@ export function routeKernelModel(input: ModelRouterInput): ModelRouterOutput {
       model: openAIDefaultModel(),
       costTier: 'high',
       reason: 'Repair pass requires highest reliability and post-check quality control.',
+      fallbackProvider: 'groq',
+    };
+  }
+
+  if (input.reasoningDepth === 'expert') {
+    return {
+      provider: 'openai',
+      model: openAIDefaultModel(),
+      costTier: 'high',
+      reason: 'Expert reasoning requested; route to highest-reliability model path.',
       fallbackProvider: 'groq',
     };
   }

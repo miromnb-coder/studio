@@ -13,6 +13,7 @@ import {
 } from './stream';
 import { buildExecutionPlan, type KernelExecutionPlan } from './planner';
 import { executeKernelTools } from './tool-executor';
+import { assessAnswerQuality } from './evaluator';
 import type {
   KernelDependencies,
   KernelRequest,
@@ -23,6 +24,8 @@ import type {
   RunKernelStreamOptions,
 } from './types';
 import type { KernelPlannerIntent } from './planner';
+import { createClient } from '@/lib/supabase/server';
+import { extractAgentMemoryCandidates, upsertAgentMemories } from '@/lib/memory/agent-memory';
 
 type ToolResult = { tool: string; ok: boolean; summary: string; data?: Record<string, unknown> };
 
@@ -60,6 +63,7 @@ function resolveRoute(request: KernelRequest, plan: KernelExecutionPlan, isRepai
     message: request.message,
     intent: plan.intent,
     taskDepth: plan.taskDepth,
+    reasoningDepth: plan.reasoningDepth,
     needsTools: plan.tools.length > 0 || plan.useBuiltInWebSearch,
     requiresHighAccuracy: requiresHighAccuracy(request.message, plan.intent),
     isRepairPass,
@@ -209,19 +213,6 @@ function getWebSearchTool() {
   return { type: 'web_search' as const };
 }
 
-function assessAnswerQuality(answer: string, plan: KernelExecutionPlan, results: ToolResult[]): { score: number; issues: string[]; shouldRepair: boolean } {
-  const issues: string[] = [];
-  const trimmed = answer.trim();
-  if (trimmed.length < 80 && plan.taskDepth !== 'quick') issues.push('Answer is too short for requested depth.');
-  if (!/[\n\-•]|\d+\./.test(trimmed) && (plan.taskDepth === 'deep' || results.length > 2)) issues.push('Answer lacks structured action format.');
-  if (!/next action|next step|first step|first action/i.test(trimmed)) issues.push('No clear next action stated.');
-  if (results.some((result) => !result.ok) && !/missing|unavailable|disconnected|fallback/i.test(trimmed)) {
-    issues.push('Missing context limitations were not clearly acknowledged.');
-  }
-  const score = Math.max(0, 1 - issues.length * 0.22);
-  return { score, issues, shouldRepair: issues.length >= 2 };
-}
-
 async function repairAnswerIfNeeded(
   client: OpenAI,
   route: ModelRouterOutput,
@@ -343,22 +334,45 @@ async function runModelOnce(
   };
 }
 
+
+
+async function maybeWriteDurableMemory(request: KernelRequest, answer: string, plan: KernelExecutionPlan) {
+  if (!request.userId) return { written: 0 };
+  if (plan.intent === 'general' && answer.length < 120) return { written: 0 };
+
+  const candidates = extractAgentMemoryCandidates({
+    userMessage: request.message,
+    assistantAnswer: answer,
+    sourceLabel: `kernel:${plan.intent}`
+  });
+
+  if (!candidates.length) return { written: 0 };
+  const supabase = await createClient();
+  return upsertAgentMemories(supabase, { userId: request.userId, candidates });
+}
 function buildExecutionMetadata(
   plan: KernelExecutionPlan,
   toolCount: number,
   routing: { provider: 'groq' | 'openai'; model: string; costTier: 'low' | 'medium' | 'high'; reason: string; fallbackUsed: boolean },
   quality?: { score: number; issues: string[] },
+  repairedAnswer = false,
 ) {
   return {
     intent: plan.intent,
     confidence: plan.confidence,
     taskDepth: plan.taskDepth,
+    reasoningDepth: plan.reasoningDepth,
     provider: routing.provider,
     model: routing.model,
     costTier: routing.costTier,
     routingReason: routing.reason,
     fallbackUsed: routing.fallbackUsed,
     responseMode: 'tool',
+    planConfidence: plan.confidence,
+    usedTools: plan.tools,
+    memoryUsed: plan.tools.includes('memory.search'),
+    personalizationApplied: true,
+    repairedAnswer,
     execution: {
       intent: plan.intent,
       forceMode: toolCount ? 'execution' : 'status',
@@ -366,6 +380,7 @@ function buildExecutionMetadata(
       toolCount,
       confidence: plan.confidence,
       taskDepth: plan.taskDepth,
+    reasoningDepth: plan.reasoningDepth,
     },
     evaluation: quality
       ? {
@@ -401,12 +416,13 @@ export async function runKernel(request: KernelRequest, deps: KernelDependencies
     };
     modelRun = await runModelOnce(getClient('openai', deps.apiKey), activeRoute, deps, { ...request, mode }, { ...plan, mode }, toolResults, options);
   }
-  const quality = assessAnswerQuality(modelRun.answer, plan, toolResults);
+  const quality = assessAnswerQuality(modelRun.answer, plan, toolResults.filter((result) => !result.ok).length);
   const repairRoute = resolveRoute(request, plan, true);
   const finalAnswer = quality.shouldRepair
     ? await repairAnswerIfNeeded(getClient(repairRoute.provider, deps.apiKey), repairRoute, deps, { answer: modelRun.answer, plan, results: toolResults, issues: quality.issues }, options.signal)
     : modelRun.answer;
   const effectiveRoute = quality.shouldRepair ? repairRoute : activeRoute;
+  const durableMemory = await maybeWriteDurableMemory(request, finalAnswer, plan);
   const executionMetadata = buildExecutionMetadata(
     plan,
     plan.tools.length + (plan.useBuiltInWebSearch && effectiveRoute.provider === 'openai' ? 1 : 0),
@@ -418,6 +434,7 @@ export async function runKernel(request: KernelRequest, deps: KernelDependencies
       fallbackUsed,
     },
     quality,
+    quality.shouldRepair,
   );
 
   return {
@@ -440,8 +457,14 @@ export async function runKernel(request: KernelRequest, deps: KernelDependencies
       toolBatches: plan.toolBatches,
       webSearchUsed: effectiveRoute.provider === 'openai' && modelRun.webSearchCount > 0,
       webSources: modelRun.webSources,
+      durableMemory,
       planner: {
         reasons: plan.reasons,
+        hiddenGoal: plan.hiddenGoal,
+        urgency: plan.urgency,
+        complexity: plan.complexity,
+        ambiguity: plan.ambiguity,
+        dependencies: plan.dependencies,
         assumptions: plan.assumptions,
         priorities: plan.priorities,
         nextBestActionHint: plan.nextBestActionHint,
@@ -592,12 +615,13 @@ export async function* runKernelStream(request: KernelRequest, deps: KernelDepen
     }
 
     const rawContent = finalText.trim() || extractTextFromResponse(finalResponse) || '';
-    const quality = assessAnswerQuality(rawContent, plan, customToolResults);
+    const quality = assessAnswerQuality(rawContent, plan, customToolResults.filter((result) => !result.ok).length);
     const repairRoute = resolveRoute(request, plan, true);
     const content = quality.shouldRepair
       ? await repairAnswerIfNeeded(getClient(repairRoute.provider, deps.apiKey), repairRoute, deps, { answer: rawContent, plan, results: customToolResults, issues: quality.issues }, options.signal)
       : rawContent;
     const effectiveRoute = quality.shouldRepair ? repairRoute : activeRoute;
+    const durableMemory = await maybeWriteDurableMemory(request, content, plan);
 
     yield createToolResultEvent({
       ...generationTool,
@@ -617,6 +641,7 @@ export async function* runKernelStream(request: KernelRequest, deps: KernelDepen
         fallbackUsed,
       },
       quality,
+      quality.shouldRepair,
     );
 
     yield createAnswerCompletedEvent({
@@ -626,6 +651,7 @@ export async function* runKernelStream(request: KernelRequest, deps: KernelDepen
         execution: executionMetadata.execution,
         intent: plan.intent,
         confidence: plan.confidence,
+        reasoningDepth: plan.reasoningDepth,
         taskDepth: plan.taskDepth,
         importantFindings: customToolResults.map(summarizeFindings),
         missingContext: missingContext(customToolResults),
@@ -634,10 +660,16 @@ export async function* runKernelStream(request: KernelRequest, deps: KernelDepen
         plannerReasons: plan.reasons,
         clarifyingQuestion: plan.clarifyingQuestion,
         nextBestActionHint: plan.nextBestActionHint,
+        hiddenGoal: plan.hiddenGoal,
+        urgency: plan.urgency,
+        complexity: plan.complexity,
+        ambiguity: plan.ambiguity,
+        dependencies: plan.dependencies,
         evaluation: executionMetadata.evaluation,
         toolsUsed: plan.tools,
         toolBatches: plan.toolBatches,
         webSources,
+        durableMemory,
       },
       toolResults: [
         ...customToolResults,

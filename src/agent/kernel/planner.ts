@@ -13,15 +13,24 @@ export type KernelPlannerIntent =
   | 'task_planning'
   | 'general';
 
+export type KernelReasoningDepth = 'quick' | 'standard' | 'deep' | 'expert';
+
 export type KernelExecutionPlan = {
   mode: 'fast' | 'agent';
   tools: KernelToolName[];
   toolBatches: KernelToolName[][];
   reasoning: 'light' | 'structured';
+  reasoningDepth: KernelReasoningDepth;
   taskDepth: 'quick' | 'standard' | 'deep';
   useBuiltInWebSearch: boolean;
   intent: KernelPlannerIntent;
   confidence: number;
+  hiddenGoal: string;
+  urgency: 'low' | 'medium' | 'high';
+  complexity: 'low' | 'medium' | 'high';
+  ambiguity: 'low' | 'medium' | 'high';
+  dependencies: string[];
+  requiresClarification: boolean;
   reasons: string[];
   assumptions: string[];
   priorities: string[];
@@ -29,6 +38,7 @@ export type KernelExecutionPlan = {
   clarifyingQuestion?: string;
   nextBestActionHint: string;
   evaluationChecks: string[];
+  recommendedNextMove: string;
 };
 
 type IntentScore = {
@@ -41,19 +51,20 @@ const includesAny = (text: string, needles: string[]) => needles.some((needle) =
 const countMatches = (text: string, needles: string[]) => needles.reduce((count, needle) => count + (text.includes(needle) ? 1 : 0), 0);
 
 const INTENT_KEYWORDS: Record<KernelPlannerIntent, string[]> = {
-  plan_today: ['today', 'tänään', 'plan my day', 'päivän suunnitelma', 'what should i do', 'mitä minun pitäisi tehdä', 'focus today', 'next task'],
-  calendar: ['calendar', 'kalenteri', 'meeting', 'event', 'schedule', 'availability', 'free time', 'appointment', 'tomorrow', 'this week'],
-  gmail: ['gmail', 'email', 'sähköposti', 'inbox', 'mail', 'urgent email', 'messages', 'reply', 'digest'],
-  finance: ['money', 'budget', 'save', 'subscription', 'finance', 'cost', 'price', 'receipt', 'invoice', 'charge', 'renewal', 'billed', 'raha', 'säästö'],
-  memory: ['remember', 'memory', 'muista', 'previous', 'before', 'last time', 'context', 'prefer', 'goal', 'project context'],
+  plan_today: ['today', 'plan my day', 'what should i do', 'focus today', 'next task'],
+  calendar: ['calendar', 'meeting', 'event', 'schedule', 'availability', 'free time', 'appointment', 'tomorrow', 'this week'],
+  gmail: ['gmail', 'email', 'inbox', 'mail', 'urgent email', 'messages', 'reply', 'digest'],
+  finance: ['money', 'budget', 'save', 'subscription', 'finance', 'cost', 'price', 'receipt', 'invoice', 'charge', 'renewal'],
+  memory: ['remember', 'memory', 'previous', 'last time', 'context', 'prefer', 'goal', 'project context'],
   kivo_build: ['kivo', 'repo', 'github', 'next.js', 'typescript', 'component', 'build error', 'vercel', 'deploy', 'kernel', 'agent', 'orchestrator', 'tool layer'],
-  compare: ['compare', 'vs', 'versus', 'difference', 'better', 'which one', 'kumpi', 'vertaa'],
-  research: ['research', 'search web', 'latest', 'current', 'news', 'recent', 'selvitä', 'etsi tietoa'],
-  task_planning: ['plan', 'steps', 'roadmap', 'todo', 'task', 'next step', 'suunnitelma', 'vaiheet', 'tee seuraavaksi'],
+  compare: ['compare', 'vs', 'versus', 'difference', 'better', 'which one'],
+  research: ['research', 'search web', 'latest', 'current', 'news', 'recent'],
+  task_planning: ['plan', 'steps', 'roadmap', 'todo', 'task', 'next step'],
   general: [],
 };
 
 const DEEP_TASK_SIGNALS = ['comprehensive', 'deep', 'full plan', 'architecture', 'production', 'step by step', 'multi-step', 'end-to-end'];
+const EXPERT_SIGNALS = ['world-class', 'premium', 'expert', 'critical', 'high stakes', 'production-ready'];
 const QUICK_TASK_SIGNALS = ['quick', 'brief', 'short', 'tl;dr', 'one line', 'fast'];
 const CLARIFY_SIGNALS = ['this', 'that', 'it', 'fix this', 'do it', 'help me', 'what now'];
 
@@ -67,6 +78,13 @@ function inferTaskDepth(text: string, mode: 'fast' | 'agent', tools: KernelToolN
   return 'standard';
 }
 
+function inferReasoningDepth(text: string, taskDepth: KernelExecutionPlan['taskDepth']): KernelReasoningDepth {
+  if (includesAny(text, QUICK_TASK_SIGNALS)) return 'quick';
+  if (includesAny(text, EXPERT_SIGNALS)) return 'expert';
+  if (taskDepth === 'deep' || includesAny(text, DEEP_TASK_SIGNALS)) return 'deep';
+  return 'standard';
+}
+
 function scoreIntent(text: string, intent: KernelPlannerIntent): IntentScore {
   const keywords = INTENT_KEYWORDS[intent];
   const matches = countMatches(text, keywords);
@@ -75,7 +93,7 @@ function scoreIntent(text: string, intent: KernelPlannerIntent): IntentScore {
 
   let score = matches;
 
-  if (intent === 'plan_today' && (includesAny(text, ['today', 'tänään']) && includesAny(text, ['calendar', 'kalenteri', 'task', 'focus', 'tehdä']))) {
+  if (intent === 'plan_today' && (includesAny(text, ['today']) && includesAny(text, ['calendar', 'task', 'focus']))) {
     score += 3;
     reasons.push('combined day-planning + schedule/task signal');
   }
@@ -85,12 +103,12 @@ function scoreIntent(text: string, intent: KernelPlannerIntent): IntentScore {
     reasons.push('finance request likely needs email-derived signals');
   }
 
-  if (intent === 'kivo_build' && includesAny(text, ['tee', 'korjaa', 'build', 'repo', 'suoraan', 'deploy'])) {
+  if (intent === 'kivo_build' && includesAny(text, ['build', 'repo', 'deploy', 'kernel', 'planner'])) {
     score += 2;
     reasons.push('Kivo implementation/build workflow signal');
   }
 
-  if (intent === 'memory' && includesAny(text, ['remember this', 'save this', 'note that', 'muista tämä'])) {
+  if (intent === 'memory' && includesAny(text, ['remember this', 'save this', 'note that'])) {
     score += 2;
     reasons.push('durable memory write signal');
   }
@@ -132,11 +150,11 @@ function buildToolsForIntent(intent: KernelPlannerIntent, text: string, mode: 'f
   switch (intent) {
     case 'plan_today':
       add(tools, 'calendar.status', 'calendar.today', 'calendar.plan_day', 'memory.search', 'productivity.next_action');
-      if (includesAny(text, ['email', 'gmail', 'inbox', 'sähköposti', 'urgent'])) add(tools, 'gmail.status', 'gmail.inbox_summary');
+      if (includesAny(text, ['email', 'gmail', 'inbox', 'urgent'])) add(tools, 'gmail.status', 'gmail.inbox_summary');
       break;
     case 'calendar':
       add(tools, 'calendar.status');
-      if (includesAny(text, ['today', 'tänään', 'plan', 'focus'])) add(tools, 'calendar.today', 'calendar.plan_day');
+      if (includesAny(text, ['today', 'plan', 'focus'])) add(tools, 'calendar.today', 'calendar.plan_day');
       else add(tools, 'calendar.search');
       break;
     case 'gmail':
@@ -148,7 +166,7 @@ function buildToolsForIntent(intent: KernelPlannerIntent, text: string, mode: 'f
       break;
     case 'memory':
       add(tools, 'memory.search');
-      if (includesAny(text, ['remember this', 'save this', 'note that', 'muista tämä', 'for future'])) add(tools, 'memory.write');
+      if (includesAny(text, ['remember this', 'save this', 'note that', 'for future'])) add(tools, 'memory.write');
       break;
     case 'kivo_build':
       add(tools, 'memory.search', 'tasks.plan', 'productivity.next_action');
@@ -164,7 +182,7 @@ function buildToolsForIntent(intent: KernelPlannerIntent, text: string, mode: 'f
       add(tools, 'tasks.plan', 'productivity.next_action', 'memory.search');
       break;
     case 'general':
-      if (mode === 'agent') add(tools, 'productivity.next_action');
+      if (mode === 'agent') add(tools, 'productivity.next_action', 'memory.search');
       break;
   }
 
@@ -238,23 +256,75 @@ function buildEvaluationChecks(intent: KernelPlannerIntent): string[] {
   return checks;
 }
 
+function inferHiddenGoal(intent: KernelPlannerIntent): string {
+  switch (intent) {
+    case 'kivo_build':
+      return 'Ship a premium-quality product direction with low implementation risk.';
+    case 'plan_today':
+      return 'Protect focus and reduce decision fatigue.';
+    case 'finance':
+      return 'Create immediate and measurable savings.';
+    default:
+      return 'Get a reliable next step with minimum friction.';
+  }
+}
+
+function inferUrgency(text: string): 'low' | 'medium' | 'high' {
+  if (includesAny(text, ['urgent', 'asap', 'today', 'now', 'immediately'])) return 'high';
+  if (includesAny(text, ['this week', 'soon', 'next'])) return 'medium';
+  return 'low';
+}
+
+function inferComplexity(text: string, tools: KernelToolName[], taskDepth: KernelExecutionPlan['taskDepth']): 'low' | 'medium' | 'high' {
+  if (taskDepth === 'deep' || tools.length >= 4 || includesAny(text, ['architecture', 'migration', 'system design'])) return 'high';
+  if (tools.length >= 2 || includesAny(text, ['plan', 'compare', 'analyze'])) return 'medium';
+  return 'low';
+}
+
+function inferAmbiguity(text: string, confidence: number): 'low' | 'medium' | 'high' {
+  if (confidence < 0.45 || text.split(' ').length <= 3) return 'high';
+  if (confidence < 0.65) return 'medium';
+  return 'low';
+}
+
+function inferDependencies(tools: KernelToolName[], useWeb: boolean): string[] {
+  const deps: string[] = [];
+  if (tools.some((tool) => tool.startsWith('memory.'))) deps.push('Durable memory retrieval');
+  if (tools.some((tool) => tool.startsWith('gmail.'))) deps.push('Gmail connector availability');
+  if (tools.some((tool) => tool.startsWith('calendar.'))) deps.push('Calendar connector availability');
+  if (useWeb) deps.push('Fresh web sources');
+  if (tools.some((tool) => tool.includes('tasks') || tool.includes('next_action'))) deps.push('Task planning stage');
+  return deps;
+}
+
 export function buildExecutionPlan(request: KernelRequest): KernelExecutionPlan {
   const text = normalize(request.message);
   const mode = request.mode === 'agent' ? 'agent' : 'fast';
   const inferred = inferIntent(text);
   const tools = buildToolsForIntent(inferred.intent, text, mode);
   const taskDepth = inferTaskDepth(text, mode, tools);
+  const reasoningDepth = inferReasoningDepth(text, taskDepth);
   const clarifyingQuestion = resolveClarifyingQuestion(text, inferred.intent, inferred.score, tools);
+  const useBuiltInWebSearch = shouldUseWeb(text, inferred.intent);
+  const complexity = inferComplexity(text, tools, taskDepth);
+  const ambiguity = inferAmbiguity(text, inferred.score);
 
   return {
     mode,
     tools,
     toolBatches: buildToolBatches(tools),
     reasoning: mode === 'agent' || tools.length > 1 || taskDepth === 'deep' ? 'structured' : 'light',
+    reasoningDepth,
     taskDepth,
-    useBuiltInWebSearch: shouldUseWeb(text, inferred.intent),
+    useBuiltInWebSearch,
     intent: inferred.intent,
     confidence: inferred.score,
+    hiddenGoal: inferHiddenGoal(inferred.intent),
+    urgency: inferUrgency(text),
+    complexity,
+    ambiguity,
+    dependencies: inferDependencies(tools, useBuiltInWebSearch),
+    requiresClarification: Boolean(clarifyingQuestion),
     reasons: inferred.reasons,
     assumptions: buildAssumptions(text, inferred.intent, inferred.score),
     priorities: buildPriorities(inferred.intent, taskDepth),
@@ -262,5 +332,6 @@ export function buildExecutionPlan(request: KernelRequest): KernelExecutionPlan 
     clarifyingQuestion,
     nextBestActionHint: buildNextBestActionHint(inferred.intent),
     evaluationChecks: buildEvaluationChecks(inferred.intent),
+    recommendedNextMove: buildNextBestActionHint(inferred.intent),
   };
 }
