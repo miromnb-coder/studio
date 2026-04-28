@@ -3,6 +3,7 @@
 import type { ReactNode } from 'react';
 import { ArrowLeft, Sparkles, ChevronRight } from 'lucide-react';
 import { useRouter } from 'next/navigation';
+import { haptic } from '@/lib/haptics';
 
 type PageHeaderProps = {
   title: string;
@@ -79,7 +80,11 @@ export function PageHeader({
       <div className="relative flex h-[48px] items-center justify-between gap-3">
         <button
           type="button"
-          onClick={resolvedLeftAction}
+          onClick={() => {
+            if (!canUseLeftButton || !resolvedLeftAction) return;
+            haptic.selection();
+            resolvedLeftAction();
+          }}
           aria-label={leftButtonAriaLabel}
           disabled={!canUseLeftButton}
           className={`tap-feedback inline-flex h-[42px] w-[42px] shrink-0 items-center justify-center rounded-full border transition ${
@@ -120,7 +125,10 @@ export function PageHeader({
         <div className="flex w-[96px] shrink-0 justify-end">
           <button
             type="button"
-            onClick={() => router.push('/upgrade')}
+            onClick={() => {
+              haptic.heavy();
+              router.push('/upgrade');
+            }}
             aria-label="Upgrade"
             className="tap-feedback inline-flex h-[38px] items-center justify-center rounded-full bg-[#0b0b0d] px-4 text-[13px] font-semibold tracking-[-0.01em] text-white shadow-[0_8px_18px_rgba(0,0,0,0.16)] transition hover:translate-y-[-1px] hover:bg-black active:translate-y-0 active:scale-[0.98]"
           >

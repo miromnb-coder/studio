@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, type ComponentType } from 'react';
+import { useCallback, useEffect, useMemo, type ComponentType } from 'react';
 import {
   AnimatePresence,
   motion,
@@ -25,6 +25,7 @@ import {
   Zap,
 } from 'lucide-react';
 import type { MessageAttachment } from '@/app/store/app-store';
+import { haptic } from '@/lib/haptics';
 
 type AiActionId =
   | 'summarize-day'
@@ -74,9 +75,14 @@ export function KivoActionSheet({
   onToolAction,
 }: KivoActionSheetProps) {
   const dragControls = useDragControls();
+  const closeWithHaptic = useCallback(() => {
+    haptic.selection();
+    onClose();
+  }, [onClose]);
 
   useEffect(() => {
     if (!open || typeof document === 'undefined') return;
+    haptic.light();
 
     const previousOverflow = document.body.style.overflow;
     const previousTouchAction = document.body.style.touchAction;
@@ -85,7 +91,7 @@ export function KivoActionSheet({
     document.body.style.touchAction = 'none';
 
     const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') onClose();
+      if (event.key === 'Escape') closeWithHaptic();
     };
 
     window.addEventListener('keydown', onKeyDown);
@@ -95,7 +101,7 @@ export function KivoActionSheet({
       document.body.style.touchAction = previousTouchAction;
       window.removeEventListener('keydown', onKeyDown);
     };
-  }, [open, onClose]);
+  }, [closeWithHaptic, open]);
 
   const imagePreviews = useMemo(
     () => attachments.filter((item) => item.kind === 'image' && item.previewUrl),
@@ -103,6 +109,7 @@ export function KivoActionSheet({
   );
 
   const closeAfter = (action: () => void) => {
+    haptic.selection();
     action();
     onClose();
   };
@@ -112,7 +119,9 @@ export function KivoActionSheet({
     info: PanInfo,
   ) => {
     if (info.offset.y > 70 || info.velocity.y > 420) {
-      onClose();
+      closeWithHaptic();
+    } else {
+      haptic.light();
     }
   };
 
@@ -128,7 +137,7 @@ export function KivoActionSheet({
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             transition={{ duration: 0.12, ease: 'easeOut' }}
-            onClick={onClose}
+            onClick={closeWithHaptic}
           />
 
           <motion.aside

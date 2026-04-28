@@ -24,6 +24,7 @@ import {
 } from 'lucide-react';
 import { useAppStore } from '@/app/store/app-store';
 import { KivoReferralSheet } from './KivoReferralSheet';
+import { haptic } from '@/lib/haptics';
 
 type SettingsRow = {
   id: string;
@@ -200,6 +201,7 @@ export function KivoSettingsScreen() {
     typeof usage?.scheduledTasks === 'number' ? usage.scheduledTasks : 3;
 
   const openReferralSheet = async () => {
+    haptic.light();
     setReferralOpen(true);
     setReferralLoading(true);
 
@@ -370,6 +372,7 @@ export function KivoSettingsScreen() {
   ];
 
   const onRowClick = (row: SettingsRow) => {
+    haptic.light();
     if (row.action === 'referral') {
       void openReferralSheet();
       return;
@@ -394,7 +397,10 @@ export function KivoSettingsScreen() {
         >
           <div className="flex items-center justify-between">
             <GhostHeaderButton
-              onClick={() => router.push('/home')}
+              onClick={() => {
+                haptic.selection();
+                router.push('/home');
+              }}
               label="Back to home"
             >
               <ChevronLeft className="h-5 w-5" strokeWidth={2} />
@@ -405,7 +411,10 @@ export function KivoSettingsScreen() {
             </h1>
 
             <GhostHeaderButton
-              onClick={() => router.push('/alerts')}
+              onClick={() => {
+                haptic.light();
+                router.push('/alerts');
+              }}
               label="Open alerts"
               dot={unreadAlerts > 0}
             >
@@ -418,7 +427,10 @@ export function KivoSettingsScreen() {
           <section className="mb-5 rounded-[26px] border border-black/[0.06] bg-white px-4 py-4 shadow-[0_12px_28px_rgba(0,0,0,0.035)]">
             <button
               type="button"
-              onClick={() => router.push('/profile')}
+              onClick={() => {
+                haptic.light();
+                router.push('/profile');
+              }}
               className="flex w-full items-center gap-4 text-left"
             >
               <div className="inline-flex h-16 w-16 shrink-0 items-center justify-center rounded-full bg-[#B8897E] text-[26px] font-medium text-white">
@@ -474,7 +486,10 @@ export function KivoSettingsScreen() {
                 <div className="flex shrink-0 flex-col items-end gap-3">
                   <button
                     type="button"
-                    onClick={() => router.push('/upgrade')}
+                    onClick={() => {
+                      haptic.heavy();
+                      router.push('/upgrade');
+                    }}
                     className="inline-flex items-center rounded-full bg-[#0B0B0F] px-5 py-2.5 text-[14px] font-medium text-white shadow-[0_10px_24px_rgba(0,0,0,0.14)] transition-all duration-200 ease-out hover:opacity-95 active:scale-[0.985]"
                   >
                     Upgrade
@@ -482,7 +497,10 @@ export function KivoSettingsScreen() {
 
                   <button
                     type="button"
-                    onClick={() => router.push('/upgrade')}
+                    onClick={() => {
+                      haptic.heavy();
+                      router.push('/upgrade');
+                    }}
                     className="inline-flex items-center gap-1 text-[14px] font-medium text-[#7B7B84] transition-colors hover:text-[#141419]"
                   >
                     See benefits

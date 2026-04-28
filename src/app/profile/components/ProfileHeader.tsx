@@ -1,6 +1,7 @@
 'use client';
 
 import { ArrowLeft, Bell } from 'lucide-react';
+import { haptic } from '@/lib/haptics';
 
 type ProfileHeaderProps = {
   onBack: () => void;
@@ -13,7 +14,10 @@ export function ProfileHeader({ onBack, onNotifications }: ProfileHeaderProps) {
       <div className="mx-auto flex w-full max-w-[640px] items-center justify-between">
         <button
           type="button"
-          onClick={onBack}
+          onClick={() => {
+            haptic.selection();
+            onBack();
+          }}
           aria-label="Go back"
           className="inline-flex h-10 w-10 items-center justify-center rounded-full text-[#171717] transition active:scale-95 active:bg-black/5"
         >
@@ -24,7 +28,10 @@ export function ProfileHeader({ onBack, onNotifications }: ProfileHeaderProps) {
 
         <button
           type="button"
-          onClick={onNotifications}
+          onClick={() => {
+            haptic.light();
+            onNotifications();
+          }}
           aria-label="Open notifications"
           className="inline-flex h-10 w-10 items-center justify-center rounded-full text-[#171717] transition active:scale-95 active:bg-black/5"
         >

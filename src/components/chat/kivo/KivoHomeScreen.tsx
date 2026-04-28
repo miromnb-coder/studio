@@ -15,6 +15,7 @@ import {
 } from 'lucide-react';
 import { useAppStore } from '@/app/store/app-store';
 import { KivoReferralSuccessToast } from './KivoReferralSuccessToast';
+import { haptic } from '@/lib/haptics';
 
 type HomeTab = 'all' | 'agents' | 'unfinished' | 'today';
 
@@ -131,6 +132,7 @@ export function KivoHomeScreen() {
     setReferralToastTitle('Invite successful');
     setReferralToastDetail(detail);
     setReferralToastOpen(true);
+    haptic.success();
 
     const timeout = window.setTimeout(() => {
       setReferralToastOpen(false);

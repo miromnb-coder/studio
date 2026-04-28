@@ -2,6 +2,7 @@
 
 import { Bot, Bookmark, CalendarDays, CheckSquare, MessageSquare, SunMedium } from 'lucide-react';
 import type { Tab } from '../types';
+import { haptic } from '@/lib/haptics';
 
 const tabs = [
   ['Today', SunMedium],
@@ -28,7 +29,10 @@ export function LibraryTabs({
           return (
             <button
               key={id}
-              onClick={() => onChange(id as Tab)}
+              onClick={() => {
+                haptic.selection();
+                onChange(id as Tab);
+              }}
               className={[
                 'flex shrink-0 items-center gap-1.5 rounded-full border px-[14px] py-[8px] text-[13px] font-semibold transition',
                 active

@@ -14,6 +14,7 @@ import {
   type ConnectorState,
 } from '@/app/lib/connectors-state';
 import type { ConnectorMode } from './ConnectorRow';
+import { haptic } from '@/lib/haptics';
 
 type QuickActionId = 'analyze' | 'planner' | 'money-saver' | 'ask-agent';
 type ToolId = 'finance-scanner' | 'memory-search' | 'research-mode' | 'compare-tool' | 'automation-builder';
@@ -118,6 +119,10 @@ export function WorkspaceSheet({
   onRecentSelect: _onRecentSelect,
 }: WorkspaceSheetProps) {
   const dragControls = useDragControls();
+  const closeWithHaptic = useCallback(() => {
+    haptic.selection();
+    onClose();
+  }, [onClose]);
   const [detailId, setDetailId] = useState<ConnectorId | null>(null);
   const [connectors, setConnectors] = useState<ConnectorRecord[]>([]);
   const [runtimeState, setRuntimeState] = useState<Partial<Record<ConnectorId, RuntimeState>>>({});
@@ -208,6 +213,7 @@ export function WorkspaceSheet({
       setDetailId(null);
       return;
     }
+    haptic.light();
 
     const previousOverflow = document.body.style.overflow;
     document.body.style.overflow = 'hidden';
@@ -217,10 +223,11 @@ export function WorkspaceSheet({
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key !== 'Escape') return;
       if (detailId) {
+        haptic.selection();
         setDetailId(null);
         return;
       }
-      onClose();
+      closeWithHaptic();
     };
 
     window.addEventListener('keydown', onKeyDown);
@@ -228,7 +235,7 @@ export function WorkspaceSheet({
       document.body.style.overflow = previousOverflow;
       window.removeEventListener('keydown', onKeyDown);
     };
-  }, [detailId, hydrateConnectors, onClose, open]);
+  }, [closeWithHaptic, detailId, hydrateConnectors, open]);
 
   const resolvedConnectors = useMemo(
     () =>
@@ -246,7 +253,11 @@ export function WorkspaceSheet({
   );
 
   const handleDragEnd = (_: MouseEvent | TouchEvent | PointerEvent, info: PanInfo) => {
-    if (info.offset.y > 120 || info.velocity.y > 650) onClose();
+    if (info.offset.y > 120 || info.velocity.y > 650) {
+      closeWithHaptic();
+    } else {
+      haptic.light();
+    }
   };
 
   const updateConnector = useCallback((id: ConnectorId, state: ConnectorState, extra?: Partial<ConnectorRecord>) => {
@@ -300,7 +311,7 @@ export function WorkspaceSheet({
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            onClick={onClose}
+            onClick={closeWithHaptic}
           />
 
           <motion.aside
@@ -330,7 +341,14 @@ export function WorkspaceSheet({
                 <div className="flex items-center gap-3">
                   <button
                     type="button"
-                    onClick={detailId ? () => setDetailId(null) : onClose}
+                    onClick={
+                      detailId
+                        ? () => {
+                            haptic.selection();
+                            setDetailId(null);
+                          }
+                        : closeWithHaptic
+                    }
                     className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-[#dde5f0] bg-white text-[#546173]"
                     aria-label={detailId ? 'Back to connectors' : 'Close connectors'}
                   >
@@ -416,7 +434,10 @@ export function WorkspaceSheet({
                     <div className="rounded-2xl border border-[#e4eaf3] bg-white p-2 shadow-[0_8px_24px_rgba(17,24,39,0.06)]">
                       <button
                         type="button"
-                        onClick={() => setDetailId('gmail')}
+                        onClick={() => {
+                          haptic.light();
+                          setDetailId('gmail');
+                        }}
                         className="flex w-full items-center justify-between rounded-xl px-3 py-3 text-left hover:bg-[#f8fbff]"
                       >
                         <span className="inline-flex items-center gap-2 text-sm font-semibold text-[#1f2937]"><PlugZap className="h-4 w-4" />Add connectors</span>
