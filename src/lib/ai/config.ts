@@ -1,5 +1,5 @@
 const DEFAULT_PROVIDER = 'groq' as const;
-const DEFAULT_MODEL = 'openai/gpt-oss-120b' as const;
+const DEFAULT_MODEL = 'groq/llama-3.3-70b-versatile' as const;
 
 export const AI_CONFIG = {
   provider: (process.env.AI_PROVIDER ?? DEFAULT_PROVIDER).toLowerCase(),

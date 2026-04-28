@@ -1,5 +1,6 @@
 import OpenAI from 'openai';
 import { buildKernelSystemPrompt } from './system';
+import { routeKernelModel, type ModelRouterOutput } from './model-router';
 import {
   createAnswerCompletedEvent,
   createDeltaEvent,
@@ -21,17 +22,20 @@ import type {
   RunKernelOptions,
   RunKernelStreamOptions,
 } from './types';
+import type { KernelPlannerIntent } from './planner';
 
 type ToolResult = { tool: string; ok: boolean; summary: string; data?: Record<string, unknown> };
 
-function getClient(apiKey?: string): OpenAI {
+function getClient(provider: 'openai' | 'groq', apiKey?: string): OpenAI {
+  if (provider === 'groq') {
+    const key = apiKey ?? process.env.GROQ_API_KEY;
+    if (!key) throw new Error('GROQ_API_KEY is missing.');
+    return new OpenAI({ apiKey: key, baseURL: 'https://api.groq.com/openai/v1' });
+  }
+
   const key = apiKey ?? process.env.OPENAI_API_KEY;
   if (!key) throw new Error('OPENAI_API_KEY is missing.');
   return new OpenAI({ apiKey: key });
-}
-
-function getModel(runtime?: KernelDependencies['runtime']) {
-  return runtime?.model ?? process.env.OPENAI_MODEL ?? 'gpt-5.4-mini';
 }
 
 function getReasoningEffort(runtime?: KernelDependencies['runtime']) {
@@ -44,6 +48,22 @@ function getMaxOutputTokens(runtime?: KernelDependencies['runtime']) {
 
 function coerceMode(mode?: KernelRequest['mode']): 'fast' | 'agent' {
   return mode === 'agent' ? 'agent' : 'fast';
+}
+
+function requiresHighAccuracy(message: string, intent: KernelPlannerIntent): boolean {
+  if (intent === 'finance' || intent === 'research') return true;
+  return /medical|legal|compliance|security|tax|contract|diagnos|prescription/i.test(message);
+}
+
+function resolveRoute(request: KernelRequest, plan: KernelExecutionPlan, isRepairPass: boolean): ModelRouterOutput {
+  return routeKernelModel({
+    message: request.message,
+    intent: plan.intent,
+    taskDepth: plan.taskDepth,
+    needsTools: plan.tools.length > 0 || plan.useBuiltInWebSearch,
+    requiresHighAccuracy: requiresHighAccuracy(request.message, plan.intent),
+    isRepairPass,
+  });
 }
 
 function buildInputMessage(message: string) {
@@ -202,7 +222,13 @@ function assessAnswerQuality(answer: string, plan: KernelExecutionPlan, results:
   return { score, issues, shouldRepair: issues.length >= 2 };
 }
 
-async function repairAnswerIfNeeded(client: OpenAI, model: string, deps: KernelDependencies, input: { answer: string; plan: KernelExecutionPlan; results: ToolResult[]; issues: string[] }, signal?: AbortSignal): Promise<string> {
+async function repairAnswerIfNeeded(
+  client: OpenAI,
+  route: ModelRouterOutput,
+  deps: KernelDependencies,
+  input: { answer: string; plan: KernelExecutionPlan; results: ToolResult[]; issues: string[] },
+  signal?: AbortSignal,
+): Promise<string> {
   if (!input.issues.length) return input.answer;
   const repairPrompt = [
     'Improve the draft answer below.',
@@ -215,32 +241,92 @@ async function repairAnswerIfNeeded(client: OpenAI, model: string, deps: KernelD
     input.answer,
   ].join('\n');
 
-  const response = await client.responses.create(
-    {
-      model,
-      reasoning: { effort: deps.runtime?.reasoningEffort ?? 'low' },
-      max_output_tokens: Math.min(1200, getMaxOutputTokens(deps.runtime)),
-      input: [
-        { role: 'system', content: 'You are an expert response editor for Kivo. Improve clarity, actionability, and structure without changing facts.' },
-        { role: 'user', content: repairPrompt },
-      ],
-    },
-    { signal },
-  );
+  const improved =
+    route.provider === 'groq'
+      ? extractTextFromChatCompletion(
+          await client.chat.completions.create(
+            {
+              model: route.model,
+              temperature: 0.1,
+              messages: [
+                { role: 'system', content: 'You are an expert response editor for Kivo. Improve clarity, actionability, and structure without changing facts.' },
+                { role: 'user', content: repairPrompt },
+              ],
+            },
+            { signal },
+          ),
+        )
+      : extractTextFromResponse(
+          await client.responses.create(
+            {
+              model: route.model,
+              reasoning: { effort: deps.runtime?.reasoningEffort ?? 'low' },
+              max_output_tokens: Math.min(1200, getMaxOutputTokens(deps.runtime)),
+              input: [
+                { role: 'system', content: 'You are an expert response editor for Kivo. Improve clarity, actionability, and structure without changing facts.' },
+                { role: 'user', content: repairPrompt },
+              ],
+            },
+            { signal },
+          ),
+        );
 
-  const improved = extractTextFromResponse(response);
   return improved || input.answer;
 }
 
-async function runModelOnce(client: OpenAI, model: string, deps: KernelDependencies, request: KernelRequest, plan: KernelExecutionPlan, toolResults: ToolResult[], options: RunKernelOptions | RunKernelStreamOptions) {
+function extractTextFromChatCompletion(response: any): string {
+  const choices = Array.isArray(response?.choices) ? response.choices : [];
+  const first = choices[0];
+  const content = first?.message?.content;
+  if (typeof content === 'string') return content.trim();
+  if (Array.isArray(content)) {
+    return content
+      .map((part: any) => (typeof part?.text === 'string' ? part.text : ''))
+      .join('\n')
+      .trim();
+  }
+  return '';
+}
+
+async function runModelOnce(
+  client: OpenAI,
+  route: ModelRouterOutput,
+  deps: KernelDependencies,
+  request: KernelRequest,
+  plan: KernelExecutionPlan,
+  toolResults: ToolResult[],
+  options: RunKernelOptions | RunKernelStreamOptions,
+) {
   const systemPrompt = buildKernelSystemPrompt({ mode: plan.mode });
   const userInput = buildInputMessage(request.message);
+  const toolContext = buildToolContextBlock(request, plan, toolResults);
+  if (route.provider === 'groq') {
+    const completion = await client.chat.completions.create(
+      {
+        model: route.model,
+        temperature: 0.2,
+        messages: [
+          { role: 'system', content: systemPrompt },
+          { role: 'user', content: toolContext ? `${userInput}\n\n${toolContext}` : userInput },
+        ],
+      },
+      { signal: options.signal },
+    );
+
+    return {
+      response: completion,
+      answer: extractTextFromChatCompletion(completion),
+      webSearchCount: 0,
+      webSources: [] as Array<{ url?: string; title?: string }>,
+    };
+  }
+
   const response = await client.responses.create(
     {
-      model,
+      model: route.model,
       reasoning: { effort: getReasoningEffort(deps.runtime) },
       max_output_tokens: getMaxOutputTokens(deps.runtime),
-      input: inputPayload(systemPrompt, userInput, buildToolContextBlock(request, plan, toolResults)),
+      input: inputPayload(systemPrompt, userInput, toolContext),
       tools: plan.useBuiltInWebSearch ? [getWebSearchTool()] : undefined,
       tool_choice: plan.useBuiltInWebSearch ? 'auto' : undefined,
       include: plan.useBuiltInWebSearch ? ['web_search_call.action.sources'] : undefined,
@@ -257,11 +343,21 @@ async function runModelOnce(client: OpenAI, model: string, deps: KernelDependenc
   };
 }
 
-function buildExecutionMetadata(plan: KernelExecutionPlan, toolCount: number, quality?: { score: number; issues: string[] }) {
+function buildExecutionMetadata(
+  plan: KernelExecutionPlan,
+  toolCount: number,
+  routing: { provider: 'groq' | 'openai'; model: string; costTier: 'low' | 'medium' | 'high'; reason: string; fallbackUsed: boolean },
+  quality?: { score: number; issues: string[] },
+) {
   return {
     intent: plan.intent,
     confidence: plan.confidence,
     taskDepth: plan.taskDepth,
+    provider: routing.provider,
+    model: routing.model,
+    costTier: routing.costTier,
+    routingReason: routing.reason,
+    fallbackUsed: routing.fallbackUsed,
     responseMode: 'tool',
     execution: {
       intent: plan.intent,
@@ -282,18 +378,47 @@ function buildExecutionMetadata(plan: KernelExecutionPlan, toolCount: number, qu
 
 export async function runKernel(request: KernelRequest, deps: KernelDependencies = {}, options: RunKernelOptions = {}): Promise<KernelResponse> {
   const mode = coerceMode(request.mode);
-  const client = getClient(deps.apiKey);
-  const model = getModel(deps.runtime);
   const userInput = buildInputMessage(request.message);
   if (!userInput) throw new Error('KernelRequest.message cannot be empty.');
 
   const plan = buildExecutionPlan(request);
   const toolResults = await executeKernelTools(plan.tools, request, { userId: request.userId, conversationId: request.conversationId }, { toolBatches: plan.toolBatches, retries: 1, timeoutMs: 12_000 });
-  const modelRun = await runModelOnce(client, model, deps, { ...request, mode }, { ...plan, mode }, toolResults, options);
+  const route = resolveRoute(request, plan, false);
+  let fallbackUsed = false;
+  let activeRoute = route;
+  let modelRun;
+  try {
+    modelRun = await runModelOnce(getClient(route.provider, deps.apiKey), route, deps, { ...request, mode }, { ...plan, mode }, toolResults, options);
+  } catch (error) {
+    if (route.provider !== 'groq' || route.fallbackProvider !== 'openai') throw error;
+    fallbackUsed = true;
+    activeRoute = {
+      provider: 'openai',
+      model: process.env.OPENAI_MODEL ?? 'gpt-5.4-mini',
+      costTier: 'high',
+      reason: `${route.reason} Groq request failed, retried once with OpenAI fallback.`,
+      fallbackProvider: 'groq',
+    };
+    modelRun = await runModelOnce(getClient('openai', deps.apiKey), activeRoute, deps, { ...request, mode }, { ...plan, mode }, toolResults, options);
+  }
   const quality = assessAnswerQuality(modelRun.answer, plan, toolResults);
+  const repairRoute = resolveRoute(request, plan, true);
   const finalAnswer = quality.shouldRepair
-    ? await repairAnswerIfNeeded(client, model, deps, { answer: modelRun.answer, plan, results: toolResults, issues: quality.issues }, options.signal)
+    ? await repairAnswerIfNeeded(getClient(repairRoute.provider, deps.apiKey), repairRoute, deps, { answer: modelRun.answer, plan, results: toolResults, issues: quality.issues }, options.signal)
     : modelRun.answer;
+  const effectiveRoute = quality.shouldRepair ? repairRoute : activeRoute;
+  const executionMetadata = buildExecutionMetadata(
+    plan,
+    plan.tools.length + (plan.useBuiltInWebSearch && effectiveRoute.provider === 'openai' ? 1 : 0),
+    {
+      provider: effectiveRoute.provider,
+      model: effectiveRoute.model,
+      costTier: effectiveRoute.costTier,
+      reason: effectiveRoute.reason,
+      fallbackUsed,
+    },
+    quality,
+  );
 
   return {
     id: modelRun.response.id,
@@ -301,19 +426,19 @@ export async function runKernel(request: KernelRequest, deps: KernelDependencies
     answer: finalAnswer,
     summary: finalAnswer.slice(0, 200),
     status: 'completed',
-    model,
+    model: effectiveRoute.model,
     createdAt: new Date().toISOString(),
     usage: extractUsage(modelRun.response),
     metadata: {
       conversationId: request.conversationId,
       userId: request.userId,
-      ...buildExecutionMetadata(plan, plan.tools.length + (plan.useBuiltInWebSearch ? 1 : 0), quality),
+      ...executionMetadata,
       importantFindings: toolResults.map(summarizeFindings),
       missingContext: missingContext(toolResults),
       toolResults,
       toolsUsed: plan.tools,
       toolBatches: plan.toolBatches,
-      webSearchUsed: modelRun.webSearchCount > 0,
+      webSearchUsed: effectiveRoute.provider === 'openai' && modelRun.webSearchCount > 0,
       webSources: modelRun.webSources,
       planner: {
         reasons: plan.reasons,
@@ -328,8 +453,6 @@ export async function runKernel(request: KernelRequest, deps: KernelDependencies
 
 export async function* runKernelStream(request: KernelRequest, deps: KernelDependencies = {}, options: RunKernelStreamOptions = {}) {
   const mode = coerceMode(request.mode);
-  const client = getClient(deps.apiKey);
-  const model = getModel(deps.runtime);
   const userInput = buildInputMessage(request.message);
   if (!userInput) throw new Error('KernelRequest.message cannot be empty.');
 
@@ -344,8 +467,11 @@ export async function* runKernelStream(request: KernelRequest, deps: KernelDepen
     yield createLogEvent('Kernel stream started.');
 
     const plan = buildExecutionPlan({ ...request, mode });
+    const route = resolveRoute(request, plan, false);
+    let activeRoute = route;
+    let fallbackUsed = false;
     yield createStatusEvent('planning');
-    yield createLogEvent(`Intent=${plan.intent} confidence=${plan.confidence.toFixed(2)} depth=${plan.taskDepth} tools=${plan.tools.length}.`);
+    yield createLogEvent(`Intent=${plan.intent} confidence=${plan.confidence.toFixed(2)} depth=${plan.taskDepth} tools=${plan.tools.length}. provider=${route.provider} model=${route.model}`);
 
     const customToolResults: ToolResult[] = [];
     yield createStatusEvent('executing');
@@ -361,7 +487,7 @@ export async function* runKernelStream(request: KernelRequest, deps: KernelDepen
       }
     }
 
-    const webSearchEvent = plan.useBuiltInWebSearch
+    const webSearchEvent = plan.useBuiltInWebSearch && activeRoute.provider === 'openai'
       ? buildToolEvent({ tool: 'web_search', title: 'Searching web', subtitle: 'Using built-in web search when useful' })
       : null;
     if (webSearchEvent) yield createToolCallEvent(webSearchEvent);
@@ -369,40 +495,84 @@ export async function* runKernelStream(request: KernelRequest, deps: KernelDepen
     const generationTool = buildToolEvent({ tool: 'response_generator', title: 'Generating response', subtitle: 'Streaming model output' });
     yield createToolCallEvent(generationTool);
 
-    const stream = await client.responses.create(
-      {
-        model,
-        stream: true,
-        reasoning: { effort: getReasoningEffort(deps.runtime) },
-        max_output_tokens: getMaxOutputTokens(deps.runtime),
-        input: inputPayload(buildKernelSystemPrompt({ mode }), userInput, buildToolContextBlock(request, plan, customToolResults)),
-        tools: plan.useBuiltInWebSearch ? [getWebSearchTool()] : undefined,
-        tool_choice: plan.useBuiltInWebSearch ? 'auto' : undefined,
-        include: plan.useBuiltInWebSearch ? ['web_search_call.action.sources'] : undefined,
-      },
-      { signal: options.signal },
-    );
-
-    for await (const event of stream as any) {
-      if (event?.type === 'response.output_text.delta') {
-        const delta = typeof event?.delta === 'string' ? event.delta : typeof event?.text === 'string' ? event.text : '';
-        if (!delta) continue;
-        finalText += delta;
-        yield createDeltaEvent(delta);
-        continue;
-      }
-      if (event?.type === 'response.completed') {
-        finalResponse = event.response;
-        finalId = event.response?.id ?? finalId;
-        finalUsage = extractUsage(event.response);
-        continue;
-      }
-      if (event?.type === 'error') {
-        const msg = event?.error?.message || event?.message || 'OpenAI stream error.';
-        yield createToolResultEvent({ ...generationTool, status: 'failed', output: msg });
-        if (webSearchEvent) yield createToolResultEvent({ ...webSearchEvent, status: 'failed', output: 'Web search did not complete.' });
-        yield createErrorEvent(msg);
+    const modelInput = buildToolContextBlock(request, plan, customToolResults);
+    const runPrimaryStream = async function* (selectedRoute: ModelRouterOutput): AsyncGenerator<string, void, void> {
+      const client = getClient(selectedRoute.provider, deps.apiKey);
+      if (selectedRoute.provider === 'groq') {
+        const stream = await client.chat.completions.create(
+          {
+            model: selectedRoute.model,
+            stream: true,
+            temperature: 0.2,
+            messages: [
+              { role: 'system', content: buildKernelSystemPrompt({ mode }) },
+              { role: 'user', content: modelInput ? `${userInput}\n\n${modelInput}` : userInput },
+            ],
+          },
+          { signal: options.signal },
+        );
+        for await (const event of stream as any) {
+          const delta = typeof event?.choices?.[0]?.delta?.content === 'string' ? event.choices[0].delta.content : '';
+          if (!delta) continue;
+          finalText += delta;
+          yield delta;
+        }
+        finalResponse = { id: `groq-${crypto.randomUUID()}` };
+        finalId = finalResponse.id;
         return;
+      }
+
+      const stream = await client.responses.create(
+        {
+          model: selectedRoute.model,
+          stream: true,
+          reasoning: { effort: getReasoningEffort(deps.runtime) },
+          max_output_tokens: getMaxOutputTokens(deps.runtime),
+          input: inputPayload(buildKernelSystemPrompt({ mode }), userInput, modelInput),
+          tools: plan.useBuiltInWebSearch ? [getWebSearchTool()] : undefined,
+          tool_choice: plan.useBuiltInWebSearch ? 'auto' : undefined,
+          include: plan.useBuiltInWebSearch ? ['web_search_call.action.sources'] : undefined,
+        },
+        { signal: options.signal },
+      );
+
+      for await (const event of stream as any) {
+        if (event?.type === 'response.output_text.delta') {
+          const delta = typeof event?.delta === 'string' ? event.delta : typeof event?.text === 'string' ? event.text : '';
+          if (!delta) continue;
+          finalText += delta;
+          yield delta;
+          continue;
+        }
+        if (event?.type === 'response.completed') {
+          finalResponse = event.response;
+          finalId = event.response?.id ?? finalId;
+          finalUsage = extractUsage(event.response);
+          continue;
+        }
+      }
+    };
+
+    try {
+      for await (const delta of runPrimaryStream(activeRoute)) {
+        yield createDeltaEvent(delta);
+      }
+    } catch (error) {
+      if (activeRoute.provider !== 'groq' || activeRoute.fallbackProvider !== 'openai') {
+        throw error;
+      }
+      fallbackUsed = true;
+      activeRoute = {
+        provider: 'openai',
+        model: process.env.OPENAI_MODEL ?? 'gpt-5.4-mini',
+        costTier: 'high',
+        reason: `${activeRoute.reason} Groq stream failed, retried once with OpenAI fallback.`,
+        fallbackProvider: 'groq',
+      };
+      yield createLogEvent('Groq stream failed; retrying once with OpenAI fallback.');
+      finalText = '';
+      for await (const delta of runPrimaryStream(activeRoute)) {
+        yield createDeltaEvent(delta);
       }
     }
 
@@ -410,7 +580,7 @@ export async function* runKernelStream(request: KernelRequest, deps: KernelDepen
 
     const webSearchCount = countWebSearchCalls(finalResponse);
     const webSources = extractWebSources(finalResponse);
-    if (webSearchEvent) {
+    if (webSearchEvent && activeRoute.provider === 'openai') {
       yield createToolResultEvent({
         ...webSearchEvent,
         status: 'completed',
@@ -423,9 +593,11 @@ export async function* runKernelStream(request: KernelRequest, deps: KernelDepen
 
     const rawContent = finalText.trim() || extractTextFromResponse(finalResponse) || '';
     const quality = assessAnswerQuality(rawContent, plan, customToolResults);
+    const repairRoute = resolveRoute(request, plan, true);
     const content = quality.shouldRepair
-      ? await repairAnswerIfNeeded(client, model, deps, { answer: rawContent, plan, results: customToolResults, issues: quality.issues }, options.signal)
+      ? await repairAnswerIfNeeded(getClient(repairRoute.provider, deps.apiKey), repairRoute, deps, { answer: rawContent, plan, results: customToolResults, issues: quality.issues }, options.signal)
       : rawContent;
+    const effectiveRoute = quality.shouldRepair ? repairRoute : activeRoute;
 
     yield createToolResultEvent({
       ...generationTool,
@@ -433,8 +605,19 @@ export async function* runKernelStream(request: KernelRequest, deps: KernelDepen
       output: content ? `Generated ${content.length} chars` : 'No response text produced by the model.',
     });
 
-    const toolCount = plan.tools.length + (plan.useBuiltInWebSearch ? 1 : 0);
-    const executionMetadata = buildExecutionMetadata(plan, toolCount, quality);
+    const toolCount = plan.tools.length + (plan.useBuiltInWebSearch && effectiveRoute.provider === 'openai' ? 1 : 0);
+    const executionMetadata = buildExecutionMetadata(
+      plan,
+      toolCount,
+      {
+        provider: effectiveRoute.provider,
+        model: effectiveRoute.model,
+        costTier: effectiveRoute.costTier,
+        reason: effectiveRoute.reason,
+        fallbackUsed,
+      },
+      quality,
+    );
 
     yield createAnswerCompletedEvent({
       content,
@@ -458,7 +641,7 @@ export async function* runKernelStream(request: KernelRequest, deps: KernelDepen
       },
       toolResults: [
         ...customToolResults,
-        ...(plan.useBuiltInWebSearch
+        ...(plan.useBuiltInWebSearch && effectiveRoute.provider === 'openai'
           ? [
               {
                 tool: 'web_search',
@@ -481,7 +664,7 @@ export async function* runKernelStream(request: KernelRequest, deps: KernelDepen
       answer: content,
       summary: content.slice(0, 200),
       status: 'completed',
-      model,
+      model: effectiveRoute.model,
       createdAt: new Date().toISOString(),
       usage: finalUsage,
       metadata: {
@@ -493,7 +676,7 @@ export async function* runKernelStream(request: KernelRequest, deps: KernelDepen
         toolsUsed: plan.tools,
         toolBatches: plan.toolBatches,
         toolResults: customToolResults,
-        webSearchUsed: webSearchCount > 0,
+        webSearchUsed: effectiveRoute.provider === 'openai' && webSearchCount > 0,
         webSources,
       },
     };
