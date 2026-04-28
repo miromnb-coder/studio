@@ -86,7 +86,7 @@ export async function runMemorySearchTool(request: KernelRequest, context: Kerne
 }
 
 export async function runMemoryWriteTool(request: KernelRequest, context: KernelToolContext): Promise<KernelToolResult> {
-  const candidates = extractAgentMemoryCandidates({
+  const candidates = await extractAgentMemoryCandidates({
     userMessage: request.message,
     sourceLabel: 'memory_write_tool',
   });

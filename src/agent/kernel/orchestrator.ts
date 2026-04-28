@@ -337,23 +337,68 @@ async function runModelOnce(
 
 
 async function maybeWriteDurableMemory(request: KernelRequest, answer: string, plan: KernelExecutionPlan) {
-  if (!request.userId) return { written: 0 };
-  if (plan.intent === 'general' && answer.length < 120) return { written: 0 };
+  if (!request.userId) return { written: 0, ignored: 0, categories: [] as string[], avgConfidence: 0 };
+  if (plan.intent === 'general' && answer.length < 120) return { written: 0, ignored: 0, categories: [] as string[], avgConfidence: 0 };
 
-  const candidates = extractAgentMemoryCandidates({
+  const candidates = await extractAgentMemoryCandidates({
     userMessage: request.message,
     assistantAnswer: answer,
-    sourceLabel: `kernel:${plan.intent}`
+    sourceLabel: `kernel:${plan.intent}`,
   });
 
-  if (!candidates.length) return { written: 0 };
+  if (!candidates.length) return { written: 0, ignored: 0, categories: [], avgConfidence: 0 };
   const supabase = await createClient();
-  return upsertAgentMemories(supabase, { userId: request.userId, candidates });
+  const stored = await upsertAgentMemories(supabase, { userId: request.userId, candidates });
+  const confidences = candidates
+    .map((candidate) => Number(candidate.confidence ?? 0))
+    .filter((value) => Number.isFinite(value) && value > 0);
+  return {
+    ...stored,
+    categories: Array.from(new Set(candidates.map((candidate) => candidate.category))),
+    avgConfidence: confidences.length ? confidences.reduce((sum, value) => sum + value, 0) / confidences.length : 0,
+  };
+}
+
+function collectMemoryStats(toolResults: ToolResult[]) {
+  const memorySearch = toolResults.find((result) => result.tool === 'memory.search');
+  const data = (memorySearch?.data ?? {}) as Record<string, unknown>;
+  const items = Array.isArray(data.items) ? (data.items as Array<Record<string, unknown>>) : [];
+  const categories = Array.from(
+    new Set(
+      items
+        .map((item) => (typeof item.category === 'string' ? item.category : null))
+        .filter((value): value is string => Boolean(value)),
+    ),
+  );
+  const avgConfidence =
+    items.length > 0
+      ? items
+          .map((item) => Number(item.confidence ?? item.confidenceScore ?? 0))
+          .filter((value) => Number.isFinite(value))
+          .reduce((sum, value) => sum + value, 0) / items.length
+      : 0;
+
+  return {
+    memoryUsed: Boolean(memorySearch?.ok && items.length > 0),
+    memoryFoundCount: items.length,
+    contextBriefIncluded: typeof data.contextBrief === 'string' && data.contextBrief.length > 0,
+    memoryCategories: categories,
+    memoryConfidenceAvg: Math.max(0, Math.min(1, avgConfidence || 0)),
+  };
 }
 function buildExecutionMetadata(
   plan: KernelExecutionPlan,
   toolCount: number,
   routing: { provider: 'groq' | 'openai'; model: string; costTier: 'low' | 'medium' | 'high'; reason: string; fallbackUsed: boolean },
+  memoryStats: {
+    memoryUsed: boolean;
+    memoryFoundCount: number;
+    contextBriefIncluded: boolean;
+    memoryCategories: string[];
+    memoryConfidenceAvg: number;
+    memoryStored: boolean;
+    memoryStoredCount: number;
+  },
   quality?: { score: number; issues: string[] },
   repairedAnswer = false,
 ) {
@@ -370,7 +415,13 @@ function buildExecutionMetadata(
     responseMode: 'tool',
     planConfidence: plan.confidence,
     usedTools: plan.tools,
-    memoryUsed: plan.tools.includes('memory.search'),
+    memoryUsed: memoryStats.memoryUsed,
+    memoryFoundCount: memoryStats.memoryFoundCount,
+    memoryStored: memoryStats.memoryStored,
+    memoryStoredCount: memoryStats.memoryStoredCount,
+    memoryCategories: memoryStats.memoryCategories,
+    contextBriefIncluded: memoryStats.contextBriefIncluded,
+    memoryConfidenceAvg: memoryStats.memoryConfidenceAvg,
     personalizationApplied: true,
     repairedAnswer,
     execution: {
@@ -423,6 +474,7 @@ export async function runKernel(request: KernelRequest, deps: KernelDependencies
     : modelRun.answer;
   const effectiveRoute = quality.shouldRepair ? repairRoute : activeRoute;
   const durableMemory = await maybeWriteDurableMemory(request, finalAnswer, plan);
+  const memoryStats = collectMemoryStats(toolResults);
   const executionMetadata = buildExecutionMetadata(
     plan,
     plan.tools.length + (plan.useBuiltInWebSearch && effectiveRoute.provider === 'openai' ? 1 : 0),
@@ -432,6 +484,11 @@ export async function runKernel(request: KernelRequest, deps: KernelDependencies
       costTier: effectiveRoute.costTier,
       reason: effectiveRoute.reason,
       fallbackUsed,
+    },
+    {
+      ...memoryStats,
+      memoryStored: durableMemory.written > 0,
+      memoryStoredCount: durableMemory.written,
     },
     quality,
     quality.shouldRepair,
@@ -622,6 +679,7 @@ export async function* runKernelStream(request: KernelRequest, deps: KernelDepen
       : rawContent;
     const effectiveRoute = quality.shouldRepair ? repairRoute : activeRoute;
     const durableMemory = await maybeWriteDurableMemory(request, content, plan);
+    const memoryStats = collectMemoryStats(customToolResults);
 
     yield createToolResultEvent({
       ...generationTool,
@@ -639,6 +697,11 @@ export async function* runKernelStream(request: KernelRequest, deps: KernelDepen
         costTier: effectiveRoute.costTier,
         reason: effectiveRoute.reason,
         fallbackUsed,
+      },
+      {
+        ...memoryStats,
+        memoryStored: durableMemory.written > 0,
+        memoryStoredCount: durableMemory.written,
       },
       quality,
       quality.shouldRepair,
