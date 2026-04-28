@@ -66,22 +66,11 @@ export function routeKernelModel(input: ModelRouterInput): ModelRouterOutput {
       model: openAIDefaultModel(),
       costTier: 'high',
       reason: input.requiresHighAccuracy
-        ? 'Task flagged for high accuracy; routing to OpenAI for stronger reliability.'
-        : 'High-risk task detected; routing to OpenAI for safer output quality.',
+        ? 'Task flagged for high accuracy and routed to OpenAI only as necessary fallback.'
+        : 'High-risk task detected; routing to OpenAI fallback for safer output quality.',
       fallbackProvider: 'groq',
     };
   }
-
-  if (input.taskDepth === 'deep') {
-    return {
-      provider: 'openai',
-      model: openAIDefaultModel(),
-      costTier: 'high',
-      reason: 'Deep reasoning request routed to OpenAI for stronger long-chain reasoning.',
-      fallbackProvider: 'groq',
-    };
-  }
-
   if (input.taskDepth === 'quick' && !input.needsTools) {
     return {
       provider: 'groq',

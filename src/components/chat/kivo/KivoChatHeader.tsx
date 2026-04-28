@@ -61,6 +61,7 @@ export default function KivoChatHeader({ hasMessages = false }: Props) {
   const [credits, setCredits] = useState(0);
   const [creditSnapshot, setCreditSnapshot] = useState<CreditSnapshot>({});
   const [isUsageSheetOpen, setIsUsageSheetOpen] = useState(false);
+  const timezoneLabel = Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC';
   const [pulse, setPulse] = useState(false);
   const previousCreditsRef = useRef<number | null>(null);
   const animatedCredits = useAnimatedNumber(credits);
@@ -71,7 +72,7 @@ export default function KivoChatHeader({ hasMessages = false }: Props) {
 
     const loadCredits = async () => {
       try {
-        const response = await fetch('/api/credits', { cache: 'no-store' });
+        const response = await fetch('/api/credits', { cache: 'no-store', headers: { 'x-kivo-timezone': timezoneLabel } });
         if (!response.ok) return;
         const data: CreditSnapshot = await response.json();
         const nextCredits = Number(data?.credits ?? 0);
@@ -103,7 +104,7 @@ export default function KivoChatHeader({ hasMessages = false }: Props) {
       window.clearInterval(intervalId);
       if (pulseTimer) window.clearTimeout(pulseTimer);
     };
-  }, []);
+  }, [timezoneLabel]);
 
   const openUsageSheet = () => {
     haptic.light();
@@ -157,6 +158,7 @@ export default function KivoChatHeader({ hasMessages = false }: Props) {
           monthlyLimit: Number(creditSnapshot.monthlyCredits ?? 200),
           bonusCredits: 0,
         }}
+        timezoneLabel={timezoneLabel}
       />
     </header>
   );

@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { createPortal } from 'react-dom';
 import {
   AnimatePresence,
@@ -31,6 +31,7 @@ type UsageMetric = {
 };
 
 type CreditHistoryEntry = {
+  id: string;
   label: string;
   amount: number;
 };
@@ -38,6 +39,15 @@ type CreditHistoryEntry = {
 type CreditHistoryDay = {
   date: string;
   entries: CreditHistoryEntry[];
+};
+
+type ApiCreditHistoryEntry = {
+  id: string;
+  title: string;
+  amount: number;
+  reason: string;
+  status: string;
+  createdAt: string;
 };
 
 type KivoUsageSheetProps = {
@@ -49,7 +59,6 @@ type KivoUsageSheetProps = {
   planSubtitle?: string;
   timezoneLabel?: string;
   usage?: Partial<UsageMetric>;
-  history?: CreditHistoryDay[];
 };
 
 const DEFAULT_USAGE: UsageMetric = {
@@ -63,23 +72,27 @@ const DEFAULT_USAGE: UsageMetric = {
   bonusCredits: 0,
 };
 
-const DEFAULT_HISTORY: CreditHistoryDay[] = [
-  {
-    date: '26. Apr 2026',
-    entries: [
-      { label: 'Asked Kivo', amount: -4 },
-      { label: 'Used Research Agent', amount: -12 },
-      { label: 'Daily credits', amount: 25 },
-    ],
-  },
-  {
-    date: '25. Apr 2026',
-    entries: [
-      { label: 'Asked Kivo', amount: -3 },
-      { label: 'Used Calendar Agent', amount: -8 },
-    ],
-  },
-];
+function groupHistoryByDay(history: ApiCreditHistoryEntry[], timeZone: string): CreditHistoryDay[] {
+  const formatter = new Intl.DateTimeFormat('en-US', { month: 'short', day: 'numeric', year: 'numeric', timeZone });
+  const now = new Date();
+  const todayKey = formatter.format(now);
+  const yesterday = new Date(now);
+  yesterday.setDate(now.getDate() - 1);
+  const yesterdayKey = formatter.format(yesterday);
+
+  const grouped = new Map<string, CreditHistoryEntry[]>();
+  for (const item of history) {
+    const key = formatter.format(new Date(item.createdAt));
+    const bucket = grouped.get(key) ?? [];
+    bucket.push({ id: item.id, label: item.title, amount: Number(item.amount || 0) });
+    grouped.set(key, bucket);
+  }
+
+  return Array.from(grouped.entries()).map(([date, entries]) => ({
+    date: date === todayKey ? 'Today' : date === yesterdayKey ? 'Yesterday' : date,
+    entries,
+  }));
+}
 
 export function KivoUsageSheet({
   isOpen,
@@ -88,13 +101,17 @@ export function KivoUsageSheet({
   planName = 'Kivo Free',
   planBadge = 'Free',
   planSubtitle = 'Upgrade anytime to Kivo Pro',
-  timezoneLabel = 'UTC+3',
+  timezoneLabel = 'UTC',
   usage,
-  history = DEFAULT_HISTORY,
 }: KivoUsageSheetProps) {
   const dragControls = useDragControls();
   const [mounted, setMounted] = useState(false);
+  const [historyRows, setHistoryRows] = useState<ApiCreditHistoryEntry[]>([]);
+  const [historyState, setHistoryState] = useState<'idle' | 'loading' | 'ready' | 'error'>('idle');
   const metric = { ...DEFAULT_USAGE, ...usage };
+
+  const groupedHistory = useMemo(() => groupHistoryByDay(historyRows, timezoneLabel), [historyRows, timezoneLabel]);
+
   const closeWithHaptic = useCallback(() => {
     haptic.selection();
     onClose();
@@ -103,6 +120,32 @@ export function KivoUsageSheet({
   useEffect(() => {
     setMounted(true);
   }, []);
+
+  useEffect(() => {
+    if (!isOpen) return;
+
+    const fetchHistory = async () => {
+      setHistoryState('loading');
+      try {
+        const response = await fetch('/api/credits/history?page=1&pageSize=40', {
+          cache: 'no-store',
+          headers: { 'x-kivo-timezone': timezoneLabel },
+        });
+        if (!response.ok) {
+          setHistoryState('error');
+          return;
+        }
+
+        const data = await response.json();
+        setHistoryRows(Array.isArray(data?.history) ? data.history : []);
+        setHistoryState('ready');
+      } catch {
+        setHistoryState('error');
+      }
+    };
+
+    fetchHistory();
+  }, [isOpen, timezoneLabel]);
 
   useEffect(() => {
     if (!isOpen) return;
@@ -127,10 +170,7 @@ export function KivoUsageSheet({
     };
   }, [closeWithHaptic, isOpen]);
 
-  const handleDragEnd = (
-    _: MouseEvent | TouchEvent | PointerEvent,
-    info: PanInfo,
-  ) => {
+  const handleDragEnd = (_: MouseEvent | TouchEvent | PointerEvent, info: PanInfo) => {
     if (info.offset.y > 90 || info.velocity.y > 560) {
       closeWithHaptic();
     } else {
@@ -206,11 +246,11 @@ export function KivoUsageSheet({
                   </div>
 
                   <button
-                  type="button"
-                  onClick={() => {
-                    haptic.heavy();
-                    onUpgrade?.();
-                  }}
+                    type="button"
+                    onClick={() => {
+                      haptic.heavy();
+                      onUpgrade?.();
+                    }}
                     className="mt-1 inline-flex h-12 items-center justify-center rounded-full bg-black/[0.10] px-6 text-[16px] font-semibold tracking-[-0.02em] text-[#101010] transition active:scale-[0.97]"
                   >
                     Upgrade
@@ -220,47 +260,35 @@ export function KivoUsageSheet({
                 <div className="my-4 h-px bg-black/[0.08]" />
 
                 <MetricRow icon={Sparkles} label="Credits" value={String(metric.credits)} />
-                <MetricRow
-                  icon={Calendar}
-                  label="Daily credits"
-                  value={`${metric.dailyUsed} / ${metric.dailyLimit}`}
-                  subValue={`Resets in ${metric.dailyResetsIn}`}
-                />
-                <MetricRow
-                  icon={CircleSlash}
-                  label="Monthly credits"
-                  value={`${metric.monthlyUsed} / ${metric.monthlyLimit}`}
-                  subValue={`Resets in ${metric.monthlyResetsIn}`}
-                />
+                <MetricRow icon={Calendar} label="Daily credits" value={`${metric.dailyUsed} / ${metric.dailyLimit}`} subValue={`Resets in ${metric.dailyResetsIn}`} />
+                <MetricRow icon={CircleSlash} label="Monthly credits" value={`${metric.monthlyUsed} / ${metric.monthlyLimit}`} subValue={`Resets in ${metric.monthlyResetsIn}`} />
                 <MetricRow icon={Gift} label="Bonus credits" value={String(metric.bonusCredits)} />
               </section>
 
               <section className="rounded-[28px] border border-black/[0.07] bg-white/90 p-4 shadow-[0_12px_28px_rgba(0,0,0,0.04)]">
                 <div className="flex items-center justify-between gap-3 border-b border-black/[0.08] pb-3">
                   <h3 className="text-[17px] font-semibold tracking-[-0.03em] text-[#111111]">Credits history</h3>
-                  <span className="inline-flex items-center gap-1 text-[17px] text-black/60">
+                  <span className="inline-flex items-center gap-1 text-[14px] text-black/60">
                     {timezoneLabel}
-                    <Info className="h-[20px] w-[20px]" strokeWidth={2.1} />
+                    <Info className="h-[18px] w-[18px]" strokeWidth={2.1} />
                   </span>
                 </div>
 
                 <div className="space-y-4 pt-4">
-                  {history.map((day, dayIndex) => (
-                    <div key={day.date}>
+                  {historyState === 'loading' ? <p className="text-[14px] text-black/55">Loading credit history…</p> : null}
+                  {historyState === 'error' ? <p className="text-[14px] text-[#9e3d3d]">Unable to load credit history right now.</p> : null}
+                  {historyState === 'ready' && groupedHistory.length === 0 ? <p className="text-[14px] text-black/55">No credit activity yet.</p> : null}
+
+                  {groupedHistory.map((day, dayIndex) => (
+                    <motion.div key={day.date} initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.2, delay: dayIndex * 0.03 }}>
                       {dayIndex > 0 ? <div className="mb-4 h-px bg-black/[0.08]" /> : null}
-
                       <p className="mb-2 text-[14px] tracking-[-0.01em] text-black/55">{day.date}</p>
-
                       <div className="space-y-1.5">
                         {day.entries.map((entry) => (
-                          <HistoryRow
-                            key={`${day.date}-${entry.label}-${entry.amount}`}
-                            label={entry.label}
-                            amount={entry.amount}
-                          />
+                          <HistoryRow key={entry.id} label={entry.label} amount={entry.amount} />
                         ))}
                       </div>
-                    </div>
+                    </motion.div>
                   ))}
                 </div>
 
@@ -271,13 +299,9 @@ export function KivoUsageSheet({
                     </span>
 
                     <div>
-                      <p className="text-[18px] font-semibold tracking-[-0.02em] text-[#101010]">
-                        Credits power everything
-                      </p>
+                      <p className="text-[18px] font-semibold tracking-[-0.02em] text-[#101010]">Credits power everything</p>
                       <p className="mt-1 text-[14px] leading-[1.45] tracking-[-0.01em] text-black/62">
-                        Each question, agent run and automation uses credits.
-                        <br />
-                        Upgrade to get more every month.
+                        Credits now map to real AI work: tools, execution depth, model tier and media.
                       </p>
                     </div>
                   </div>
@@ -292,17 +316,7 @@ export function KivoUsageSheet({
   );
 }
 
-function MetricRow({
-  icon: Icon,
-  label,
-  value,
-  subValue,
-}: {
-  icon: typeof Sparkles;
-  label: string;
-  value: string;
-  subValue?: string;
-}) {
+function MetricRow({ icon: Icon, label, value, subValue }: { icon: typeof Sparkles; label: string; value: string; subValue?: string }) {
   return (
     <div className="flex min-h-12 items-start justify-between py-1.5">
       <div className="flex min-w-0 items-start gap-3">
@@ -314,9 +328,7 @@ function MetricRow({
             {label}
             <Info className="h-[18px] w-[18px] text-black/45" strokeWidth={2} />
           </span>
-          {subValue ? (
-            <p className="mt-0.5 text-[14px] tracking-[-0.01em] text-black/52">{subValue}</p>
-          ) : null}
+          {subValue ? <p className="mt-0.5 text-[14px] tracking-[-0.01em] text-black/52">{subValue}</p> : null}
         </div>
       </div>
 
@@ -332,10 +344,8 @@ function HistoryRow({ label, amount }: { label: string; amount: number }) {
 
   return (
     <div className="flex items-center justify-between gap-2">
-      <p className="text-[17px] tracking-[-0.03em] text-[#181818]">{label}</p>
-      <p
-        className={`text-[17px] font-medium tracking-[-0.03em] ${amount > 0 ? 'text-[#202020]' : 'text-[#1a1a1a]'}`}
-      >
+      <p className="text-[16px] tracking-[-0.02em] text-[#181818]">{label}</p>
+      <p className={`text-[16px] font-medium tracking-[-0.03em] ${amount > 0 ? 'text-emerald-600' : amount < 0 ? 'text-[#8f3131]' : 'text-[#1a1a1a]'}`}>
         {amountLabel}
       </p>
     </div>

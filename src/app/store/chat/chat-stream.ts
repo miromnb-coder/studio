@@ -27,7 +27,13 @@ export async function streamAssistantResponse({ requestId, assistantMessageId, c
   const currentState = getState(); const conversationMessages = currentState.messageState[conversationId] ?? []; const latestPrompt = latestUserMessage(conversationMessages); const pace = inferPace(latestPrompt); const payload = buildStreamPayload(conversationMessages, currentState.user?.id);
   setState((prev) => { const messages = prev.messageState[conversationId] ?? []; const execution = buildExecution('Thinking', '', 0); return { ...prev, activeAgent: DEFAULT_ACTIVE_AGENT, messageState: { ...prev.messageState, [conversationId]: updateAssistantMessage(messages, assistantMessageId, (message) => ({ ...message, isStreaming: true, content: '', structuredData: { execution }, agentMetadata: { ...mergeAgentMetadata(message.agentMetadata), execution, structuredData: { execution } } })) } }; });
 
-  const response = await fetch('/api/chat', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
+  const timeZone = Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC';
+  const response = await fetch('/api/chat', { method: 'POST', headers: { 'Content-Type': 'application/json', 'x-kivo-timezone': timeZone }, body: JSON.stringify(payload) });
+  const estimateHeader = Number(response.headers.get('X-Credits-Estimate') || 0);
+  const estimateNote = response.headers.get('X-Credits-Estimate-Message');
+  if (estimateHeader >= 8 && estimateNote) {
+    trackEvent('credit_estimate_shown', { conversationId, messageId: assistantMessageId, requestId, properties: { estimate: estimateHeader, note: estimateNote } });
+  }
   if (!response.ok) { const reason = await response.json().catch(() => null); if (reason?.usage) emitUsageUpdate({ usage: reason.usage, plan: reason?.plan }); throw new Error(providerSafeErrorMessage(reason?.error || reason?.message || `Request failed (${response.status})`)); }
   const reader = response.body?.getReader(); if (!reader) throw new Error('Missing response stream.');
   const decoder = new TextDecoder(); let buffer = ''; let modelText = ''; let visibleText = ''; let streamComplete = false; let streamError: string | null = null; let toolCount = 0; let flushTimer: number | null = null; let lastStatusText = 'Thinking'; let latestMetadata: AgentResponseMetadata | undefined; let latestToolResults: Array<Record<string, unknown>> | undefined; const startedAt = Date.now();

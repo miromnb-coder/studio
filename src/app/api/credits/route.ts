@@ -10,10 +10,15 @@ async function requireUserId() {
   return data.user?.id ?? null;
 }
 
-export async function GET() {
+function resolveTimeZone(req?: NextRequest) {
+  const candidate = req?.headers.get('x-kivo-timezone') || req?.headers.get('x-timezone');
+  return candidate && candidate.trim() ? candidate.trim() : undefined;
+}
+
+export async function GET(req: NextRequest) {
   const userId = await requireUserId();
   if (!userId) return Response.json({ error: 'AUTH_REQUIRED' }, { status: 401 });
-  return Response.json(await getCreditSnapshot({ userId }));
+  return Response.json(await getCreditSnapshot({ userId, timeZone: resolveTimeZone(req) }));
 }
 
 export async function POST(req: NextRequest) {

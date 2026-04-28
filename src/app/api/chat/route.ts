@@ -5,7 +5,7 @@ import {
   runKernelStream,
   serializeKernelStreamEvent,
 } from '@/agent/kernel';
-import { chargeEstimatedCredits, settleCreditCharge } from '@/lib/credits';
+import { chargeEstimatedCredits, settleCreditCharge, estimateCreditCost } from '@/lib/credits';
 import { createClient } from '@/lib/supabase/server';
 
 export const dynamic = 'force-dynamic';
@@ -142,6 +142,37 @@ function normalizeIncomingPayload(body: unknown): NormalizedPayload {
   };
 }
 
+
+function deriveActualCreditUsage(input: {
+  mode: 'fast' | 'agent';
+  message: string;
+  requestedTools: string[];
+  attachments: NormalizedAttachment[];
+  observedTools: string[];
+  executionSteps: number;
+  provider?: 'groq' | 'openai';
+  model?: string;
+  reasoningDepth?: 'quick' | 'standard' | 'deep' | 'expert';
+}) {
+  const fileCount = input.attachments.filter((item) => item.kind === 'file').length;
+  const imageCount = input.attachments.filter((item) => item.kind === 'image').length;
+  const estimate = estimateCreditCost({
+    message: input.message,
+    mode: input.mode,
+    tools: [...input.requestedTools, ...input.observedTools],
+    executionSteps: input.executionSteps,
+    provider: input.provider,
+    model: input.model,
+    reasoningDepth: input.reasoningDepth,
+    hasFile: fileCount > 0,
+    fileCount,
+    hasImage: imageCount > 0,
+    imageCount,
+    usesWeb: input.requestedTools.some((tool) => /web/i.test(tool)) || input.observedTools.some((tool) => /web/i.test(tool)),
+  });
+  return estimate.estimated;
+}
+
 export async function POST(request: NextRequest) {
   let payload: NormalizedPayload;
 
@@ -167,14 +198,30 @@ export async function POST(request: NextRequest) {
       return Response.json({ error: 'No message provided in request body.' }, { status: 400 });
     }
 
+    const fileCount = payload.attachments.filter((item) => item.kind === 'file').length;
+    const imageCount = payload.attachments.filter((item) => item.kind === 'image').length;
+
     const charged = await chargeEstimatedCredits({
       userId,
       message: payload.input,
       mode: payload.mode,
-      hasFile: payload.attachments.length > 0,
+      hasFile: fileCount > 0,
+      fileCount,
+      hasImage: imageCount > 0,
+      imageCount,
       usesWeb: payload.usesWeb,
       tools: payload.requestedTools,
       executionSteps: payload.executionSteps,
+      provider: 'groq',
+      model: 'llama-3.3-70b-versatile',
+      reasoningDepth: payload.mode === 'agent' ? 'standard' : 'quick',
+      routingMetadata: {
+        provider: 'groq',
+        model: 'llama-3.3-70b-versatile',
+        costTier: 'low',
+        routingReason: 'Default routing to Groq for normal chat and planning tasks',
+        fallbackUsed: false,
+      },
     });
 
     if (!charged.ok) {
@@ -195,6 +242,10 @@ export async function POST(request: NextRequest) {
       async start(controller) {
         let failed = false;
         let steps = 0;
+        const observedTools = new Set<string>();
+        let routedProvider: 'groq' | 'openai' = 'groq';
+        let routedModel = 'llama-3.3-70b-versatile';
+        let reasoningDepth: 'quick' | 'standard' | 'deep' | 'expert' = payload.mode === 'agent' ? 'standard' : 'quick';
 
         try {
           for await (const event of runKernelStream({
@@ -209,6 +260,19 @@ export async function POST(request: NextRequest) {
             },
           })) {
             steps += 1;
+            if (event && typeof event === 'object' && 'type' in event) {
+              const typedEvent = event as Record<string, unknown>;
+              if (typedEvent.type === 'tool_started' && typeof typedEvent.tool === 'string') observedTools.add(typedEvent.tool);
+              if (typedEvent.type === 'done' && typedEvent.result && typeof typedEvent.result === 'object') {
+                const result = typedEvent.result as Record<string, unknown>;
+                const metadata = result.metadata && typeof result.metadata === 'object' ? (result.metadata as Record<string, unknown>) : undefined;
+                if (metadata?.provider === 'openai' || metadata?.provider === 'groq') routedProvider = metadata.provider;
+                if (typeof metadata?.model === 'string') routedModel = metadata.model;
+                if (metadata?.taskDepth === 'deep') reasoningDepth = 'deep';
+                if (metadata?.taskDepth === 'standard') reasoningDepth = 'standard';
+                if (metadata?.taskDepth === 'quick') reasoningDepth = 'quick';
+              }
+            }
             controller.enqueue(streamLine(event));
           }
         } catch (error) {
@@ -224,21 +288,26 @@ export async function POST(request: NextRequest) {
           );
         } finally {
           try {
-            const estimated = charged.estimate.estimated;
-            const actualUsage = Math.max(
-              1,
-              Math.round(
-                estimated *
-                  (failed ? 0.35 : Math.min(1, 0.55 + steps * 0.06)),
-              ),
-            );
+            const actualUsage = deriveActualCreditUsage({
+              mode: payload.mode,
+              message: payload.input,
+              requestedTools: payload.requestedTools,
+              attachments: payload.attachments,
+              observedTools: Array.from(observedTools),
+              executionSteps: Math.max(steps, payload.executionSteps),
+              provider: routedProvider,
+              model: routedModel,
+              reasoningDepth,
+            });
 
             await settleCreditCharge(charged.reservationId, {
               used: actualUsage,
               failed,
+              title: payload.mode === 'agent' ? 'Agent mode request' : 'Quick normal chat',
+              agentTool: Array.from(observedTools)[0] || 'chat',
               reason: failed
                 ? 'Chat kernel execution failed'
-                : 'Chat kernel execution completed',
+                : `provider:${routedProvider};model:${routedModel};reasoning:${reasoningDepth};steps:${Math.max(steps, payload.executionSteps)}`,
             });
           } catch (settleError) {
             console.error('Failed to settle chat credit charge', {
@@ -267,6 +336,7 @@ export async function POST(request: NextRequest) {
         'X-Credits-Requires-Confirmation': String(
           charged.estimate.requiresConfirmation,
         ),
+        'X-Credits-Estimate-Message': charged.estimate.estimated >= 8 ? `This task may use ~${charged.estimate.estimated} credits` : '',
         'X-Kivo-Route': 'chat-direct-kernel',
         'X-Kivo-Started-At': String(startedAt),
       },
