@@ -4,6 +4,7 @@ import { AnimatePresence, motion } from 'framer-motion';
 import { useEffect, useState } from 'react';
 import type { Message } from '@/app/store/app-store';
 import { ResponseRenderer } from '@/components/chat/ResponseRenderer';
+import { KivoLiveSteps } from './live-steps/KivoLiveSteps';
 import { KivoWebSourceCards } from './KivoWebSourceCards';
 
 const STREAMING_LABELS = [
@@ -97,6 +98,7 @@ export function KivoAssistantMessage({
       className="w-full max-w-[760px]"
     >
       <AnimatePresence initial={false}>{isStreaming ? <StreamingState /> : null}</AnimatePresence>
+      <KivoLiveSteps message={message} latestUserContent={latestUserContent} />
 
       {!showStreamingOnly ? (
         <motion.div layout className="max-w-[720px] px-0 py-0">
