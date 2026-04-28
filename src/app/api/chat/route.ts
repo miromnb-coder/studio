@@ -1,21 +1,16 @@
 import crypto from 'node:crypto';
 import { NextRequest } from 'next/server';
-import type {
-  AgentResponse as LegacyAgentResponse,
-  AgentResponseMetadata,
-} from '@/types/agent-response';
-import type { OperatorResponse } from '@/types/operator-response';
-import type { ResponseMode } from '@/agent/types/response-mode';
-import type {
-  AgentFinalAnswer,
-  AgentResponse as VNextAgentResponse,
-  StructuredAnswer,
-} from '@/agent/vNext/types';
+import {
+  createErrorEvent,
+  runKernelStream,
+  serializeKernelStreamEvent,
+} from '@/agent/kernel';
+import { chargeEstimatedCredits, settleCreditCharge } from '@/lib/credits';
+import { createClient } from '@/lib/supabase/server';
+
+export const dynamic = 'force-dynamic';
 
 const encoder = new TextEncoder();
-
-const SAFE_FALLBACK =
-  'I ran into an issue, but here’s what I could analyze so far.';
 
 type LegacyMessage = {
   role: 'user' | 'assistant' | 'system';
@@ -44,50 +39,14 @@ type NormalizedPayload = {
   history: LegacyMessage[];
   userId?: string;
   attachments: NormalizedAttachment[];
+  mode: 'fast' | 'agent';
+  usesWeb: boolean;
+  requestedTools: string[];
+  executionSteps: number;
 };
 
-type AgentStep = {
-  action?: string;
-  status?: string;
-  summary?: string;
-  error?: string;
-  tool?: string;
-};
-
-type UnifiedResult = {
-  reply: string;
-  structured?: StructuredAnswer;
-  structuredData: Record<string, unknown>;
-  metadata: Partial<AgentResponseMetadata>;
-  operatorResponse?: OperatorResponse;
-  confidence: number | null;
-  tools: string[];
-  memoryUsed: boolean;
-  suggestedActions: string[];
-};
-
-type StreamToolStep = {
-  stepId: string;
-  label: string;
-  status?: string;
-  summary?: string;
-  error?: string;
-  tool?: string;
-};
-
-function streamLine(payload: Record<string, unknown>) {
-  return encoder.encode(`${JSON.stringify(payload)}\n`);
-}
-
-function normalizeText(value: unknown): string {
-  if (typeof value !== 'string') return '';
-  return value.trim();
-}
-
-function asObject(value: unknown): Record<string, unknown> {
-  return value && typeof value === 'object' && !Array.isArray(value)
-    ? (value as Record<string, unknown>)
-    : {};
+function streamLine(payload: unknown) {
+  return encoder.encode(serializeKernelStreamEvent(payload));
 }
 
 function normalizeAttachments(raw: unknown): NormalizedAttachment[] {
@@ -95,8 +54,7 @@ function normalizeAttachments(raw: unknown): NormalizedAttachment[] {
 
   return raw
     .filter((item): item is IncomingAttachment => {
-      if (!item || typeof item !== 'object') return false;
-      return true;
+      return Boolean(item && typeof item === 'object');
     })
     .map((item, index) => {
       const kind = item.kind === 'image' ? 'image' : 'file';
@@ -123,6 +81,33 @@ function normalizeAttachments(raw: unknown): NormalizedAttachment[] {
     });
 }
 
+function normalizeMessages(raw: unknown): LegacyMessage[] {
+  if (!Array.isArray(raw)) return [];
+
+  return raw
+    .filter((item): item is LegacyMessage => {
+      if (!item || typeof item !== 'object') return false;
+      const record = item as Record<string, unknown>;
+
+      return (
+        (record.role === 'user' ||
+          record.role === 'assistant' ||
+          record.role === 'system') &&
+        typeof record.content === 'string' &&
+        record.content.trim().length > 0
+      );
+    })
+    .map((item) => ({
+      role: item.role,
+      content: item.content.trim(),
+    }));
+}
+
+function normalizeStringArray(raw: unknown): string[] {
+  if (!Array.isArray(raw)) return [];
+  return raw.filter((item): item is string => typeof item === 'string' && item.trim().length > 0);
+}
+
 function normalizeIncomingPayload(body: unknown): NormalizedPayload {
   const raw =
     body && typeof body === 'object'
@@ -132,460 +117,28 @@ function normalizeIncomingPayload(body: unknown): NormalizedPayload {
   const legacyMessage =
     typeof raw.message === 'string' ? raw.message.trim() : '';
 
+  const messages = normalizeMessages(raw.messages);
   const attachments = normalizeAttachments(raw.attachments);
 
-  const messages = Array.isArray(raw.messages)
-    ? raw.messages
-        .filter((item): item is LegacyMessage => {
-          if (!item || typeof item !== 'object') return false;
-          const record = item as Record<string, unknown>;
-
-          return (
-            (record.role === 'user' ||
-              record.role === 'assistant' ||
-              record.role === 'system') &&
-            typeof record.content === 'string' &&
-            record.content.trim().length > 0
-          );
-        })
-        .map((item) => ({
-          role: item.role,
-          content: item.content.trim(),
-        }))
-    : [];
-
-  if (messages.length > 0) {
-    const input =
-      [...messages].reverse().find((m) => m.role === 'user')?.content ||
-      legacyMessage ||
-      'Continue';
-
-    return {
-      input,
-      history: messages.slice(-12),
-      userId:
-        typeof raw.userId === 'string' ? raw.userId : undefined,
-      attachments,
-    };
-  }
+  const input =
+    messages.length > 0
+      ? [...messages].reverse().find((m) => m.role === 'user')?.content ||
+        legacyMessage ||
+        'Continue'
+      : legacyMessage ||
+        (typeof raw.input === 'string' && raw.input.trim().length > 0
+          ? raw.input.trim()
+          : 'Continue');
 
   return {
-    input: legacyMessage || 'Continue',
-    history: legacyMessage
-      ? [{ role: 'user', content: legacyMessage }]
-      : [],
-    userId:
-      typeof raw.userId === 'string' ? raw.userId : undefined,
+    input,
+    history: messages.length > 0 ? messages.slice(-12) : legacyMessage ? [{ role: 'user', content: legacyMessage }] : [],
+    userId: typeof raw.userId === 'string' ? raw.userId : undefined,
     attachments,
-  };
-}
-
-function delay(ms: number) {
-  return new Promise((resolve) => setTimeout(resolve, ms));
-}
-
-function isVNextResponse(value: unknown): value is VNextAgentResponse {
-  if (!value || typeof value !== 'object') return false;
-  const record = value as Record<string, unknown>;
-  return (
-    typeof record.requestId === 'string' &&
-    typeof record.route === 'object' &&
-    typeof record.plan === 'object' &&
-    typeof record.answer === 'object'
-  );
-}
-
-function isLegacyResponse(value: unknown): value is LegacyAgentResponse {
-  if (!value || typeof value !== 'object') return false;
-  const record = value as Record<string, unknown>;
-  return typeof record.reply === 'string' && typeof record.metadata === 'object';
-}
-
-function getSafeReply(result: UnifiedResult | null): string {
-  const reply = typeof result?.reply === 'string' ? result.reply.trim() : '';
-  return reply || SAFE_FALLBACK;
-}
-
-function buildRouteStructuredData(route: Record<string, unknown>) {
-  return {
-    intent: typeof route.intent === 'string' ? route.intent : undefined,
-    confidence:
-      typeof route.confidence === 'number' ? route.confidence : undefined,
-    reason: typeof route.reason === 'string' ? route.reason : undefined,
-    requiresTools: Array.isArray(route.requiresTools)
-      ? route.requiresTools
-      : undefined,
-    shouldFetchMemory:
-      typeof route.shouldFetchMemory === 'boolean'
-        ? route.shouldFetchMemory
-        : undefined,
-    suggestedExecutionMode:
-      route.suggestedExecutionMode === 'sync' ||
-      route.suggestedExecutionMode === 'stream'
-        ? route.suggestedExecutionMode
-        : undefined,
-    fallbackMessage:
-      typeof route.fallbackMessage === 'string'
-        ? route.fallbackMessage
-        : undefined,
-  };
-}
-
-function normalizeUnifiedResult(raw: unknown): UnifiedResult | null {
-  if (isVNextResponse(raw)) {
-    const answer = raw.answer as AgentFinalAnswer;
-    const route = asObject(raw.route);
-    const memory = asObject(raw.memory);
-    const evaluation = asObject(raw.evaluation);
-    const routeStructured = buildRouteStructuredData(route);
-    const toolResults = Array.isArray(raw.toolResults) ? raw.toolResults : [];
-
-    const structuredData = {
-      ...(asObject(answer.structuredData)),
-      route: {
-        ...routeStructured,
-        ...asObject(asObject(answer.structuredData).route),
-      },
-      evaluation: {
-        passed:
-          typeof evaluation.passed === 'boolean' ? evaluation.passed : undefined,
-        score:
-          typeof evaluation.score === 'number' ? evaluation.score : undefined,
-        issues: Array.isArray(evaluation.issues) ? evaluation.issues : [],
-        suggestedActions: Array.isArray(evaluation.suggestedActions)
-          ? evaluation.suggestedActions
-          : [],
-      },
-      toolResults: toolResults.map((item) => ({
-        callId: item.callId,
-        stepId: item.stepId,
-        tool: item.tool,
-        ok: item.ok,
-        error: item.error,
-        data: item.data,
-      })),
-      memory: {
-        summary:
-          typeof memory.summary === 'string' ? memory.summary : undefined,
-        source: typeof memory.source === 'string' ? memory.source : undefined,
-        items: Array.isArray(memory.items) ? memory.items : [],
-      },
-      structuredAnswer: answer.structured,
-    };
-
-    return {
-      reply: answer.text,
-      structured: answer.structured,
-      structuredData,
-      metadata: {
-        intent:
-          typeof route.intent === 'string'
-            ? (route.intent as AgentResponseMetadata['intent'])
-            : 'general',
-        responseMode:
-          (asObject(answer.metadata).mode as ResponseMode) ||
-          (asObject(answer.metadata).responseMode as ResponseMode) ||
-          'operator',
-        plan:
-          typeof raw.plan.summary === 'string'
-            ? raw.plan.summary
-            : 'Generated plan',
-        steps: Array.isArray(raw.plan.steps)
-          ? raw.plan.steps.map((step) => ({
-              action:
-                typeof step.title === 'string'
-                  ? step.title
-                  : typeof step.id === 'string'
-                    ? step.id
-                    : 'Step',
-              status:
-                typeof step.status === 'string' ? step.status : 'completed',
-              summary:
-                typeof step.description === 'string'
-                  ? step.description
-                  : undefined,
-              tool:
-                typeof step.requiredTool === 'string'
-                  ? step.requiredTool
-                  : undefined,
-            }))
-          : [],
-        structuredData,
-        suggestedActions: Array.isArray(answer.followUps)
-          ? answer.followUps.map((item, index) => ({
-              id: `followup-${index + 1}`,
-              label: String(item),
-              kind: 'general' as const,
-            }))
-          : [],
-        memoryUsed: Array.isArray(memory.items) ? memory.items.length > 0 : false,
-      },
-      operatorResponse:
-        asObject(answer.metadata).operatorResponse &&
-        typeof asObject(answer.metadata).operatorResponse === 'object'
-          ? (asObject(answer.metadata).operatorResponse as OperatorResponse)
-          : undefined,
-      confidence:
-        typeof answer.confidence === 'number' ? answer.confidence : null,
-      tools: toolResults
-        .map((item) => item.tool)
-        .filter((tool): tool is string => typeof tool === 'string')
-        .slice(0, 8),
-      memoryUsed: Array.isArray(memory.items) ? memory.items.length > 0 : false,
-      suggestedActions: Array.isArray(answer.followUps)
-        ? answer.followUps.map(String)
-        : [],
-    };
-  }
-
-  if (isLegacyResponse(raw)) {
-    const metadata = raw.metadata ?? {};
-    const structuredData =
-      metadata.structuredData && typeof metadata.structuredData === 'object'
-        ? (metadata.structuredData as Record<string, unknown>)
-        : {};
-
-    const fromMetadata = structuredData.structuredAnswer;
-    const structured =
-      fromMetadata && typeof fromMetadata === 'object'
-        ? (fromMetadata as StructuredAnswer)
-        : raw.operatorResponse &&
-            typeof raw.operatorResponse === 'object' &&
-            typeof raw.operatorResponse.answer === 'string'
-          ? {
-              summary: raw.operatorResponse.answer,
-              plainText: raw.reply,
-            }
-          : undefined;
-
-    const route = asObject(structuredData.route);
-    const evaluation = asObject(structuredData.evaluation);
-
-    const confidence =
-      typeof route.confidence === 'number'
-        ? route.confidence
-        : typeof evaluation.score === 'number'
-          ? evaluation.score > 1
-            ? evaluation.score / 100
-            : evaluation.score
-          : null;
-
-    const toolsFromStructured = Array.isArray(structuredData.toolResults)
-      ? structuredData.toolResults
-          .map((item) => {
-            const record = asObject(item);
-            return typeof record.tool === 'string' ? record.tool : null;
-          })
-          .filter((item): item is string => Boolean(item))
-      : [];
-
-    const toolsFromSteps = Array.isArray(metadata.steps)
-      ? metadata.steps
-          .map((step) => {
-            const record = asObject(step);
-            return typeof record.tool === 'string'
-              ? record.tool
-              : typeof record.action === 'string'
-                ? record.action
-                : null;
-          })
-          .filter((item): item is string => Boolean(item))
-      : [];
-
-    const tools = [...new Set([...toolsFromStructured, ...toolsFromSteps])].slice(0, 8);
-
-    const memoryUsed =
-      typeof metadata.memoryUsed === 'boolean'
-        ? metadata.memoryUsed
-        : Array.isArray(asObject(structuredData.memory).items)
-          ? (asObject(structuredData.memory).items as unknown[]).length > 0
-          : false;
-
-    const suggestedActions = Array.isArray(metadata.suggestedActions)
-      ? metadata.suggestedActions
-          .map((item) =>
-            typeof item === 'string'
-              ? item
-              : typeof asObject(item).label === 'string'
-                ? String(asObject(item).label)
-                : '',
-          )
-          .filter((item): item is string => item.trim().length > 0)
-      : [];
-
-    return {
-      reply: raw.reply,
-      structured,
-      structuredData,
-      metadata,
-      operatorResponse:
-        raw.operatorResponse && typeof raw.operatorResponse === 'object'
-          ? raw.operatorResponse
-          : undefined,
-      confidence,
-      tools,
-      memoryUsed,
-      suggestedActions,
-    };
-  }
-
-  return null;
-}
-
-function splitLongChunk(chunk: string): string[] {
-  if (chunk.length <= 42) return [chunk];
-
-  const words = chunk.split(/(\s+)/).filter(Boolean);
-  const pieces: string[] = [];
-  let current = '';
-
-  for (const word of words) {
-    if ((current + word).length > 32 && current) {
-      pieces.push(current);
-      current = word;
-    } else {
-      current += word;
-    }
-  }
-
-  if (current) pieces.push(current);
-  return pieces;
-}
-
-function tokenChunks(text: string): string[] {
-  const normalized = text.replace(/\r\n/g, '\n');
-  const sentenceLikeChunks =
-    normalized.match(/[^.!?\n]+[.!?]?|\n+/g)?.filter(Boolean) ?? [normalized];
-
-  return sentenceLikeChunks
-    .flatMap((chunk) => splitLongChunk(chunk))
-    .filter((chunk) => chunk.length > 0);
-}
-
-function getChunkDelay(chunk: string, index: number): number {
-  const trimmed = chunk.trim();
-
-  if (!trimmed) return 8;
-  if (index === 0) return 90;
-  if (/[.!?]$/.test(trimmed)) return 70;
-  if (trimmed.length <= 8) return 24;
-  if (trimmed.length <= 20) return 32;
-  return 42;
-}
-
-function getResponseMode(result: UnifiedResult | null): ResponseMode {
-  const metadataMode = result?.metadata?.responseMode;
-  if (
-    metadataMode === 'casual' ||
-    metadataMode === 'fast' ||
-    metadataMode === 'operator' ||
-    metadataMode === 'tool' ||
-    metadataMode === 'fallback'
-  ) {
-    return metadataMode;
-  }
-
-  const structuredMode = asObject(result?.structuredData).response_mode;
-
-  if (
-    structuredMode === 'casual' ||
-    structuredMode === 'fast' ||
-    structuredMode === 'operator' ||
-    structuredMode === 'tool' ||
-    structuredMode === 'fallback'
-  ) {
-    return structuredMode;
-  }
-
-  return 'operator';
-}
-
-function buildNormalizedToolSteps(
-  steps: AgentStep[],
-  tools: string[],
-): StreamToolStep[] {
-  const normalizedSteps = steps.slice(0, 8).map((step, index) => ({
-    stepId: `tool-${index + 1}`,
-    label:
-      step.action?.trim() ||
-      step.tool?.trim() ||
-      `Tool step ${index + 1}`,
-    status: step.status,
-    summary: step.summary,
-    error: step.error,
-    tool: step.tool,
-  }));
-
-  if (normalizedSteps.length > 0) return normalizedSteps;
-
-  return tools.slice(0, 4).map((tool, index) => ({
-    stepId: `tool-${index + 1}`,
-    label: `Using ${tool}`,
-    status: 'completed',
-    summary: undefined,
-    error: undefined,
-    tool,
-  }));
-}
-
-function buildFinalMetadata(params: {
-  unified: UnifiedResult;
-  structuredData: Record<string, unknown>;
-  confidence: number | null;
-  structured?: StructuredAnswer;
-  tools: string[];
-  memoryUsed: boolean;
-  suggestedActions: string[];
-  responseMode: ResponseMode;
-  operatorResponse?: OperatorResponse;
-}) {
-  const {
-    unified,
-    structuredData,
-    confidence,
-    structured,
-    tools,
-    memoryUsed,
-    suggestedActions,
-    responseMode,
-    operatorResponse,
-  } = params;
-
-  const safeToolResults = Array.isArray(structuredData.toolResults)
-    ? structuredData.toolResults
-    : tools.map((tool) => ({ tool, ok: true }));
-
-  const safeMemory =
-    structuredData.memory && typeof structuredData.memory === 'object'
-      ? structuredData.memory
-      : {
-          items: memoryUsed ? [{ kind: 'summary' }] : [],
-        };
-
-  const mergedStructuredData = {
-    ...structuredData,
-    route: {
-      ...(typeof structuredData.route === 'object' && structuredData.route
-        ? (structuredData.route as Record<string, unknown>)
-        : {}),
-      confidence,
-    },
-    toolResults: safeToolResults,
-    memory: safeMemory,
-    structuredAnswer: structured,
-  };
-
-  return {
-    ...(unified.metadata || {}),
-    responseMode,
-    execution:
-      typeof structuredData.execution === 'object' && structuredData.execution
-        ? (structuredData.execution as Record<string, unknown>)
-        : undefined,
-    operatorResponse,
-    structuredData: mergedStructuredData,
-    suggestedActions,
-    memoryUsed,
+    mode: raw.mode === 'agent' ? 'agent' : 'fast',
+    usesWeb: raw.usesWeb === true,
+    requestedTools: normalizeStringArray(raw.tools),
+    executionSteps: typeof raw.executionSteps === 'number' && Number.isFinite(raw.executionSteps) ? raw.executionSteps : 0,
   };
 }
 
@@ -596,293 +149,139 @@ export async function POST(request: NextRequest) {
     const body = await request.json().catch(() => ({}));
     payload = normalizeIncomingPayload(body);
   } catch {
-    return new Response(
-      JSON.stringify({ error: 'Invalid request payload.' }),
-      {
-        status: 400,
-        headers: { 'Content-Type': 'application/json' },
-      },
-    );
+    return Response.json({ error: 'Invalid request payload.' }, { status: 400 });
   }
 
   const requestId = crypto.randomUUID();
-  const start = Date.now();
-  const agentUrl = new URL('/api/agent', request.url);
 
-  const upstream = await fetch(agentUrl, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      cookie: request.headers.get('cookie') || '',
-      'x-kivo-request-id': requestId,
-    },
-    body: JSON.stringify({
-      input: payload.input,
-      history: payload.history,
-      userId: payload.userId,
-      attachments: payload.attachments,
-    }),
-    cache: 'no-store',
-  }).catch(() => null);
+  try {
+    const supabase = await createClient();
+    const { data: auth } = await supabase.auth.getUser();
+    const userId = auth.user?.id || payload.userId;
 
-  if (!upstream) {
-    return new Response(
-      JSON.stringify({ error: 'Operator backend unavailable.' }),
-      {
-        status: 503,
-        headers: { 'Content-Type': 'application/json' },
-      },
-    );
-  }
-
-  const rawResult = (await upstream.json().catch(
-    () => null,
-  )) as unknown;
-
-  if (!upstream.ok) {
-    const reason =
-      rawResult && typeof rawResult === 'object'
-        ? (rawResult as Record<string, unknown>)
-        : null;
-
-    const message =
-      reason && typeof reason.message === 'string'
-        ? reason.message
-        : 'Something went wrong. Please try again.';
-
-    if (
-      upstream.status === 402 &&
-      reason &&
-      reason.error === 'limit_reached'
-    ) {
-      return new Response(JSON.stringify(reason), {
-        status: 402,
-        headers: { 'Content-Type': 'application/json' },
-      });
+    if (!userId) {
+      return Response.json({ error: 'AUTH_REQUIRED' }, { status: 401 });
     }
 
-    return new Response(
-      JSON.stringify({
-        error:
-          reason && typeof reason.error === 'string'
-            ? reason.error
-            : 'upstream_error',
-        message,
-      }),
-      {
-        status: upstream.status,
-        headers: { 'Content-Type': 'application/json' },
-      },
-    );
-  }
+    if (!payload.input.trim()) {
+      return Response.json({ error: 'No message provided in request body.' }, { status: 400 });
+    }
 
-  const unified = normalizeUnifiedResult(rawResult);
+    const charged = await chargeEstimatedCredits({
+      userId,
+      message: payload.input,
+      mode: payload.mode,
+      hasFile: payload.attachments.length > 0,
+      usesWeb: payload.usesWeb,
+      tools: payload.requestedTools,
+      executionSteps: payload.executionSteps,
+    });
 
-  if (!unified) {
-    return new Response(
-      JSON.stringify({
-        error: 'invalid_upstream_shape',
-        message: 'Operator returned an unsupported response shape.',
-      }),
-      {
-        status: 500,
-        headers: { 'Content-Type': 'application/json' },
-      },
-    );
-  }
+    if (!charged.ok) {
+      return Response.json(
+        {
+          error: 'no_credits',
+          credits: charged.account.credits,
+          required: charged.required,
+          estimate: charged.estimate,
+          upgrade: true,
+        },
+        { status: 402 },
+      );
+    }
 
-  const final = getSafeReply(unified);
-  const structured = unified.structured;
-  const structuredData = unified.structuredData ?? {};
-  const confidence = unified.confidence;
-  const tools = unified.tools;
-  const memoryUsed = unified.memoryUsed;
-  const suggestedActions = unified.suggestedActions;
-  const operatorResponse = unified.operatorResponse;
-  const responseMode = getResponseMode(unified);
-  const route = unified.metadata.intent || 'general';
+    const startedAt = Date.now();
+    const stream = new ReadableStream<Uint8Array>({
+      async start(controller) {
+        let failed = false;
+        let steps = 0;
 
-  const steps = Array.isArray(unified.metadata.steps)
-    ? (unified.metadata.steps as AgentStep[])
-    : [];
-
-  const tokens = tokenChunks(final);
-  const toolSteps = buildNormalizedToolSteps(steps, tools);
-  const finalMetadata = buildFinalMetadata({
-    unified,
-    structuredData,
-    confidence,
-    structured,
-    tools,
-    memoryUsed,
-    suggestedActions,
-    responseMode,
-    operatorResponse,
-  });
-
-  const stream = new ReadableStream<Uint8Array>({
-    async start(controller) {
-      const send = (payloadLine: Record<string, unknown>) => {
-        controller.enqueue(streamLine(payloadLine));
-      };
-
-      const shouldEmitWorkflow =
-        responseMode === 'operator' || responseMode === 'tool';
-      const shouldEmitCompactWorkflow = responseMode === 'fast';
-
-      try {
-        if (shouldEmitWorkflow || shouldEmitCompactWorkflow) {
-          send({
-            type: 'router_started',
-            stepId: 'router',
-            label: 'Analyzing request',
-            requestId,
-          });
-
-          await delay(120);
-          send({
-            type: 'router_completed',
-            stepId: 'router',
-            label: 'Analyzing request',
-            requestId,
-          });
-        }
-
-        if (shouldEmitWorkflow) {
-          await delay(90);
-          send({
-            type: 'planning_started',
-            stepId: 'planning',
-            label: 'Building execution plan',
-            requestId,
-          });
-
-          await delay(120);
-          send({
-            type: 'planning_completed',
-            stepId: 'planning',
-            label: 'Building execution plan',
-            requestId,
-          });
-
-          await delay(90);
-          send({
-            type: 'memory_started',
-            stepId: 'memory',
-            label: 'Checking memory',
-            requestId,
-          });
-
-          await delay(120);
-          send({
-            type: 'memory_completed',
-            stepId: 'memory',
-            label: 'Checking memory',
-            status: memoryUsed ? 'completed' : 'skipped',
-            summary: memoryUsed
-              ? 'Relevant memory was incorporated.'
-              : 'No relevant memory found for this request.',
-            requestId,
-          });
-        }
-
-        if (
-          responseMode === 'tool' ||
-          (responseMode === 'operator' && toolSteps.length > 0)
-        ) {
-          for (const step of toolSteps) {
-            await delay(110);
-            send({
-              type: 'tool_started',
-              stepId: step.stepId,
-              label: step.label,
-              summary: step.summary,
-              tool: step.tool,
+        try {
+          for await (const event of runKernelStream({
+            message: payload.input,
+            userId,
+            mode: payload.mode,
+            metadata: {
               requestId,
-            });
+              history: payload.history,
+              attachments: payload.attachments,
+              source: 'api.chat.direct_kernel',
+            },
+          })) {
+            steps += 1;
+            controller.enqueue(streamLine(event));
+          }
+        } catch (error) {
+          failed = true;
+          controller.enqueue(
+            streamLine(
+              createErrorEvent(
+                error instanceof Error
+                  ? error.message
+                  : 'Unknown chat stream error.',
+              ),
+            ),
+          );
+        } finally {
+          try {
+            const estimated = charged.estimate.estimated;
+            const actualUsage = Math.max(
+              1,
+              Math.round(
+                estimated *
+                  (failed ? 0.35 : Math.min(1, 0.55 + steps * 0.06)),
+              ),
+            );
 
-            await delay(140);
-            send({
-              type: 'tool_completed',
-              stepId: step.stepId,
-              label: step.label,
-              summary: step.summary,
-              tool: step.tool,
-              status: step.status,
-              error: step.error,
-              requestId,
+            await settleCreditCharge(charged.reservationId, {
+              used: actualUsage,
+              failed,
+              reason: failed
+                ? 'Chat kernel execution failed'
+                : 'Chat kernel execution completed',
             });
+          } catch (settleError) {
+            console.error('Failed to settle chat credit charge', {
+              requestId,
+              error:
+                settleError instanceof Error
+                  ? settleError.message
+                  : String(settleError),
+            });
+          } finally {
+            controller.close();
           }
         }
+      },
+    });
 
-        const firstTokenAt = Date.now();
-        let emittedChars = 0;
+    return new Response(stream, {
+      headers: {
+        'Content-Type': 'application/x-ndjson; charset=utf-8',
+        'Cache-Control': 'no-cache, no-transform',
+        Connection: 'keep-alive',
+        'X-Accel-Buffering': 'no',
+        'x-kivo-request-id': requestId,
+        'X-Credits-Remaining': String(charged.account.credits),
+        'X-Credits-Estimate': String(charged.estimate.estimated),
+        'X-Credits-Requires-Confirmation': String(
+          charged.estimate.requiresConfirmation,
+        ),
+        'X-Kivo-Route': 'chat-direct-kernel',
+        'X-Kivo-Started-At': String(startedAt),
+      },
+    });
+  } catch (error) {
+    console.error('Kivo chat route failed before stream start', {
+      requestId,
+      error: error instanceof Error ? error.message : String(error),
+    });
 
-        await delay(120);
-
-        for (let index = 0; index < tokens.length; index += 1) {
-          const token = tokens[index];
-          await delay(getChunkDelay(token, index));
-          emittedChars += token.length;
-
-          send({
-            type: 'answer_delta',
-            delta: token,
-            emittedChars,
-            requestId,
-          });
-        }
-
-        send({
-          type: 'answer_completed',
-          content: final,
-          structured,
-          structuredData: finalMetadata.structuredData,
-          toolResults: Array.isArray(finalMetadata.structuredData.toolResults)
-            ? finalMetadata.structuredData.toolResults
-            : tools.map((tool) => ({ tool, ok: true })),
-          route,
-          metadata: finalMetadata,
-          operatorResponse,
-          metrics: {
-            ttfbMs: firstTokenAt - start,
-            completionMs: Date.now() - start,
-            charCount: final.length,
-          },
-          requestId,
-        });
-      } catch {
-        send({
-          type: 'answer_completed',
-          content: final || SAFE_FALLBACK,
-          structured,
-          structuredData: finalMetadata.structuredData,
-          toolResults: Array.isArray(finalMetadata.structuredData.toolResults)
-            ? finalMetadata.structuredData.toolResults
-            : tools.map((tool) => ({ tool, ok: true })),
-          route,
-          metadata: finalMetadata,
-          operatorResponse,
-          metrics: {
-            ttfbMs: Date.now() - start,
-            completionMs: Date.now() - start,
-            charCount: final.length,
-          },
-          requestId,
-        });
-      } finally {
-        controller.close();
-      }
-    },
-  });
-
-  return new Response(stream, {
-    headers: {
-      'Content-Type': 'application/x-ndjson; charset=utf-8',
-      'Cache-Control': 'no-cache, no-transform',
-      Connection: 'keep-alive',
-      'X-Accel-Buffering': 'no',
-      'x-kivo-request-id': requestId,
-    },
-  });
+    return Response.json(
+      {
+        error: error instanceof Error ? error.message : 'Chat route failed.',
+      },
+      { status: 500 },
+    );
+  }
 }
