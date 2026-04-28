@@ -3,6 +3,7 @@ import { useAppStore } from '@/app/store/app-store';
 import type { MessageAttachment } from '@/app/store/app-store';
 import type { AppRouterInstance } from 'next/dist/shared/lib/app-router-context.shared-runtime';
 import { buildAttachment, cleanupAttachments } from './KivoChatScreenHooks';
+import { haptic } from '@/lib/haptics';
 
 type WorkspaceQuickActionId = 'analyze' | 'planner' | 'money-saver' | 'ask-agent';
 type WorkspaceToolId =
@@ -100,8 +101,10 @@ export function useKivoChatScreenActions({
     void refreshIntegrationStatuses();
 
     if (calendarParam === 'connected' || connectedParam === '1') {
+      haptic.success();
       showNotice('Google Calendar connected', 'Calendar tools are now ready to use.');
     } else if (calendarParam === 'error') {
+      haptic.error();
       const reason = searchParams.get('reason');
       const detail = reason
         ? `Could not connect Google Calendar (${reason}).`
@@ -238,6 +241,7 @@ export function useKivoChatScreenActions({
 
   const handleActionTool = useCallback(
     (id: ProductivityToolId) => {
+      haptic.selection();
       if (id === 'gmail') {
         if (!gmailConnected) return void window.location.assign('/api/integrations/gmail/connect');
         return void openOperatorRoute('/actions?tool=gmail');
@@ -258,7 +262,9 @@ export function useKivoChatScreenActions({
     const canSend = draftPrompt.trim().length > 0 || attachments.length > 0;
     const isBusy = isSending || isAgentResponding;
     if (!canSend || isBusy) return;
+    haptic.medium();
     if (!userId) {
+      haptic.error();
       showNotice('Sign in required', 'Please sign in before sending messages.');
       router.push('/login?next=/chat');
       return;
@@ -314,21 +320,29 @@ export function useKivoChatScreenActions({
         if (id === 'gmail') {
           await fetch('/api/integrations/gmail/disconnect', { method: 'POST' });
           setGmailConnected(false);
+          haptic.warning();
           return;
         }
         if (id === 'google-calendar') {
           await fetch('/api/integrations/google-calendar/disconnect', { method: 'POST' });
           setCalendarConnected(false);
+          haptic.warning();
         }
       };
 
       if (connector === 'gmail') {
-        if (mode === 'connect') return void requireAuthThenOpen('/api/integrations/gmail/connect');
+        if (mode === 'connect') {
+          haptic.success();
+          return void requireAuthThenOpen('/api/integrations/gmail/connect');
+        }
         if (mode === 'toggle') return void disconnect('gmail');
         if (mode === 'connected' || mode === 'manage') return void openOperatorRoute('/actions?tool=gmail');
       }
       if (connector === 'google-calendar') {
-        if (mode === 'connect') return void requireAuthThenOpen('/api/integrations/google-calendar/connect');
+        if (mode === 'connect') {
+          haptic.success();
+          return void requireAuthThenOpen('/api/integrations/google-calendar/connect');
+        }
         if (mode === 'toggle') return void disconnect('google-calendar');
         if (mode === 'connected' || mode === 'manage') {
           return void openOperatorRoute('/actions?tool=google-calendar');
@@ -344,7 +358,10 @@ export function useKivoChatScreenActions({
           return;
         }
       }
-      if (connector === 'google-drive') return void openOperatorRoute('/tools?source=drive');
+      if (connector === 'google-drive') {
+        haptic.success();
+        return void openOperatorRoute('/tools?source=drive');
+      }
       if (connector === 'outlook') return void openOperatorRoute('/tools');
       if (connector === 'github') return void openOperatorRoute('/agents');
       openOperatorRoute('/tools');

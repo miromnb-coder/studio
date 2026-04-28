@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
 import {
   AnimatePresence,
@@ -17,6 +17,7 @@ import {
   Sparkles,
   X,
 } from 'lucide-react';
+import { haptic } from '@/lib/haptics';
 
 type UsageMetric = {
   credits: number;
@@ -94,6 +95,10 @@ export function KivoUsageSheet({
   const dragControls = useDragControls();
   const [mounted, setMounted] = useState(false);
   const metric = { ...DEFAULT_USAGE, ...usage };
+  const closeWithHaptic = useCallback(() => {
+    haptic.selection();
+    onClose();
+  }, [onClose]);
 
   useEffect(() => {
     setMounted(true);
@@ -101,6 +106,7 @@ export function KivoUsageSheet({
 
   useEffect(() => {
     if (!isOpen) return;
+    haptic.light();
 
     const previousOverflow = document.body.style.overflow;
     const previousTouchAction = document.body.style.touchAction;
@@ -109,7 +115,7 @@ export function KivoUsageSheet({
     document.body.style.touchAction = 'none';
 
     const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') onClose();
+      if (event.key === 'Escape') closeWithHaptic();
     };
 
     window.addEventListener('keydown', onKeyDown);
@@ -119,14 +125,16 @@ export function KivoUsageSheet({
       document.body.style.touchAction = previousTouchAction;
       window.removeEventListener('keydown', onKeyDown);
     };
-  }, [isOpen, onClose]);
+  }, [closeWithHaptic, isOpen]);
 
   const handleDragEnd = (
     _: MouseEvent | TouchEvent | PointerEvent,
     info: PanInfo,
   ) => {
     if (info.offset.y > 90 || info.velocity.y > 560) {
-      onClose();
+      closeWithHaptic();
+    } else {
+      haptic.light();
     }
   };
 
@@ -144,7 +152,7 @@ export function KivoUsageSheet({
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             transition={{ duration: 0.16, ease: 'easeOut' }}
-            onClick={onClose}
+            onClick={closeWithHaptic}
           />
 
           <motion.aside
@@ -175,7 +183,7 @@ export function KivoUsageSheet({
 
                 <button
                   type="button"
-                  onClick={onClose}
+                  onClick={closeWithHaptic}
                   aria-label="Close"
                   className="inline-flex h-12 w-12 items-center justify-center rounded-full border border-black/[0.06] bg-[#f3f3f3] text-black/85 transition active:scale-[0.95]"
                 >
@@ -198,8 +206,11 @@ export function KivoUsageSheet({
                   </div>
 
                   <button
-                    type="button"
-                    onClick={onUpgrade}
+                  type="button"
+                  onClick={() => {
+                    haptic.heavy();
+                    onUpgrade?.();
+                  }}
                     className="mt-1 inline-flex h-12 items-center justify-center rounded-full bg-black/[0.10] px-6 text-[16px] font-semibold tracking-[-0.02em] text-[#101010] transition active:scale-[0.97]"
                   >
                     Upgrade

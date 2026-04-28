@@ -2,6 +2,7 @@
 
 import { ChevronRight, Gift, Sparkles } from 'lucide-react';
 import type { ProPlanData } from '@/app/profile/types';
+import { haptic } from '@/lib/haptics';
 
 type ProCardProps = {
   data: ProPlanData;
@@ -59,7 +60,10 @@ export function ProCard({ data, onUpgrade, onViewDetails }: ProCardProps) {
           </div>
           <button
             type="button"
-            onClick={onUpgrade}
+            onClick={() => {
+              haptic.heavy();
+              onUpgrade();
+            }}
             className="inline-flex items-center gap-2 rounded-full bg-[radial-gradient(circle_at_10%_20%,#232936,#0f1219_66%)] px-5 py-2.5 text-[15px] font-semibold text-white shadow-[0_10px_20px_rgba(15,18,25,0.28)] transition active:scale-95"
           >
             <Sparkles className="h-4 w-4" strokeWidth={2} />
@@ -85,7 +89,10 @@ export function ProCard({ data, onUpgrade, onViewDetails }: ProCardProps) {
 
       <button
         type="button"
-        onClick={onViewDetails}
+        onClick={() => {
+          haptic.light();
+          onViewDetails();
+        }}
         className="flex w-full items-center justify-between border-t border-black/[0.06] bg-white/60 px-5 py-4 text-left transition active:bg-black/[0.02]"
       >
         <span className="inline-flex items-center gap-3 text-[17px] font-medium text-[#1e1e1e]"><Gift className="h-5 w-5" />View plan details</span>

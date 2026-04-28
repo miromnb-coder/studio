@@ -2,6 +2,7 @@
 
 import { memo, type ReactNode } from 'react';
 import { Bell, BrainCircuit, MessageCircle, Plus, Search, Settings2, Sparkles } from 'lucide-react';
+import { haptic } from '@/lib/haptics';
 
 export type KivoSidebarSection = 'new' | 'search' | 'chats' | 'agents' | 'tools' | 'alerts' | 'settings';
 export type KivoSidebarRecentChat = { id: string; title: string; preview?: string; timestamp?: string };
@@ -47,7 +48,16 @@ function KivoSidebar({ activeSection, userName, onSectionChange }: KivoSidebarPr
         {RAIL_ITEMS.map((item) => (
           <div key={item.id} className="flex flex-col items-center">
             {item.dividerBefore ? <div className="mb-2 mt-1 h-px w-8 bg-black/[0.055]" /> : null}
-            <RailButton label={item.label} icon={item.icon} badge={item.badge} active={activeSection === item.id} onClick={() => onSectionChange(item.id)} />
+            <RailButton
+              label={item.label}
+              icon={item.icon}
+              badge={item.badge}
+              active={activeSection === item.id}
+              onClick={() => {
+                haptic.selection();
+                onSectionChange(item.id);
+              }}
+            />
           </div>
         ))}
       </div>

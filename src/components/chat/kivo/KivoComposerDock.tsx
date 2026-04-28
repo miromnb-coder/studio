@@ -2,7 +2,7 @@
 
 import { memo, useCallback, useLayoutEffect, useRef, type ReactNode, type Ref } from 'react';
 import { ArrowUp, BotMessageSquare, Mic, Plus, Workflow } from 'lucide-react';
-import { triggerLightHaptic } from './haptics';
+import { haptic } from '@/lib/haptics';
 
 type KivoComposerDockProps = {
   value: string;
@@ -54,22 +54,22 @@ export const KivoComposerDock = memo(function KivoComposerDock({
 
   const send = useCallback(() => {
     if (!canSend || isSending) return;
-    triggerLightHaptic();
+    haptic.medium();
     onSend();
   }, [canSend, isSending, onSend]);
 
   const handlePlus = useCallback(() => {
-    triggerLightHaptic();
+    haptic.light();
     onPlusClick();
   }, [onPlusClick]);
 
   const handleQuick = useCallback(() => {
-    triggerLightHaptic();
+    haptic.selection();
     onQuickActionClick();
   }, [onQuickActionClick]);
 
   const handleMic = useCallback(() => {
-    triggerLightHaptic();
+    haptic.selection();
     onMicClick();
   }, [onMicClick]);
 

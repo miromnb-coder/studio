@@ -2,6 +2,7 @@
 
 import { ChevronRight } from 'lucide-react';
 import type { SettingsItem } from '@/app/profile/types';
+import { haptic } from '@/lib/haptics';
 
 type SettingsRowProps = {
   item: SettingsItem;
@@ -15,7 +16,10 @@ export function SettingsRow({ item, onPress, isLast }: SettingsRowProps) {
   return (
     <button
       type="button"
-      onClick={() => onPress(item.route)}
+      onClick={() => {
+        haptic.light();
+        onPress(item.route);
+      }}
       className={`flex w-full items-center gap-3 px-4 py-3 text-left transition active:bg-black/[0.03] ${!isLast ? 'border-b border-black/[0.06]' : ''}`}
     >
       <span className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-[#f8f8f7] text-[#1f1f1f]">

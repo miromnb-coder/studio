@@ -7,6 +7,7 @@ import { type KivoSidebarRecentChat } from './KivoSidebar';
 import { KivoChatScreenLayout } from './KivoChatScreenLayout';
 import { useKivoChatScreenHooks } from './KivoChatScreenHooks';
 import { useKivoChatScreenActions } from './KivoChatScreenActions';
+import { haptic } from '@/lib/haptics';
 
 export type KivoConnectedService = {
   id: 'gmail' | 'calendar' | 'drive' | 'github' | 'web' | 'outlook';
@@ -38,6 +39,7 @@ export function KivoChatScreen() {
   const [localConnectedServices, setLocalConnectedServices] = useState<KivoConnectedService[]>([]);
 
   const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const wasRespondingRef = useRef(false);
   const hasMessages = messages.length > 0;
   const disabledNotice = null;
   const disableNotice = useCallback(() => {}, []);
@@ -69,6 +71,21 @@ export function KivoChatScreen() {
   useEffect(() => {
     if (hasMessages) setShowSidebarRail(false);
   }, [hasMessages]);
+
+  useEffect(() => {
+    if (!wasRespondingRef.current && isAgentResponding) {
+      wasRespondingRef.current = true;
+      return;
+    }
+    if (wasRespondingRef.current && !isAgentResponding) {
+      if (streamError?.trim()) {
+        haptic.error();
+      } else {
+        haptic.success();
+      }
+      wasRespondingRef.current = false;
+    }
+  }, [isAgentResponding, streamError]);
 
   useEffect(() => {
     if (typeof window === 'undefined') return;

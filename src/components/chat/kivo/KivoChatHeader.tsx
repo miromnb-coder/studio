@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { ChevronLeft, Sparkles } from 'lucide-react';
 import { KivoUsageSheet } from './KivoUsageSheet';
+import { haptic } from '@/lib/haptics';
 
 type Props = {
   hasMessages?: boolean;
@@ -81,6 +82,9 @@ export default function KivoChatHeader({ hasMessages = false }: Props) {
 
         if (previousCreditsRef.current !== null && previousCreditsRef.current !== nextCredits) {
           setPulse(true);
+          if (nextCredits > previousCreditsRef.current) {
+            haptic.success();
+          }
           if (pulseTimer) window.clearTimeout(pulseTimer);
           pulseTimer = window.setTimeout(() => setPulse(false), 520);
         }
@@ -102,7 +106,7 @@ export default function KivoChatHeader({ hasMessages = false }: Props) {
   }, []);
 
   const openUsageSheet = () => {
-    window.navigator.vibrate?.(8);
+    haptic.light();
     setIsUsageSheetOpen((currentState) => !currentState);
   };
 
@@ -111,7 +115,10 @@ export default function KivoChatHeader({ hasMessages = false }: Props) {
       <div className="mx-auto flex h-[74px] w-full max-w-[560px] items-center px-4">
         <button
           type="button"
-          onClick={() => router.push('/library')}
+          onClick={() => {
+            haptic.selection();
+            router.push('/library');
+          }}
           aria-label="Open library"
           className="inline-flex h-10 w-10 items-center justify-center rounded-full text-[#1C2431] transition-transform duration-200 active:scale-[0.93]"
         >
@@ -138,6 +145,10 @@ export default function KivoChatHeader({ hasMessages = false }: Props) {
       <KivoUsageSheet
         isOpen={isUsageSheetOpen}
         onClose={() => setIsUsageSheetOpen(false)}
+        onUpgrade={() => {
+          haptic.heavy();
+          router.push('/upgrade');
+        }}
         usage={{
           credits,
           dailyUsed: Number(creditSnapshot.freeCredits ?? credits),

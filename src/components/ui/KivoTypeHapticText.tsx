@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { haptic } from '@/lib/haptics';
 
 type KivoTypeHapticTextProps = {
   phrases: string[];
@@ -17,21 +18,6 @@ type KivoTypeHapticTextProps = {
 
 type Phase = 'typing' | 'holding_full' | 'deleting' | 'holding_empty';
 
-const MIN_HAPTIC_INTERVAL_MS = 32;
-
-function canUseNavigatorVibrate(): boolean {
-  return (
-    typeof navigator !== 'undefined' &&
-    typeof navigator.vibrate === 'function'
-  );
-}
-
-function triggerWebHaptic(): void {
-  if (canUseNavigatorVibrate()) {
-    navigator.vibrate(8);
-  }
-}
-
 export function KivoTypeHapticText({
   phrases,
   className,
@@ -42,7 +28,7 @@ export function KivoTypeHapticText({
   loop = true,
   cursor = true,
   hapticsEveryNthChar = 1,
-  hapticsEnabled = true,
+  hapticsEnabled = false,
 }: KivoTypeHapticTextProps) {
   const safePhrases = useMemo(
     () => phrases.map((item) => item.trim()).filter(Boolean),
@@ -54,7 +40,6 @@ export function KivoTypeHapticText({
   const [phase, setPhase] = useState<Phase>('typing');
 
   const stepRef = useRef(0);
-  const lastHapticAtRef = useRef(0);
 
   const maybeTriggerHaptic = () => {
     if (!hapticsEnabled) return;
@@ -64,11 +49,7 @@ export function KivoTypeHapticText({
 
     if (stepRef.current % hapticsEveryNthChar !== 0) return;
 
-    const now = Date.now();
-    if (now - lastHapticAtRef.current < MIN_HAPTIC_INTERVAL_MS) return;
-
-    lastHapticAtRef.current = now;
-    triggerWebHaptic();
+    haptic.selection();
   };
 
   useEffect(() => {
