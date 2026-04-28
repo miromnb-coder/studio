@@ -39,6 +39,7 @@ export const KivoComposerDock = memo(function KivoComposerDock({
   desktopShiftX = 0,
 }: KivoComposerDockProps) {
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
+  const effectiveKeyboardOffset = keyboardOffset > 0 ? Math.max(0, keyboardOffset - 70) : 0;
 
   useLayoutEffect(() => {
     const textarea = textareaRef.current;
@@ -76,7 +77,7 @@ export const KivoComposerDock = memo(function KivoComposerDock({
       className="pointer-events-none fixed inset-x-0 z-40 mx-auto w-full max-w-none px-[10px] pb-2 transition-transform duration-[320ms] ease-[cubic-bezier(0.22,1,0.36,1)] will-change-transform"
       style={{
         bottom: 'calc(env(safe-area-inset-bottom, 0px) + 30px)',
-        transform: `translate3d(${desktopShiftX}px, 0, 0)`,
+        transform: `translate3d(${desktopShiftX}px, ${-effectiveKeyboardOffset}px, 0)`,
       }}
     >
       <div className="pointer-events-auto overflow-hidden rounded-[29px] border border-white/85 bg-white/90 px-[10px] pb-[9px] pt-[11px] shadow-[0_14px_38px_rgba(15,23,42,0.068),inset_0_1px_0_rgba(255,255,255,0.98)] backdrop-blur-2xl transition-[box-shadow,transform,background-color] duration-300 ease-[cubic-bezier(0.22,1,0.36,1)] [contain:layout_paint] focus-within:bg-white/96 focus-within:shadow-[0_18px_48px_rgba(15,23,42,0.092),inset_0_1px_0_rgba(255,255,255,1)]">
