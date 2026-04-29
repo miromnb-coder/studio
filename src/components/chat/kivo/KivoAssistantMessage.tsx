@@ -1,10 +1,15 @@
 'use client';
 
 import { AnimatePresence, motion } from 'framer-motion';
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import type { Message } from '@/app/store/app-store';
 import { ResponseRenderer } from '@/components/chat/ResponseRenderer';
 import { KivoLiveSteps } from './live-steps/KivoLiveSteps';
+import { mapRunningTask } from './live-steps/running-task-mapper';
+import type { LiveStepContext, LiveStepStreamEvent } from './live-steps/live-steps-types';
+import { mapStreamEventsToLiveSteps } from './live-steps/live-steps-mapper';
+import { KivoRunningTaskCard } from './live-steps/KivoRunningTaskCard';
+import { KivoLiveSessionSheet } from './live-steps/KivoLiveSessionSheet';
 import { KivoWebSourceCards } from './KivoWebSourceCards';
 
 const STREAMING_LABELS = [
@@ -79,6 +84,39 @@ function getWebSources(message: Message): Array<{ url?: string; title?: string }
   return [];
 }
 
+
+
+function asEvents(value: unknown): LiveStepStreamEvent[] {
+  if (!Array.isArray(value)) return [];
+  return value.filter((item) => item && typeof item === 'object').map((item) => item as LiveStepStreamEvent).filter((item) => typeof item.type === 'string');
+}
+
+function readLiveStepContext(message: Message, latestUserContent: string): LiveStepContext {
+  const metadata = safeRecord(message.agentMetadata);
+  const structured = safeRecord(message.structuredData) || safeRecord(metadata?.structuredData);
+  const liveSteps = safeRecord(structured?.liveSteps);
+  const toolsUsed = Array.isArray(structured?.toolsUsed) ? structured.toolsUsed as string[] : undefined;
+  const startedAt = typeof liveSteps?.startedAt === 'number' ? liveSteps.startedAt : undefined;
+
+  return {
+    isStreaming: Boolean(message.isStreaming),
+    elapsedMs: startedAt ? Date.now() - startedAt : undefined,
+    reasoningDepth: typeof structured?.reasoningDepth === 'string' ? structured.reasoningDepth : undefined,
+    toolsUsed,
+    memoryUsed: metadata?.memoryUsed === true,
+    taskDepth: typeof structured?.taskDepth === 'string' ? structured.taskDepth as LiveStepContext['taskDepth'] : undefined,
+    mode: typeof metadata?.mode === 'string' ? metadata.mode : 'agent',
+    contentLength: message.content.trim().length,
+    latestUserContent,
+  };
+}
+
+function extractEvents(message: Message): LiveStepStreamEvent[] {
+  const metadata = safeRecord(message.agentMetadata);
+  const structured = safeRecord(message.structuredData) || safeRecord(metadata?.structuredData);
+  const liveSteps = safeRecord(structured?.liveSteps);
+  return asEvents(liveSteps?.events);
+}
 export function KivoAssistantMessage({
   message,
   latestUserContent,
@@ -89,6 +127,12 @@ export function KivoAssistantMessage({
   const isStreaming = Boolean(message.isStreaming);
   const showStreamingOnly = isStreaming && !message.content.trim();
   const webSources = getWebSources(message);
+  const [sheetOpen, setSheetOpen] = useState(false);
+
+  const liveEvents = useMemo(() => extractEvents(message), [message]);
+  const liveContext = useMemo(() => readLiveStepContext(message, latestUserContent), [message, latestUserContent]);
+  const runningTask = useMemo(() => mapRunningTask(liveEvents, liveContext), [liveEvents, liveContext]);
+  const mappedSteps = useMemo(() => mapStreamEventsToLiveSteps(liveEvents), [liveEvents]);
 
   return (
     <motion.div
@@ -99,6 +143,7 @@ export function KivoAssistantMessage({
     >
       <AnimatePresence initial={false}>{isStreaming ? <StreamingState /> : null}</AnimatePresence>
       <KivoLiveSteps message={message} latestUserContent={latestUserContent} />
+      {runningTask ? <KivoRunningTaskCard task={runningTask} onOpen={() => setSheetOpen(true)} /> : null}
 
       {!showStreamingOnly ? (
         <motion.div layout className="max-w-[720px] px-0 py-0">
@@ -112,6 +157,7 @@ export function KivoAssistantMessage({
           <KivoWebSourceCards sources={webSources} />
         </motion.div>
       ) : null}
+      {runningTask && sheetOpen ? <KivoLiveSessionSheet task={runningTask} steps={mappedSteps} onClose={() => setSheetOpen(false)} /> : null}
     </motion.div>
   );
 }
