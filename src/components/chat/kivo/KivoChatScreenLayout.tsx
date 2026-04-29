@@ -1,7 +1,6 @@
 'use client';
 
-import { AnimatePresence, motion } from 'framer-motion';
-import { useEffect, useState, type CSSProperties } from 'react';
+import { useState, type CSSProperties } from 'react';
 import { WorkspaceSheet } from '@/components/chat/WorkspaceSheet';
 import { KivoActionSheet } from './KivoActionSheet';
 import { KivoChatScreenAttachmentTray } from './KivoChatScreenAttachmentTray';
@@ -34,25 +33,19 @@ export function KivoChatScreenLayout(props: Props) {
   } = props;
 
   const [taskSheetOpen, setTaskSheetOpen] = useState(false);
-  const [hideFinishedTask, setHideFinishedTask] = useState(false);
   const sidebarWidth = showSidebarRail ? KIVO_CHAT_SIDEBAR_RAIL_WIDTH : 0;
   const contentLeftOffset = sidebarWidth ? sidebarWidth + SIDEBAR_GAP : 0;
   const composerLeftOffset = sidebarWidth ? sidebarWidth + SIDEBAR_GAP : 12;
   const floatingBottom = Math.max(168, 148 + (keyboardOffset || 0));
-  const task = floatingRunningTask?.task;
-
-  useEffect(() => {
-    setHideFinishedTask(false);
-    if (!task || task.status === 'running') return;
-    const timeout = window.setTimeout(() => setHideFinishedTask(true), task.status === 'failed' ? 4200 : 3200);
-    return () => window.clearTimeout(timeout);
-  }, [task?.status, task?.title, task?.currentStep]);
-
-  const showFloatingTask = Boolean(task && !hideFinishedTask);
 
   const handleSidebarToggle = () => {
-    if (showSidebarRail) { setShowSidebarRail(false); setIsSidebarOpen(false); return; }
-    setShowSidebarRail(true); setIsSidebarOpen(false);
+    if (showSidebarRail) {
+      setShowSidebarRail(false);
+      setIsSidebarOpen(false);
+      return;
+    }
+    setShowSidebarRail(true);
+    setIsSidebarOpen(false);
   };
 
   const handleComposerFocus = () => {
@@ -72,34 +65,29 @@ export function KivoChatScreenLayout(props: Props) {
           <div className="sticky top-0 z-20 shrink-0 bg-[#f7f7f5]/90 backdrop-blur-xl">
             <KivoChatHeader hasMessages={hasMessages} isSidebarOpen={showSidebarRail} onSidebarToggle={handleSidebarToggle} onSummarize={handleHeaderSummarize} onCreateTask={handleHeaderCreateTask} />
           </div>
+
           <KivoChatScreenMainContent mainScrollRef={mainScrollRef} scrollBottomPadding={scrollBottomPadding} streamError={streamError} refinedStreamError={refinedStreamError} hasMessages={hasMessages} isAgentResponding={isAgentResponding} isSending={isSending} messages={messages} lastMessageSafetySpacer={lastMessageSafetySpacer} />
           <KivoChatScreenScrollToLatestButton show={showScrollToLatest} bottom={latestButtonBottom} onClick={onScrollToLatest} />
           <KivoChatScreenAttachmentTray attachments={attachments} keyboardOffset={keyboardOffset} attachmentTrayRef={attachmentTrayRef} onRemoveAttachment={removeAttachment} />
           <KivoChatScreenNoticeToast notice={notice} />
 
-          <AnimatePresence>
-            {showFloatingTask && task ? (
-              <motion.div
-                key={`${task.title}-${task.currentStep}-${task.status}`}
-                initial={{ opacity: 0, y: 18, scale: 0.985 }}
-                animate={{ opacity: 1, y: 0, scale: 1 }}
-                exit={{ opacity: 0, y: 14, scale: 0.985 }}
-                transition={{ duration: 0.24, ease: 'easeOut' }}
-                className="pointer-events-none fixed z-40"
-                style={{ left: `${composerLeftOffset}px`, right: '12px', bottom: `${floatingBottom}px` }}
-              >
-                <div className="pointer-events-auto mx-auto w-full max-w-[560px] px-5">
-                  <KivoRunningTaskCard task={task} onOpen={() => setTaskSheetOpen(true)} />
-                </div>
-              </motion.div>
-            ) : null}
-          </AnimatePresence>
+          {floatingRunningTask?.task ? (
+            <div
+              className="pointer-events-none fixed z-40 transition-[left,right,bottom,transform,opacity] duration-300 ease-out"
+              style={{ left: `${composerLeftOffset}px`, right: '12px', bottom: `${floatingBottom}px` }}
+            >
+              <div className="pointer-events-auto mx-auto w-full max-w-[560px] px-5">
+                <KivoRunningTaskCard task={floatingRunningTask.task} onOpen={() => setTaskSheetOpen(true)} />
+              </div>
+            </div>
+          ) : null}
 
           <div className="[&>div]:!left-[var(--kivo-composer-left)] [&>div]:!right-3 [&>div]:!mx-0 [&>div]:!w-auto [&>div]:!max-w-none [&>div]:transition-[left,right,transform] [&>div]:duration-300 [&>div]:ease-out" style={{ ['--kivo-composer-left' as string]: `${composerLeftOffset}px` } as CSSProperties}>
             <KivoComposerDock value={draftPrompt} onChange={setDraftPrompt} onSend={handleSend} onPlusClick={() => setActionSheetOpen(true)} onQuickActionClick={() => setWorkspaceOpen(true)} onMicClick={toggleMic} canSend={canSend} isListening={isListening} isSending={isBusy} placeholder={placeholder} keyboardOffset={keyboardOffset} containerRef={composerDockRef} desktopShiftX={0} onFocus={handleComposerFocus} />
           </div>
 
-          {task && taskSheetOpen ? <KivoLiveSessionSheet task={task} steps={floatingRunningTask?.steps || []} onClose={() => setTaskSheetOpen(false)} /> : null}
+          {floatingRunningTask?.task && taskSheetOpen ? <KivoLiveSessionSheet task={floatingRunningTask.task} steps={floatingRunningTask.steps || []} onClose={() => setTaskSheetOpen(false)} /> : null}
+
           <KivoReferralSuccessToast open={referralToastOpen} title={referralToastTitle} detail={referralToastDetail} onClose={() => setReferralToastOpen(false)} />
           <KivoActionSheet open={actionSheetOpen} isListening={isListening} attachments={attachments} toolState={{ gmail: { connected: gmailConnected, subtitle: 'Inbox summary, urgent emails, subscriptions' }, calendar: { connected: calendarConnected, subtitle: 'Today plan, reminders, free time' }, 'money-saver': { connected: true, subtitle: 'Find leaks, subscriptions, savings' }, tasks: { connected: true, subtitle: 'Notes, todos, action items' } }} onClose={closeActionSheet} onAddImages={() => openFilePicker('image/*')} onAddFiles={() => openFilePicker()} onPasteLink={handlePasteLink} onVoiceInput={toggleMic} onAiAction={handleAiAction} onToolAction={handleActionTool} />
           <WorkspaceSheet open={workspaceOpen} onClose={closeWorkspace} onQuickAction={handleQuickAction} onConnectorAction={handleConnectorAction} onToolSelect={handleToolSelect} onRecentSelect={handleRecentSelect} />
