@@ -1,15 +1,10 @@
 'use client';
 
 import { AnimatePresence, motion } from 'framer-motion';
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useState } from 'react';
 import type { Message } from '@/app/store/app-store';
 import { ResponseRenderer } from '@/components/chat/ResponseRenderer';
 import { KivoLiveSteps } from './live-steps/KivoLiveSteps';
-import { mapRunningTask } from './live-steps/running-task-mapper';
-import type { LiveStepContext, LiveStepStreamEvent } from './live-steps/live-steps-types';
-import { mapStreamEventsToLiveSteps } from './live-steps/live-steps-mapper';
-import { KivoRunningTaskCard } from './live-steps/KivoRunningTaskCard';
-import { KivoLiveSessionSheet } from './live-steps/KivoLiveSessionSheet';
 import { KivoWebSourceCards } from './KivoWebSourceCards';
 
 const STREAMING_LABELS = [
@@ -22,27 +17,15 @@ const STREAMING_LABELS = [
 
 function StreamingState() {
   const [labelIndex, setLabelIndex] = useState(0);
-
   useEffect(() => {
-    const interval = window.setInterval(() => {
-      setLabelIndex((current) => (current + 1) % STREAMING_LABELS.length);
-    }, 1700);
-
+    const interval = window.setInterval(() => setLabelIndex((current) => (current + 1) % STREAMING_LABELS.length), 1700);
     return () => window.clearInterval(interval);
   }, []);
-
   return (
     <div className="mb-3.5 overflow-hidden py-1">
       <div className="relative inline-block overflow-hidden text-[15px] font-normal tracking-[-0.018em] text-[#a1a1aa]">
         <AnimatePresence mode="wait" initial={false}>
-          <motion.span
-            key={STREAMING_LABELS[labelIndex]}
-            initial={{ opacity: 0, y: 4 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -4 }}
-            transition={{ duration: 0.22, ease: 'easeOut' }}
-            className="relative z-10 inline-block"
-          >
+          <motion.span key={STREAMING_LABELS[labelIndex]} initial={{ opacity: 0, y: 4 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -4 }} transition={{ duration: 0.22, ease: 'easeOut' }} className="relative z-10 inline-block">
             {STREAMING_LABELS[labelIndex]}
           </motion.span>
         </AnimatePresence>
@@ -63,101 +46,36 @@ function getWebSources(message: Message): Array<{ url?: string; title?: string }
   const metadata = safeRecord(message.agentMetadata);
   const metadataStructuredData = safeRecord(metadata?.structuredData);
   const candidates = [structuredData?.webSources, metadataStructuredData?.webSources];
-
   for (const value of candidates) {
     if (!Array.isArray(value)) continue;
-
     const normalized = value
       .filter((item) => item && typeof item === 'object')
       .map((item) => {
         const source = item as Record<string, unknown>;
-        return {
-          url: typeof source.url === 'string' ? source.url : undefined,
-          title: typeof source.title === 'string' ? source.title : undefined,
-        };
+        return { url: typeof source.url === 'string' ? source.url : undefined, title: typeof source.title === 'string' ? source.title : undefined };
       })
       .filter((item) => item.url || item.title);
-
     if (normalized.length) return normalized;
   }
-
   return [];
 }
 
-
-
-function asEvents(value: unknown): LiveStepStreamEvent[] {
-  if (!Array.isArray(value)) return [];
-  return value.filter((item) => item && typeof item === 'object').map((item) => item as LiveStepStreamEvent).filter((item) => typeof item.type === 'string');
-}
-
-function readLiveStepContext(message: Message, latestUserContent: string): LiveStepContext {
-  const metadata = safeRecord(message.agentMetadata);
-  const structured = safeRecord(message.structuredData) || safeRecord(metadata?.structuredData);
-  const liveSteps = safeRecord(structured?.liveSteps);
-  const toolsUsed = Array.isArray(structured?.toolsUsed) ? structured.toolsUsed as string[] : undefined;
-  const startedAt = typeof liveSteps?.startedAt === 'number' ? liveSteps.startedAt : undefined;
-
-  return {
-    isStreaming: Boolean(message.isStreaming),
-    elapsedMs: startedAt ? Date.now() - startedAt : undefined,
-    reasoningDepth: typeof structured?.reasoningDepth === 'string' ? structured.reasoningDepth : undefined,
-    toolsUsed,
-    memoryUsed: metadata?.memoryUsed === true,
-    taskDepth: typeof structured?.taskDepth === 'string' ? structured.taskDepth as LiveStepContext['taskDepth'] : undefined,
-    mode: typeof metadata?.mode === 'string' ? metadata.mode : 'agent',
-    contentLength: message.content.trim().length,
-    latestUserContent,
-  };
-}
-
-function extractEvents(message: Message): LiveStepStreamEvent[] {
-  const metadata = safeRecord(message.agentMetadata);
-  const structured = safeRecord(message.structuredData) || safeRecord(metadata?.structuredData);
-  const liveSteps = safeRecord(structured?.liveSteps);
-  return asEvents(liveSteps?.events);
-}
-export function KivoAssistantMessage({
-  message,
-  latestUserContent,
-}: {
-  message: Message;
-  latestUserContent: string;
-}) {
+export function KivoAssistantMessage({ message, latestUserContent }: { message: Message; latestUserContent: string }) {
   const isStreaming = Boolean(message.isStreaming);
   const showStreamingOnly = isStreaming && !message.content.trim();
   const webSources = getWebSources(message);
-  const [sheetOpen, setSheetOpen] = useState(false);
-
-  const liveEvents = useMemo(() => extractEvents(message), [message]);
-  const liveContext = useMemo(() => readLiveStepContext(message, latestUserContent), [message, latestUserContent]);
-  const runningTask = useMemo(() => mapRunningTask(liveEvents, liveContext), [liveEvents, liveContext]);
-  const mappedSteps = useMemo(() => mapStreamEventsToLiveSteps(liveEvents), [liveEvents]);
-
   return (
-    <motion.div
-      initial={{ opacity: 0, y: 12 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.24, ease: 'easeOut' }}
-      className="w-full max-w-[760px]"
-    >
+    <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.24, ease: 'easeOut' }} className="w-full max-w-[760px]">
       <AnimatePresence initial={false}>{isStreaming ? <StreamingState /> : null}</AnimatePresence>
       <KivoLiveSteps message={message} latestUserContent={latestUserContent} />
-      {runningTask ? <KivoRunningTaskCard task={runningTask} onOpen={() => setSheetOpen(true)} /> : null}
-
       {!showStreamingOnly ? (
         <motion.div layout className="max-w-[720px] px-0 py-0">
           <div className="text-[16px] leading-[1.62] tracking-[-0.018em] text-[#1f2933] [&>*+*]:mt-3.5 [&_li+li]:mt-1.5 [&_ol]:pl-5 [&_ul]:pl-5">
-            <ResponseRenderer
-              message={message}
-              latestUserContent={latestUserContent}
-            />
+            <ResponseRenderer message={message} latestUserContent={latestUserContent} />
           </div>
-
           <KivoWebSourceCards sources={webSources} />
         </motion.div>
       ) : null}
-      {runningTask && sheetOpen ? <KivoLiveSessionSheet task={runningTask} steps={mappedSteps} onClose={() => setSheetOpen(false)} /> : null}
     </motion.div>
   );
 }
