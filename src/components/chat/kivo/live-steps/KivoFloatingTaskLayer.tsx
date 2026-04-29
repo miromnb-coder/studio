@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { KivoRunningTaskCard } from './KivoRunningTaskCard';
 import { KivoLiveSessionSheet } from './KivoLiveSessionSheet';
+import { KivoLiveComputerView } from './KivoLiveComputerView';
 import type { RunningTask } from './running-task-types';
 import type { LiveStep } from './live-steps-types';
 
@@ -20,6 +21,7 @@ type Props = {
 
 export function KivoFloatingTaskLayer({ floatingRunningTask, composerLeftOffset, keyboardOffset = 0, enabled = true }: Props) {
   const [sheetOpen, setSheetOpen] = useState(false);
+  const [workspaceOpen, setWorkspaceOpen] = useState(false);
   const task = enabled ? floatingRunningTask?.task : null;
   if (!task) return null;
 
@@ -27,16 +29,14 @@ export function KivoFloatingTaskLayer({ floatingRunningTask, composerLeftOffset,
 
   return (
     <>
-      <div
-        className="pointer-events-none fixed z-40 transition-[left,right,bottom,transform,opacity] duration-300 ease-out"
-        style={{ left: `${composerLeftOffset}px`, right: '10px', bottom: `${floatingBottom}px` }}
-      >
+      <div className="pointer-events-none fixed z-40 transition-[left,right,bottom,transform,opacity] duration-300 ease-out" style={{ left: `${composerLeftOffset}px`, right: '10px', bottom: `${floatingBottom}px` }}>
         <div className="pointer-events-auto mx-auto w-full max-w-[560px] px-4">
-          <KivoRunningTaskCard task={task} onOpen={() => setSheetOpen(true)} />
+          <KivoRunningTaskCard task={task} onOpenPreview={() => setWorkspaceOpen(true)} />
         </div>
       </div>
 
       {sheetOpen ? <KivoLiveSessionSheet task={task} steps={floatingRunningTask?.steps || []} onClose={() => setSheetOpen(false)} /> : null}
+      {workspaceOpen ? <KivoLiveComputerView task={task} steps={floatingRunningTask?.steps || []} onClose={() => setWorkspaceOpen(false)} /> : null}
     </>
   );
 }
