@@ -14,7 +14,6 @@ import {
   Camera,
   FileText,
   Globe,
-  Link2,
   Mail,
   Mic,
   PiggyBank,
@@ -108,6 +107,8 @@ export function KivoActionSheet({
     [attachments],
   );
 
+  const photoPreviewItems = imagePreviews.length > 0 ? imagePreviews : DEFAULT_PHOTO_PREVIEWS;
+
   const closeAfter = (action: () => void) => {
     haptic.selection();
     action();
@@ -165,57 +166,49 @@ export function KivoActionSheet({
             <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-6 pb-[calc(env(safe-area-inset-bottom,0px)+96px)] [-webkit-overflow-scrolling:touch]">
               <section className="border-b border-black/[0.08] pb-5">
                 <div className="mb-4 flex items-center justify-between">
-                  <h2 className="text-[24px] font-semibold tracking-[-0.035em] text-[#222]">
+                  <h2 className="text-[30px] font-semibold tracking-[-0.045em] text-[#222]">
                     Photos
                   </h2>
 
                   <button
                     type="button"
                     onClick={() => closeAfter(onAddImages)}
-                    className="text-[19px] font-semibold tracking-[-0.02em] text-[#0a84ff] active:opacity-60"
+                    className="text-[24px] font-semibold tracking-[-0.025em] text-[#0a84ff] active:opacity-60"
                   >
                     See all
                   </button>
                 </div>
 
-                <div className="-mx-1 flex gap-4 overflow-x-auto px-1 pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+                <div className="-mx-1 flex snap-x gap-5 overflow-x-auto px-1 pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
                   <button
                     type="button"
                     onClick={() => closeAfter(onAddImages)}
-                    className="flex h-[112px] w-[112px] shrink-0 flex-col items-center justify-center rounded-[22px] bg-[#f2f2f2] text-[#2b2b2b] transition active:scale-[0.985]"
+                    className="flex h-[124px] w-[124px] shrink-0 snap-start flex-col items-center justify-center rounded-[28px] bg-[#f2f2f2] text-[#2b2b2b] transition active:scale-[0.985]"
                   >
-                    <Camera className="h-8 w-8" strokeWidth={2.2} />
-                    <span className="mt-3 text-[18px] font-normal tracking-[-0.02em]">
+                    <Camera className="h-9 w-9" strokeWidth={2.25} />
+                    <span className="mt-4 text-[20px] font-normal tracking-[-0.025em]">
                       Camera
                     </span>
                   </button>
 
-                  {imagePreviews.map((image) => (
+                  {photoPreviewItems.map((image, index) => (
                     <button
                       key={image.id}
                       type="button"
                       onClick={() => closeAfter(onAddImages)}
-                      className="h-[112px] w-[112px] shrink-0 overflow-hidden rounded-[22px] bg-[#f2f2f2]"
+                      className="relative h-[124px] w-[124px] shrink-0 snap-start overflow-hidden rounded-[28px] bg-[#f2f2f2] ring-1 ring-black/[0.04] transition active:scale-[0.985]"
                     >
                       <img
                         src={image.previewUrl}
                         alt={image.name}
                         className="h-full w-full object-cover"
                       />
+                      <span className="absolute right-3 top-3 h-8 w-8 rounded-full border-[4px] border-white/95 bg-white/25 shadow-[0_2px_10px_rgba(0,0,0,0.12)]" />
+                      {index === 0 && imagePreviews.length === 0 ? (
+                        <span className="absolute inset-0 bg-gradient-to-b from-white/15 via-transparent to-black/5" />
+                      ) : null}
                     </button>
                   ))}
-
-                  <MiniPhotoButton
-                    icon={FileText}
-                    label="Files"
-                    onClick={() => closeAfter(onAddFiles)}
-                  />
-
-                  <MiniPhotoButton
-                    icon={Link2}
-                    label="Link"
-                    onClick={() => closeAfter(onPasteLink)}
-                  />
                 </div>
               </section>
 
@@ -243,26 +236,26 @@ export function KivoActionSheet({
   );
 }
 
-function MiniPhotoButton({
-  icon: Icon,
-  label,
-  onClick,
-}: {
-  icon: ComponentType<{ className?: string; strokeWidth?: number }>;
-  label: string;
-  onClick: () => void;
-}) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      className="flex h-[112px] w-[112px] shrink-0 flex-col items-center justify-center rounded-[22px] bg-[#f7f7f7] text-[#bdbdbd] transition active:scale-[0.985]"
-    >
-      <Icon className="h-7 w-7" strokeWidth={1.9} />
-      <span className="mt-3 text-[16px] tracking-[-0.02em]">{label}</span>
-    </button>
-  );
-}
+const DEFAULT_PHOTO_PREVIEWS = [
+  {
+    id: 'default-photo-preview-1',
+    name: 'Kivo screen preview',
+    previewUrl:
+      'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 240 240"><rect width="240" height="240" rx="34" fill="%23f5f5f5"/><rect x="28" y="54" width="184" height="132" rx="26" fill="white"/><rect x="82" y="72" width="76" height="8" rx="4" fill="%23cfcfcf"/><text x="54" y="111" font-family="Arial" font-size="15" font-weight="700" fill="%23282828">Photos</text><rect x="54" y="130" width="38" height="38" rx="10" fill="%23eeeeee"/><rect x="101" y="130" width="38" height="38" rx="10" fill="%23f1f1f1"/><rect x="148" y="130" width="38" height="38" rx="10" fill="%23f1f1f1"/><circle cx="190" cy="52" r="18" fill="%23ffffff" fill-opacity="0.65" stroke="%23ffffff" stroke-width="4"/></svg>',
+  },
+  {
+    id: 'default-photo-preview-2',
+    name: 'Kivo response preview',
+    previewUrl:
+      'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 240 240"><rect width="240" height="240" rx="34" fill="%23f7f7f7"/><text x="24" y="42" font-family="Arial" font-size="13" fill="%23808080">Tarkistaminen on tärkeää...</text><text x="24" y="70" font-family="Arial" font-size="13" fill="%23808080">Seuraava toimi on tarkistaa</text><text x="24" y="98" font-family="Arial" font-size="13" fill="%23808080">kalenterisi ja varmistaa...</text><rect x="30" y="170" width="180" height="42" rx="18" fill="white"/><circle cx="52" cy="191" r="11" fill="%23efefef"/><rect x="76" y="184" width="88" height="8" rx="4" fill="%23888888"/><circle cx="190" cy="52" r="18" fill="%23ffffff" fill-opacity="0.65" stroke="%23ffffff" stroke-width="4"/></svg>',
+  },
+  {
+    id: 'default-photo-preview-3',
+    name: 'Kivo task preview',
+    previewUrl:
+      'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 240 240"><rect width="240" height="240" rx="34" fill="%23f6f6f6"/><text x="25" y="38" font-family="Arial" font-size="12" fill="%23808080">suosittelen, että tarkistat...</text><text x="25" y="62" font-family="Arial" font-size="12" fill="%23808080">tärkeimmät tapahtumat...</text><rect x="24" y="104" width="192" height="76" rx="20" fill="white"/><rect x="48" y="128" width="38" height="38" rx="12" fill="%23eeeeee"/><text x="100" y="137" font-family="Arial" font-size="14" font-weight="700" fill="%23282828">Task Progress 4/4</text><circle cx="104" cy="156" r="5" fill="%2334c759"/><rect x="116" y="151" width="88" height="8" rx="4" fill="%23888888"/><rect x="24" y="195" width="192" height="28" rx="14" fill="white"/><circle cx="190" cy="52" r="18" fill="%23ffffff" fill-opacity="0.65" stroke="%23ffffff" stroke-width="4"/></svg>',
+  },
+];
 
 function SheetRow({ icon: Icon, title, badge, onClick }: SheetRowProps) {
   return (
