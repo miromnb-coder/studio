@@ -213,7 +213,7 @@ export function KivoChatScreen() {
       isAgentResponding={isAgentResponding}
       isSending={actions.isSending}
       messages={messages}
-      lastMessageSafetySpacer={lastMessageSafetySpacer}
+      lastMessageSafetySpacer={hooks.lastMessageSafetySpacer}
       showScrollToLatest={hooks.showScrollToLatest}
       latestButtonBottom={hooks.latestButtonBottom}
       onScrollToLatest={() => { hooks.scrollToLatest('smooth'); requestAnimationFrame(() => hooks.updateScrollState()); }}
