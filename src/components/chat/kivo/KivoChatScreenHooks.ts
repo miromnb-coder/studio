@@ -5,6 +5,7 @@ import type { MessageAttachment } from '@/app/store/app-store';
 const NEAR_BOTTOM_THRESHOLD = 140;
 const SCROLL_MEMORY_KEY = 'kivo-chat-scroll-memory-v1';
 const MIN_SCROLL_SAFETY_SPACE = 28;
+const MIN_COMPOSER_CLEARANCE = 178;
 const MAX_KEYBOARD_OFFSET_RATIO = 0.62;
 const MAX_KEYBOARD_OFFSET_ABSOLUTE = 430;
 
@@ -57,8 +58,9 @@ export function useKivoChatScreenHooks({ activeConversationId, hasMessages, mess
   const ensureSpeechRecognition = useCallback(() => { if (recognitionRef.current) return recognitionRef.current; const SpeechRecognitionCtor = typeof window !== 'undefined' ? window.SpeechRecognition || window.webkitSpeechRecognition : null; if (!SpeechRecognitionCtor) return null; const recognition = new SpeechRecognitionCtor(); recognition.continuous = false; recognition.interimResults = false; recognition.lang = 'en-US'; recognition.onresult = (event) => { const transcript = event.results?.[0]?.[0]?.transcript?.trim(); if (!transcript) return; const currentDraft = typeof useAppStore.getState === 'function' ? useAppStore.getState().draftPrompt : draftPrompt; setDraftPrompt(currentDraft ? `${currentDraft} ${transcript}` : transcript); focusComposer(); }; recognition.onerror = () => { setIsListening(false); showNotice('Speech unavailable', 'Microphone input could not be captured.'); }; recognition.onend = () => setIsListening(false); recognitionRef.current = recognition; return recognition; }, [draftPrompt, focusComposer, setDraftPrompt, showNotice]);
   const toggleMic = useCallback(() => { const recognition = ensureSpeechRecognition(); if (!recognition) { showNotice('Speech unavailable', 'This browser does not support speech recognition.'); return; } if (isListening) { recognition.stop(); setIsListening(false); return; } setIsListening(true); recognition.start(); }, [ensureSpeechRecognition, isListening, showNotice]);
 
-  const scrollBottomPadding = Math.max(MIN_SCROLL_SAFETY_SPACE, bottomOverlayInset + MIN_SCROLL_SAFETY_SPACE);
-  const lastMessageSafetySpacer = Math.max(40, Math.round(bottomOverlayInset * 0.18));
+  const composerClearance = Math.max(MIN_COMPOSER_CLEARANCE, Math.round(bottomOverlayInset + MIN_SCROLL_SAFETY_SPACE));
+  const scrollBottomPadding = 0;
+  const lastMessageSafetySpacer = composerClearance;
   const latestButtonBottom = Math.max(12, Math.round(bottomOverlayInset + MIN_SCROLL_SAFETY_SPACE));
   return { isListening, keyboardOffset, scrollBottomPadding, lastMessageSafetySpacer, latestButtonBottom, showScrollToLatest, mainScrollRef, composerDockRef, attachmentTrayRef, scrollToLatest, updateScrollState, toggleMic };
 }
