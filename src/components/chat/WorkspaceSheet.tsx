@@ -67,25 +67,25 @@ function ConnectorListRow({
 
   return (
     <li>
-      <div className="flex items-center gap-3 rounded-2xl border border-[#e8edf4] bg-white p-3 shadow-[0_1px_2px_rgba(18,23,34,0.04)]">
+      <div className="flex items-center gap-3 rounded-2xl border border-white/70 bg-white/78 p-3 shadow-[0_10px_26px_rgba(17,24,39,0.045)] backdrop-blur-xl">
         <button
           type="button"
           onClick={() => onOpen(connector.id)}
           className="flex min-w-0 flex-1 items-center gap-3 text-left"
           aria-label={`Open ${connector.name} details`}
         >
-          <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-[#e4e9f1] bg-[#fbfdff] text-[#485365]">
+          <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-black/[0.055] bg-white/72 text-[#485365] shadow-[inset_0_1px_0_rgba(255,255,255,0.75)]">
             <ConnectorLogo name={connector.name as never} />
           </span>
 
           <span className="min-w-0">
             <span className="block truncate text-[15px] font-semibold text-[#1f2937]">{connector.name}</span>
-            <span className="mt-0.5 block text-[12px] text-[#6b7280]">{CONNECTOR_STATUS_LABEL[connector.state]}</span>
+            <span className="mt-0.5 block text-[12px] text-[#6f736f]">{CONNECTOR_STATUS_LABEL[connector.state]}</span>
           </span>
         </button>
 
         {isBusy ? (
-          <span className="inline-flex items-center gap-1 rounded-full border border-[#dde4ef] bg-[#f7f9fc] px-3 py-1.5 text-[11px] font-medium text-[#607086]">
+          <span className="inline-flex items-center gap-1 rounded-full border border-black/[0.06] bg-white/60 px-3 py-1.5 text-[11px] font-medium text-[#607086] backdrop-blur-xl">
             <Loader2 className="h-3.5 w-3.5 animate-spin" />
             Connecting
           </span>
@@ -95,7 +95,7 @@ function ConnectorListRow({
             onClick={() => onAction(connector.id)}
             className={`inline-flex items-center gap-1 rounded-full px-3 py-1.5 text-[11px] font-semibold transition active:scale-[0.98] ${
               isConnected
-                ? 'border border-[#dce4f0] bg-white text-[#334155] hover:bg-[#f8fafc]'
+                ? 'border border-black/[0.07] bg-white/64 text-[#334155] hover:bg-white/90'
                 : connector.state === 'error'
                   ? 'border border-[#f0d2d2] bg-[#fff7f7] text-[#934646] hover:bg-[#fff1f1]'
                   : 'bg-[#111827] text-white hover:bg-[#0b1220]'
@@ -307,7 +307,7 @@ export function WorkspaceSheet({
       {open ? (
         <>
           <motion.div
-            className="fixed inset-0 z-40 bg-[#0f172a]/25 backdrop-blur-[2px]"
+            className="fixed inset-0 z-40 bg-black/18 backdrop-blur-sm"
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
@@ -315,7 +315,7 @@ export function WorkspaceSheet({
           />
 
           <motion.aside
-            className="fixed inset-x-0 bottom-0 z-50 max-h-[92dvh] overflow-hidden rounded-t-[30px] border border-[#e5eaf2] bg-[#f8faff] shadow-[0_-20px_48px_rgba(15,23,42,0.16)]"
+            className="fixed inset-x-0 bottom-0 z-50 max-h-[92dvh] overflow-hidden rounded-t-[30px] border border-white/70 bg-[radial-gradient(circle_at_top,rgba(255,255,255,0.92),transparent_38%),linear-gradient(to_bottom,#f7f7f5,#f5f5f3,#f2f2f0)] shadow-[0_-20px_48px_rgba(15,23,42,0.13)]"
             initial={{ y: '100%' }}
             animate={{ y: 0 }}
             exit={{ y: '100%' }}
@@ -328,14 +328,14 @@ export function WorkspaceSheet({
             onDragEnd={handleDragEnd}
           >
             <div className="flex h-full max-h-[92dvh] min-h-[56dvh] flex-col">
-              <header className="sticky top-0 z-10 border-b border-[#e8edf5] bg-[#f8faff]/95 px-4 pb-3 pt-2 backdrop-blur-xl sm:px-5">
+              <header className="sticky top-0 z-10 border-b border-black/[0.055] bg-[#f7f7f5]/82 px-4 pb-3 pt-2 backdrop-blur-xl sm:px-5">
                 <button
                   type="button"
                   onPointerDown={(event) => dragControls.start(event)}
                   className="mx-auto mb-2 block w-full touch-none"
                   aria-label="Drag to dismiss"
                 >
-                  <span className="mx-auto block h-1.5 w-14 rounded-full bg-[#d3dae6]" />
+                  <span className="mx-auto block h-1.5 w-14 rounded-full bg-black/14" />
                 </button>
 
                 <div className="flex items-center gap-3">
@@ -349,7 +349,7 @@ export function WorkspaceSheet({
                           }
                         : closeWithHaptic
                     }
-                    className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-[#dde5f0] bg-white text-[#546173]"
+                    className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-black/[0.07] bg-white/72 text-[#546173] shadow-[0_8px_22px_rgba(17,24,39,0.045)] backdrop-blur-xl"
                     aria-label={detailId ? 'Back to connectors' : 'Close connectors'}
                   >
                     {detailId ? <ChevronLeft className="h-5 w-5" /> : <X className="h-5 w-5" />}
@@ -357,7 +357,7 @@ export function WorkspaceSheet({
 
                   <div className="min-w-0">
                     <h2 className="truncate text-[22px] font-semibold tracking-[-0.03em] text-[#101827]">{title}</h2>
-                    <p className="truncate text-[13px] text-[#667085]">{subtitle}</p>
+                    <p className="truncate text-[13px] text-[#6f736f]">{subtitle}</p>
                   </div>
                 </div>
               </header>
@@ -365,19 +365,19 @@ export function WorkspaceSheet({
               <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 pb-[max(20px,env(safe-area-inset-bottom))] pt-4 sm:px-5">
                 {detailConnector ? (
                   <section className="space-y-4 pb-2">
-                    <div className="rounded-2xl border border-[#e3e9f2] bg-white p-4 shadow-[0_6px_20px_rgba(16,24,40,0.06)]">
+                    <div className="rounded-2xl border border-white/70 bg-white/76 p-4 shadow-[0_10px_28px_rgba(16,24,40,0.055)] backdrop-blur-xl">
                       <div className="flex items-start justify-between gap-3">
                         <div>
                           <p className="text-[13px] font-semibold text-[#1f2937]">Status</p>
-                          <p className="mt-1 text-[12px] text-[#6b7280]">{CONNECTOR_STATUS_LABEL[detailConnector.state]}</p>
+                          <p className="mt-1 text-[12px] text-[#6f736f]">{CONNECTOR_STATUS_LABEL[detailConnector.state]}</p>
                         </div>
                         {detailConnector.state === 'error' ? <AlertTriangle className="h-4 w-4 text-[#a34a4a]" /> : <CheckCircle2 className="h-4 w-4 text-[#3c8f5b]" />}
                       </div>
 
                       <dl className="mt-3 space-y-1.5 text-[12px] text-[#4b5563]">
-                        <div className="flex justify-between gap-3"><dt className="text-[#6b7280]">Account</dt><dd className="truncate text-right">{detailConnector.accountEmail || 'Not connected'}</dd></div>
-                        <div className="flex justify-between gap-3"><dt className="text-[#6b7280]">Last sync</dt><dd className="text-right">{formatSyncLabel(detailConnector.lastSyncAt)}</dd></div>
-                        <div className="flex justify-between gap-3"><dt className="text-[#6b7280]">Permissions</dt><dd className="text-right">{detailConnector.permissions.length}</dd></div>
+                        <div className="flex justify-between gap-3"><dt className="text-[#6f736f]">Account</dt><dd className="truncate text-right">{detailConnector.accountEmail || 'Not connected'}</dd></div>
+                        <div className="flex justify-between gap-3"><dt className="text-[#6f736f]">Last sync</dt><dd className="text-right">{formatSyncLabel(detailConnector.lastSyncAt)}</dd></div>
+                        <div className="flex justify-between gap-3"><dt className="text-[#6f736f]">Permissions</dt><dd className="text-right">{detailConnector.permissions.length}</dd></div>
                       </dl>
                       {detailConnector.state === 'error' && detailConnector.errorMessage ? (
                         <p className="mt-3 rounded-xl border border-[#f2d1d1] bg-[#fff6f6] px-3 py-2 text-[12px] text-[#9f3a3a]">
@@ -414,7 +414,7 @@ export function WorkspaceSheet({
                       <button
                         type="button"
                         onClick={() => handleConnectorAction(detailConnector.id, detailConnector.state === 'connected' ? 'manage' : 'connect')}
-                        className="w-full rounded-2xl border border-[#dce3ee] bg-white px-4 py-3 text-sm font-semibold text-[#334155]"
+                        className="w-full rounded-2xl border border-black/[0.07] bg-white/72 px-4 py-3 text-sm font-semibold text-[#334155] backdrop-blur-xl"
                       >
                         {detailConnector.state === 'connected' ? 'Manage' : 'Reconnect'}
                       </button>
@@ -431,32 +431,32 @@ export function WorkspaceSheet({
                   </section>
                 ) : (
                   <section className="space-y-4">
-                    <div className="rounded-2xl border border-[#e4eaf3] bg-white p-2 shadow-[0_8px_24px_rgba(17,24,39,0.06)]">
+                    <div className="rounded-2xl border border-white/70 bg-white/72 p-2 shadow-[0_10px_28px_rgba(17,24,39,0.052)] backdrop-blur-xl">
                       <button
                         type="button"
                         onClick={() => {
                           haptic.light();
                           setDetailId('gmail');
                         }}
-                        className="flex w-full items-center justify-between rounded-xl px-3 py-3 text-left hover:bg-[#f8fbff]"
+                        className="flex w-full items-center justify-between rounded-xl px-3 py-3 text-left hover:bg-white/68"
                       >
                         <span className="inline-flex items-center gap-2 text-sm font-semibold text-[#1f2937]"><PlugZap className="h-4 w-4" />Add connectors</span>
-                        <span className="text-xs text-[#6b7280]">Start with Gmail</span>
+                        <span className="text-xs text-[#6f736f]">Start with Gmail</span>
                       </button>
 
-                      <div className="mx-3 h-px bg-[#edf1f7]" />
+                      <div className="mx-3 h-px bg-black/[0.065]" />
 
                       <button
                         type="button"
                         onClick={() => handleConnectorAction('gmail', 'manage')}
-                        className="flex w-full items-center justify-between rounded-xl px-3 py-3 text-left hover:bg-[#f8fbff]"
+                        className="flex w-full items-center justify-between rounded-xl px-3 py-3 text-left hover:bg-white/68"
                       >
                         <span className="inline-flex items-center gap-2 text-sm font-semibold text-[#1f2937]"><Settings2 className="h-4 w-4" />Manage connectors</span>
-                        <span className="text-xs text-[#6b7280]">Permissions and tools</span>
+                        <span className="text-xs text-[#6f736f]">Permissions and tools</span>
                       </button>
                     </div>
 
-                    <div className="rounded-2xl border border-[#e4eaf3] bg-[#fbfdff] p-2 shadow-[0_8px_24px_rgba(17,24,39,0.05)]">
+                    <div className="rounded-2xl border border-white/70 bg-white/42 p-2 shadow-[0_10px_28px_rgba(17,24,39,0.045)] backdrop-blur-xl">
                       <ul className="space-y-2">
                         {resolvedConnectors.map((connector) => (
                           <ConnectorListRow
@@ -471,8 +471,8 @@ export function WorkspaceSheet({
                       </ul>
                     </div>
 
-                    <p className="px-1 text-[12px] text-[#6b7280]">Connect your tools to unlock real operator actions.</p>
-                    <p className="px-1 text-[11px] text-[#9aa4b2]">{connectedCount} connected</p>
+                    <p className="px-1 text-[12px] text-[#6f736f]">Connect your tools to unlock real operator actions.</p>
+                    <p className="px-1 text-[11px] text-[#9a9d98]">{connectedCount} connected</p>
                   </section>
                 )}
               </div>
