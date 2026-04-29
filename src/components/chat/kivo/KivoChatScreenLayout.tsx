@@ -9,6 +9,7 @@ import { KivoChatScreenScrollToLatestButton } from './KivoChatScreenScrollToLate
 import { KivoComposerDock } from './KivoComposerDock';
 import { KivoChatSidebarArea, KIVO_CHAT_SIDEBAR_RAIL_WIDTH } from './KivoChatSidebarArea';
 import { KivoReferralSuccessToast } from './KivoReferralSuccessToast';
+import { KivoFloatingTaskLayer } from './live-steps/KivoFloatingTaskLayer';
 
 const SIDEBAR_GAP = 12;
 type Props = any;
@@ -25,6 +26,7 @@ export function KivoChatScreenLayout(props: Props) {
     referralToastDetail, setReferralToastOpen, actionSheetOpen, gmailConnected, calendarConnected, closeActionSheet,
     openFilePicker, handlePasteLink, handleAiAction, handleActionTool, workspaceOpen, closeWorkspace, handleQuickAction,
     handleConnectorAction, handleToolSelect, handleRecentSelect, fileInputRef, filePickerAccept, onHiddenFileInputChange,
+    floatingRunningTask,
   } = props;
 
   const sidebarWidth = showSidebarRail ? KIVO_CHAT_SIDEBAR_RAIL_WIDTH : 0;
@@ -56,6 +58,7 @@ export function KivoChatScreenLayout(props: Props) {
           <KivoChatScreenScrollToLatestButton show={showScrollToLatest} bottom={latestButtonBottom} onClick={onScrollToLatest} />
           <KivoChatScreenAttachmentTray attachments={attachments} keyboardOffset={keyboardOffset} attachmentTrayRef={attachmentTrayRef} onRemoveAttachment={removeAttachment} />
           <KivoChatScreenNoticeToast notice={notice} />
+          <KivoFloatingTaskLayer floatingRunningTask={floatingRunningTask} composerLeftOffset={composerLeftOffset} keyboardOffset={keyboardOffset} />
           <div className="[&>div]:!left-[var(--kivo-composer-left)] [&>div]:!right-3 [&>div]:!mx-0 [&>div]:!w-auto [&>div]:!max-w-none [&>div]:transition-[left,right,transform] [&>div]:duration-300 [&>div]:ease-out" style={{ ['--kivo-composer-left' as string]: `${composerLeftOffset}px` } as CSSProperties}>
             <KivoComposerDock value={draftPrompt} onChange={setDraftPrompt} onSend={handleSend} onPlusClick={() => setActionSheetOpen(true)} onQuickActionClick={() => setWorkspaceOpen(true)} onMicClick={toggleMic} canSend={canSend} isListening={isListening} isSending={isBusy} placeholder={placeholder} keyboardOffset={keyboardOffset} containerRef={composerDockRef} desktopShiftX={0} onFocus={handleComposerFocus} />
           </div>
