@@ -1,9 +1,10 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, type ComponentType } from 'react';
+import { useCallback, useEffect, useMemo, useState, type ComponentType } from 'react';
 import {
   AnimatePresence,
   motion,
+  Reorder,
   type PanInfo,
   useDragControls,
 } from 'framer-motion';
@@ -12,6 +13,7 @@ import {
   Brain,
   CalendarClock,
   Camera,
+  Check,
   FileText,
   Globe,
   Mail,
@@ -53,6 +55,12 @@ type KivoActionSheetProps = {
   onToolAction: (id: ProductivityToolId) => void;
 };
 
+type PhotoPreviewItem = {
+  id: string;
+  name: string;
+  previewUrl: string;
+};
+
 type SheetRowProps = {
   icon: ComponentType<{ className?: string; strokeWidth?: number }>;
   title: string;
@@ -74,6 +82,9 @@ export function KivoActionSheet({
   onToolAction,
 }: KivoActionSheetProps) {
   const dragControls = useDragControls();
+  const [selectedPhotoIds, setSelectedPhotoIds] = useState<string[]>([]);
+  const [orderedPhotoIds, setOrderedPhotoIds] = useState<string[]>([]);
+
   const closeWithHaptic = useCallback(() => {
     haptic.selection();
     onClose();
@@ -102,17 +113,53 @@ export function KivoActionSheet({
     };
   }, [closeWithHaptic, open]);
 
-  const imagePreviews = useMemo(
-    () => attachments.filter((item) => item.kind === 'image' && item.previewUrl),
+  const imagePreviews = useMemo<PhotoPreviewItem[]>(
+    () =>
+      attachments
+        .filter((item) => item.kind === 'image' && item.previewUrl)
+        .map((item) => ({ id: item.id, name: item.name, previewUrl: item.previewUrl || '' })),
     [attachments],
   );
 
-  const photoPreviewItems = imagePreviews.length > 0 ? imagePreviews : DEFAULT_PHOTO_PREVIEWS;
+  const photoPreviewItems = useMemo<PhotoPreviewItem[]>(
+    () => (imagePreviews.length > 0 ? imagePreviews : DEFAULT_PHOTO_PREVIEWS),
+    [imagePreviews],
+  );
+
+  useEffect(() => {
+    setOrderedPhotoIds((current) => {
+      const visibleIds = photoPreviewItems.map((item) => item.id);
+      const preserved = current.filter((id) => visibleIds.includes(id));
+      const missing = visibleIds.filter((id) => !preserved.includes(id));
+      return [...preserved, ...missing];
+    });
+  }, [photoPreviewItems]);
+
+  const orderedPhotoItems = useMemo(
+    () =>
+      orderedPhotoIds
+        .map((id) => photoPreviewItems.find((item) => item.id === id))
+        .filter((item): item is PhotoPreviewItem => Boolean(item)),
+    [orderedPhotoIds, photoPreviewItems],
+  );
+
+  const selectedCount = selectedPhotoIds.length;
 
   const closeAfter = (action: () => void) => {
     haptic.selection();
     action();
     onClose();
+  };
+
+  const togglePhotoSelection = (id: string) => {
+    haptic.selection();
+    setSelectedPhotoIds((current) =>
+      current.includes(id) ? current.filter((item) => item !== id) : [...current, id],
+    );
+  };
+
+  const handleCameraCapture = () => {
+    closeAfter(onAddImages);
   };
 
   const handleDragEnd = (
@@ -133,20 +180,20 @@ export function KivoActionSheet({
           <motion.button
             type="button"
             aria-label="Close action sheet"
-            className="fixed inset-0 z-40 bg-black/28 backdrop-blur-[2px]"
+            className="fixed inset-0 z-40 bg-black/25 backdrop-blur-md"
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            transition={{ duration: 0.12, ease: 'easeOut' }}
+            transition={{ duration: 0.16, ease: 'easeOut' }}
             onClick={closeWithHaptic}
           />
 
           <motion.aside
-            className="fixed inset-x-0 bottom-0 z-50 mx-auto flex max-h-[68dvh] w-full max-w-[560px] flex-col overflow-hidden rounded-t-[28px] bg-white shadow-[0_-18px_48px_rgba(0,0,0,0.16)]"
-            initial={{ y: '100%' }}
-            animate={{ y: 0 }}
-            exit={{ y: '100%' }}
-            transition={{ type: 'spring', stiffness: 560, damping: 44, mass: 0.75 }}
+            className="fixed inset-x-0 bottom-0 z-50 mx-auto flex max-h-[72dvh] w-full max-w-[560px] flex-col overflow-hidden rounded-t-[34px] border border-white/70 bg-white/88 shadow-[0_-24px_70px_rgba(0,0,0,0.18)] backdrop-blur-2xl"
+            initial={{ y: '100%', scale: 0.985 }}
+            animate={{ y: 0, scale: 1 }}
+            exit={{ y: '100%', scale: 0.985 }}
+            transition={{ type: 'spring', stiffness: 520, damping: 42, mass: 0.78 }}
             drag="y"
             dragControls={dragControls}
             dragListener={false}
@@ -166,9 +213,16 @@ export function KivoActionSheet({
             <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-6 pb-[calc(env(safe-area-inset-bottom,0px)+96px)] [-webkit-overflow-scrolling:touch]">
               <section className="border-b border-black/[0.08] pb-5">
                 <div className="mb-4 flex items-center justify-between">
-                  <h2 className="text-[30px] font-semibold tracking-[-0.045em] text-[#222]">
-                    Photos
-                  </h2>
+                  <div>
+                    <h2 className="text-[30px] font-semibold tracking-[-0.045em] text-[#222]">
+                      Photos
+                    </h2>
+                    {selectedCount > 0 ? (
+                      <p className="mt-1 text-[14px] font-medium tracking-[-0.02em] text-black/45">
+                        {selectedCount} selected · hold and drag to reorder
+                      </p>
+                    ) : null}
+                  </div>
 
                   <button
                     type="button"
@@ -179,37 +233,61 @@ export function KivoActionSheet({
                   </button>
                 </div>
 
-                <div className="-mx-1 flex snap-x gap-5 overflow-x-auto px-1 pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+                <Reorder.Group
+                  axis="x"
+                  values={orderedPhotoIds}
+                  onReorder={setOrderedPhotoIds}
+                  className="-mx-1 flex snap-x gap-5 overflow-x-auto px-1 pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+                >
                   <button
                     type="button"
-                    onClick={() => closeAfter(onAddImages)}
-                    className="flex h-[124px] w-[124px] shrink-0 snap-start flex-col items-center justify-center rounded-[28px] bg-[#f2f2f2] text-[#2b2b2b] transition active:scale-[0.985]"
+                    onClick={handleCameraCapture}
+                    className="relative flex h-[124px] w-[124px] shrink-0 snap-start flex-col items-center justify-center overflow-hidden rounded-[28px] bg-[#f2f2f2] text-[#2b2b2b] transition active:scale-[0.985]"
                   >
-                    <Camera className="h-9 w-9" strokeWidth={2.25} />
-                    <span className="mt-4 text-[20px] font-normal tracking-[-0.025em]">
+                    <span className="absolute inset-0 bg-[radial-gradient(circle_at_50%_0%,rgba(255,255,255,0.95),transparent_60%)]" />
+                    <Camera className="relative h-9 w-9" strokeWidth={2.25} />
+                    <span className="relative mt-4 text-[20px] font-normal tracking-[-0.025em]">
                       Camera
                     </span>
                   </button>
 
-                  {photoPreviewItems.map((image, index) => (
-                    <button
-                      key={image.id}
-                      type="button"
-                      onClick={() => closeAfter(onAddImages)}
-                      className="relative h-[124px] w-[124px] shrink-0 snap-start overflow-hidden rounded-[28px] bg-[#f2f2f2] ring-1 ring-black/[0.04] transition active:scale-[0.985]"
-                    >
-                      <img
-                        src={image.previewUrl}
-                        alt={image.name}
-                        className="h-full w-full object-cover"
-                      />
-                      <span className="absolute right-3 top-3 h-8 w-8 rounded-full border-[4px] border-white/95 bg-white/25 shadow-[0_2px_10px_rgba(0,0,0,0.12)]" />
-                      {index === 0 && imagePreviews.length === 0 ? (
-                        <span className="absolute inset-0 bg-gradient-to-b from-white/15 via-transparent to-black/5" />
-                      ) : null}
-                    </button>
-                  ))}
-                </div>
+                  {orderedPhotoItems.map((image) => {
+                    const selectedIndex = selectedPhotoIds.indexOf(image.id);
+                    const selected = selectedIndex !== -1;
+
+                    return (
+                      <Reorder.Item
+                        key={image.id}
+                        value={image.id}
+                        as="button"
+                        type="button"
+                        whileDrag={{ scale: 1.045, zIndex: 20 }}
+                        onClick={() => togglePhotoSelection(image.id)}
+                        className="relative h-[124px] w-[124px] shrink-0 snap-start overflow-hidden rounded-[28px] bg-[#f2f2f2] ring-1 ring-black/[0.04] transition active:scale-[0.985]"
+                      >
+                        <img
+                          src={image.previewUrl}
+                          alt={image.name}
+                          className="h-full w-full object-cover"
+                        />
+                        <span className="absolute inset-0 bg-gradient-to-b from-white/10 via-transparent to-black/12" />
+                        <span
+                          className={`absolute right-3 top-3 grid h-8 w-8 place-items-center rounded-full border-[4px] border-white/95 shadow-[0_2px_10px_rgba(0,0,0,0.14)] transition ${
+                            selected ? 'bg-[#0a84ff] text-white' : 'bg-white/28 text-transparent backdrop-blur-md'
+                          }`}
+                        >
+                          {selected ? (
+                            selectedCount > 1 ? (
+                              <span className="text-[13px] font-bold leading-none">{selectedIndex + 1}</span>
+                            ) : (
+                              <Check className="h-4 w-4" strokeWidth={3} />
+                            )
+                          ) : null}
+                        </span>
+                      </Reorder.Item>
+                    );
+                  })}
+                </Reorder.Group>
               </section>
 
               <section className="pt-4">
@@ -236,7 +314,7 @@ export function KivoActionSheet({
   );
 }
 
-const DEFAULT_PHOTO_PREVIEWS = [
+const DEFAULT_PHOTO_PREVIEWS: PhotoPreviewItem[] = [
   {
     id: 'default-photo-preview-1',
     name: 'Kivo screen preview',
