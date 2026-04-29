@@ -65,7 +65,7 @@ export function KivoChatScreenLayout(props: Props) {
           <KivoReferralSuccessToast open={referralToastOpen} title={referralToastTitle} detail={referralToastDetail} onClose={() => setReferralToastOpen(false)} />
           <KivoActionSheet open={actionSheetOpen} isListening={isListening} attachments={attachments} toolState={{ gmail: { connected: gmailConnected, subtitle: 'Inbox summary, urgent emails, subscriptions' }, calendar: { connected: calendarConnected, subtitle: 'Today plan, reminders, free time' }, 'money-saver': { connected: true, subtitle: 'Find leaks, subscriptions, savings' }, tasks: { connected: true, subtitle: 'Notes, todos, action items' } }} onClose={closeActionSheet} onAddImages={() => openFilePicker('image/*')} onAddFiles={() => openFilePicker()} onPasteLink={handlePasteLink} onVoiceInput={toggleMic} onAiAction={handleAiAction} onToolAction={handleActionTool} />
           <WorkspaceSheet open={workspaceOpen} onClose={closeWorkspace} onQuickAction={handleQuickAction} onConnectorAction={handleConnectorAction} onToolSelect={handleToolSelect} onRecentSelect={handleRecentSelect} />
-          <input ref={fileInputRef} type="file" multiple accept={filePickerAccept} className="hidden" onChange={onHiddenFileInputChange} />
+          <input ref={fileInputRef} data-kivo-file-picker="true" type="file" multiple accept={filePickerAccept} className="hidden" onChange={onHiddenFileInputChange} />
         </div>
       </div>
     </div>
