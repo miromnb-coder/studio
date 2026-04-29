@@ -12,15 +12,15 @@ function fmt(seconds: number): string {
 }
 
 function previewStyle(type: RunningTask['previewType']) {
-  if (type === 'calendar') return 'from-[#f7fbff] via-[#ffffff] to-[#edf3fa]';
-  if (type === 'research') return 'from-[#f6f9ff] via-[#ffffff] to-[#eef2f8]';
-  if (type === 'memory') return 'from-[#faf6ff] via-[#ffffff] to-[#f0ecf8]';
-  if (type === 'tool') return 'from-[#f7fbfa] via-[#ffffff] to-[#edf3f0]';
+  if (type === 'calendar') return 'from-[#f7fbff] via-[#ffffff] to-[#eef3f7]';
+  if (type === 'research') return 'from-[#f7f9ff] via-[#ffffff] to-[#eef1f6]';
+  if (type === 'memory') return 'from-[#fbf8ff] via-[#ffffff] to-[#f0edf5]';
+  if (type === 'tool') return 'from-[#f8fbfa] via-[#ffffff] to-[#eef2ef]';
   return 'from-[#fafafa] via-[#ffffff] to-[#eeeeec]';
 }
 
 function Icon({ type }: { type: RunningTask['previewType'] }) {
-  const cls = 'h-4 w-4 text-[#8f969d]';
+  const cls = 'h-[17px] w-[17px] text-[#9aa0a6]';
   if (type === 'calendar') return <Calendar className={cls} />;
   if (type === 'research') return <BookOpen className={cls} />;
   if (type === 'memory') return <Brain className={cls} />;
@@ -46,25 +46,25 @@ export function KivoRunningTaskCard({ task, onOpen }: { task: RunningTask; onOpe
     <button
       type="button"
       onClick={onOpen}
-      className="group relative flex min-h-[78px] w-full items-center gap-4 overflow-hidden rounded-[26px] border border-white/75 bg-white/92 px-3.5 py-3 text-left shadow-[0_18px_48px_rgba(15,23,42,0.12)] backdrop-blur-[24px] transition duration-200 active:scale-[0.985]"
+      className="group relative flex h-[72px] w-full items-center gap-[14px] overflow-hidden rounded-[24px] border border-white/80 bg-white/96 px-[12px] py-[10px] text-left shadow-[0_14px_38px_rgba(15,23,42,0.105)] backdrop-blur-[22px] transition duration-150 active:scale-[0.988]"
     >
-      <span className="pointer-events-none absolute inset-x-8 top-0 h-px bg-white/95" />
-      <span className="pointer-events-none absolute -left-10 -top-12 h-28 w-28 rounded-full bg-white/55 blur-2xl" />
+      <span className="pointer-events-none absolute inset-x-7 top-0 h-px bg-white" />
+      <span className="pointer-events-none absolute -left-8 -top-10 h-24 w-24 rounded-full bg-white/50 blur-2xl" />
 
-      <div className="relative flex h-[56px] w-[66px] flex-none items-center justify-center overflow-hidden rounded-[14px] border border-black/[0.035] bg-[#f6f6f4] shadow-[0_9px_22px_rgba(15,23,42,0.08)]">
+      <div className="relative flex h-[50px] w-[58px] flex-none items-center justify-center overflow-hidden rounded-[12px] border border-black/[0.03] bg-[#f7f7f5] shadow-[0_7px_18px_rgba(15,23,42,0.07)]">
         <div className={`relative flex h-full w-full items-center justify-center bg-gradient-to-br ${previewGradient}`}>
-          <span className="absolute inset-0 bg-[radial-gradient(circle_at_30%_20%,rgba(255,255,255,0.96),transparent_52%)]" />
-          <span className="relative flex h-8 w-8 items-center justify-center rounded-full bg-white/72 shadow-[0_6px_14px_rgba(15,23,42,0.075)]">
+          <span className="absolute inset-0 bg-[radial-gradient(circle_at_28%_18%,rgba(255,255,255,0.98),transparent_52%)]" />
+          <span className="relative flex h-[32px] w-[32px] items-center justify-center rounded-full bg-white/72 shadow-[0_5px_12px_rgba(15,23,42,0.07)]">
             <Icon type={task.previewType} />
           </span>
         </div>
       </div>
 
-      <div className="relative min-w-0 flex-1 pt-0.5">
-        <p className="truncate text-[16.5px] font-semibold leading-tight tracking-[-0.024em] text-[#232629]">
+      <div className="relative min-w-0 flex-1 pt-[1px]">
+        <p className="truncate text-[16px] font-semibold leading-[1.16] tracking-[-0.026em] text-[#222426]">
           {label}
         </p>
-        <p className="mt-1 text-[13px] font-medium leading-none text-[#8b8f94]">
+        <p className="mt-[5px] text-[12.5px] font-medium leading-none tracking-[-0.01em] text-[#8c9095]">
           {fmt(elapsed)}
         </p>
       </div>
