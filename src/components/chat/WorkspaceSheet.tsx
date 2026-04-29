@@ -37,19 +37,12 @@ type ConnectorSheetItem = {
   connectorId?: ConnectorId;
   name: 'Gmail' | 'Google Calendar' | 'GitHub' | 'My Browser' | 'Google Drive' | 'Outlook' | 'Outlook Calendar' | 'Instagram' | 'Meta Ads Manager';
   state: ConnectorState;
-  action: 'toggle' | 'connect';
   beta?: boolean;
+  canToggle?: boolean;
 };
 
 const CONNECTOR_ORDER: ConnectorId[] = ['gmail', 'google-calendar', 'github', 'browser', 'google-drive', 'outlook'];
-
-const CONNECTOR_STATUS_LABEL: Record<ConnectorState, string> = {
-  connected: 'Connected',
-  connecting: 'Connecting',
-  error: 'Needs attention',
-  not_connected: 'Not connected',
-  reconnecting: 'Connecting',
-};
+const TOGGLE_AFTER_CONNECTED = new Set<ConnectorId>(['gmail', 'google-calendar', 'github']);
 
 const CONNECTOR_NAME_MAP: Partial<Record<ConnectorId, ConnectorSheetItem['name']>> = {
   gmail: 'Gmail',
@@ -79,15 +72,16 @@ function IOSSwitch({ active, disabled }: { active: boolean; disabled?: boolean }
 function ConnectorSheetRow({ item, onAction }: { item: ConnectorSheetItem; onAction: (item: ConnectorSheetItem) => void }) {
   const connected = item.state === 'connected';
   const busy = item.state === 'connecting' || item.state === 'reconnecting';
+  const showSwitch = item.canToggle === true && connected;
 
   return (
-    <li className="flex min-h-[76px] items-center gap-5 border-b border-black/[0.055] last:border-b-0">
+    <li className="flex min-h-[73px] items-center gap-5 border-b border-black/[0.055] last:border-b-0">
       <span className="flex h-8 w-8 shrink-0 items-center justify-center">
         <ConnectorLogo name={item.name as never} />
       </span>
 
       <div className="flex min-w-0 flex-1 items-center gap-3">
-        <span className="truncate text-[24px] font-normal tracking-[-0.045em] text-[#303030]">
+        <span className="truncate text-[22px] font-normal tracking-[-0.045em] text-[#303030]">
           {item.name === 'Outlook' ? 'Outlook Mail' : item.name}
         </span>
         {item.beta ? (
@@ -100,10 +94,10 @@ function ConnectorSheetRow({ item, onAction }: { item: ConnectorSheetItem; onAct
       <button
         type="button"
         onClick={() => onAction(item)}
-        className="shrink-0 text-[22px] font-normal tracking-[-0.04em] text-[#808080] active:opacity-60"
+        className="shrink-0 text-[20px] font-normal tracking-[-0.04em] text-[#808080] active:opacity-60"
         aria-label={`${connected ? 'Manage' : 'Connect'} ${item.name}`}
       >
-        {item.action === 'toggle' ? <IOSSwitch active={connected} disabled={busy} /> : 'Connect'}
+        {showSwitch ? <IOSSwitch active={!busy && connected} disabled={busy} /> : busy ? 'Connecting' : 'Connect'}
       </button>
     </li>
   );
@@ -222,15 +216,15 @@ export function WorkspaceSheet({
         connectorId: id,
         name: CONNECTOR_NAME_MAP[id] ?? connector.name,
         state: connector.state,
-        action: id === 'gmail' || id === 'google-calendar' || id === 'github' ? 'toggle' : 'connect',
+        canToggle: TOGGLE_AFTER_CONNECTED.has(id),
       } as ConnectorSheetItem;
     });
 
     return [
       ...primary,
-      { id: 'outlook-calendar', name: 'Outlook Calendar', state: 'not_connected', action: 'connect' },
-      { id: 'instagram', name: 'Instagram', state: 'not_connected', action: 'connect', beta: true },
-      { id: 'meta-ads-manager', name: 'Meta Ads Manager', state: 'not_connected', action: 'connect', beta: true },
+      { id: 'outlook-calendar', name: 'Outlook Calendar', state: 'not_connected' },
+      { id: 'instagram', name: 'Instagram', state: 'not_connected', beta: true },
+      { id: 'meta-ads-manager', name: 'Meta Ads Manager', state: 'not_connected', beta: true },
     ];
   }, [resolvedConnectors]);
 
@@ -262,15 +256,14 @@ export function WorkspaceSheet({
       haptic.selection();
       if (!item.connectorId) return;
 
-      if (item.action === 'toggle') {
-        const nextState: ConnectorState = item.state === 'connected' ? 'not_connected' : 'connecting';
-        updateConnector(item.connectorId, nextState);
-        onConnectorAction(item.connectorId, item.state === 'connected' ? 'toggle' : 'connect');
+      if (item.canToggle === true && item.state === 'connected') {
+        updateConnector(item.connectorId, 'not_connected');
+        onConnectorAction(item.connectorId, 'toggle');
         return;
       }
 
-      updateConnector(item.connectorId, item.state === 'connected' ? 'connected' : 'connecting');
-      onConnectorAction(item.connectorId, item.state === 'connected' ? 'manage' : 'connect');
+      updateConnector(item.connectorId, 'connecting');
+      onConnectorAction(item.connectorId, 'connect');
     },
     [onConnectorAction, updateConnector],
   );
@@ -288,7 +281,7 @@ export function WorkspaceSheet({
           />
 
           <motion.aside
-            className="fixed inset-x-0 bottom-0 z-50 mx-auto h-[calc(100dvh-62px)] max-w-[560px] overflow-hidden rounded-t-[10px] bg-[#f6f6f4] text-[#303030] shadow-[0_-14px_30px_rgba(0,0,0,0.18)]"
+            className="fixed inset-x-0 bottom-0 z-50 mx-auto h-[calc(100dvh-104px)] max-w-[560px] overflow-hidden rounded-t-[10px] bg-[#f6f6f4] text-[#303030] shadow-[0_-14px_30px_rgba(0,0,0,0.18)]"
             initial={{ y: '100%' }}
             animate={{ y: 0 }}
             exit={{ y: '100%' }}
@@ -329,24 +322,24 @@ export function WorkspaceSheet({
                 <section className="overflow-hidden rounded-[28px] bg-[#ededeb] px-7 py-3">
                   <button
                     type="button"
-                    onClick={() => handleConnectorAction({ id: 'gmail', connectorId: 'gmail', name: 'Gmail', state: 'not_connected', action: 'connect' })}
+                    onClick={() => handleConnectorAction({ id: 'gmail', connectorId: 'gmail', name: 'Gmail', state: 'not_connected' })}
                     className="flex min-h-[72px] w-full items-center gap-5 border-b border-black/[0.06] text-left active:opacity-60"
                   >
                     <Plus className="h-8 w-8 shrink-0" strokeWidth={1.9} />
                     <span className="flex flex-1 items-center justify-between gap-5">
-                      <span className="text-[24px] font-normal tracking-[-0.045em]">Add connectors</span>
+                      <span className="text-[22px] font-normal tracking-[-0.045em]">Add connectors</span>
                       <ChevronRight className="h-7 w-7 text-[#7b7b7b]" strokeWidth={2.2} />
                     </span>
                   </button>
 
                   <button
                     type="button"
-                    onClick={() => handleConnectorAction({ id: 'gmail', connectorId: 'gmail', name: 'Gmail', state: 'connected', action: 'connect' })}
+                    onClick={() => handleConnectorAction({ id: 'gmail', connectorId: 'gmail', name: 'Gmail', state: 'connected' })}
                     className="flex min-h-[72px] w-full items-center gap-5 text-left active:opacity-60"
                   >
                     <Settings2 className="h-8 w-8 shrink-0" strokeWidth={1.9} />
                     <span className="flex flex-1 items-center justify-between gap-5">
-                      <span className="text-[24px] font-normal tracking-[-0.045em]">Manage connectors</span>
+                      <span className="text-[22px] font-normal tracking-[-0.045em]">Manage connectors</span>
                       <ChevronRight className="h-7 w-7 text-[#7b7b7b]" strokeWidth={2.2} />
                     </span>
                   </button>
