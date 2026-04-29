@@ -8,11 +8,53 @@ import { KivoChatScreenLayout } from './KivoChatScreenLayout';
 import { useKivoChatScreenHooks } from './KivoChatScreenHooks';
 import { useKivoChatScreenActions } from './KivoChatScreenActions';
 import { haptic } from '@/lib/haptics';
+import { mapRunningTask } from './live-steps/running-task-mapper';
+import { mapStreamEventsToLiveSteps } from './live-steps/live-steps-mapper';
+import type { LiveStepContext, LiveStepStreamEvent } from './live-steps/live-steps-types';
 
 export type KivoConnectedService = {
   id: 'gmail' | 'calendar' | 'drive' | 'github' | 'web' | 'outlook';
   label: string;
 };
+
+function safeRecord(value: unknown): Record<string, unknown> | null {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
+  return value as Record<string, unknown>;
+}
+
+function asEvents(value: unknown): LiveStepStreamEvent[] {
+  if (!Array.isArray(value)) return [];
+  return value.filter((item) => item && typeof item === 'object').map((item) => item as LiveStepStreamEvent).filter((item) => typeof item.type === 'string');
+}
+
+function extractEvents(message: unknown): LiveStepStreamEvent[] {
+  const record = safeRecord(message);
+  const metadata = safeRecord(record?.agentMetadata);
+  const structured = safeRecord(record?.structuredData) || safeRecord(metadata?.structuredData);
+  const liveSteps = safeRecord(structured?.liveSteps);
+  return asEvents(liveSteps?.events);
+}
+
+function readLiveStepContext(message: unknown, latestUserContent: string): LiveStepContext {
+  const record = safeRecord(message);
+  const metadata = safeRecord(record?.agentMetadata);
+  const structured = safeRecord(record?.structuredData) || safeRecord(metadata?.structuredData);
+  const liveSteps = safeRecord(structured?.liveSteps);
+  const toolsUsed = Array.isArray(structured?.toolsUsed) ? structured.toolsUsed as string[] : undefined;
+  const startedAt = typeof liveSteps?.startedAt === 'number' ? liveSteps.startedAt : undefined;
+  const content = typeof record?.content === 'string' ? record.content : '';
+  return {
+    isStreaming: record?.isStreaming === true,
+    elapsedMs: startedAt ? Date.now() - startedAt : undefined,
+    reasoningDepth: typeof structured?.reasoningDepth === 'string' ? structured.reasoningDepth : undefined,
+    toolsUsed,
+    memoryUsed: metadata?.memoryUsed === true,
+    taskDepth: typeof structured?.taskDepth === 'string' ? structured.taskDepth as LiveStepContext['taskDepth'] : undefined,
+    mode: typeof metadata?.mode === 'string' ? metadata.mode : 'agent',
+    contentLength: content.trim().length,
+    latestUserContent,
+  };
+}
 
 export function KivoChatScreen() {
   const router = useRouter();
@@ -64,25 +106,12 @@ export function KivoChatScreen() {
     showNotice: disableNotice,
   });
 
+  useEffect(() => { if (!hydrated) hydrate(); }, [hydrate, hydrated]);
+  useEffect(() => { if (hasMessages) setShowSidebarRail(false); }, [hasMessages]);
   useEffect(() => {
-    if (!hydrated) hydrate();
-  }, [hydrate, hydrated]);
-
-  useEffect(() => {
-    if (hasMessages) setShowSidebarRail(false);
-  }, [hasMessages]);
-
-  useEffect(() => {
-    if (!wasRespondingRef.current && isAgentResponding) {
-      wasRespondingRef.current = true;
-      return;
-    }
+    if (!wasRespondingRef.current && isAgentResponding) { wasRespondingRef.current = true; return; }
     if (wasRespondingRef.current && !isAgentResponding) {
-      if (streamError?.trim()) {
-        haptic.error();
-      } else {
-        haptic.success();
-      }
+      if (streamError?.trim()) haptic.error(); else haptic.success();
       wasRespondingRef.current = false;
     }
   }, [isAgentResponding, streamError]);
@@ -103,12 +132,7 @@ export function KivoChatScreen() {
   const hasAttachments = actions.attachments.length > 0;
   const canSend = draftPrompt.trim().length > 0 || hasAttachments;
   const isBusy = actions.isSending || isAgentResponding;
-
-  const placeholder = useMemo(() => {
-    if (hasAttachments && !draftPrompt.trim()) return 'Add a message or send attachments';
-    return 'Assign a task or ask anything';
-  }, [hasAttachments, draftPrompt]);
-
+  const placeholder = useMemo(() => hasAttachments && !draftPrompt.trim() ? 'Add a message or send attachments' : 'Assign a task or ask anything', [hasAttachments, draftPrompt]);
   const refinedStreamError = useMemo(() => {
     const raw = (streamError || '').trim();
     if (!raw) return '';
@@ -117,7 +141,6 @@ export function KivoChatScreen() {
     if (raw.toLowerCase().includes('calendar')) return 'Calendar is unavailable right now.';
     return 'Something went wrong. Please try again.';
   }, [streamError]);
-
   const lastMessageKey = useMemo(() => {
     const lastMessage = messages[messages.length - 1];
     if (!lastMessage) return 'empty';
@@ -138,13 +161,19 @@ export function KivoChatScreen() {
     setNotice: disableNotice,
     setDraftPrompt,
     showNotice: disableNotice,
-    focusComposer: () => {
-      requestAnimationFrame(() => {
-        const textarea = document.getElementById('kivo-composer-textarea') as HTMLTextAreaElement | null;
-        textarea?.focus();
-      });
-    },
+    focusComposer: () => requestAnimationFrame(() => (document.getElementById('kivo-composer-textarea') as HTMLTextAreaElement | null)?.focus()),
   });
+
+  const latestUserContent = useMemo(() => [...messages].reverse().find((message) => message.role === 'user')?.content || '', [messages]);
+  const floatingRunningTaskData = useMemo(() => {
+    const assistant = [...messages].reverse().find((message) => message.role === 'assistant');
+    if (!assistant) return null;
+    const events = extractEvents(assistant);
+    const context = readLiveStepContext(assistant, latestUserContent);
+    const task = mapRunningTask(events, context);
+    if (!task) return null;
+    return { task, steps: mapStreamEventsToLiveSteps(events) };
+  }, [messages, latestUserContent]);
 
   const sidebarRecentChats = useMemo<KivoSidebarRecentChat[]>((() => {
     if (!activeConversationId) return [];
@@ -184,13 +213,10 @@ export function KivoChatScreen() {
       isAgentResponding={isAgentResponding}
       isSending={actions.isSending}
       messages={messages}
-      lastMessageSafetySpacer={hooks.lastMessageSafetySpacer}
+      lastMessageSafetySpacer={lastMessageSafetySpacer}
       showScrollToLatest={hooks.showScrollToLatest}
       latestButtonBottom={hooks.latestButtonBottom}
-      onScrollToLatest={() => {
-        hooks.scrollToLatest('smooth');
-        requestAnimationFrame(() => hooks.updateScrollState());
-      }}
+      onScrollToLatest={() => { hooks.scrollToLatest('smooth'); requestAnimationFrame(() => hooks.updateScrollState()); }}
       attachments={actions.attachments}
       keyboardOffset={hooks.keyboardOffset}
       attachmentTrayRef={hooks.attachmentTrayRef}
@@ -215,10 +241,7 @@ export function KivoChatScreen() {
       gmailConnected={actions.gmailConnected}
       calendarConnected={actions.calendarConnected}
       closeActionSheet={actions.closeActionSheet}
-      openFilePicker={(accept) => {
-        actions.openFilePicker(accept);
-        fileInputRef.current?.click();
-      }}
+      openFilePicker={(accept) => { actions.openFilePicker(accept); fileInputRef.current?.click(); }}
       handlePasteLink={actions.handlePasteLink}
       handleAiAction={actions.handleAiAction}
       handleActionTool={actions.handleActionTool}
@@ -231,6 +254,7 @@ export function KivoChatScreen() {
       fileInputRef={fileInputRef}
       filePickerAccept={actions.filePickerAccept}
       onHiddenFileInputChange={actions.onHiddenFileInputChange}
+      floatingRunningTask={floatingRunningTaskData}
     />
   );
 }
