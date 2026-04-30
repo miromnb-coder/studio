@@ -39,11 +39,11 @@ export function KivoChatScreenLayout(props: Props) {
   };
 
   const handleComposerFocus = () => {
-    setTimeout(() => {
-      const el = mainScrollRef.current;
-      if (!el) return;
-      el.scrollTo({ top: el.scrollHeight, behavior: 'smooth' });
-    }, 180);
+    const el = mainScrollRef.current;
+    if (!el) return;
+    requestAnimationFrame(() => {
+      el.scrollTo({ top: el.scrollHeight, behavior: 'auto' });
+    });
   };
 
   return (
