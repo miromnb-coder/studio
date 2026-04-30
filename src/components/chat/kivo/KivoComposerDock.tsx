@@ -1,6 +1,6 @@
 'use client';
 
-import { memo, useCallback, useLayoutEffect, useRef, type ReactNode, type Ref } from 'react';
+import { memo, useCallback, useEffect, useLayoutEffect, useRef, useState, type ReactNode, type Ref } from 'react';
 import { ArrowUp, BotMessageSquare, Mic, Plus, Workflow } from 'lucide-react';
 import { haptic } from '@/lib/haptics';
 
@@ -24,6 +24,70 @@ type KivoComposerDockProps = {
 const MIN_TEXTAREA_HEIGHT = 25;
 const MAX_TEXTAREA_HEIGHT = 112;
 const KEYBOARD_TOP_GAP = 18;
+const MIN_KEYBOARD_OFFSET = 80;
+const MAX_KEYBOARD_OFFSET = 430;
+
+function isEditableElement(value: Element | null) {
+  if (!(value instanceof HTMLElement)) return false;
+  const tag = value.tagName.toLowerCase();
+  return tag === 'textarea' || tag === 'input' || value.isContentEditable;
+}
+
+function readKeyboardOffset() {
+  if (typeof window === 'undefined') return 0;
+  const viewport = window.visualViewport;
+  const focused = isEditableElement(document.activeElement);
+  if (!viewport || !focused) return 0;
+
+  const rawOffset = window.innerHeight - viewport.height - viewport.offsetTop;
+  if (!Number.isFinite(rawOffset) || rawOffset < MIN_KEYBOARD_OFFSET) return 0;
+  return Math.max(0, Math.min(Math.round(rawOffset), MAX_KEYBOARD_OFFSET));
+}
+
+function useComposerKeyboardOffset() {
+  const [offset, setOffset] = useState(0);
+  const frameRef = useRef<number | null>(null);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+
+    const sync = () => {
+      if (frameRef.current !== null) window.cancelAnimationFrame(frameRef.current);
+      frameRef.current = window.requestAnimationFrame(() => {
+        frameRef.current = null;
+        const nextOffset = readKeyboardOffset();
+        setOffset((current) => (Math.abs(current - nextOffset) < 1 ? current : nextOffset));
+      });
+    };
+
+    const syncSoon = () => {
+      sync();
+      window.setTimeout(sync, 80);
+      window.setTimeout(sync, 220);
+    };
+
+    sync();
+    window.visualViewport?.addEventListener('resize', sync);
+    window.visualViewport?.addEventListener('scroll', sync);
+    window.addEventListener('resize', sync);
+    window.addEventListener('focusin', syncSoon);
+    window.addEventListener('focusout', syncSoon);
+
+    return () => {
+      if (frameRef.current !== null) {
+        window.cancelAnimationFrame(frameRef.current);
+        frameRef.current = null;
+      }
+      window.visualViewport?.removeEventListener('resize', sync);
+      window.visualViewport?.removeEventListener('scroll', sync);
+      window.removeEventListener('resize', sync);
+      window.removeEventListener('focusin', syncSoon);
+      window.removeEventListener('focusout', syncSoon);
+    };
+  }, []);
+
+  return offset;
+}
 
 export const KivoComposerDock = memo(function KivoComposerDock({
   value,
@@ -36,13 +100,15 @@ export const KivoComposerDock = memo(function KivoComposerDock({
   isListening = false,
   isSending = false,
   placeholder = 'Assign a task or ask anything',
-  keyboardOffset = 0,
+  keyboardOffset,
   containerRef,
   desktopShiftX = 0,
   onFocus,
 }: KivoComposerDockProps) {
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
-  const effectiveKeyboardOffset = keyboardOffset > 0 ? Math.max(0, keyboardOffset - KEYBOARD_TOP_GAP) : 0;
+  const measuredKeyboardOffset = useComposerKeyboardOffset();
+  const resolvedKeyboardOffset = typeof keyboardOffset === 'number' ? keyboardOffset : measuredKeyboardOffset;
+  const effectiveKeyboardOffset = resolvedKeyboardOffset > 0 ? Math.max(0, resolvedKeyboardOffset - KEYBOARD_TOP_GAP) : 0;
 
   useLayoutEffect(() => {
     const textarea = textareaRef.current;
